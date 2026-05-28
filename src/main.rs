@@ -1,7 +1,11 @@
+mod auth;
 mod db;
+mod handlers;
+mod middleware;
 mod state;
 
-use axum::{routing::get, Router};
+use axum::{middleware as axum_middleware, routing::get, routing::post, routing::put, Router};
+use rand::RngCore;
 use state::AppState;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -29,7 +33,11 @@ async fn main() -> anyhow::Result<()> {
     let db = db::init_pool("data.db").await?;
     tracing::info!("database ready");
 
-    let state = AppState { db };
+    let mut secret_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
+    let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+
+    let state = AppState { db, jwt_secret };
 
     let app = build_router(state);
 
@@ -41,7 +49,21 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn build_router(state: AppState) -> Router {
-    let api = Router::new().route("/health", get(health));
+    let protected_auth = Router::new()
+        .route("/admin/password", put(handlers::auth::change_admin_password))
+        .route_layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            middleware::require_admin,
+        ));
+
+    let auth_routes = Router::new()
+        .route("/admin", post(handlers::auth::admin_login))
+        .route("/teacher", post(handlers::auth::teacher_login))
+        .merge(protected_auth);
+
+    let api = Router::new()
+        .route("/health", get(health))
+        .nest("/auth", auth_routes);
 
     let app = Router::new()
         .nest("/api", api)
