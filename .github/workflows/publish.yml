@@ -1,0 +1,99 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - '[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            artifact_name: windows-x64
+            binary: principal-candidate-manager.exe
+          - platform: macos-latest
+            artifact_name: macos
+            binary: principal-candidate-manager
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install frontend dependencies
+        run: npm --prefix frontend install
+
+      - name: build frontend
+        run: npm --prefix frontend run build
+
+      - name: build binary
+        run: cargo build --release
+
+      - name: get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | awk -F'"' '{print $2}')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: package artifact
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          zip "principal-candidate-manager-${VERSION}-${{ matrix.artifact_name }}.zip" \
+              "target/release/${{ matrix.binary }}"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: principal-candidate-manager-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_name }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: get version
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | awk -F'"' '{print $2}')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: create draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes "See the assets to download this version and install." \
+            --draft \
+            artifacts/*
