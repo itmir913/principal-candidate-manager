@@ -1,5 +1,6 @@
 -- ================================================================
 -- 학교장추천 선발 시스템 — Schema v7  (migration v0 → v1)
+-- Float-Free Architecture (×10000 완전 정수화) + Abandon 박제 로직
 -- ================================================================
 
 PRAGMA journal_mode = WAL;
@@ -86,13 +87,15 @@ CREATE TABLE IF NOT EXISTS areas (
 
 -- ================================================================
 -- RANGE_TABLE
--- threshold: REAL (원본 측정값, 대소비교만)
+-- threshold: INTEGER (×10000, 원본 측정값)
+--   예) 내신 1.25등급 → 12500 / 봉사 30.5시간 → 305000
 -- score: INTEGER (×10000)
 -- Out-of-bounds → 0점 (백엔드 의무 구현)
+-- 구간 비교는 정수 대소비교만 사용 (Float-Free Zone)
 -- ================================================================
 CREATE TABLE IF NOT EXISTS range_table (
     area_id    INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    threshold  REAL    NOT NULL,
+    threshold  INTEGER NOT NULL,   -- ×10000
     score      INTEGER NOT NULL,
     PRIMARY KEY (area_id, threshold)
 );
@@ -124,7 +127,12 @@ CREATE TABLE IF NOT EXISTS universities (
 
 -- ================================================================
 -- BASE_DATA
--- value 포맷: RANGE="30.0", CATEGORY="회장", MANUAL="8500"(×10000)
+-- value 포맷:
+--   RANGE    : "305000"  (원본 측정값 ×10000 정수 문자열)
+--   CATEGORY : "회장"    (범주값)
+--   MANUAL   : "8500"    (점수 ×10000 정수 문자열)
+-- 투명화 계층: 교사 입력 "30.5" → 백엔드 즉시 ×10000 → DB "305000"
+--             DB "305000" → API 응답 시 /10000 → Vue 표시 "30.5"
 -- ================================================================
 CREATE TABLE IF NOT EXISTS base_data (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,6 +189,9 @@ END;
 -- total_score: INTEGER (×10000)
 -- score_detail: JSON {"area_id": score_int, ...} (×10000)
 -- FK CASCADE 미적용: 불변 이력 보존
+-- Abandon 박제: 포기(abandoned=1) 발생 시 이 테이블을 수정하지 않는다.
+--   recommended=1 행은 영구 불변 스냅샷(Immutable Snapshot).
+--   잔여석 = 정원 - COUNT(이전 라운드 recommended=1) 로 실시간 계산.
 -- ================================================================
 CREATE TABLE IF NOT EXISTS results (
     student_id     INTEGER NOT NULL,
