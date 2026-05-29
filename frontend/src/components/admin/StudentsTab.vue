@@ -2,21 +2,30 @@
   <div>
     <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 관리 (명렬표)</h2>
 
-    <!-- 액션 버튼 -->
-    <div class="flex flex-wrap gap-2 mb-4">
-      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlTemplate">양식 다운로드</button>
-      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlExport">목록 내보내기</button>
-      <label class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 cursor-pointer">
-        가져오기
-        <input type="file" accept=".xlsx,.csv" class="hidden" @change="onFileChange" />
-      </label>
+    <!-- 분류별 가져오기/내보내기 -->
+    <div class="mb-4 border border-gray-200 rounded divide-y divide-gray-200">
+      <div v-for="cat in categories" :key="cat.key" class="flex items-center gap-2 px-3 py-2">
+        <span class="w-14 text-sm font-medium text-gray-600 flex-shrink-0">{{ cat.label }}</span>
+        <button
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50"
+          @click="cat.dlTemplate"
+        >양식 다운로드</button>
+        <button
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50"
+          @click="cat.dlExport"
+        >목록 내보내기</button>
+        <label class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 cursor-pointer">
+          가져오기
+          <input type="file" accept=".xlsx,.csv" class="hidden" @change="e => cat.onImport(e)" />
+        </label>
+      </div>
     </div>
 
     <!-- 업로드 결과 -->
     <div v-if="result" class="mb-4 p-3 rounded border text-sm"
       :class="result.errors.length ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'">
       <p class="font-medium mb-1">
-        업로드 완료 — 신규 {{ result.inserted }}명, 수정 {{ result.updated }}명
+        [{{ result.label }}] 완료 — 신규 {{ result.inserted }}명, 수정 {{ result.updated }}명
       </p>
       <ul v-if="result.errors.length" class="list-disc list-inside text-yellow-700 space-y-0.5">
         <li v-for="(e, i) in result.errors" :key="i">{{ e }}</li>
@@ -51,6 +60,7 @@
             <th class="px-3 py-2 border-b">반</th>
             <th class="px-3 py-2 border-b">번호</th>
             <th class="px-3 py-2 border-b">졸업연도</th>
+            <th class="px-3 py-2 border-b w-14"></th>
           </tr>
         </thead>
         <tbody>
@@ -66,10 +76,16 @@
             <td class="px-3 py-1.5 border-b">{{ s.class_no ?? '-' }}</td>
             <td class="px-3 py-1.5 border-b">{{ s.seq_no ?? '-' }}</td>
             <td class="px-3 py-1.5 border-b">{{ s.grad_year ?? '-' }}</td>
+            <td class="px-3 py-1.5 border-b">
+              <button
+                class="px-2 py-0.5 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
+                @click="remove(s)"
+              >삭제</button>
+            </td>
           </tr>
           <tr v-if="students.length === 0">
-            <td colspan="7" class="px-3 py-4 text-center text-gray-400">
-              학생 데이터가 없습니다. 샘플 양식을 다운로드하여 작성 후 업로드하세요.
+            <td colspan="8" class="px-3 py-4 text-center text-gray-400">
+              학생 데이터가 없습니다. 양식을 다운로드하여 작성 후 가져오기 하세요.
             </td>
           </tr>
         </tbody>
@@ -85,6 +101,13 @@ import {
   downloadStudentTemplate,
   exportStudents,
   importStudents,
+  downloadEnrolledTemplate,
+  exportEnrolled,
+  importEnrolled,
+  downloadGraduatedTemplate,
+  exportGraduated,
+  importGraduated,
+  deleteStudent,
 } from '../../api/admin.js'
 
 const students = ref([])
@@ -105,48 +128,84 @@ async function loadStudents() {
   }
 }
 
-function saveBlob(response, filename) {
+function saveBlob(response, fallback) {
+  const disposition = response.headers?.['content-disposition'] ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = match ? match[1] : fallback
   const url = URL.createObjectURL(new Blob([response.data]))
   const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
+  a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
 }
 
-async function dlTemplate() {
-  try {
-    const res = await downloadStudentTemplate()
-    saveBlob(res, 'students_template.xlsx')
-  } catch (e) {
-    error.value = e.response?.data ?? e.message
-  }
-}
-
-async function dlExport() {
-  try {
-    const res = await exportStudents()
-    saveBlob(res, 'students.xlsx')
-  } catch (e) {
-    error.value = e.response?.data ?? e.message
-  }
-}
-
-async function onFileChange(evt) {
+async function runImport(apiFn, label, evt) {
   const file = evt.target.files?.[0]
   if (!file) return
   error.value = ''
   result.value = null
   try {
-    result.value = await importStudents(file)
+    const data = await apiFn(file)
+    result.value = { label, ...data }
     await loadStudents()
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }
-  // input 초기화 (같은 파일 재업로드 허용)
   evt.target.value = ''
 }
 
+async function remove(s) {
+  const label = `${s.name}(${s.student_code})`
+  if (!window.confirm(`${label} 학생을 삭제하시겠습니까?`)) return
+  error.value = ''
+  try {
+    await deleteStudent(s.id)
+    students.value = students.value.filter(x => x.id !== s.id)
+  } catch (e) {
+    error.value = e.response?.data ?? e.message
+  }
+}
+
+const categories = [
+  {
+    key: 'enrolled',
+    label: '재학생',
+    dlTemplate: async () => {
+      try { saveBlob(await downloadEnrolledTemplate(), 'enrolled_template.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    dlExport: async () => {
+      try { saveBlob(await exportEnrolled(), 'enrolled.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    onImport: (e) => runImport(importEnrolled, '재학생', e),
+  },
+  {
+    key: 'graduated',
+    label: '졸업생',
+    dlTemplate: async () => {
+      try { saveBlob(await downloadGraduatedTemplate(), 'graduated_template.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    dlExport: async () => {
+      try { saveBlob(await exportGraduated(), 'graduated.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    onImport: (e) => runImport(importGraduated, '졸업생', e),
+  },
+  {
+    key: 'all',
+    label: '전체',
+    dlTemplate: async () => {
+      try { saveBlob(await downloadStudentTemplate(), 'students_template.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    dlExport: async () => {
+      try { saveBlob(await exportStudents(), 'students.xlsx') }
+      catch (e) { error.value = e.response?.data ?? e.message }
+    },
+    onImport: (e) => runImport(importStudents, '전체', e),
+  },
+]
+
 onMounted(loadStudents)
 </script>
-

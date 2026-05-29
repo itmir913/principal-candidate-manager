@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::Response,
     Json,
@@ -286,6 +286,217 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
     Ok(wb.save_to_buffer()?)
 }
 
+// ── 재학생 전용 ───────────────────────────────────────────────────
+
+const ENROLLED_HEADERS: &[&str] = &["student_code", "name", "grade", "class_no", "seq_no"];
+const GRADUATED_HEADERS: &[&str] = &["student_code", "name", "grad_year"];
+
+/// GET /api/students/enrolled/template
+pub async fn enrolled_template() -> Result<Response, ApiError> {
+    let buf = build_enrolled_template_xlsx()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, "enrolled_template.xlsx"))
+}
+
+/// GET /api/students/enrolled/export
+pub async fn export_enrolled(State(state): State<AppState>) -> Result<Response, ApiError> {
+    let rows = sqlx::query_as::<_, StudentRow>(
+        "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year
+         FROM students WHERE is_enrolled = 1 ORDER BY grade, class_no, seq_no",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let buf = build_enrolled_export_xlsx(&rows)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, &format!("enrolled_{}.xlsx", excel::now_tag())))
+}
+
+/// POST /api/students/enrolled/import
+pub async fn import_enrolled(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Json<ImportResult>, ApiError> {
+    let bytes = loop {
+        match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+            Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
+            None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
+        }
+    };
+    let file_rows = excel::parse_file_rows(&bytes)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let mut inserted = 0usize;
+    let mut updated = 0usize;
+    let mut errors: Vec<String> = Vec::new();
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (idx, cols) in file_rows.iter().enumerate() {
+        let rec = row_to_enrolled_record(cols);
+        if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
+            errors.push(format!("{}행: {}", idx + 2, e));
+        }
+    }
+    tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(ImportResult { inserted, updated, errors }))
+}
+
+// ── 졸업생 전용 ───────────────────────────────────────────────────
+
+/// GET /api/students/graduated/template
+pub async fn graduated_template() -> Result<Response, ApiError> {
+    let buf = build_graduated_template_xlsx()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, "graduated_template.xlsx"))
+}
+
+/// GET /api/students/graduated/export
+pub async fn export_graduated(State(state): State<AppState>) -> Result<Response, ApiError> {
+    let rows = sqlx::query_as::<_, StudentRow>(
+        "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year
+         FROM students WHERE is_enrolled = 0 ORDER BY grad_year DESC, student_code",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let buf = build_graduated_export_xlsx(&rows)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, &format!("graduated_{}.xlsx", excel::now_tag())))
+}
+
+/// POST /api/students/graduated/import
+pub async fn import_graduated(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Json<ImportResult>, ApiError> {
+    let bytes = loop {
+        match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+            Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
+            None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
+        }
+    };
+    let file_rows = excel::parse_file_rows(&bytes)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let mut inserted = 0usize;
+    let mut updated = 0usize;
+    let mut errors: Vec<String> = Vec::new();
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (idx, cols) in file_rows.iter().enumerate() {
+        let rec = row_to_graduated_record(cols);
+        if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
+            errors.push(format!("{}행: {}", idx + 2, e));
+        }
+    }
+    tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(ImportResult { inserted, updated, errors }))
+}
+
+// ── 학생 삭제 ─────────────────────────────────────────────────────
+
+/// DELETE /api/students/:id
+pub async fn delete_student(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    let base_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE student_id = ?")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let app_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM applications WHERE student_id = ?")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if base_count > 0 || app_count > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!(
+                "기초 데이터 {}건, 지원 기록 {}건이 있어 삭제할 수 없습니다.",
+                base_count, app_count
+            ),
+        ));
+    }
+
+    sqlx::query("DELETE FROM students WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ── xlsx 생성 (재학생/졸업생 전용) ────────────────────────────────
+
+fn build_enrolled_template_xlsx() -> anyhow::Result<Vec<u8>> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    for (i, h) in ENROLLED_HEADERS.iter().enumerate() {
+        ws.write_string(0, i as u16, *h)?;
+    }
+    ws.write_string(1, 0, "20250001")?;
+    ws.write_string(1, 1, "홍길동")?;
+    ws.write_number(1, 2, 1.0)?;
+    ws.write_number(1, 3, 1.0)?;
+    ws.write_number(1, 4, 1.0)?;
+    Ok(wb.save_to_buffer()?)
+}
+
+fn build_enrolled_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    for (i, h) in ENROLLED_HEADERS.iter().enumerate() {
+        ws.write_string(0, i as u16, *h)?;
+    }
+    for (r, row) in rows.iter().enumerate() {
+        let r = r as u32 + 1;
+        ws.write_string(r, 0, &row.student_code)?;
+        ws.write_string(r, 1, &row.name)?;
+        if let Some(v) = row.grade    { ws.write_number(r, 2, v as f64)?; }
+        if let Some(v) = row.class_no { ws.write_number(r, 3, v as f64)?; }
+        if let Some(v) = row.seq_no   { ws.write_number(r, 4, v as f64)?; }
+    }
+    Ok(wb.save_to_buffer()?)
+}
+
+fn build_graduated_template_xlsx() -> anyhow::Result<Vec<u8>> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    for (i, h) in GRADUATED_HEADERS.iter().enumerate() {
+        ws.write_string(0, i as u16, *h)?;
+    }
+    ws.write_string(1, 0, "20240001")?;
+    ws.write_string(1, 1, "김철수")?;
+    ws.write_number(1, 2, 2024.0)?;
+    Ok(wb.save_to_buffer()?)
+}
+
+fn build_graduated_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    for (i, h) in GRADUATED_HEADERS.iter().enumerate() {
+        ws.write_string(0, i as u16, *h)?;
+    }
+    for (r, row) in rows.iter().enumerate() {
+        let r = r as u32 + 1;
+        ws.write_string(r, 0, &row.student_code)?;
+        ws.write_string(r, 1, &row.name)?;
+        if let Some(v) = row.grad_year { ws.write_number(r, 2, v as f64)?; }
+    }
+    Ok(wb.save_to_buffer()?)
+}
+
 // ── 파싱 ─────────────────────────────────────────────────────────
 
 fn row_to_record(cols: &[String]) -> StudentRecord {
@@ -299,5 +510,33 @@ fn row_to_record(cols: &[String]) -> StudentRecord {
         class_no:     parse_i64(4),
         seq_no:       parse_i64(5),
         grad_year:    parse_i64(6),
+    }
+}
+
+fn row_to_enrolled_record(cols: &[String]) -> StudentRecord {
+    let get = |i: usize| cols.get(i).cloned().unwrap_or_default();
+    let parse_i64 = |i: usize| get(i).trim().parse::<i64>().ok();
+    StudentRecord {
+        student_code: get(0).trim().to_string(),
+        name:         get(1).trim().to_string(),
+        is_enrolled:  1,
+        grade:        parse_i64(2),
+        class_no:     parse_i64(3),
+        seq_no:       parse_i64(4),
+        grad_year:    None,
+    }
+}
+
+fn row_to_graduated_record(cols: &[String]) -> StudentRecord {
+    let get = |i: usize| cols.get(i).cloned().unwrap_or_default();
+    let parse_i64 = |i: usize| get(i).trim().parse::<i64>().ok();
+    StudentRecord {
+        student_code: get(0).trim().to_string(),
+        name:         get(1).trim().to_string(),
+        is_enrolled:  0,
+        grade:        None,
+        class_no:     None,
+        seq_no:       None,
+        grad_year:    parse_i64(2),
     }
 }

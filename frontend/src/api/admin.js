@@ -63,15 +63,32 @@ export const getStudents = (params = {}) =>
 
 export const downloadStudentTemplate = () =>
   axios.get('/api/students/template', { responseType: 'blob' })
-
 export const exportStudents = () =>
   axios.get('/api/students/export', { responseType: 'blob' })
-
 export const importStudents = (file) => {
-  const fd = new FormData()
-  fd.append('file', file)
+  const fd = new FormData(); fd.append('file', file)
   return axios.post('/api/students/import', fd).then(r => r.data)
 }
+
+export const downloadEnrolledTemplate = () =>
+  axios.get('/api/students/enrolled/template', { responseType: 'blob' })
+export const exportEnrolled = () =>
+  axios.get('/api/students/enrolled/export', { responseType: 'blob' })
+export const importEnrolled = (file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post('/api/students/enrolled/import', fd).then(r => r.data)
+}
+
+export const downloadGraduatedTemplate = () =>
+  axios.get('/api/students/graduated/template', { responseType: 'blob' })
+export const exportGraduated = () =>
+  axios.get('/api/students/graduated/export', { responseType: 'blob' })
+export const importGraduated = (file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post('/api/students/graduated/import', fd).then(r => r.data)
+}
+
+export const deleteStudent = (id) => axios.delete(`/api/students/${id}`)
 
 // ── 대학 관리 ──────────────────────────────────────────────────
 export const getUniversities = () => axios.get('/api/universities').then(r => r.data)
