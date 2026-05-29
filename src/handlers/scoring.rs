@@ -18,6 +18,7 @@ type Db = sqlx::SqlitePool;
 pub struct AreaRow {
     pub id: i64,
     pub calc_type: String,
+    pub max_score: i64,
     pub range_direction: Option<String>,
     pub category_agg: Option<String>,
     pub lookup_scope: String,
@@ -64,12 +65,16 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> i
             .max_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
             .unwrap_or(0),
+        // threshold가 허용 상한선 역할: value <= threshold인 행 중 최소 threshold 선택.
+        // value가 최대 threshold를 초과하면("5일 이상: 5점") 최대 threshold 행의 점수 사용.
         "LOWER" => rows
             .iter()
             .filter(|(th, _)| value <= *th)
             .min_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
-            .unwrap_or(0),
+            .unwrap_or_else(|| {
+                rows.iter().max_by_key(|(th, _)| *th).map(|(_, sc)| *sc).unwrap_or(0)
+            }),
         _ => 0,
     }
 }
@@ -140,7 +145,7 @@ pub async fn calc_area_score(
             if scores.is_empty() { return Ok(0); }
             Ok(match area.category_agg.as_deref().unwrap_or("SUM") {
                 "MAX" => *scores.iter().max().unwrap_or(&0),
-                _ => scores.iter().sum(),
+                _ => scores.iter().sum::<i64>().min(area.max_score),
             })
         }
 
@@ -180,7 +185,7 @@ pub async fn calculate_scores(
     }
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
-        "SELECT id, calc_type, range_direction, category_agg, lookup_scope FROM areas ORDER BY id",
+        "SELECT id, calc_type, max_score, range_direction, category_agg, lookup_scope FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
     .await
@@ -536,6 +541,7 @@ struct AreaWithName {
     id: i64,
     name: String,
     calc_type: String,
+    max_score: i64,
     range_direction: Option<String>,
     category_agg: Option<String>,
     lookup_scope: String,
@@ -546,7 +552,7 @@ pub async fn score_preview(
     Query(q): Query<ScorePreviewQuery>,
 ) -> Result<Json<ScorePreviewResponse>, ApiError> {
     let area_rows: Vec<AreaWithName> = sqlx::query_as::<_, AreaWithName>(
-        "SELECT id, name, calc_type, range_direction, category_agg, lookup_scope
+        "SELECT id, name, calc_type, max_score, range_direction, category_agg, lookup_scope
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -560,6 +566,7 @@ pub async fn score_preview(
         let area = AreaRow {
             id: aw.id,
             calc_type: aw.calc_type.clone(),
+            max_score: aw.max_score,
             range_direction: aw.range_direction.clone(),
             category_agg: aw.category_agg.clone(),
             lookup_scope: aw.lookup_scope.clone(),

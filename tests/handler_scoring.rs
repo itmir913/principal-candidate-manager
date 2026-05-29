@@ -46,7 +46,8 @@ fn lower_between_thresholds() {
 
 #[test]
 fn lower_above_all_thresholds() {
-    assert_eq!(lookup_range_score(400_000, &sample_rows(), "LOWER"), 0);
+    // value가 최대 threshold를 초과하면 최대 threshold 행의 점수 반환 ("5일 이상 → 5점" 케이스)
+    assert_eq!(lookup_range_score(400_000, &sample_rows(), "LOWER"), 10_000);
 }
 
 #[test]
@@ -138,6 +139,7 @@ async fn calc_range_simple_upper() {
     let area = AreaRow {
         id: aid,
         calc_type: "RANGE".into(),
+        max_score: 100_000,
         range_direction: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
@@ -174,6 +176,7 @@ async fn calc_range_simple_lower() {
     let area = AreaRow {
         id: aid,
         calc_type: "RANGE".into(),
+        max_score: 100_000,
         range_direction: Some("LOWER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
@@ -209,6 +212,7 @@ async fn calc_range_composite() {
     let area = AreaRow {
         id: aid,
         calc_type: "RANGE".into(),
+        max_score: 100_000,
         range_direction: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "COMPOSITE".into(),
@@ -246,6 +250,7 @@ async fn calc_category_sum() {
     let area = AreaRow {
         id: aid,
         calc_type: "CATEGORY".into(),
+        max_score: 100_000,
         range_direction: None,
         category_agg: Some("SUM".into()),
         lookup_scope: "SIMPLE".into(),
@@ -283,6 +288,7 @@ async fn calc_category_max() {
     let area = AreaRow {
         id: aid,
         calc_type: "CATEGORY".into(),
+        max_score: 100_000,
         range_direction: None,
         category_agg: Some("MAX".into()),
         lookup_scope: "SIMPLE".into(),
@@ -308,6 +314,7 @@ async fn calc_manual() {
     let area = AreaRow {
         id: aid,
         calc_type: "MANUAL".into(),
+        max_score: 100_000,
         range_direction: None,
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
@@ -332,11 +339,72 @@ async fn calc_no_base_data_returns_zero() {
     let area = AreaRow {
         id: aid,
         calc_type: "RANGE".into(),
+        max_score: 100_000,
         range_direction: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };
     assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn calc_category_sum_capped_at_max_score() {
+    // 합산이 max_score를 초과할 때 max_score로 상한 처리되는지 검증
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
+    // insert_area는 max_score=100_000으로 삽입. 세 항목 합산=110_000 > 100_000
+
+    for (cat, sc) in [("회장", 50_000i64), ("부회장", 40_000), ("임원", 20_000)] {
+        sqlx::query(
+            "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)",
+        )
+        .bind(aid).bind(cat).bind(sc).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)",
+        )
+        .bind(sid).bind(aid).bind(cat).execute(&pool).await.unwrap();
+    }
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "CATEGORY".into(),
+        max_score: 100_000,
+        range_direction: None,
+        category_agg: Some("SUM".into()),
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+}
+
+#[tokio::test]
+async fn calc_range_lower_above_max_threshold_uses_last_score() {
+    // "결석 5일 이상: 5점" 케이스 — value가 최대 threshold를 초과해도 최대 threshold 점수 반환
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "RANGE", Some("LOWER"), None, "SIMPLE").await;
+
+    for (th, sc) in [(0i64, 100_000i64), (10_000, 80_000), (50_000, 50_000)] {
+        sqlx::query(
+            "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+        )
+        .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
+    }
+    // value=70_000 은 최대 threshold(50_000)를 초과 → 50_000점 반환 기대
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '70000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "RANGE".into(),
+        max_score: 100_000,
+        range_direction: Some("LOWER".into()),
+        category_agg: None,
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
 }
 
 // ── calculate_scores 통합 ─────────────────────────────────────────
