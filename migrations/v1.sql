@@ -162,7 +162,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_category_map
 CREATE TABLE IF NOT EXISTS base_data (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id  INTEGER NOT NULL REFERENCES students(id),
-    area_id     INTEGER NOT NULL REFERENCES areas(id),
+    area_id     INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
     track_id    INTEGER REFERENCES univ_tracks(id),
     value       TEXT    NOT NULL,
     multi_value INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1))
