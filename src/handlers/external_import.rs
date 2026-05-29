@@ -43,24 +43,31 @@ fn parse_daegyo(bytes: &[u8]) -> Result<ParsedFile, String> {
     // 2행: 헤더
     let header_row = rows.get(1).cloned().unwrap_or_default();
     let col = excel::col_map(&header_row);
-    for c in &["학년", "반", "번호", "이름", "내등급(환산)"] {
+    for c in &["학년", "반", "번호", "이름", "일반등급", "내점수(환산)", "내등급(환산)"] {
         if !col.contains_key(*c) {
             return Err(format!("대교협 양식에서 '{}' 열을 찾을 수 없습니다", c));
         }
     }
 
     // 3행~: 데이터
+    // 내점수(환산)가 "미제공"이면 환산등급을 제공하지 않는 모집단위 → 일반등급 사용
     let records = rows
         .iter()
         .skip(2)
         .filter(|row| !row.iter().all(|c| c.is_empty()))
         .map(|row| {
+            let jum = excel::get_col(row, &col, "내점수(환산)");
+            let val = if jum == "미제공" {
+                excel::get_col(row, &col, "일반등급")
+            } else {
+                excel::get_col(row, &col, "내등급(환산)")
+            };
             vec![
                 excel::get_col(row, &col, "학년").to_string(),
                 excel::get_col(row, &col, "반").to_string(),
                 excel::get_col(row, &col, "번호").to_string(),
                 excel::get_col(row, &col, "이름").to_string(),
-                excel::get_col(row, &col, "내등급(환산)").to_string(),
+                val.to_string(),
             ]
         })
         .collect();

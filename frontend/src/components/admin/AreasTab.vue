@@ -314,7 +314,8 @@
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
          @click.self="closeExtModal">
       <div class="bg-white rounded-lg shadow-xl w-[520px] max-h-[90vh] overflow-y-auto p-6">
-        <h3 class="text-base font-semibold text-gray-800 mb-4">{{ extModal.title }}</h3>
+        <h3 class="text-base font-semibold text-gray-800 mb-1">{{ extModal.title }}</h3>
+        <p class="text-xs text-gray-400 mb-4 truncate">{{ extModal.file?.name }}</p>
 
         <div class="space-y-3 mb-4">
           <div>
