@@ -76,6 +76,9 @@
             <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
           </select>
         </div>
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+          전형요소는 등록 후 수정할 수 없습니다.
+        </p>
         <div class="flex gap-1">
           <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded" @click="addArea">저장</button>
           <button class="px-2 py-1 bg-gray-200 text-xs rounded" @click="showAddForm = false">취소</button>
@@ -89,6 +92,21 @@
         <h3 class="text-base font-semibold text-gray-800">{{ selected.name }}</h3>
         <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ calcTypeLabel(selected.calc_type) }}</span>
         <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+      </div>
+
+      <!-- 기본 정보 카드 -->
+      <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
+        <div class="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
+          <span><span class="text-gray-400 mr-1">만점</span>{{ displayScore(selected.max_score) }}점</span>
+          <span><span class="text-gray-400 mr-1">조회 기준</span>{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+          <span><span class="text-gray-400 mr-1">계산 유형</span>{{ calcTypeLabel(selected.calc_type) }}</span>
+          <span v-if="selected.calc_type === 'NUMERIC'"><span class="text-gray-400 mr-1">탐색 방향</span>{{ matchModeLabel(selected.match_mode) }}</span>
+          <span v-if="selected.calc_type === 'CATEGORY'"><span class="text-gray-400 mr-1">범주 집계</span>{{ categoryAggLabel(selected.category_agg) }}</span>
+          <span><span class="text-gray-400 mr-1">교사 직접 입력</span>{{ selected.teacher_editable ? '허용' : '불가' }}</span>
+        </div>
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+          전형요소는 등록 후 수정할 수 없습니다. 설정을 변경하려면 삭제 후 재등록하세요.
+        </p>
       </div>
 
       <!-- 서브탭 -->
@@ -113,6 +131,25 @@
 
       <!-- 점수 기준 탭 -->
       <div v-if="activeTab === 'score'">
+        <div class="mb-4 p-3 bg-blue-50 border border-blue-100 rounded text-xs">
+          <p class="font-medium text-blue-700 mb-2">양식 예시 — {{ scoreEx.desc }}</p>
+          <table class="border-collapse text-gray-700">
+            <thead>
+              <tr>
+                <th v-for="h in scoreEx.headers" :key="h"
+                    class="border border-blue-200 bg-blue-100 px-3 py-1 text-left font-medium whitespace-nowrap">{{ h }}</th>
+                <th class="bg-transparent px-3 py-1"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in scoreEx.rows" :key="i">
+                <td v-for="(cell, j) in row" :key="j"
+                    class="border border-blue-100 px-3 py-1 whitespace-nowrap">{{ cell }}</td>
+                <td class="pl-4 py-1 text-gray-400 whitespace-nowrap">{{ scoreEx.rowDescs[i] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="text-xs text-gray-500 mb-3">
           기준값·점수는 실제 값으로 작성 (예: 1.25, 30.5 / 소수점 최대 5자리)
         </p>
@@ -160,6 +197,23 @@
 
       <!-- 기초 데이터 탭 -->
       <div v-if="activeTab === 'base'">
+        <div class="mb-4 p-3 bg-blue-50 border border-blue-100 rounded text-xs">
+          <p class="font-medium text-blue-700 mb-2">양식 예시 — {{ baseEx.desc }}</p>
+          <table class="border-collapse text-gray-700">
+            <thead>
+              <tr>
+                <th v-for="h in baseEx.headers" :key="h"
+                    class="border border-blue-200 bg-blue-100 px-3 py-1 text-left font-medium whitespace-nowrap">{{ h }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in baseEx.rows" :key="i">
+                <td v-for="(cell, j) in row" :key="j"
+                    class="border border-blue-100 px-3 py-1 whitespace-nowrap">{{ cell }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="text-xs text-gray-500 mb-3">
           학생코드로 학생을 찾습니다. 구간 조회·수기 입력은 실제 값으로 작성 (소수점 최대 5자리).
         </p>
@@ -209,7 +263,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, defineComponent, h } from 'vue'
+import { ref, watch, onMounted, defineComponent, h, computed } from 'vue'
 import {
   getAreas, createArea, deleteArea,
   downloadNumericTableTemplate, exportNumericTable, importNumericTable,
@@ -217,6 +271,7 @@ import {
   downloadBaseDataTemplate, exportBaseData, importBaseData,
   getNumericTableList, getCategoryMapList, getBaseDataList,
 } from '../../api/admin.js'
+import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 
 // ── 상태 ──────────────────────────────────────────────────────
 const areas    = ref([])
@@ -247,10 +302,21 @@ function parseDisplayScore(raw) {
   return Math.round(f * 100000)
 }
 
-const CALC_TYPE_LABELS = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
+const CALC_TYPE_LABELS    = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
 const LOOKUP_SCOPE_LABELS = { SIMPLE: '학생 공통', COMPOSITE: '대학별 개별' }
-function calcTypeLabel(v) { return CALC_TYPE_LABELS[v] ?? v }
+const MATCH_MODE_LABELS   = { UPPER: '이상 ▲', LOWER: '이하 ▼', EXACT: '정확히 일치' }
+const CATEGORY_AGG_LABELS = { SUM: '중복 선택 (합산)', MAX: '최대 1개 (최고점)' }
+function calcTypeLabel(v)    { return CALC_TYPE_LABELS[v]    ?? v }
 function lookupScopeLabel(v) { return LOOKUP_SCOPE_LABELS[v] ?? v }
+function matchModeLabel(v)   { return v ? (MATCH_MODE_LABELS[v]   ?? v) : '—' }
+function categoryAggLabel(v) { return v ? (CATEGORY_AGG_LABELS[v] ?? v) : '—' }
+function displayScore(v) {
+  const f = v / 100000
+  return f % 1 === 0 ? String(f) : f.toFixed(5).replace(/\.?0+$/, '')
+}
+
+const scoreEx = computed(() => selected.value ? getScoreExample(selected.value) : null)
+const baseEx  = computed(() => selected.value ? getBaseExample(selected.value) : null)
 
 // ── 전형요소 목록 ─────────────────────────────────────────────────
 async function load() {
