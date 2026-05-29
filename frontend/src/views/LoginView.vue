@@ -63,7 +63,7 @@
           type="submit"
           :disabled="loading || !teacherGrade || !teacherClassNo"
           class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-        >{{ loading ? '처리 중…' : '로그인' }}</button>
+        >{{ loading ? '로그인 중…' : '로그인' }}</button>
       </form>
 
       <!-- Admin form -->
@@ -82,7 +82,7 @@
           type="submit"
           :disabled="loading"
           class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-        >{{ loading ? '처리 중…' : '로그인' }}</button>
+        >{{ loading ? '로그인 중…' : '로그인' }}</button>
       </form>
 
       <p v-if="error" class="mt-3 text-sm text-red-600 text-center">{{ error }}</p>
