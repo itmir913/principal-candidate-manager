@@ -19,7 +19,7 @@ pub struct AreaRow {
     pub id: i64,
     pub calc_type: String,
     pub max_score: i64,
-    pub range_direction: Option<String>,
+    pub match_mode: Option<String>,
     pub category_agg: Option<String>,
     pub lookup_scope: String,
 }
@@ -85,7 +85,7 @@ pub async fn calc_area_score(
     area: &AreaRow,
     univ_id: i64,
 ) -> Result<i64, sqlx::Error> {
-    // COMPOSITE 전형 요소는 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
+    // COMPOSITE 전형요소는 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
     let lookup_univ: Option<i64> = if area.lookup_scope == "COMPOSITE" {
         Some(univ_id)
     } else {
@@ -93,7 +93,7 @@ pub async fn calc_area_score(
     };
 
     let raw: i64 = match area.calc_type.as_str() {
-        "RANGE" => {
+        "NUMERIC" => {
             let value_str: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
@@ -105,10 +105,10 @@ pub async fn calc_area_score(
 
             let Some(vs) = value_str else { return Ok(0); };
             let value: i64 = vs.trim().parse().unwrap_or(0);
-            let direction = area.range_direction.as_deref().unwrap_or("UPPER");
+            let mode = area.match_mode.as_deref().unwrap_or("UPPER");
 
             let rows: Vec<(i64, i64)> = sqlx::query(
-                "SELECT threshold, score FROM range_table
+                "SELECT threshold, score FROM numeric_table
                  WHERE area_id = ? AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))
                  ORDER BY threshold",
             )
@@ -118,7 +118,7 @@ pub async fn calc_area_score(
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
             .collect();
 
-            lookup_range_score(value, &rows, direction)
+            lookup_range_score(value, &rows, mode)
         }
 
         "CATEGORY" => {
@@ -187,7 +187,7 @@ pub async fn calculate_scores(
     }
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
-        "SELECT id, calc_type, max_score, range_direction, category_agg, lookup_scope FROM areas ORDER BY id",
+        "SELECT id, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
     .await
@@ -445,11 +445,11 @@ pub async fn export_results(
                 serde_json::from_str(&r.score_detail).unwrap_or_default();
             for area in &areas {
                 let sc = detail.get(&area.id.to_string()).copied().unwrap_or(0);
-                ws.write_number(row, col, sc as f64 / 10000.0).ok();
+                ws.write_number(row, col, sc as f64 / 100000.0).ok();
                 col += 1;
             }
 
-            ws.write_number(row, col, r.total_score as f64 / 10000.0).ok(); col += 1;
+            ws.write_number(row, col, r.total_score as f64 / 100000.0).ok(); col += 1;
             ws.write_string(row, col, if r.recommended == 1 { "추천" } else { "" }).ok(); col += 1;
             ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).ok();
         }
@@ -544,7 +544,7 @@ struct AreaWithName {
     name: String,
     calc_type: String,
     max_score: i64,
-    range_direction: Option<String>,
+    match_mode: Option<String>,
     category_agg: Option<String>,
     lookup_scope: String,
 }
@@ -554,7 +554,7 @@ pub async fn score_preview(
     Query(q): Query<ScorePreviewQuery>,
 ) -> Result<Json<ScorePreviewResponse>, ApiError> {
     let area_rows: Vec<AreaWithName> = sqlx::query_as::<_, AreaWithName>(
-        "SELECT id, name, calc_type, max_score, range_direction, category_agg, lookup_scope
+        "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -569,7 +569,7 @@ pub async fn score_preview(
             id: aw.id,
             calc_type: aw.calc_type.clone(),
             max_score: aw.max_score,
-            range_direction: aw.range_direction.clone(),
+            match_mode: aw.match_mode.clone(),
             category_agg: aw.category_agg.clone(),
             lookup_scope: aw.lookup_scope.clone(),
         };

@@ -27,14 +27,14 @@ export const updateArea = (id, body) => axios.put(`/api/areas/${id}`, body).then
 
 export const deleteArea = (id) => axios.delete(`/api/areas/${id}`)
 
-// ── 점수 기준 Excel (range-table) ──────────────────────────────
-export const downloadRangeTableTemplate = (id) =>
-  axios.get(`/api/areas/${id}/range-table/template`, { responseType: 'blob' })
-export const exportRangeTable = (id) =>
-  axios.get(`/api/areas/${id}/range-table/export`, { responseType: 'blob' })
-export const importRangeTable = (id, file) => {
+// ── 점수 기준 Excel (numeric-table) ────────────────────────────
+export const downloadNumericTableTemplate = (id) =>
+  axios.get(`/api/areas/${id}/numeric-table/template`, { responseType: 'blob' })
+export const exportNumericTable = (id) =>
+  axios.get(`/api/areas/${id}/numeric-table/export`, { responseType: 'blob' })
+export const importNumericTable = (id, file) => {
   const fd = new FormData(); fd.append('file', file)
-  return axios.post(`/api/areas/${id}/range-table/import`, fd).then(r => r.data)
+  return axios.post(`/api/areas/${id}/numeric-table/import`, fd).then(r => r.data)
 }
 
 // ── 점수 기준 Excel (category-map) ─────────────────────────────
@@ -48,8 +48,8 @@ export const importCategoryMap = (id, file) => {
 }
 
 // ── 점수 기준 / 기초 데이터 JSON 조회 ─────────────────────────
-export const getRangeTableList = (id) =>
-  axios.get(`/api/areas/${id}/range-table/list`).then(r => r.data)
+export const getNumericTableList = (id) =>
+  axios.get(`/api/areas/${id}/numeric-table/list`).then(r => r.data)
 export const getCategoryMapList = (id) =>
   axios.get(`/api/areas/${id}/category-map/list`).then(r => r.data)
 export const getBaseDataList = (id) =>

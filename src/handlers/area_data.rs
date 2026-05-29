@@ -1,5 +1,5 @@
-/// 전형 요소별 데이터 Excel 업로드/다운로드 핸들러
-/// - 점수 기준: range_table (RANGE), category_map (CATEGORY)
+/// 전형요소별 데이터 Excel 업로드/다운로드 핸들러
+/// - 점수 기준: numeric_table (RANGE), category_map (CATEGORY)
 /// - 기초 데이터: base_data (모든 calc_type)
 use axum::{
     extract::{Multipart, Path, State},
@@ -34,14 +34,22 @@ struct AreaInfo {
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
 
 fn db_to_display(v: i64) -> f64 {
-    v as f64 / 10000.0
+    v as f64 / 100000.0
 }
 
-fn display_to_db(s: &str) -> Option<i64> {
-    s.trim()
-        .parse::<f64>()
-        .ok()
-        .map(|f| (f * 10000.0).round() as i64)
+/// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
+fn parse_display_value(s: &str) -> Result<i64, String> {
+    let trimmed = s.trim();
+    let f: f64 = trimmed
+        .parse()
+        .map_err(|_| format!("'{}' 숫자 변환 실패", trimmed))?;
+    if let Some(dot_pos) = trimmed.find('.') {
+        let decimals = trimmed[dot_pos + 1..].trim_end_matches('0');
+        if decimals.len() > 5 {
+            return Err(format!("'{}' 소수점 5자리 초과 (최대 5자리)", trimmed));
+        }
+    }
+    Ok((f * 100000.0).round() as i64)
 }
 
 fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
@@ -61,7 +69,7 @@ async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     .fetch_optional(db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형 요소 id={} 없음", id)))
+    .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", id)))
 }
 
 /// 대학이 없으면 자동 생성 후 (id, 생성여부) 반환
@@ -117,7 +125,7 @@ fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     }
 }
 
-/// COMPOSITE 전형 요소: univ_id 조회/생성 (열 이름 기반)
+/// COMPOSITE 전형요소: univ_id 조회/생성 (열 이름 기반)
 async fn resolve_univ(
     db: &Db,
     area: &AreaInfo,
@@ -131,7 +139,7 @@ async fn resolve_univ(
         let un = excel::get_col(cols, col, "대학명");
         let tn = excel::get_col(cols, col, "전형명");
         if un.is_empty() || tn.is_empty() {
-            errors.push(format!("{}행: COMPOSITE 전형 요소는 대학명, 전형명 필수", row_num));
+            errors.push(format!("{}행: COMPOSITE 전형요소는 대학명, 전형명 필수", row_num));
             return None;
         }
         match find_or_create_univ(db, un, tn).await {
@@ -154,22 +162,22 @@ async fn resolve_univ(
 // ── RANGE TABLE ──────────────────────────────────────────────────
 
 /// GET /api/areas/:id/range-table/template
-pub async fn range_table_template(
+pub async fn numeric_table_template(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "RANGE" {
-        return Err((StatusCode::BAD_REQUEST, "RANGE 전형 요소만 구간표를 사용합니다".into()));
+    if area.calc_type != "NUMERIC" {
+        return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "기준값");
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "range_table_template.xlsx"))
+    Ok(excel::xlsx_response(buf, "numeric_table_template.xlsx"))
 }
 
 /// GET /api/areas/:id/range-table/export
-pub async fn range_table_export(
+pub async fn numeric_table_export(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Response, ApiError> {
@@ -185,7 +193,7 @@ pub async fn range_table_export(
             "SELECT rt.threshold, rt.score,
                     COALESCE(u.univ_name, '') AS univ_name,
                     COALESCE(u.track_name, '') AS track_name
-             FROM range_table rt
+             FROM numeric_table rt
              LEFT JOIN universities u ON rt.univ_id = u.id
              WHERE rt.area_id = ?
              ORDER BY rt.univ_id, rt.threshold",
@@ -206,7 +214,7 @@ pub async fn range_table_export(
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
-            "SELECT threshold, score FROM range_table
+            "SELECT threshold, score FROM numeric_table
              WHERE area_id = ? AND univ_id IS NULL ORDER BY threshold",
         )
         .bind(id)
@@ -223,18 +231,18 @@ pub async fn range_table_export(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, &format!("range_table_{}.xlsx", excel::now_tag())))
+    Ok(excel::xlsx_response(buf, &format!("numeric_table_{}.xlsx", excel::now_tag())))
 }
 
 /// POST /api/areas/:id/range-table/import
-pub async fn range_table_import(
+pub async fn numeric_table_import(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     multipart: Multipart,
 ) -> Result<Json<ImportResult>, ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "RANGE" {
-        return Err((StatusCode::BAD_REQUEST, "RANGE 전형 요소만 구간표를 사용합니다".into()));
+    if area.calc_type != "NUMERIC" {
+        return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
@@ -245,7 +253,7 @@ pub async fn range_table_import(
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query("DELETE FROM range_table WHERE area_id = ?")
+    sqlx::query("DELETE FROM numeric_table WHERE area_id = ?")
         .bind(id).execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -256,13 +264,13 @@ pub async fn range_table_import(
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
 
-        let th = match display_to_db(excel::get_col(cols, &col, "기준값")) {
-            Some(v) => v,
-            None => { errors.push(format!("{}행: 기준값 파싱 실패", row_num)); continue; }
+        let th = match parse_display_value(excel::get_col(cols, &col, "기준값")) {
+            Ok(v) => v,
+            Err(e) => { errors.push(format!("{}행: 기준값 — {}", row_num, e)); continue; }
         };
-        let sc = match display_to_db(excel::get_col(cols, &col, "점수")) {
-            Some(v) => v,
-            None => { errors.push(format!("{}행: 점수 파싱 실패", row_num)); continue; }
+        let sc = match parse_display_value(excel::get_col(cols, &col, "점수")) {
+            Ok(v) => v,
+            Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
 
         let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
@@ -271,7 +279,7 @@ pub async fn range_table_import(
         };
 
         match sqlx::query(
-            "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, ?, ?, ?)",
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, ?, ?, ?)",
         )
         .bind(id).bind(univ_id).bind(th).bind(sc)
         .execute(&mut *tx).await {
@@ -293,7 +301,7 @@ pub async fn category_map_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "CATEGORY" {
-        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형 요소만 범주표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "범주");
     let buf = simple_template(&headers)
@@ -367,7 +375,7 @@ pub async fn category_map_import(
 ) -> Result<Json<ImportResult>, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "CATEGORY" {
-        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형 요소만 범주표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
@@ -394,9 +402,9 @@ pub async fn category_map_import(
             errors.push(format!("{}행: 범주 누락", row_num));
             continue;
         }
-        let sc = match display_to_db(excel::get_col(cols, &col, "점수")) {
-            Some(v) => v,
-            None => { errors.push(format!("{}행: 점수 파싱 실패", row_num)); continue; }
+        let sc = match parse_display_value(excel::get_col(cols, &col, "점수")) {
+            Ok(v) => v,
+            Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
 
         let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
@@ -554,12 +562,12 @@ pub async fn base_data_import(
             }
         };
 
-        // value 변환 (RANGE/MANUAL: ×10000, CATEGORY: 그대로)
+        // value 변환 (NUMERIC/MANUAL: ×100000, CATEGORY: 그대로)
         let db_value = match area.calc_type.as_str() {
-            "RANGE" | "MANUAL" => match display_to_db(raw_value) {
-                Some(v) => v.to_string(),
-                None => {
-                    errors.push(format!("{}행: 값 '{}' 숫자 파싱 실패", row_num, raw_value));
+            "NUMERIC" | "MANUAL" => match parse_display_value(raw_value) {
+                Ok(v) => v.to_string(),
+                Err(e) => {
+                    errors.push(format!("{}행: 값 — {}", row_num, e));
                     continue;
                 }
             },
@@ -614,7 +622,7 @@ pub struct BaseDataListRow {
 }
 
 /// GET /api/areas/:id/range-table/list
-pub async fn range_table_list(
+pub async fn numeric_table_list(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Vec<RangeTableListRow>>, ApiError> {
@@ -625,7 +633,7 @@ pub async fn range_table_list(
         "SELECT rt.threshold, rt.score,
                 COALESCE(u.univ_name, '') AS univ_name,
                 COALESCE(u.track_name, '') AS track_name
-         FROM range_table rt
+         FROM numeric_table rt
          LEFT JOIN universities u ON rt.univ_id = u.id
          WHERE rt.area_id = ?
          ORDER BY rt.univ_id, rt.threshold",
@@ -709,7 +717,7 @@ pub async fn base_data_list(
         .map(|row| {
             let raw: String = row.get("value");
             let value = match area.calc_type.as_str() {
-                "RANGE" | "MANUAL" => raw
+                "NUMERIC" | "MANUAL" => raw
                     .parse::<i64>()
                     .map(|v| format!("{}", db_to_display(v)))
                     .unwrap_or(raw),
@@ -729,10 +737,10 @@ pub async fn base_data_list(
 
 // ── xlsx 쓰기 헬퍼 ───────────────────────────────────────────────
 
-/// DB value 문자열 → xlsx 셀 (RANGE/MANUAL: ÷10000 숫자, CATEGORY: 문자열)
+/// DB value 문자열 → xlsx 셀 (NUMERIC/MANUAL: ÷100000 숫자, CATEGORY: 문자열)
 fn write_value(ws: &mut rust_xlsxwriter::Worksheet, row: u32, col: u16, value: &str, calc_type: &str) {
     match calc_type {
-        "RANGE" | "MANUAL" => {
+        "NUMERIC" | "MANUAL" => {
             if let Ok(v) = value.parse::<i64>() {
                 ws.write_number(row, col, db_to_display(v)).ok();
             } else {

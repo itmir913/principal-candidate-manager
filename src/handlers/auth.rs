@@ -58,7 +58,8 @@ pub async fn admin_login(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let hash = hash.ok_or((StatusCode::INTERNAL_SERVER_ERROR, "설정값 없음".into()))?;
+    // 행이 없거나 빈 문자열이면 미초기화 상태 → 최초 로그인으로 처리
+    let hash = hash.unwrap_or_default();
 
     if hash.is_empty() {
         let new_hash = bcrypt::hash(&body.password, bcrypt::DEFAULT_COST)

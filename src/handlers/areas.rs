@@ -18,7 +18,7 @@ pub struct AreaRow {
     pub calc_type: String,
     pub teacher_editable: i64,
     pub lookup_scope: String,
-    pub range_direction: Option<String>,
+    pub match_mode: Option<String>,
     pub category_agg: Option<String>,
 }
 
@@ -29,7 +29,7 @@ pub struct CreateAreaBody {
     pub calc_type: String,
     pub teacher_editable: i64,
     pub lookup_scope: String,
-    pub range_direction: Option<String>,
+    pub match_mode: Option<String>,
     pub category_agg: Option<String>,
 }
 
@@ -40,7 +40,7 @@ pub struct UpdateAreaBody {
     pub calc_type: Option<String>,
     pub teacher_editable: Option<i64>,
     pub lookup_scope: Option<String>,
-    pub range_direction: Option<String>,
+    pub match_mode: Option<String>,
     pub category_agg: Option<String>,
 }
 
@@ -59,7 +59,7 @@ pub struct CategoryRow {
 pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRow>>, ApiError> {
     let rows = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, max_score, calc_type, teacher_editable, lookup_scope,
-                range_direction, category_agg
+                match_mode, category_agg
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -73,9 +73,16 @@ pub async fn create_area(
     State(state): State<AppState>,
     Json(body): Json<CreateAreaBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    if body.calc_type == "NUMERIC" && body.match_mode.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "NUMERIC 전형요소는 match_mode(UPPER/LOWER/EXACT)가 필수입니다".into()));
+    }
+    if body.calc_type == "CATEGORY" && body.category_agg.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소는 category_agg(SUM/MAX)가 필수입니다".into()));
+    }
+
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope,
-                            range_direction, category_agg)
+                            match_mode, category_agg)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          RETURNING id",
     )
@@ -84,7 +91,7 @@ pub async fn create_area(
     .bind(&body.calc_type)
     .bind(body.teacher_editable)
     .bind(&body.lookup_scope)
-    .bind(&body.range_direction)
+    .bind(&body.match_mode)
     .bind(&body.category_agg)
     .fetch_one(&state.db)
     .await
@@ -119,7 +126,7 @@ pub async fn update_area(
     update_field!(body.calc_type, "calc_type");
     update_field!(body.teacher_editable, "teacher_editable");
     update_field!(body.lookup_scope, "lookup_scope");
-    update_field!(body.range_direction, "range_direction");
+    update_field!(body.match_mode, "match_mode");
     update_field!(body.category_agg, "category_agg");
 
     tx.commit().await
@@ -141,12 +148,12 @@ pub async fn delete_area(
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn get_range_table(
+pub async fn get_numeric_table(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Vec<RangeRow>>, ApiError> {
     let rows = sqlx::query_as::<_, RangeRow>(
-        "SELECT threshold, score FROM range_table WHERE area_id = ? ORDER BY threshold",
+        "SELECT threshold, score FROM numeric_table WHERE area_id = ? ORDER BY threshold",
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -156,7 +163,7 @@ pub async fn get_range_table(
     Ok(Json(rows))
 }
 
-pub async fn put_range_table(
+pub async fn put_numeric_table(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     Json(rows): Json<Vec<RangeRow>>,
@@ -167,14 +174,14 @@ pub async fn put_range_table(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM range_table WHERE area_id = ?")
+    sqlx::query("DELETE FROM numeric_table WHERE area_id = ?")
         .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for row in rows {
-        sqlx::query("INSERT INTO range_table (area_id, threshold, score) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO numeric_table (area_id, threshold, score) VALUES (?, ?, ?)")
             .bind(id)
             .bind(row.threshold)
             .bind(row.score)

@@ -87,7 +87,7 @@ async fn insert_area(
     scope: &str,
 ) -> i64 {
     sqlx::query(
-        "INSERT INTO areas (name, max_score, calc_type, range_direction, category_agg, lookup_scope) \
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope) \
          VALUES ('TestArea', 100000, ?, ?, ?, ?)",
     )
     .bind(calc_type)
@@ -114,11 +114,11 @@ async fn insert_university(pool: &sqlx::SqlitePool) -> i64 {
 async fn calc_range_simple_upper() {
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
-    let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "SIMPLE").await;
+    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "SIMPLE").await;
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
         sqlx::query(
-            "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(th)
@@ -138,9 +138,9 @@ async fn calc_range_simple_upper() {
 
     let area = AreaRow {
         id: aid,
-        calc_type: "RANGE".into(),
+        calc_type: "NUMERIC".into(),
         max_score: 100_000,
-        range_direction: Some("UPPER".into()),
+        match_mode: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };
@@ -151,11 +151,11 @@ async fn calc_range_simple_upper() {
 async fn calc_range_simple_lower() {
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
-    let aid = insert_area(&pool, "RANGE", Some("LOWER"), None, "SIMPLE").await;
+    let aid = insert_area(&pool, "NUMERIC", Some("LOWER"), None, "SIMPLE").await;
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
         sqlx::query(
-            "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(th)
@@ -175,9 +175,9 @@ async fn calc_range_simple_lower() {
 
     let area = AreaRow {
         id: aid,
-        calc_type: "RANGE".into(),
+        calc_type: "NUMERIC".into(),
         max_score: 100_000,
-        range_direction: Some("LOWER".into()),
+        match_mode: Some("LOWER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };
@@ -189,10 +189,10 @@ async fn calc_range_composite() {
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
     let uid = insert_university(&pool).await;
-    let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "COMPOSITE").await;
+    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "COMPOSITE").await;
 
     sqlx::query(
-        "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, ?, 100000, 80000)",
+        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, ?, 100000, 80000)",
     )
     .bind(aid)
     .bind(uid)
@@ -211,9 +211,9 @@ async fn calc_range_composite() {
 
     let area = AreaRow {
         id: aid,
-        calc_type: "RANGE".into(),
+        calc_type: "NUMERIC".into(),
         max_score: 100_000,
-        range_direction: Some("UPPER".into()),
+        match_mode: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "COMPOSITE".into(),
     };
@@ -251,7 +251,7 @@ async fn calc_category_sum() {
         id: aid,
         calc_type: "CATEGORY".into(),
         max_score: 100_000,
-        range_direction: None,
+        match_mode: None,
         category_agg: Some("SUM".into()),
         lookup_scope: "SIMPLE".into(),
     };
@@ -289,7 +289,7 @@ async fn calc_category_max() {
         id: aid,
         calc_type: "CATEGORY".into(),
         max_score: 100_000,
-        range_direction: None,
+        match_mode: None,
         category_agg: Some("MAX".into()),
         lookup_scope: "SIMPLE".into(),
     };
@@ -315,7 +315,7 @@ async fn calc_manual() {
         id: aid,
         calc_type: "MANUAL".into(),
         max_score: 100_000,
-        range_direction: None,
+        match_mode: None,
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };
@@ -326,10 +326,10 @@ async fn calc_manual() {
 async fn calc_no_base_data_returns_zero() {
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
-    let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "SIMPLE").await;
+    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 50000)",
+        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 50000)",
     )
     .bind(aid)
     .execute(&pool)
@@ -338,9 +338,9 @@ async fn calc_no_base_data_returns_zero() {
 
     let area = AreaRow {
         id: aid,
-        calc_type: "RANGE".into(),
+        calc_type: "NUMERIC".into(),
         max_score: 100_000,
-        range_direction: Some("UPPER".into()),
+        match_mode: Some("UPPER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };
@@ -370,7 +370,7 @@ async fn calc_category_sum_capped_at_max_score() {
         id: aid,
         calc_type: "CATEGORY".into(),
         max_score: 100_000,
-        range_direction: None,
+        match_mode: None,
         category_agg: Some("SUM".into()),
         lookup_scope: "SIMPLE".into(),
     };
@@ -382,11 +382,11 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
     // "결석 5일 이상: 5점" 케이스 — value가 최대 threshold를 초과해도 최대 threshold 점수 반환
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
-    let aid = insert_area(&pool, "RANGE", Some("LOWER"), None, "SIMPLE").await;
+    let aid = insert_area(&pool, "NUMERIC", Some("LOWER"), None, "SIMPLE").await;
 
     for (th, sc) in [(0i64, 100_000i64), (10_000, 80_000), (50_000, 50_000)] {
         sqlx::query(
-            "INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
     }
@@ -398,9 +398,9 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
 
     let area = AreaRow {
         id: aid,
-        calc_type: "RANGE".into(),
+        calc_type: "NUMERIC".into(),
         max_score: 100_000,
-        range_direction: Some("LOWER".into()),
+        match_mode: Some("LOWER".into()),
         category_agg: None,
         lookup_scope: "SIMPLE".into(),
     };

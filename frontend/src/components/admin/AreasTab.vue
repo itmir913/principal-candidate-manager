@@ -1,9 +1,9 @@
 <template>
   <div class="flex gap-4 min-h-0">
-    <!-- ── 좌측: 전형 요소 목록 ── -->
+    <!-- ── 좌측: 전형요소 목록 ── -->
     <div class="w-72 shrink-0">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-gray-700">전형 요소 목록</h2>
+        <h2 class="text-lg font-semibold text-gray-700">전형요소 목록</h2>
         <button class="px-2 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
           @click="openAddForm">+ 추가</button>
       </div>
@@ -19,18 +19,18 @@
           @click="selectArea(area)">
           <div class="min-w-0">
             <span class="text-sm font-medium truncate block">{{ area.name }}</span>
-            <span class="text-xs text-gray-400">{{ area.calc_type }} · {{ area.lookup_scope }}</span>
+            <span class="text-xs text-gray-400">{{ calcTypeLabel(area.calc_type) }} · {{ lookupScopeLabel(area.lookup_scope) }}</span>
           </div>
           <button class="text-red-400 text-xs hover:text-red-600 ml-2 shrink-0"
             @click.stop="removeArea(area.id)">삭제</button>
         </li>
-        <li v-if="areas.length === 0" class="text-gray-400 text-sm px-2">등록된 전형 요소 없음</li>
+        <li v-if="areas.length === 0" class="text-gray-400 text-sm px-2">등록된 전형요소 없음</li>
       </ul>
 
-      <!-- 전형 요소 추가 폼 -->
+      <!-- 전형요소 추가 폼 -->
       <div v-if="showAddForm" class="mt-3 p-3 border border-blue-200 rounded bg-blue-50 space-y-2 text-sm">
         <div>
-          <label class="text-xs text-gray-500">전형 요소 이름</label>
+          <label class="text-xs text-gray-500">전형요소 이름</label>
           <input v-model="newArea.name" type="text" class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
         <div>
@@ -40,15 +40,18 @@
         </div>
         <div class="flex gap-2">
           <div class="flex-1">
-            <label class="text-xs text-gray-500">calc_type</label>
+            <label class="text-xs text-gray-500">점수 산출 방식</label>
             <select v-model="newArea.calc_type" class="w-full border rounded px-2 py-1 mt-0.5">
-              <option>RANGE</option><option>CATEGORY</option><option>MANUAL</option>
+              <option value="NUMERIC">구간 조회</option>
+              <option value="CATEGORY">범주 선택</option>
+              <option value="MANUAL">수기 입력</option>
             </select>
           </div>
           <div class="flex-1">
-            <label class="text-xs text-gray-500">lookup_scope</label>
+            <label class="text-xs text-gray-500">데이터 조회 기준</label>
             <select v-model="newArea.lookup_scope" class="w-full border rounded px-2 py-1 mt-0.5">
-              <option>SIMPLE</option><option>COMPOSITE</option>
+              <option value="SIMPLE">학생 공통</option>
+              <option value="COMPOSITE">대학별 개별</option>
             </select>
           </div>
         </div>
@@ -56,16 +59,21 @@
           <input v-model="newArea.teacher_editable" type="checkbox" id="te" />
           <label for="te" class="text-xs text-gray-500">담임교사 수동 입력</label>
         </div>
-        <div v-if="newArea.calc_type === 'RANGE'">
-          <label class="text-xs text-gray-500">range_direction</label>
-          <select v-model="newArea.range_direction" class="w-full border rounded px-2 py-1 mt-0.5">
-            <option value="">없음</option><option>UPPER</option><option>LOWER</option>
+        <div v-if="newArea.calc_type === 'NUMERIC'">
+          <label class="text-xs text-gray-500">구간 탐색 방향 <span class="text-red-500">*</span></label>
+          <select v-model="newArea.match_mode" class="w-full border rounded px-2 py-1 mt-0.5">
+            <option value="">선택하세요</option>
+            <option value="UPPER">이상 ▲ (값이 클수록 유리)</option>
+            <option value="LOWER">이하 ▼ (값이 작을수록 유리)</option>
+            <option value="EXACT">정확 일치</option>
           </select>
         </div>
         <div v-if="newArea.calc_type === 'CATEGORY'">
-          <label class="text-xs text-gray-500">category_agg</label>
+          <label class="text-xs text-gray-500">복수 활동 처리 방식 <span class="text-red-500">*</span></label>
           <select v-model="newArea.category_agg" class="w-full border rounded px-2 py-1 mt-0.5">
-            <option value="">없음</option><option>SUM</option><option>MAX</option>
+            <option value="">선택하세요</option>
+            <option value="SUM">전체 합산 (만점 상한 적용)</option>
+            <option value="MAX">최고 경력만 인정</option>
           </select>
         </div>
         <div class="flex gap-1">
@@ -75,12 +83,12 @@
       </div>
     </div>
 
-    <!-- ── 우측: 전형 요소 상세 (서브탭) ── -->
+    <!-- ── 우측: 전형요소 상세 (서브탭) ── -->
     <div class="flex-1 min-w-0" v-if="selected">
       <div class="flex items-center gap-2 mb-3">
         <h3 class="text-base font-semibold text-gray-800">{{ selected.name }}</h3>
-        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ selected.calc_type }}</span>
-        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ selected.lookup_scope }}</span>
+        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ calcTypeLabel(selected.calc_type) }}</span>
+        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
       </div>
 
       <!-- 서브탭 -->
@@ -106,7 +114,7 @@
       <!-- 점수 기준 탭 -->
       <div v-if="activeTab === 'score'">
         <p class="text-xs text-gray-500 mb-3">
-          threshold·score는 ÷10000 표시값으로 작성 (예: 1.25, 30.5)
+          기준값·점수는 실제 값으로 작성 (예: 1.25, 30.5 / 소수점 최대 5자리)
         </p>
         <ExcelPanel
           :area-id="selected.id"
@@ -124,7 +132,7 @@
             <thead class="sticky top-0 bg-gray-50">
               <tr>
                 <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">
-                  {{ selected.calc_type === 'RANGE' ? '기준값' : '범주' }}
+                  {{ selected.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
                 </th>
                 <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">점수</th>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
@@ -137,7 +145,7 @@
               <tr v-for="(row, i) in scoreRows" :key="i"
                   :class="i % 2 === 1 ? 'bg-gray-50' : ''">
                 <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">
-                  {{ selected.calc_type === 'RANGE' ? row.threshold : row.category }}
+                  {{ selected.calc_type === 'NUMERIC' ? row.threshold : row.category }}
                 </td>
                 <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.score }}</td>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
@@ -153,7 +161,7 @@
       <!-- 기초 데이터 탭 -->
       <div v-if="activeTab === 'base'">
         <p class="text-xs text-gray-500 mb-3">
-          student_code로 학생을 찾습니다. RANGE/MANUAL value는 ÷10000 표시값으로 작성.
+          학생코드로 학생을 찾습니다. 구간 조회·수기 입력은 실제 값으로 작성 (소수점 최대 5자리).
         </p>
         <ExcelPanel
           :area-id="selected.id"
@@ -196,7 +204,7 @@
       </div>
     </div>
 
-    <p v-else class="text-gray-400 text-sm mt-2">왼쪽에서 전형 요소를 선택하세요.</p>
+    <p v-else class="text-gray-400 text-sm mt-2">왼쪽에서 전형요소를 선택하세요.</p>
   </div>
 </template>
 
@@ -204,10 +212,10 @@
 import { ref, watch, onMounted, defineComponent, h } from 'vue'
 import {
   getAreas, createArea, deleteArea,
-  downloadRangeTableTemplate, exportRangeTable, importRangeTable,
+  downloadNumericTableTemplate, exportNumericTable, importNumericTable,
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
   downloadBaseDataTemplate, exportBaseData, importBaseData,
-  getRangeTableList, getCategoryMapList, getBaseDataList,
+  getNumericTableList, getCategoryMapList, getBaseDataList,
 } from '../../api/admin.js'
 
 // ── 상태 ──────────────────────────────────────────────────────
@@ -224,12 +232,17 @@ const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
 
 function defaultNewArea() {
-  return { name: '', max_score_display: 0, calc_type: 'RANGE',
+  return { name: '', max_score_display: 0, calc_type: 'NUMERIC',
            lookup_scope: 'SIMPLE', teacher_editable: true,
-           range_direction: '', category_agg: '' }
+           match_mode: '', category_agg: '' }
 }
 
-// ── 전형 요소 목록 ─────────────────────────────────────────────────
+const CALC_TYPE_LABELS = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
+const LOOKUP_SCOPE_LABELS = { SIMPLE: '학생 공통', COMPOSITE: '대학별 개별' }
+function calcTypeLabel(v) { return CALC_TYPE_LABELS[v] ?? v }
+function lookupScopeLabel(v) { return LOOKUP_SCOPE_LABELS[v] ?? v }
+
+// ── 전형요소 목록 ─────────────────────────────────────────────────
 async function load() {
   try { areas.value = await getAreas() }
   catch (e) { error.value = e.response?.data ?? e.message }
@@ -238,6 +251,7 @@ async function load() {
 function selectArea(area) {
   selected.value = area
   activeTab.value = area.calc_type === 'MANUAL' ? 'base' : 'score'
+
   scoreResult.value = null
   baseResult.value  = null
   loadScoreRows()
@@ -250,7 +264,7 @@ async function loadScoreRows() {
   try {
     scoreRows.value = area.calc_type === 'CATEGORY'
       ? await getCategoryMapList(area.id)
-      : await getRangeTableList(area.id)
+      : await getNumericTableList(area.id)
   } catch { scoreRows.value = [] }
 }
 
@@ -266,11 +280,11 @@ function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows()  }
 async function addArea() {
   const body = {
     name: newArea.value.name,
-    max_score: Math.round(newArea.value.max_score_display * 10000),
+    max_score: Math.round(newArea.value.max_score_display * 100000),
     calc_type: newArea.value.calc_type,
     lookup_scope: newArea.value.lookup_scope,
     teacher_editable: newArea.value.teacher_editable ? 1 : 0,
-    range_direction: newArea.value.range_direction || null,
+    match_mode: newArea.value.match_mode || null,
     category_agg: newArea.value.category_agg || null,
   }
   try {
@@ -281,7 +295,7 @@ async function addArea() {
 }
 
 async function removeArea(id) {
-  if (!confirm('전형 요소를 삭제하면 구간표·범주표·기초데이터도 함께 삭제됩니다. 계속할까요?')) return
+  if (!confirm('전형요소를 삭제하면 구간표·범주표·기초데이터도 함께 삭제됩니다. 계속할까요?')) return
   try {
     await deleteArea(id)
     if (selected.value?.id === id) selected.value = null
@@ -323,10 +337,10 @@ const ExcelPanel = defineComponent({
         if (props.panel === 'score') {
           const res = props.calcType === 'CATEGORY'
             ? await downloadCategoryMapTemplate(props.areaId)
-            : await downloadRangeTableTemplate(props.areaId)
+            : await downloadNumericTableTemplate(props.areaId)
           saveBlob(res, props.calcType === 'CATEGORY'
             ? `${props.areaName}_category_map_template.xlsx`
-            : `${props.areaName}_range_table_template.xlsx`)
+            : `${props.areaName}_numeric_table_template.xlsx`)
         } else {
           const res = await downloadBaseDataTemplate(props.areaId)
           saveBlob(res, `${props.areaName}_base_data_template.xlsx`)
@@ -340,10 +354,10 @@ const ExcelPanel = defineComponent({
         if (props.panel === 'score') {
           const res = props.calcType === 'CATEGORY'
             ? await exportCategoryMap(props.areaId)
-            : await exportRangeTable(props.areaId)
+            : await exportNumericTable(props.areaId)
           saveBlob(res, props.calcType === 'CATEGORY'
             ? `${props.areaName}_category_map.xlsx`
-            : `${props.areaName}_range_table.xlsx`)
+            : `${props.areaName}_numeric_table.xlsx`)
         } else {
           const res = await exportBaseData(props.areaId)
           saveBlob(res, `${props.areaName}_base_data.xlsx`)
@@ -361,7 +375,7 @@ const ExcelPanel = defineComponent({
         if (props.panel === 'score') {
           result = props.calcType === 'CATEGORY'
             ? await importCategoryMap(props.areaId, file)
-            : await importRangeTable(props.areaId, file)
+            : await importNumericTable(props.areaId, file)
         } else {
           result = await importBaseData(props.areaId, file)
         }

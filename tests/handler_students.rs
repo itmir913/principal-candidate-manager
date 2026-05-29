@@ -337,7 +337,7 @@ async fn delete_student_with_base_data_returns_conflict() {
     .unwrap();
     let aid: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
-         VALUES ('내신', 100000, 'RANGE', 'SIMPLE') RETURNING id",
+         VALUES ('내신', 100000, 'NUMERIC', 'SIMPLE') RETURNING id",
     )
     .fetch_one(&pool)
     .await
