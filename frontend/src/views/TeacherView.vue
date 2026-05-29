@@ -66,7 +66,7 @@
               </select>
             </div>
             <div class="flex-1">
-              <label class="block text-xs text-gray-500 mb-1">지원 대학/모집단위</label>
+              <label class="block text-xs text-gray-500 mb-1">지원 대학/모집단위명</label>
               <select
                 v-model="newApp.univId"
                 class="w-full border rounded px-2 py-1.5 text-sm"

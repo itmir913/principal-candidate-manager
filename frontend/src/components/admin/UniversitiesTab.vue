@@ -16,7 +16,7 @@
       <thead>
         <tr class="bg-gray-100 text-gray-600 text-left">
           <th class="px-3 py-2 border-b">대학명</th>
-          <th class="px-3 py-2 border-b">전형명</th>
+          <th class="px-3 py-2 border-b">모집단위명</th>
           <th class="px-3 py-2 border-b">정원</th>
           <th class="px-3 py-2 border-b">재학생우선</th>
           <th class="px-3 py-2 border-b w-32"></th>
@@ -26,7 +26,7 @@
         <!-- 추가 행 -->
         <tr v-if="adding" class="bg-blue-50">
           <td class="px-2 py-1 border-b"><input v-model="form.univ_name" type="text" class="w-full border rounded px-2 py-0.5 text-sm" placeholder="대학교" /></td>
-          <td class="px-2 py-1 border-b"><input v-model="form.track_name" type="text" class="w-full border rounded px-2 py-0.5 text-sm" placeholder="전형명" /></td>
+          <td class="px-2 py-1 border-b"><input v-model="form.track_name" type="text" class="w-full border rounded px-2 py-0.5 text-sm" placeholder="모집단위명" /></td>
           <td class="px-2 py-1 border-b"><input v-model.number="form.capacity" type="number" min="1" class="w-16 border rounded px-2 py-0.5 text-sm" /></td>
           <td class="px-2 py-1 border-b text-center"><input v-model="form.prioritize_enrolled" type="checkbox" /></td>
           <td class="px-2 py-1 border-b">

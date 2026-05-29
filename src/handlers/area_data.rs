@@ -125,7 +125,7 @@ async fn read_file(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
 /// COMPOSITE 여부에 따라 헤더 결정
 fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     if area.lookup_scope == "COMPOSITE" {
-        vec![key_col, "점수", "대학명", "전형명"]
+        vec![key_col, "점수", "대학명", "모집단위명"]
     } else {
         vec![key_col, "점수"]
     }
@@ -143,9 +143,9 @@ async fn resolve_univ(
 ) -> Option<Option<i64>> {
     if area.lookup_scope == "COMPOSITE" {
         let un = excel::get_col(cols, col, "대학명");
-        let tn = excel::get_col(cols, col, "전형명");
+        let tn = excel::get_col(cols, col, "모집단위명");
         if un.is_empty() || tn.is_empty() {
-            errors.push(format!("{}행: COMPOSITE 전형요소는 대학명, 전형명 필수", row_num));
+            errors.push(format!("{}행: COMPOSITE 전형요소는 대학명, 모집단위명 필수", row_num));
             return None;
         }
         match find_or_create_univ(db, un, tn).await {
@@ -192,7 +192,7 @@ pub async fn numeric_table_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["기준값", "점수", "대학명", "전형명"].iter().enumerate() {
+        for (i, h) in ["기준값", "점수", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -329,7 +329,7 @@ pub async fn category_map_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["범주", "점수", "대학명", "전형명"].iter().enumerate() {
+        for (i, h) in ["범주", "점수", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -448,7 +448,7 @@ pub async fn base_data_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     let headers: Vec<&str> = if area.lookup_scope == "COMPOSITE" {
-        vec!["학생코드", "이름", "값", "대학명", "전형명"]
+        vec!["학생코드", "이름", "값", "대학명", "모집단위명"]
     } else {
         vec!["학생코드", "이름", "값"]
     };
@@ -467,7 +467,7 @@ pub async fn base_data_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["학생코드", "이름", "값", "대학명", "전형명"].iter().enumerate() {
+        for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(

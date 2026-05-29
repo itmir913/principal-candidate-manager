@@ -174,7 +174,7 @@
                 <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">점수</th>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
                   <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">전형명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">모집단위명</th>
                 </template>
               </tr>
             </thead>
@@ -237,7 +237,7 @@
                 <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">값</th>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
                   <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">전형명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">모집단위명</th>
                 </template>
               </tr>
             </thead>
