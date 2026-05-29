@@ -27,6 +27,12 @@
         <li v-if="areas.length === 0" class="text-gray-400 text-sm px-2">등록된 전형요소 없음</li>
       </ul>
 
+      <div v-if="areas.length > 0"
+        class="mt-2 px-3 py-2 border-t border-gray-200 flex items-center justify-between text-sm font-semibold text-gray-700">
+        <span>총점</span>
+        <span>{{ displayScore(totalMaxScore) }}점</span>
+      </div>
+
       <!-- 전형요소 추가 폼 -->
       <div v-if="showAddForm" class="mt-3 p-3 border border-blue-200 rounded bg-blue-50 space-y-2 text-sm">
         <div>
@@ -314,6 +320,8 @@ function displayScore(v) {
   const f = v / 100000
   return f % 1 === 0 ? String(f) : f.toFixed(5).replace(/\.?0+$/, '')
 }
+
+const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
 
 const scoreEx = computed(() => selected.value ? getScoreExample(selected.value) : null)
 const baseEx  = computed(() => selected.value ? getBaseExample(selected.value) : null)
