@@ -410,6 +410,229 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
     assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
 }
 
+#[tokio::test]
+async fn calc_manual_capped_at_max_score() {
+    // MANUAL 값이 max_score를 초과할 때 max_score로 상한 처리
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
+    // insert_area: max_score=100_000, 저장값 200_000 > 100_000 → 100_000 반환 기대
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '200000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "MANUAL".into(),
+        max_score: 100_000,
+        match_mode: None,
+        category_agg: None,
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+}
+
+#[tokio::test]
+async fn calc_range_upper_capped_at_max_score() {
+    // RANGE UPPER: numeric_table score가 max_score를 초과할 때 상한 처리
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "SIMPLE").await;
+    // insert_area: max_score=100_000, 구간표 점수=200_000 > 100_000 → 100_000 반환 기대
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 200000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '100000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "NUMERIC".into(),
+        max_score: 100_000,
+        match_mode: Some("UPPER".into()),
+        category_agg: None,
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+}
+
+#[tokio::test]
+async fn calc_category_max_capped_at_max_score() {
+    // CATEGORY MAX: 단일 항목이 max_score를 초과할 때 상한 처리
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "CATEGORY", None, Some("MAX"), "SIMPLE").await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '회장', 200000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '회장', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "CATEGORY".into(),
+        max_score: 100_000,
+        match_mode: None,
+        category_agg: Some("MAX".into()),
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+}
+
+// ── 감점 전형요소 (음수 점수) ─────────────────────────────────────
+
+#[tokio::test]
+async fn calc_category_deduction_returns_negative_score() {
+    // CATEGORY SUM: 감점 범주(음수 점수)에 해당하는 학생 → 음수 결과
+    // 일반 학생은 base_data 없음 → 0점, 위반 학생은 범주 매핑 → 감점
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '규정위반', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid, calc_type: "CATEGORY".into(), max_score: 1_000_000,
+        match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
+    };
+    let score = calc_area_score(&pool, sid, &area, 0).await.unwrap();
+    assert_eq!(score, -300_000, "감점 범주: -3.0점 → -300000");
+}
+
+#[tokio::test]
+async fn calc_category_deduction_student_without_violation_gets_zero() {
+    // 위반 없는 학생은 base_data 없음 → 0점 (감점 없음)
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    // base_data에 아무 것도 없음
+
+    let area = AreaRow {
+        id: aid, calc_type: "CATEGORY".into(), max_score: 1_000_000,
+        match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn calc_manual_deduction_returns_negative_score() {
+    // MANUAL: 음수 값 직접 입력 → 음수 점수 반환
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '-500000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid, calc_type: "MANUAL".into(), max_score: 1_000_000,
+        match_mode: None, category_agg: None, lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -500_000, "-5.0점 → -500000");
+}
+
+#[tokio::test]
+async fn calc_pure_deduction_area_max_score_zero() {
+    // 순수 감점 전형요소: max_score=0, 위반 학생은 음수 점수, 일반 학생은 0점
+    // raw.min(0): 음수는 그대로 통과, 양수가 있다면 0으로 상한
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+
+    // max_score=0 으로 전형요소 직접 삽입 (insert_area는 100_000 고정이라 직접 삽입)
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, category_agg, lookup_scope, multi_value) \
+         VALUES ('감점전형', 0, 'CATEGORY', 'SUM', 'SIMPLE', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -500000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid, calc_type: "CATEGORY".into(), max_score: 0,
+        match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
+    };
+    // min(-500000, 0) = -500000 → 감점 보존
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -500_000);
+}
+
+#[tokio::test]
+async fn calc_pure_deduction_area_no_violation_gets_zero() {
+    // 순수 감점 전형요소에서 위반 없는 학생 → 0점
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, category_agg, lookup_scope, multi_value) \
+         VALUES ('감점전형', 0, 'CATEGORY', 'SUM', 'SIMPLE', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -500000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    // base_data 없음 → scores.is_empty() → Ok(0)
+
+    let area = AreaRow {
+        id: aid, calc_type: "CATEGORY".into(), max_score: 0,
+        match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn calc_deduction_does_not_cap_at_max_score() {
+    // 감점 결과는 max_score 상한에 걸리지 않아야 함
+    // raw=-300000, max_score=1000000 → min(-300000, 1000000) = -300000 (감점 유지)
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -300000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid, calc_type: "CATEGORY".into(), max_score: 1_000_000,
+        match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -300_000);
+}
+
 // ── calculate_scores 통합 ─────────────────────────────────────────
 
 async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {

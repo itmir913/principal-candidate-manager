@@ -41,13 +41,16 @@ fn db_to_display(v: i64) -> f64 {
 }
 
 /// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
+/// 음수 허용: 감점 전형요소(특정 범주 해당 학생 감점)를 지원하기 위해 음수 점수가 가능.
 fn parse_display_value(s: &str) -> Result<i64, String> {
     let trimmed = s.trim();
     let f: f64 = trimmed
         .parse()
         .map_err(|_| format!("'{}' 숫자 변환 실패", trimmed))?;
-    if let Some(dot_pos) = trimmed.find('.') {
-        let decimals = trimmed[dot_pos + 1..].trim_end_matches('0');
+    // 소수점 자릿수 확인 (부호 제거 후 검사)
+    let abs_str = trimmed.trim_start_matches('-');
+    if let Some(dot_pos) = abs_str.find('.') {
+        let decimals = abs_str[dot_pos + 1..].trim_end_matches('0');
         if decimals.len() > 5 {
             return Err(format!("'{}' 소수점 5자리 초과 (최대 5자리)", trimmed));
         }

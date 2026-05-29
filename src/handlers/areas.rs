@@ -77,8 +77,8 @@ pub async fn create_area(
     State(state): State<AppState>,
     Json(body): Json<CreateAreaBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
-    if body.max_score <= 0 {
-        return Err((StatusCode::BAD_REQUEST, "만점은 0보다 커야 합니다".into()));
+    if body.max_score < 0 {
+        return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
     if body.calc_type == "NUMERIC" && body.match_mode.is_none() {
         return Err((StatusCode::BAD_REQUEST, "NUMERIC 전형요소는 match_mode(UPPER/LOWER/EXACT)가 필수입니다".into()));
@@ -117,8 +117,8 @@ pub async fn update_area(
     Json(body): Json<UpdateAreaBody>,
 ) -> Result<StatusCode, ApiError> {
     if let Some(ms) = body.max_score {
-        if ms <= 0 {
-            return Err((StatusCode::BAD_REQUEST, "만점은 0보다 커야 합니다".into()));
+        if ms < 0 {
+            return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
         }
     }
 

@@ -241,7 +241,7 @@ function parseDisplayScore(raw) {
   const s = String(raw).trim()
   if (!s) return null
   const f = parseFloat(s)
-  if (isNaN(f) || f <= 0) return null
+  if (isNaN(f) || f < 0) return null
   const dot = s.indexOf('.')
   if (dot !== -1 && s.slice(dot + 1).replace(/0+$/, '').length > 5) return null
   return Math.round(f * 100000)

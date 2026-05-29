@@ -81,7 +81,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
 CREATE TABLE IF NOT EXISTS areas (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     name             TEXT    NOT NULL UNIQUE,
-    max_score        INTEGER NOT NULL CHECK(max_score > 0),   -- ×100000 정수
+    max_score        INTEGER NOT NULL CHECK(max_score >= 0),  -- ×100000 정수 (순수 감점 전형요소는 0 허용)
     calc_type        TEXT    NOT NULL CHECK(calc_type IN ('NUMERIC', 'CATEGORY', 'MANUAL')),
     teacher_editable INTEGER NOT NULL DEFAULT 1 CHECK(teacher_editable IN (0, 1)),
     lookup_scope     TEXT    NOT NULL DEFAULT 'SIMPLE'
