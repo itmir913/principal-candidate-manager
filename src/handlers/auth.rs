@@ -27,6 +27,25 @@ pub struct TokenResponse {
 
 type ApiError = (StatusCode, String);
 
+#[derive(Serialize)]
+pub struct AdminStatusResponse {
+    pub initialized: bool,
+}
+
+pub async fn admin_status(
+    State(state): State<AppState>,
+) -> Result<Json<AdminStatusResponse>, ApiError> {
+    let hash: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM app_configs WHERE key = 'admin_password_hash'",
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let initialized = hash.map(|h| !h.is_empty()).unwrap_or(false);
+    Ok(Json(AdminStatusResponse { initialized }))
+}
+
 pub async fn admin_login(
     State(state): State<AppState>,
     Json(body): Json<AdminLoginBody>,

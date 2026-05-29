@@ -57,6 +57,7 @@ fn build_router(state: AppState) -> Router {
         ));
 
     let auth_routes = Router::new()
+        .route("/admin/status", get(handlers::auth::admin_status))
         .route("/admin", post(handlers::auth::admin_login))
         .route("/teacher", post(handlers::auth::teacher_login))
         .merge(protected_auth);
