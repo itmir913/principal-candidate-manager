@@ -174,6 +174,39 @@ pub async fn export_classes(
     Ok(excel::xlsx_response(buf, &format!("classes_{}.xlsx", excel::now_tag())))
 }
 
+pub async fn delete_class(
+    State(state): State<AppState>,
+    Path((grade, class_no)): Path<(i64, i64)>,
+) -> Result<StatusCode, ApiError> {
+    let student_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM students WHERE grade = ? AND class_no = ?",
+    )
+    .bind(grade)
+    .bind(class_no)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if student_count > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!(
+                "{}학년 {}반에 학생 {}명이 등록되어 있어 삭제할 수 없습니다.",
+                grade, class_no, student_count
+            ),
+        ));
+    }
+
+    sqlx::query("DELETE FROM classes WHERE grade = ? AND class_no = ?")
+        .bind(grade)
+        .bind(class_no)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn upsert_class(
     State(state): State<AppState>,
     Path((grade, class_no)): Path<(i64, i64)>,

@@ -11,6 +11,9 @@ export const downloadClassTemplate = () =>
 export const exportClasses = () =>
   axios.get('/api/classes/export', { responseType: 'blob' })
 
+export const deleteClass = (grade, classNo) =>
+  axios.delete(`/api/classes/${grade}/${classNo}`)
+
 export const importClasses = (file) => {
   const fd = new FormData(); fd.append('file', file)
   return axios.post('/api/classes/import', fd).then(r => r.data)

@@ -83,12 +83,18 @@
       <tbody>
         <template v-for="row in classes" :key="`${row.grade}-${row.class_no}`">
           <tr v-if="editing?.grade !== row.grade || editing?.class_no !== row.class_no"
-            class="hover:bg-gray-50 cursor-pointer"
-            @click="startEdit(row)">
+            class="hover:bg-gray-50">
             <td class="px-3 py-2 border-b">{{ row.grade }}</td>
             <td class="px-3 py-2 border-b">{{ row.class_no }}</td>
             <td class="px-3 py-2 border-b">{{ row.teacher_name ?? '-' }}</td>
-            <td class="px-3 py-2 border-b text-blue-500 text-xs">클릭하여 편집</td>
+            <td class="px-3 py-2 border-b">
+              <div class="flex gap-2">
+                <button class="text-blue-500 text-xs hover:underline disabled:opacity-40"
+                  :disabled="saving" @click="startEdit(row)">편집</button>
+                <button class="text-red-400 text-xs hover:underline disabled:opacity-40"
+                  :disabled="saving" @click="remove(row)">삭제</button>
+              </div>
+            </td>
           </tr>
           <tr v-else class="bg-yellow-50">
             <td class="px-3 py-2 border-b">{{ row.grade }}</td>
@@ -121,7 +127,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getClasses, upsertClass, downloadClassTemplate, exportClasses, importClasses } from '../../api/admin.js'
+import { getClasses, upsertClass, deleteClass, downloadClassTemplate, exportClasses, importClasses } from '../../api/admin.js'
 
 const classes = ref([])
 const error = ref('')
@@ -179,6 +185,20 @@ async function addRow() {
   try {
     await upsertClass(newGrade.value, newClassNo.value, body)
     cancelAdd()
+    await load()
+  } catch (e) {
+    error.value = e.response?.data ?? e.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(row) {
+  if (!confirm(`${row.grade}학년 ${row.class_no}반을 삭제하시겠습니까?`)) return
+  saving.value = true
+  error.value = ''
+  try {
+    await deleteClass(row.grade, row.class_no)
     await load()
   } catch (e) {
     error.value = e.response?.data ?? e.message

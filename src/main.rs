@@ -135,7 +135,8 @@ fn build_router(state: AppState) -> Router {
         .route("/classes/import", post(handlers::classes::import_classes))
         .route(
             "/classes/:grade/:class_no",
-            put(handlers::classes::upsert_class),
+            put(handlers::classes::upsert_class)
+                .delete(handlers::classes::delete_class),
         )
         .route("/areas", get(handlers::areas::list_areas))
         .route("/areas", post(handlers::areas::create_area))
