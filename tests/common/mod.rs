@@ -2,6 +2,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use axum::{body::Body, extract::{FromRequest, Multipart}, http::Request};
+
 use principal_candidate_manager::{
     auth::{AdminClaims, TeacherClaims},
     state::AppState,
@@ -50,6 +52,24 @@ pub async fn create_test_pool_shared() -> SqlitePool {
         .unwrap();
     sqlx::raw_sql(include_str!("../../migrations/v1.sql")).execute(&pool).await.unwrap();
     pool
+}
+
+/// CSV 문자열을 multipart/form-data 요청으로 감싸 반환
+pub async fn csv_multipart(csv: &str) -> Multipart {
+    let boundary = "boundary42";
+    let body = format!(
+        "--{boundary}\r\n\
+         Content-Disposition: form-data; name=\"file\"; filename=\"data.csv\"\r\n\
+         Content-Type: text/csv\r\n\r\n\
+         {csv}\r\n\
+         --{boundary}--\r\n"
+    );
+    let req = Request::builder()
+        .method("POST")
+        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .body(Body::from(body))
+        .unwrap();
+    Multipart::from_request(req, &()).await.unwrap()
 }
 
 pub async fn insert_class(pool: &SqlitePool, grade: i64, class_no: i64) {

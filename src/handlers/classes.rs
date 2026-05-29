@@ -62,7 +62,7 @@ pub async fn classes_template() -> Result<Response, ApiError> {
 pub async fn import_classes(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let field = multipart
         .next_field()
         .await
@@ -155,10 +155,12 @@ pub async fn import_classes(
         }
     }
 
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({ "inserted": 0, "updated": 0, "errors": errors }))));
+    }
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(serde_json::json!({ "inserted": inserted, "updated": updated, "errors": errors })))
+    Ok((StatusCode::OK, Json(serde_json::json!({ "inserted": inserted, "updated": updated, "errors": [] }))))
 }
 
 pub async fn export_classes(

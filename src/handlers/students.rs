@@ -135,7 +135,7 @@ pub async fn export_students(State(state): State<AppState>) -> Result<Response, 
 pub async fn import_students(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let bytes = loop {
         match multipart
             .next_field()
@@ -170,10 +170,12 @@ pub async fn import_students(
         }
     }
 
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
+    }
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(Json(ImportResult { inserted, updated, errors }))
+    Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
 
 // ── DB upsert ─────────────────────────────────────────────────────
@@ -356,7 +358,7 @@ pub async fn export_enrolled(State(state): State<AppState>) -> Result<Response, 
 pub async fn import_enrolled(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let bytes = loop {
         match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
             Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
@@ -381,8 +383,11 @@ pub async fn import_enrolled(
             errors.push(format!("{}행: {}", idx + 2, e));
         }
     }
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
+    }
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ImportResult { inserted, updated, errors }))
+    Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
 
 // ── 졸업생 전용 ───────────────────────────────────────────────────
@@ -413,7 +418,7 @@ pub async fn export_graduated(State(state): State<AppState>) -> Result<Response,
 pub async fn import_graduated(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let bytes = loop {
         match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
             Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
@@ -438,8 +443,11 @@ pub async fn import_graduated(
             errors.push(format!("{}행: {}", idx + 2, e));
         }
     }
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
+    }
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ImportResult { inserted, updated, errors }))
+    Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
 
 // ── 재학생 위치 기반 upsert (student_code 자동 생성) ──────────────
