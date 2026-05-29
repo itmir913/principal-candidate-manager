@@ -96,3 +96,38 @@ fn cell_to_str(cell: &DataType) -> String {
         _ => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_xlsx_true() {
+        assert!(is_xlsx(b"PK\x03\x04some_zip_content"));
+    }
+
+    #[test]
+    fn is_xlsx_false() {
+        assert!(!is_xlsx(b"name,score\nalice,100"));
+    }
+
+    #[test]
+    fn decode_bytes_strips_utf8_bom() {
+        let bytes: Vec<u8> = b"\xef\xbb\xbfhello".to_vec();
+        assert_eq!(decode_bytes(&bytes), "hello");
+    }
+
+    #[test]
+    fn decode_bytes_plain_utf8() {
+        assert_eq!(decode_bytes(b"hello world"), "hello world");
+    }
+
+    #[test]
+    fn parse_file_rows_csv_skips_header() {
+        let csv = b"name,score\nalice,100\nbob,200";
+        let rows = parse_file_rows(csv).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0], vec!["alice", "100"]);
+        assert_eq!(rows[1], vec!["bob", "200"]);
+    }
+}

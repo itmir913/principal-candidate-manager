@@ -5,6 +5,14 @@ export const getClasses = () => axios.get('/api/classes').then(r => r.data)
 export const upsertClass = (grade, classNo, body) =>
   axios.put(`/api/classes/${grade}/${classNo}`, body).then(r => r.data)
 
+export const downloadClassTemplate = () =>
+  axios.get('/api/classes/template', { responseType: 'blob' })
+
+export const importClasses = (file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post('/api/classes/import', fd).then(r => r.data)
+}
+
 export const getAreas = () => axios.get('/api/areas').then(r => r.data)
 
 export const createArea = (body) => axios.post('/api/areas', body).then(r => r.data)

@@ -30,8 +30,8 @@
           <td class="px-2 py-1 border-b"><input v-model.number="form.capacity" type="number" min="1" class="w-16 border rounded px-2 py-0.5 text-sm" /></td>
           <td class="px-2 py-1 border-b text-center"><input v-model="form.prioritize_enrolled" type="checkbox" /></td>
           <td class="px-2 py-1 border-b">
-            <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1" @click="saveAdd">저장</button>
-            <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" @click="adding = false">취소</button>
+            <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveAdd">{{ saving ? '...' : '저장' }}</button>
+            <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" :disabled="saving" @click="adding = false">취소</button>
           </td>
         </tr>
 
@@ -43,8 +43,8 @@
             <td class="px-3 py-2 border-b">{{ row.capacity }}</td>
             <td class="px-3 py-2 border-b text-center">{{ row.prioritize_enrolled ? '○' : '-' }}</td>
             <td class="px-3 py-2 border-b">
-              <button class="text-blue-500 text-xs mr-2 hover:underline" @click="startEdit(row)">편집</button>
-              <button class="text-red-400 text-xs hover:underline" @click="remove(row.id)">삭제</button>
+              <button class="text-blue-500 text-xs mr-2 hover:underline disabled:opacity-40" :disabled="saving" @click="startEdit(row)">편집</button>
+              <button class="text-red-400 text-xs hover:underline disabled:opacity-40" :disabled="saving" @click="remove(row.id)">삭제</button>
             </td>
           </tr>
           <!-- 인라인 편집 행 -->
@@ -54,8 +54,8 @@
             <td class="px-2 py-1 border-b"><input v-model.number="form.capacity" type="number" min="1" class="w-16 border rounded px-2 py-0.5 text-sm" /></td>
             <td class="px-2 py-1 border-b text-center"><input v-model="form.prioritize_enrolled" type="checkbox" /></td>
             <td class="px-2 py-1 border-b">
-              <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1" @click="saveEdit(row.id)">저장</button>
-              <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" @click="editingId = null">취소</button>
+              <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveEdit(row.id)">{{ saving ? '...' : '저장' }}</button>
+              <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" :disabled="saving" @click="editingId = null">취소</button>
             </td>
           </tr>
         </template>
@@ -77,6 +77,7 @@ const error = ref('')
 const adding = ref(false)
 const editingId = ref(null)
 const form = ref(emptyForm())
+const saving = ref(false)
 
 function emptyForm() {
   return { univ_name: '', track_name: '', capacity: 1, prioritize_enrolled: false }
@@ -93,11 +94,14 @@ function startAdd() {
 }
 
 async function saveAdd() {
+  saving.value = true
+  error.value = ''
   try {
     await createUniversity({ ...form.value })
     adding.value = false
     await load()
   } catch (e) { error.value = e.response?.data ?? e.message }
+  finally { saving.value = false }
 }
 
 function startEdit(row) {
@@ -112,19 +116,25 @@ function startEdit(row) {
 }
 
 async function saveEdit(id) {
+  saving.value = true
+  error.value = ''
   try {
     await updateUniversity(id, { ...form.value })
     editingId.value = null
     await load()
   } catch (e) { error.value = e.response?.data ?? e.message }
+  finally { saving.value = false }
 }
 
 async function remove(id) {
   if (!confirm('이 대학을 삭제하시겠습니까?')) return
+  saving.value = true
+  error.value = ''
   try {
     await deleteUniversity(id)
     await load()
   } catch (e) { error.value = e.response?.data ?? e.message }
+  finally { saving.value = false }
 }
 
 onMounted(load)

@@ -55,6 +55,21 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+pub(crate) async fn create_test_pool() -> SqlitePool {
+    use sqlx::sqlite::SqliteConnectOptions;
+    let opts = SqliteConnectOptions::new()
+        .filename(":memory:")
+        .foreign_keys(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .unwrap();
+    sqlx::raw_sql(MIGRATIONS[0]).execute(&pool).await.unwrap();
+    pool
+}
+
 // 첫 실행 시 app_configs 초기 행 삽입 (이미 있으면 무시)
 async fn seed_app_configs(pool: &SqlitePool) -> Result<()> {
     sqlx::query(

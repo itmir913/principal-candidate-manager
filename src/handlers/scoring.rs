@@ -567,6 +567,279 @@ pub async fn score_preview(
 
 // ─────────────────────────────────────────────────────────────────
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── lookup_range_score 순수 함수 테스트 ────────────────────────
+
+    fn sample_rows() -> Vec<(i64, i64)> {
+        // 임계값(×10000) → 점수(×10000)
+        // 100000(=1.0), 200000(=2.0), 300000(=3.0)
+        vec![(100_000, 50_000), (200_000, 30_000), (300_000, 10_000)]
+    }
+
+    #[test]
+    fn upper_exact_match() {
+        assert_eq!(lookup_range_score(200_000, &sample_rows(), "UPPER"), 30_000);
+    }
+
+    #[test]
+    fn upper_between_thresholds() {
+        // 150000 >= 100000 ✓, >= 200000 ✗ → max 충족 threshold = 100000 → 50000
+        assert_eq!(lookup_range_score(150_000, &sample_rows(), "UPPER"), 50_000);
+    }
+
+    #[test]
+    fn upper_above_all_thresholds() {
+        // 모든 threshold 충족 → max threshold = 300000 → 10000
+        assert_eq!(lookup_range_score(350_000, &sample_rows(), "UPPER"), 10_000);
+    }
+
+    #[test]
+    fn upper_below_all_thresholds() {
+        // 아무 threshold도 충족 못함 → 0
+        assert_eq!(lookup_range_score(50_000, &sample_rows(), "UPPER"), 0);
+    }
+
+    #[test]
+    fn lower_exact_match() {
+        assert_eq!(lookup_range_score(200_000, &sample_rows(), "LOWER"), 30_000);
+    }
+
+    #[test]
+    fn lower_between_thresholds() {
+        // 150000 <= 200000 ✓, <= 300000 ✓, <= 100000 ✗ → min 충족 threshold = 200000 → 30000
+        assert_eq!(lookup_range_score(150_000, &sample_rows(), "LOWER"), 30_000);
+    }
+
+    #[test]
+    fn lower_above_all_thresholds() {
+        // 아무 threshold도 충족 못함(value > 모두) → 0
+        assert_eq!(lookup_range_score(400_000, &sample_rows(), "LOWER"), 0);
+    }
+
+    #[test]
+    fn lower_below_all_thresholds() {
+        // 모든 threshold 충족 → min threshold = 100000 → 50000
+        assert_eq!(lookup_range_score(50_000, &sample_rows(), "LOWER"), 50_000);
+    }
+
+    #[test]
+    fn empty_rows_return_zero() {
+        assert_eq!(lookup_range_score(100_000, &[], "UPPER"), 0);
+        assert_eq!(lookup_range_score(100_000, &[], "LOWER"), 0);
+    }
+
+    #[test]
+    fn unknown_direction_returns_zero() {
+        assert_eq!(lookup_range_score(100_000, &sample_rows(), "UNKNOWN"), 0);
+    }
+
+    // ── calc_area_score 통합 테스트 (인메모리 SQLite) ──────────────
+
+    async fn insert_student(pool: &Db) -> i64 {
+        sqlx::query(
+            "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES ('S001', '홍길동', 0, 2024)",
+        )
+        .execute(pool)
+        .await
+        .unwrap()
+        .last_insert_rowid()
+    }
+
+    async fn insert_area(
+        pool: &Db,
+        calc_type: &str,
+        direction: Option<&str>,
+        agg: Option<&str>,
+        scope: &str,
+    ) -> i64 {
+        sqlx::query(
+            "INSERT INTO areas (name, max_score, calc_type, range_direction, category_agg, lookup_scope) \
+             VALUES ('TestArea', 100000, ?, ?, ?, ?)",
+        )
+        .bind(calc_type)
+        .bind(direction)
+        .bind(agg)
+        .bind(scope)
+        .execute(pool)
+        .await
+        .unwrap()
+        .last_insert_rowid()
+    }
+
+    async fn insert_university(pool: &Db) -> i64 {
+        sqlx::query(
+            "INSERT INTO universities (univ_name, track_name, capacity) VALUES ('서울대', '컴퓨터공학', 5)",
+        )
+        .execute(pool)
+        .await
+        .unwrap()
+        .last_insert_rowid()
+    }
+
+    #[tokio::test]
+    async fn calc_range_simple_upper() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "SIMPLE").await;
+
+        // threshold 1.0(100000)→50000, 2.0(200000)→30000, 3.0(300000)→10000
+        for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
+            sqlx::query("INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)")
+                .bind(aid).bind(th).bind(sc)
+                .execute(&pool).await.unwrap();
+        }
+        // base_data: 1.25등급 = 12500(×10000=125000)
+        sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '125000')")
+            .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "RANGE".into(),
+            range_direction: Some("UPPER".into()),
+            category_agg: None,
+            lookup_scope: "SIMPLE".into(),
+        };
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
+    }
+
+    #[tokio::test]
+    async fn calc_range_simple_lower() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "RANGE", Some("LOWER"), None, "SIMPLE").await;
+
+        for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
+            sqlx::query("INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)")
+                .bind(aid).bind(th).bind(sc)
+                .execute(&pool).await.unwrap();
+        }
+        // base_data: 150000 → LOWER: 150000 <= 200000 (min) → 30000
+        sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '150000')")
+            .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "RANGE".into(),
+            range_direction: Some("LOWER".into()),
+            category_agg: None,
+            lookup_scope: "SIMPLE".into(),
+        };
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+    }
+
+    #[tokio::test]
+    async fn calc_range_composite() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let uid = insert_university(&pool).await;
+        let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "COMPOSITE").await;
+
+        sqlx::query("INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, ?, 100000, 80000)")
+            .bind(aid).bind(uid).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, ?, '150000')")
+            .bind(sid).bind(aid).bind(uid).execute(&pool).await.unwrap();
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "RANGE".into(),
+            range_direction: Some("UPPER".into()),
+            category_agg: None,
+            lookup_scope: "COMPOSITE".into(),
+        };
+        assert_eq!(calc_area_score(&pool, sid, &area, uid).await.unwrap(), 80_000);
+    }
+
+    #[tokio::test]
+    async fn calc_category_sum() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
+
+        for (cat, sc) in [("회장", 30_000i64), ("봉사", 20_000)] {
+            sqlx::query("INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)")
+                .bind(aid).bind(cat).bind(sc).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)")
+                .bind(sid).bind(aid).bind(cat).execute(&pool).await.unwrap();
+        }
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "CATEGORY".into(),
+            range_direction: None,
+            category_agg: Some("SUM".into()),
+            lookup_scope: "SIMPLE".into(),
+        };
+        // 30000 + 20000 = 50000
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
+    }
+
+    #[tokio::test]
+    async fn calc_category_max() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "CATEGORY", None, Some("MAX"), "SIMPLE").await;
+
+        for (cat, sc) in [("회장", 30_000i64), ("부회장", 20_000)] {
+            sqlx::query("INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)")
+                .bind(aid).bind(cat).bind(sc).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)")
+                .bind(sid).bind(aid).bind(cat).execute(&pool).await.unwrap();
+        }
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "CATEGORY".into(),
+            range_direction: None,
+            category_agg: Some("MAX".into()),
+            lookup_scope: "SIMPLE".into(),
+        };
+        // max(30000, 20000) = 30000
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+    }
+
+    #[tokio::test]
+    async fn calc_manual() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
+
+        sqlx::query("INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '75000')")
+            .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "MANUAL".into(),
+            range_direction: None,
+            category_agg: None,
+            lookup_scope: "SIMPLE".into(),
+        };
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 75_000);
+    }
+
+    #[tokio::test]
+    async fn calc_no_base_data_returns_zero() {
+        let pool = crate::db::create_test_pool().await;
+        let sid = insert_student(&pool).await;
+        let aid = insert_area(&pool, "RANGE", Some("UPPER"), None, "SIMPLE").await;
+
+        sqlx::query("INSERT INTO range_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 50000)")
+            .bind(aid).execute(&pool).await.unwrap();
+        // base_data 없음 → 0 반환
+
+        let area = AreaRow {
+            id: aid,
+            calc_type: "RANGE".into(),
+            range_direction: Some("UPPER".into()),
+            category_agg: None,
+            lookup_scope: "SIMPLE".into(),
+        };
+        assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+    }
+}
+
 pub async fn recommend_result(
     State(state): State<AppState>,
     Path((sid, uid, rid)): Path<(i64, i64, i64)>,

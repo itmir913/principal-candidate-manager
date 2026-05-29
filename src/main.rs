@@ -130,6 +130,8 @@ fn build_router(state: AppState) -> Router {
         .route("/students/export", get(handlers::students::export_students))
         .route("/students/import", post(handlers::students::import_students))
         .route("/classes", get(handlers::classes::list_classes))
+        .route("/classes/template", get(handlers::classes::classes_template))
+        .route("/classes/import", post(handlers::classes::import_classes))
         .route(
             "/classes/:grade/:class_no",
             put(handlers::classes::upsert_class),

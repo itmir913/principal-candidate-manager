@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev":   "concurrently \"npm --prefix frontend run dev\" \"cargo run --features dev\"",
+    "dev":   "concurrently \"cargo run --features dev\" \"wait-on -t 180000 http://localhost:8080/api/health && npm --prefix frontend run dev\"",
     "test":  "cargo test",
     "build": "npm --prefix frontend run build && cargo build --release"
   },
   "devDependencies": {
-    "concurrently": "^10.0.0"
+    "concurrently": "^10.0.0",
+    "wait-on": "^8.0.0"
   }
 }
