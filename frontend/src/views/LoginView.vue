@@ -91,7 +91,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -130,14 +130,7 @@ function onGradeChange() {
   if (!availableClassNos.value.includes(teacherClassNo.value)) {
     teacherClassNo.value = ''
   }
-  if (teacherGrade.value) localStorage.setItem(LS_GRADE, teacherGrade.value)
-  else localStorage.removeItem(LS_GRADE)
 }
-
-watch(teacherClassNo, (v) => {
-  if (v) localStorage.setItem(LS_CLASS, v)
-  else localStorage.removeItem(LS_CLASS)
-})
 
 async function fetchClasses() {
   classesLoading.value = true
