@@ -172,9 +172,13 @@ async fn resolve_track(
     if area.lookup_scope == "COMPOSITE" {
         let un = excel::get_col(cols, col, "대학명");
         let tn = excel::get_col(cols, col, "모집단위명");
-        if un.is_empty() || tn.is_empty() {
-            errors.push(format!("{}행: COMPOSITE 전형요소는 대학명, 모집단위명 필수", row_num));
-            return None;
+        match (un.is_empty(), tn.is_empty()) {
+            (true, true) => return Some(None), // 공통 테이블로 저장
+            (false, true) | (true, false) => {
+                errors.push(format!("{}행: 대학명과 모집단위명은 함께 입력하거나 함께 비워야 합니다", row_num));
+                return None;
+            }
+            (false, false) => {}
         }
         match find_or_create_track(db, un, tn).await {
             Ok((track_id, created)) => {

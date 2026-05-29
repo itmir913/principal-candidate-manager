@@ -111,7 +111,7 @@ pub async fn calc_area_score(
             let value: i64 = vs.trim().parse().unwrap_or(0);
             let mode = area.match_mode.as_deref().unwrap_or("UPPER");
 
-            let rows: Vec<(i64, i64)> = sqlx::query(
+            let mut rows: Vec<(i64, i64)> = sqlx::query(
                 "SELECT threshold, score FROM numeric_table
                  WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
                  ORDER BY threshold",
@@ -121,6 +121,20 @@ pub async fn calc_area_score(
             .into_iter()
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
             .collect();
+
+            // 모집단위별 점수 기준이 없으면 공통(track_id IS NULL) 테이블로 폴백
+            if rows.is_empty() && lookup_track.is_some() {
+                rows = sqlx::query(
+                    "SELECT threshold, score FROM numeric_table
+                     WHERE area_id = ? AND track_id IS NULL
+                     ORDER BY threshold",
+                )
+                .bind(area.id)
+                .fetch_all(db).await.map_err(|e| e.to_string())?
+                .into_iter()
+                .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
+                .collect();
+            }
 
             lookup_range_score(value, &rows, mode)?
         }
@@ -136,13 +150,24 @@ pub async fn calc_area_score(
 
             let mut scores: Vec<i64> = Vec::new();
             for cat in &values {
-                let sc: Option<i64> = sqlx::query_scalar(
+                let mut sc: Option<i64> = sqlx::query_scalar(
                     "SELECT score FROM category_map
                      WHERE area_id = ? AND category = ?
                        AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
                 )
                 .bind(area.id).bind(cat.as_str()).bind(lookup_track).bind(lookup_track)
                 .fetch_optional(db).await.map_err(|e| e.to_string())?;
+
+                // 모집단위별 범주 기준이 없으면 공통(track_id IS NULL) 범주표로 폴백
+                if sc.is_none() && lookup_track.is_some() {
+                    sc = sqlx::query_scalar(
+                        "SELECT score FROM category_map
+                         WHERE area_id = ? AND category = ? AND track_id IS NULL",
+                    )
+                    .bind(area.id).bind(cat.as_str())
+                    .fetch_optional(db).await.map_err(|e| e.to_string())?;
+                }
+
                 if let Some(s) = sc { scores.push(s); }
             }
 

@@ -181,8 +181,11 @@
             </tbody>
           </table>
         </div>
-        <p class="text-xs text-gray-500 mb-3">
+        <p class="text-xs text-gray-500" :class="selected.lookup_scope === 'COMPOSITE' ? 'mb-1' : 'mb-3'">
           기준값·점수는 실제 값으로 작성 (예: 1.25, 30.5 / 소수점 최대 5자리)
+        </p>
+        <p v-if="selected.lookup_scope === 'COMPOSITE'" class="text-xs text-blue-600 mb-3">
+          대학명·모집단위명을 비워두면 모든 대학에 공통 적용됩니다.
         </p>
         <ExcelPanel
           :area-id="selected.id"
