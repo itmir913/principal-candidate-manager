@@ -130,6 +130,10 @@ pub async fn change_admin_password(
         return Err((StatusCode::UNAUTHORIZED, "현재 비밀번호가 틀렸습니다".into()));
     }
 
+    if body.new_password.len() < 8 {
+        return Err((StatusCode::BAD_REQUEST, "새 비밀번호는 8자 이상이어야 합니다".into()));
+    }
+
     // bcrypt는 CPU 집약 — DB 접근 전 미리 계산
     let new_hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

@@ -137,6 +137,10 @@ function closePwModal() {
 
 async function changePw() {
   if (!currentPw.value || !newPw.value || !confirmPw.value) return
+  if (newPw.value.length < 8) {
+    pwError.value = '새 비밀번호는 8자 이상이어야 합니다.'
+    return
+  }
   if (newPw.value !== confirmPw.value) {
     pwError.value = '새 비밀번호가 일치하지 않습니다.'
     return

@@ -101,6 +101,14 @@ pub async fn import_classes(
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        // 비밀번호 최소 길이 검증 (4자 미만이면 해당 행 오류 처리)
+        if let Some(ref pw) = password {
+            if pw.len() < 4 {
+                errors.push(format!("{}행: 비밀번호는 4자 이상이어야 합니다", line));
+                continue;
+            }
+        }
+
         // bcrypt는 CPU 작업이므로 트랜잭션 진입 전에 미리 계산
         let password_hash: Option<String> = if let Some(ref pw) = password {
             Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST)
@@ -220,6 +228,13 @@ pub async fn upsert_class(
     Path((grade, class_no)): Path<(i64, i64)>,
     Json(body): Json<UpsertClassBody>,
 ) -> Result<StatusCode, ApiError> {
+    // 비밀번호 최소 길이 검증
+    if let Some(ref pw) = body.password {
+        if pw.len() < 4 {
+            return Err((StatusCode::BAD_REQUEST, "비밀번호는 4자 이상이어야 합니다".into()));
+        }
+    }
+
     // bcrypt는 CPU 작업이므로 트랜잭션 밖에서 미리 계산
     let password_hash = if let Some(ref pw) = body.password {
         Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST)
