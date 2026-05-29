@@ -8,6 +8,9 @@ export const upsertClass = (grade, classNo, body) =>
 export const downloadClassTemplate = () =>
   axios.get('/api/classes/template', { responseType: 'blob' })
 
+export const exportClasses = () =>
+  axios.get('/api/classes/export', { responseType: 'blob' })
+
 export const importClasses = (file) => {
   const fd = new FormData(); fd.append('file', file)
   return axios.post('/api/classes/import', fd).then(r => r.data)

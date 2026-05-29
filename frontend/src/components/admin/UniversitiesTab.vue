@@ -6,7 +6,7 @@
         class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
         @click="startAdd"
       >
-        + 대학 추가
+        + 추가
       </button>
     </div>
 
@@ -30,7 +30,7 @@
           <td class="px-2 py-1 border-b"><input v-model.number="form.capacity" type="number" min="1" class="w-16 border rounded px-2 py-0.5 text-sm" /></td>
           <td class="px-2 py-1 border-b text-center"><input v-model="form.prioritize_enrolled" type="checkbox" /></td>
           <td class="px-2 py-1 border-b">
-            <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveAdd">{{ saving ? '...' : '저장' }}</button>
+            <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveAdd">{{ saving ? '저장 중…' : '저장' }}</button>
             <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" :disabled="saving" @click="adding = false">취소</button>
           </td>
         </tr>
@@ -54,7 +54,7 @@
             <td class="px-2 py-1 border-b"><input v-model.number="form.capacity" type="number" min="1" class="w-16 border rounded px-2 py-0.5 text-sm" /></td>
             <td class="px-2 py-1 border-b text-center"><input v-model="form.prioritize_enrolled" type="checkbox" /></td>
             <td class="px-2 py-1 border-b">
-              <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveEdit(row.id)">{{ saving ? '...' : '저장' }}</button>
+              <button class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40" :disabled="saving" @click="saveEdit(row.id)">{{ saving ? '저장 중…' : '저장' }}</button>
               <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" :disabled="saving" @click="editingId = null">취소</button>
             </td>
           </tr>

@@ -4,10 +4,10 @@
 
     <!-- 액션 버튼 -->
     <div class="flex flex-wrap gap-2 mb-4">
-      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlTemplate">⬇ 샘플 양식 다운로드</button>
-      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlExport">⬇ 현재 데이터 다운로드</button>
+      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlTemplate">양식 다운로드</button>
+      <button class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50" @click="dlExport">목록 내보내기</button>
       <label class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 cursor-pointer">
-        ⬆ 파일 업로드
+        가져오기
         <input type="file" accept=".xlsx,.csv" class="hidden" @change="onFileChange" />
       </label>
     </div>

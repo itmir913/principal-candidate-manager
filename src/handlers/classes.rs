@@ -142,6 +142,38 @@ pub async fn import_classes(
     Ok(Json(serde_json::json!({ "inserted": inserted, "updated": updated, "errors": errors })))
 }
 
+pub async fn export_classes(
+    State(state): State<AppState>,
+) -> Result<Response, ApiError> {
+    let rows = sqlx::query_as::<_, ClassRow>(
+        "SELECT grade, class_no, teacher_name FROM classes ORDER BY grade, class_no",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut wb = Workbook::new();
+    let ws = wb
+        .add_worksheet()
+        .set_name("학급목록")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (i, h) in ["학년", "반", "담임명"].iter().enumerate() {
+        ws.write_string(0, i as u16, *h).ok();
+    }
+    for (row_i, r) in rows.iter().enumerate() {
+        let ri = (row_i + 1) as u32;
+        ws.write_number(ri, 0, r.grade as f64).ok();
+        ws.write_number(ri, 1, r.class_no as f64).ok();
+        ws.write_string(ri, 2, r.teacher_name.as_deref().unwrap_or("")).ok();
+    }
+
+    let buf = wb
+        .save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, "classes.xlsx"))
+}
+
 pub async fn upsert_class(
     State(state): State<AppState>,
     Path((grade, class_no)): Path<(i64, i64)>,

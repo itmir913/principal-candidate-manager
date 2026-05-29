@@ -8,7 +8,7 @@
           class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
           :disabled="hasOpenRound || loading"
           @click="handleOpenRound"
-        >+ 열기</button>
+        >라운드 열기</button>
       </div>
 
       <div v-if="rounds.length === 0" class="text-xs text-gray-400 py-4 text-center">
@@ -33,7 +33,7 @@
               v-if="r.status === 'OPEN'"
               class="text-xs px-1.5 py-0.5 border rounded text-red-600 hover:bg-red-50"
               @click.stop="handleCloseRound(r.id)"
-            >닫기</button>
+            >마감</button>
           </div>
         </li>
       </ul>
@@ -78,7 +78,7 @@
               class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40"
               :disabled="calcLoading || apps.length === 0"
               @click="handleCalculate"
-            >{{ calcLoading ? '계산 중...' : '점수 계산' }}</button>
+            >{{ calcLoading ? '계산 중…' : '점수 계산' }}</button>
           </div>
           <div v-if="calcMsg" class="mb-3 text-sm" :class="calcMsg.ok ? 'text-green-600' : 'text-red-500'">
             {{ calcMsg.text }}
@@ -174,7 +174,7 @@
               class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
               :disabled="results.length === 0"
               @click="downloadExcel"
-            >Excel 내보내기</button>
+            >목록 내보내기</button>
           </div>
 
           <div v-if="results.length === 0" class="text-sm text-gray-400 py-6 text-center">
@@ -232,12 +232,12 @@
                   </td>
                   <td class="px-3 py-2 text-center">
                     <span v-if="r.abandoned" class="text-xs text-red-400">포기</span>
-                    <span v-else-if="r.recommended" class="text-xs text-green-600 font-semibold">추천확정</span>
+                    <span v-else-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
                     <button
                       v-else-if="selected.status === 'CLOSED'"
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
                       @click="handleRecommend(r)"
-                    >추천</button>
+                    >추천 확정</button>
                   </td>
                 </tr>
               </tbody>

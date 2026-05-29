@@ -7,19 +7,24 @@
           class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
           :disabled="uploading"
           @click="dlTemplate"
-        >⬇ 샘플 양식</button>
+        >양식 다운로드</button>
+        <button
+          class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
+          :disabled="uploading"
+          @click="dlExport"
+        >목록 내보내기</button>
         <label
           class="px-3 py-1.5 text-sm rounded cursor-pointer"
           :class="uploading ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'"
         >
-          {{ uploading ? '업로드 중...' : '⬆ 파일 업로드' }}
+          {{ uploading ? '가져오는 중…' : '가져오기' }}
           <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onFileChange" />
         </label>
         <button
           class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-40"
           :disabled="showAddForm"
           @click="showAddForm = true"
-        >+ 학급 추가</button>
+        >+ 추가</button>
       </div>
     </div>
 
@@ -60,7 +65,7 @@
         class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-40"
         :disabled="saving"
         @click="addRow"
-      >{{ saving ? '저장 중...' : '저장' }}</button>
+      >{{ saving ? '저장 중…' : '저장' }}</button>
       <button class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300" @click="cancelAdd">취소</button>
     </div>
 
@@ -100,7 +105,7 @@
                   class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded disabled:opacity-40"
                   :disabled="saving"
                   @click="saveEdit(row)"
-                >{{ saving ? '...' : '저장' }}</button>
+                >{{ saving ? '저장 중…' : '저장' }}</button>
                 <button class="px-2 py-0.5 bg-gray-200 text-xs rounded" :disabled="saving" @click="editing = null">취소</button>
               </div>
             </td>
@@ -116,7 +121,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getClasses, upsertClass, downloadClassTemplate, importClasses } from '../../api/admin.js'
+import { getClasses, upsertClass, downloadClassTemplate, exportClasses, importClasses } from '../../api/admin.js'
 
 const classes = ref([])
 const error = ref('')
@@ -204,6 +209,15 @@ async function dlTemplate() {
   try {
     const res = await downloadClassTemplate()
     saveBlob(res, 'classes_template.xlsx')
+  } catch (e) {
+    error.value = e.response?.data ?? e.message
+  }
+}
+
+async function dlExport() {
+  try {
+    const res = await exportClasses()
+    saveBlob(res, 'classes.xlsx')
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }

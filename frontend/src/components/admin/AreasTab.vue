@@ -5,7 +5,7 @@
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-700">영역 목록</h2>
         <button class="px-2 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          @click="openAddForm">+</button>
+          @click="openAddForm">+ 추가</button>
       </div>
 
       <p v-if="error" class="text-red-500 text-sm mb-2">{{ error }}</p>
@@ -280,15 +280,15 @@ const ExcelPanel = defineComponent({
         h('button', {
           class: 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50',
           onClick: dlTemplate,
-        }, '⬇ 샘플 양식 다운로드'),
+        }, '양식 다운로드'),
         h('button', {
           class: 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50',
           onClick: dlExport,
-        }, '⬇ 현재 데이터 다운로드'),
+        }, '목록 내보내기'),
         h('label', {
           class: `px-3 py-1.5 text-sm rounded cursor-pointer ${uploading.value ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
         }, [
-          uploading.value ? '업로드 중...' : '⬆ 파일 업로드',
+          uploading.value ? '가져오는 중…' : '가져오기',
           h('input', { type: 'file', accept: '.xlsx,.csv', class: 'hidden', onChange: onFile }),
         ]),
       ]),

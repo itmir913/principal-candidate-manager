@@ -182,7 +182,7 @@
                       {{ (r.total_score / 10000).toFixed(2) }}
                     </td>
                     <td class="px-3 py-2 text-center">
-                      <span v-if="r.recommended" class="text-xs text-green-600 font-semibold">추천확정</span>
+                      <span v-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
                       <span v-else-if="r.abandoned" class="text-xs text-red-400">포기</span>
                       <span v-else class="text-xs text-gray-300">-</span>
                     </td>
