@@ -26,6 +26,7 @@ pub struct TrackRow {
     pub univ_id: i64,
     pub track_name: String,
     pub unit_quota: Option<i64>,
+    pub prioritize_enrolled: i64,
 }
 
 /// 모집단위 + 대학명 포함 (담임 지원 등록 드롭다운용)
@@ -36,6 +37,7 @@ pub struct TrackWithUnivRow {
     pub univ_name: String,
     pub track_name: String,
     pub unit_quota: Option<i64>,
+    pub prioritize_enrolled: i64,
 }
 
 // ── Option<Option<T>> 역직렬화 헬퍼 ─────────────────────────────
@@ -74,6 +76,7 @@ pub struct CreateTrackBody {
     pub track_name: String,
     #[serde(default, deserialize_with = "deser_opt_opt")]
     pub unit_quota: Option<Option<i64>>,
+    pub prioritize_enrolled: bool,
 }
 
 #[derive(Deserialize)]
@@ -81,6 +84,7 @@ pub struct UpdateTrackBody {
     pub track_name: Option<String>,
     #[serde(default, deserialize_with = "deser_opt_opt")]
     pub unit_quota: Option<Option<i64>>,
+    pub prioritize_enrolled: Option<bool>,
 }
 
 // ── 대학 마스터 핸들러 ───────────────────────────────────────────
@@ -162,7 +166,7 @@ pub async fn list_tracks(
     Path(univ_id): Path<i64>,
 ) -> Result<Json<Vec<TrackRow>>, ApiError> {
     let rows = sqlx::query_as::<_, TrackRow>(
-        "SELECT id, univ_id, track_name, unit_quota
+        "SELECT id, univ_id, track_name, unit_quota, prioritize_enrolled
          FROM univ_tracks WHERE univ_id = ? ORDER BY id",
     )
     .bind(univ_id)
@@ -177,7 +181,7 @@ pub async fn list_all_tracks(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TrackWithUnivRow>>, ApiError> {
     let rows = sqlx::query_as::<_, TrackWithUnivRow>(
-        "SELECT ut.id, ut.univ_id, u.univ_name, ut.track_name, ut.unit_quota
+        "SELECT ut.id, ut.univ_id, u.univ_name, ut.track_name, ut.unit_quota, ut.prioritize_enrolled
          FROM univ_tracks ut
          JOIN universities u ON ut.univ_id = u.id
          ORDER BY u.univ_name, ut.track_name",
@@ -195,13 +199,15 @@ pub async fn create_track(
     Json(body): Json<CreateTrackBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let unit_quota = body.unit_quota.flatten();
+    let enrolled = body.prioritize_enrolled as i64;
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota)
-         VALUES (?, ?, ?) RETURNING id",
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled)
+         VALUES (?, ?, ?, ?) RETURNING id",
     )
     .bind(univ_id)
     .bind(&body.track_name)
     .bind(unit_quota)
+    .bind(enrolled)
     .fetch_one(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -222,6 +228,11 @@ pub async fn update_track(
     if let Some(v) = body.unit_quota {
         sqlx::query("UPDATE univ_tracks SET unit_quota = ? WHERE id = ?")
             .bind(v).bind(id).execute(&state.db).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    if let Some(v) = body.prioritize_enrolled {
+        sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
+            .bind(v as i64).bind(id).execute(&state.db).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     Ok(StatusCode::NO_CONTENT)

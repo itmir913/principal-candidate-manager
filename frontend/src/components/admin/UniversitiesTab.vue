@@ -154,6 +154,7 @@
             <tr class="bg-gray-100 text-gray-600 text-left">
               <th class="px-3 py-2 border-b">모집단위명</th>
               <th class="px-3 py-2 border-b">제한 인원</th>
+              <th class="px-3 py-2 border-b text-center">재학생 우선</th>
               <th class="px-3 py-2 border-b w-28"></th>
             </tr>
           </thead>
@@ -166,6 +167,9 @@
               </td>
               <td class="px-2 py-1.5 border-b">
                 <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
+              </td>
+              <td class="px-2 py-1.5 border-b text-center">
+                <input v-model="trackForm.prioritize_enrolled" type="checkbox" />
               </td>
               <td class="px-2 py-1.5 border-b">
                 <button
@@ -187,6 +191,9 @@
                 <td class="px-3 py-2 border-b">{{ t.track_name }}</td>
                 <td class="px-3 py-2 border-b">
                   {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
+                </td>
+                <td class="px-3 py-2 border-b text-center">
+                  {{ t.prioritize_enrolled ? '○' : '-' }}
                 </td>
                 <td class="px-3 py-2 border-b">
                   <button
@@ -210,6 +217,9 @@
                 <td class="px-2 py-1.5 border-b">
                   <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
                 </td>
+                <td class="px-2 py-1.5 border-b text-center">
+                  <input v-model="trackForm.prioritize_enrolled" type="checkbox" />
+                </td>
                 <td class="px-2 py-1.5 border-b">
                   <button
                     class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40"
@@ -226,7 +236,7 @@
             </template>
 
             <tr v-if="tracks.length === 0 && !addingTrack">
-              <td colspan="3" class="px-3 py-6 text-center text-gray-400">
+              <td colspan="4" class="px-3 py-6 text-center text-gray-400">
                 등록된 모집단위가 없습니다.
               </td>
             </tr>
@@ -294,11 +304,11 @@ const selectedUniv = computed(() => univs.value.find(u => u.id === selectedUnivI
 
 // ── 폼 초기값 ─────────────────────────────────────────────────
 function emptyUnivForm() {
-  return { univ_name: '', unlimited: true, total_quota: 1, prioritize_enrolled: false }
+  return { univ_name: '', unlimited: true, total_quota: 1, prioritize_enrolled: true }
 }
 
 function emptyTrackForm() {
-  return { track_name: '', unlimited: true, unit_quota: 1 }
+  return { track_name: '', unlimited: true, unit_quota: 1, prioritize_enrolled: false }
 }
 
 function univToForm(u) {
@@ -315,6 +325,7 @@ function trackToForm(t) {
     track_name: t.track_name,
     unlimited: t.unit_quota == null,
     unit_quota: t.unit_quota ?? 1,
+    prioritize_enrolled: t.prioritize_enrolled === 1,
   }
 }
 
@@ -330,6 +341,7 @@ function trackFormToBody(f) {
   return {
     track_name: f.track_name.trim(),
     unit_quota: f.unlimited ? null : f.unit_quota,
+    prioritize_enrolled: f.prioritize_enrolled,
   }
 }
 
