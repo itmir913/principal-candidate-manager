@@ -257,6 +257,19 @@
           :area-name="selected.name"
           panel="base"
           @result="onBaseResult" />
+
+        <!-- 외부 프로그램 가져오기 (COMPOSITE 전용) -->
+        <div v-if="selected.lookup_scope === 'COMPOSITE'" class="mt-2 flex flex-wrap gap-2">
+          <label class="px-3 py-1.5 text-sm border border-gray-300 rounded cursor-pointer hover:bg-gray-50 text-gray-700">
+            대교협 석차연명부
+            <input type="file" accept=".xlsx" class="hidden" @change="onExternalFile('daegyo', $event)" />
+          </label>
+          <label class="px-3 py-1.5 text-sm border border-gray-300 rounded cursor-pointer hover:bg-gray-50 text-gray-700">
+            유니브 석차연명부
+            <input type="file" accept=".xls" class="hidden" @change="onExternalFile('univ', $event)" />
+          </label>
+        </div>
+
         <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
 
         <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
@@ -294,6 +307,70 @@
 
     <p v-else class="text-gray-400 text-sm mt-2">왼쪽에서 전형요소를 선택하세요.</p>
   </div>
+
+  <!-- 외부 가져오기 모달 -->
+  <Teleport to="body">
+    <div v-if="extModal.open"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @click.self="closeExtModal">
+      <div class="bg-white rounded-lg shadow-xl w-[520px] max-h-[90vh] overflow-y-auto p-6">
+        <h3 class="text-base font-semibold text-gray-800 mb-4">{{ extModal.title }}</h3>
+
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="text-xs text-gray-500">대학명</label>
+            <input v-model="extModal.univName" type="text"
+                   class="w-full border rounded px-2 py-1.5 mt-0.5 text-sm" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500">모집단위명 <span class="text-red-500">*</span></label>
+            <input v-model="extModal.trackName" type="text"
+                   class="w-full border rounded px-2 py-1.5 mt-0.5 text-sm"
+                   placeholder="예: 자연계열" />
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <p class="text-xs text-gray-500 mb-1">
+            미리보기 (상위 {{ extModal.preview.length }}행 / 총 {{ extModal.total }}행)
+          </p>
+          <div class="overflow-x-auto border border-gray-200 rounded">
+            <table class="text-xs w-full border-collapse">
+              <thead>
+                <tr class="bg-gray-50">
+                  <th v-for="h in ['학년','반','번호','이름', extModal.valueHeader]" :key="h"
+                      class="border-b border-gray-200 px-2 py-1.5 text-left font-medium text-gray-600 whitespace-nowrap">
+                    {{ h }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in extModal.preview" :key="i"
+                    :class="i % 2 === 1 ? 'bg-gray-50' : ''">
+                  <td v-for="(cell, j) in row" :key="j"
+                      class="border-b border-gray-100 px-2 py-1.5 text-gray-700 whitespace-nowrap">
+                    {{ cell }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p v-if="extModal.error" class="text-red-500 text-sm mb-3">{{ extModal.error }}</p>
+
+        <div class="flex justify-end gap-2">
+          <button class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                  @click="closeExtModal">취소</button>
+          <button class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  :disabled="extModal.importing || !extModal.trackName.trim()"
+                  @click="doExtImport">
+            {{ extModal.importing ? '가져오는 중…' : '가져오기' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -304,6 +381,7 @@ import {
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
   downloadBaseDataTemplate, exportBaseData, importBaseData,
   getNumericTableList, getCategoryMapList, getBaseDataList,
+  previewDaegyoImport, importDaegyo, previewUnivImport, importUniv,
 } from '../../api/admin.js'
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 
@@ -458,6 +536,67 @@ async function saveEdit() {
 function openAddForm() {
   newArea.value = defaultNewArea()
   showAddForm.value = true
+}
+
+// ── 외부 가져오기 모달 ────────────────────────────────────────────
+const extModal = ref({
+  open: false, format: '', title: '', file: null,
+  univName: '', trackName: '', valueHeader: '',
+  preview: [], total: 0, importing: false, error: '',
+})
+
+async function onExternalFile(format, evt) {
+  const file = evt.target.files?.[0]
+  evt.target.value = ''
+  if (!file) return
+  try {
+    const data = format === 'daegyo'
+      ? await previewDaegyoImport(selected.value.id, file)
+      : await previewUnivImport(selected.value.id, file)
+    extModal.value = {
+      open: true,
+      format,
+      title: format === 'daegyo' ? '대교협 석차연명부 가져오기' : '유니브 석차연명부 가져오기',
+      file,
+      univName: data.univ_name,
+      trackName: '',
+      valueHeader: data.value_header,
+      preview: data.preview,
+      total: data.total,
+      importing: false,
+      error: '',
+    }
+  } catch (e) {
+    alert(e.response?.data ?? e.message ?? '파일 파싱 오류')
+  }
+}
+
+function closeExtModal() {
+  extModal.value.open = false
+}
+
+async function doExtImport() {
+  const m = extModal.value
+  if (!m.trackName.trim()) return
+  m.importing = true
+  m.error = ''
+  try {
+    const res = m.format === 'daegyo'
+      ? await importDaegyo(selected.value.id, m.file, m.univName, m.trackName)
+      : await importUniv(selected.value.id, m.file, m.univName, m.trackName)
+    closeExtModal()
+    onBaseResult(res.data)
+  } catch (e) {
+    const d = e.response?.data
+    if (d != null && typeof d === 'object' && Array.isArray(d.errors)) {
+      closeExtModal()
+      onBaseResult(d)
+    } else {
+      m.error = typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
+    }
+  } finally {
+    m.importing = false
+  }
 }
 
 onMounted(load)

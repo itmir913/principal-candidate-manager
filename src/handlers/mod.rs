@@ -1,6 +1,7 @@
 pub mod applications;
 pub mod area_data;
 pub mod areas;
+pub mod external_import;
 pub mod auth;
 pub mod classes;
 pub mod rounds;

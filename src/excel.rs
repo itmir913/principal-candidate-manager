@@ -77,6 +77,42 @@ pub fn is_xlsx(bytes: &[u8]) -> bool {
     bytes.starts_with(b"PK")
 }
 
+/// xls 여부 판별 (OLE2 매직 바이트)
+pub fn is_xls(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"\xD0\xCF\x11\xE0")
+}
+
+/// xlsx 전체 행 (빈 행 필터 없음 — 외부 양식 파싱용)
+pub fn parse_xlsx_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
+    let cursor = Cursor::new(bytes.to_vec());
+    let mut wb: Xlsx<_> = Xlsx::new(cursor)?;
+    let sheet = wb
+        .sheet_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("시트가 없습니다"))?;
+    let range = wb
+        .worksheet_range(&sheet)
+        .ok_or_else(|| anyhow::anyhow!("시트를 열 수 없습니다"))??;
+    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+}
+
+/// xls 전체 행 (빈 행 필터 없음 — 외부 양식 파싱용)
+pub fn parse_xls_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
+    use calamine::Xls;
+    let cursor = Cursor::new(bytes.to_vec());
+    let mut wb: Xls<_> = Xls::new(cursor)?;
+    let sheet = wb
+        .sheet_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("시트가 없습니다"))?;
+    let range = wb
+        .worksheet_range(&sheet)
+        .ok_or_else(|| anyhow::anyhow!("시트를 열 수 없습니다"))??;
+    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+}
+
 /// 현재 로컬 시각을 `YYYYMMDD_HHMMSS` 형식으로 반환
 pub fn now_tag() -> String {
     chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()

@@ -65,6 +65,30 @@ export const importBaseData = (id, file) => {
   return axios.post(`/api/areas/${id}/base-data/import`, fd).then(r => r.data)
 }
 
+// ── 외부 가져오기 (대교협·유니브 석차연명부) ──────────────────
+export const previewDaegyoImport = (id, file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post(`/api/areas/${id}/base-data/external/daegyo/preview`, fd).then(r => r.data)
+}
+export const importDaegyo = (id, file, univName, trackName) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('univ_name', univName)
+  fd.append('track_name', trackName)
+  return axios.post(`/api/areas/${id}/base-data/external/daegyo/import`, fd)
+}
+export const previewUnivImport = (id, file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post(`/api/areas/${id}/base-data/external/univ/preview`, fd).then(r => r.data)
+}
+export const importUniv = (id, file, univName, trackName) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('univ_name', univName)
+  fd.append('track_name', trackName)
+  return axios.post(`/api/areas/${id}/base-data/external/univ/import`, fd)
+}
+
 // ── 학생 관리 ──────────────────────────────────────────────────
 export const getStudents = (params = {}) =>
   axios.get('/api/students', { params }).then(r => r.data)

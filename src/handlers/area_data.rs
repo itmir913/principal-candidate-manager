@@ -28,11 +28,11 @@ pub struct ImportResult {
 }
 
 #[derive(sqlx::FromRow)]
-struct AreaInfo {
-    max_score: i64,
-    calc_type: String,
-    lookup_scope: String,
-    multi_value: i64,
+pub(crate) struct AreaInfo {
+    pub(crate) max_score: i64,
+    pub(crate) calc_type: String,
+    pub(crate) lookup_scope: String,
+    pub(crate) multi_value: i64,
 }
 
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ fn db_to_display(v: i64) -> f64 {
 
 /// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
 /// 음수 허용: 감점 전형요소(특정 범주 해당 학생 감점)를 지원하기 위해 음수 점수가 가능.
-fn parse_display_value(s: &str) -> Result<i64, String> {
+pub(crate) fn parse_display_value(s: &str) -> Result<i64, String> {
     let trimmed = s.trim();
     let f: f64 = trimmed
         .parse()
@@ -73,7 +73,7 @@ fn fmt_score(v: i64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
+pub(crate) async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     sqlx::query_as::<_, AreaInfo>(
         "SELECT max_score, calc_type, lookup_scope, multi_value FROM areas WHERE id = ?",
     )
@@ -85,7 +85,7 @@ async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
 }
 
 /// 대학+모집단위가 없으면 자동 생성 후 (track_id, 생성여부) 반환
-async fn find_or_create_track(
+pub(crate) async fn find_or_create_track(
     db: &Db,
     univ_name: &str,
     track_name: &str,
