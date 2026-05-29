@@ -4,7 +4,11 @@ mod handlers;
 mod middleware;
 mod state;
 
-use axum::{middleware as axum_middleware, routing::get, routing::post, routing::put, Router};
+use axum::{
+    middleware as axum_middleware,
+    routing::{delete, get, post, put},
+    Router,
+};
 use rand::RngCore;
 use state::AppState;
 use tower_http::cors::CorsLayer;
@@ -62,9 +66,33 @@ fn build_router(state: AppState) -> Router {
         .route("/teacher", post(handlers::auth::teacher_login))
         .merge(protected_auth);
 
+    let admin_routes = Router::new()
+        .route("/classes", get(handlers::classes::list_classes))
+        .route(
+            "/classes/:grade/:class_no",
+            put(handlers::classes::upsert_class),
+        )
+        .route("/areas", get(handlers::areas::list_areas))
+        .route("/areas", post(handlers::areas::create_area))
+        .route("/areas/:id", put(handlers::areas::update_area))
+        .route("/areas/:id", delete(handlers::areas::delete_area))
+        .route("/areas/:id/range-table", get(handlers::areas::get_range_table))
+        .route("/areas/:id/range-table", put(handlers::areas::put_range_table))
+        .route("/areas/:id/category-map", get(handlers::areas::get_category_map))
+        .route("/areas/:id/category-map", put(handlers::areas::put_category_map))
+        .route("/universities", get(handlers::universities::list_universities))
+        .route("/universities", post(handlers::universities::create_university))
+        .route("/universities/:id", put(handlers::universities::update_university))
+        .route("/universities/:id", delete(handlers::universities::delete_university))
+        .route_layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            middleware::require_admin,
+        ));
+
     let api = Router::new()
         .route("/health", get(health))
-        .nest("/auth", auth_routes);
+        .nest("/auth", auth_routes)
+        .merge(admin_routes);
 
     let app = Router::new()
         .nest("/api", api)
