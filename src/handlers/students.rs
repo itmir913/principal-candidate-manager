@@ -323,7 +323,7 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 // ── 재학생 전용 ───────────────────────────────────────────────────
 
 // 가져오기 양식 헤더: 학번 제외 (백엔드에서 자동 생성)
-const ENROLLED_IMPORT_HEADERS: &[&str] = &["이름", "학년", "반", "번호"];
+const ENROLLED_IMPORT_HEADERS: &[&str] = &["학년", "반", "번호", "이름"];
 // 내보내기 헤더: 참조용으로 학번 포함
 const ENROLLED_EXPORT_HEADERS: &[&str] = &["학번", "이름", "학년", "반", "번호"];
 const GRADUATED_HEADERS: &[&str] = &["학번", "이름", "졸업연도"];
@@ -561,11 +561,11 @@ fn build_enrolled_template_xlsx() -> anyhow::Result<Vec<u8>> {
     for (i, h) in ENROLLED_IMPORT_HEADERS.iter().enumerate() {
         ws.write_string(0, i as u16, *h)?;
     }
-    // 샘플 행: name, grade, class_no, seq_no
-    ws.write_string(1, 0, "홍길동")?;
+    // 샘플 행: grade, class_no, seq_no, name
+    ws.write_number(1, 0, 1.0)?;
     ws.write_number(1, 1, 1.0)?;
     ws.write_number(1, 2, 1.0)?;
-    ws.write_number(1, 3, 1.0)?;
+    ws.write_string(1, 3, "홍길동")?;
     Ok(wb.save_to_buffer()?)
 }
 
