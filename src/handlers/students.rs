@@ -273,8 +273,8 @@ async fn upsert_student(
 // ── xlsx 생성 ────────────────────────────────────────────────────
 
 const HEADERS: &[&str] = &[
-    "student_code", "name", "is_enrolled",
-    "grade", "class_no", "seq_no", "grad_year",
+    "학번", "이름", "재학여부",
+    "학년", "반", "번호", "졸업연도",
 ];
 
 fn build_template_xlsx() -> anyhow::Result<Vec<u8>> {
@@ -319,11 +319,11 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 
 // ── 재학생 전용 ───────────────────────────────────────────────────
 
-// 가져오기 양식 헤더: student_code 제외 (백엔드에서 자동 생성)
-const ENROLLED_IMPORT_HEADERS: &[&str] = &["name", "grade", "class_no", "seq_no"];
-// 내보내기 헤더: 참조용으로 student_code 포함
-const ENROLLED_EXPORT_HEADERS: &[&str] = &["student_code", "name", "grade", "class_no", "seq_no"];
-const GRADUATED_HEADERS: &[&str] = &["student_code", "name", "grad_year"];
+// 가져오기 양식 헤더: 학번 제외 (백엔드에서 자동 생성)
+const ENROLLED_IMPORT_HEADERS: &[&str] = &["이름", "학년", "반", "번호"];
+// 내보내기 헤더: 참조용으로 학번 포함
+const ENROLLED_EXPORT_HEADERS: &[&str] = &["학번", "이름", "학년", "반", "번호"];
+const GRADUATED_HEADERS: &[&str] = &["학번", "이름", "졸업연도"];
 
 /// GET /api/students/enrolled/template
 pub async fn enrolled_template() -> Result<Response, ApiError> {

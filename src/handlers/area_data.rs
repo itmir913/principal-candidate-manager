@@ -111,9 +111,9 @@ async fn read_file(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
 /// COMPOSITE 여부에 따라 헤더 결정
 fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     if area.lookup_scope == "COMPOSITE" {
-        vec![key_col, "score", "univ_name", "track_name"]
+        vec![key_col, "점수", "대학명", "전형명"]
     } else {
-        vec![key_col, "score"]
+        vec![key_col, "점수"]
     }
 }
 
@@ -132,7 +132,7 @@ async fn resolve_univ(
         let un = cols.get(un_col).map(|s| s.trim()).unwrap_or("");
         let tn = cols.get(tn_col).map(|s| s.trim()).unwrap_or("");
         if un.is_empty() || tn.is_empty() {
-            errors.push(format!("{}행: COMPOSITE 영역은 univ_name, track_name 필수", row_num));
+            errors.push(format!("{}행: COMPOSITE 영역은 대학명, 전형명 필수", row_num));
             return None;
         }
         match find_or_create_univ(db, un, tn).await {
@@ -163,7 +163,7 @@ pub async fn range_table_template(
     if area.calc_type != "RANGE" {
         return Err((StatusCode::BAD_REQUEST, "RANGE 영역만 구간표를 사용합니다".into()));
     }
-    let headers = score_headers(&area, "threshold");
+    let headers = score_headers(&area, "기준값");
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(excel::xlsx_response(buf, "range_table_template.xlsx"))
@@ -179,7 +179,7 @@ pub async fn range_table_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["threshold", "score", "univ_name", "track_name"].iter().enumerate() {
+        for (i, h) in ["기준값", "점수", "대학명", "전형명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -203,7 +203,7 @@ pub async fn range_table_export(
             ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
         }
     } else {
-        for (i, h) in ["threshold", "score"].iter().enumerate() {
+        for (i, h) in ["기준값", "점수"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -257,11 +257,11 @@ pub async fn range_table_import(
 
         let th = match display_to_db(g(0)) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: threshold 파싱 실패 ('{}')", row_num, g(0))); continue; }
+            None => { errors.push(format!("{}행: 기준값 파싱 실패 ('{}')", row_num, g(0))); continue; }
         };
         let sc = match display_to_db(g(1)) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: score 파싱 실패 ('{}')", row_num, g(1))); continue; }
+            None => { errors.push(format!("{}행: 점수 파싱 실패 ('{}')", row_num, g(1))); continue; }
         };
 
         let univ_id = match resolve_univ(&state.db, &area, cols, 2, 3, row_num, &mut errors, &mut warnings).await {
@@ -294,7 +294,7 @@ pub async fn category_map_template(
     if area.calc_type != "CATEGORY" {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 영역만 범주표를 사용합니다".into()));
     }
-    let headers = score_headers(&area, "category");
+    let headers = score_headers(&area, "범주");
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(excel::xlsx_response(buf, "category_map_template.xlsx"))
@@ -310,7 +310,7 @@ pub async fn category_map_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["category", "score", "univ_name", "track_name"].iter().enumerate() {
+        for (i, h) in ["범주", "점수", "대학명", "전형명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -334,7 +334,7 @@ pub async fn category_map_export(
             ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
         }
     } else {
-        for (i, h) in ["category", "score"].iter().enumerate() {
+        for (i, h) in ["범주", "점수"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -388,12 +388,12 @@ pub async fn category_map_import(
 
         let category = g(0).trim().to_string();
         if category.is_empty() {
-            errors.push(format!("{}행: category 누락", row_num));
+            errors.push(format!("{}행: 범주 누락", row_num));
             continue;
         }
         let sc = match display_to_db(g(1)) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: score 파싱 실패 ('{}')", row_num, g(1))); continue; }
+            None => { errors.push(format!("{}행: 점수 파싱 실패 ('{}')", row_num, g(1))); continue; }
         };
 
         let univ_id = match resolve_univ(&state.db, &area, cols, 2, 3, row_num, &mut errors, &mut warnings).await {
@@ -424,9 +424,9 @@ pub async fn base_data_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     let headers: Vec<&str> = if area.lookup_scope == "COMPOSITE" {
-        vec!["student_code", "name", "value", "univ_name", "track_name"]
+        vec!["학번", "이름", "값", "대학명", "전형명"]
     } else {
-        vec!["student_code", "name", "value"]
+        vec!["학번", "이름", "값"]
     };
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -443,7 +443,7 @@ pub async fn base_data_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["student_code", "name", "value", "univ_name", "track_name"].iter().enumerate() {
+        for (i, h) in ["학번", "이름", "값", "대학명", "전형명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -467,7 +467,7 @@ pub async fn base_data_export(
             ws.write_string(r, 4, row.get::<&str, _>("track_name")).ok();
         }
     } else {
-        for (i, h) in ["student_code", "name", "value"].iter().enumerate() {
+        for (i, h) in ["학번", "이름", "값"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -522,13 +522,13 @@ pub async fn base_data_import(
 
         let student_code = g(0).trim();
         if student_code.is_empty() {
-            errors.push(format!("{}행: student_code 누락", row_num));
+            errors.push(format!("{}행: 학번 누락", row_num));
             continue;
         }
 
         let raw_value = g(2).trim();
         if raw_value.is_empty() {
-            errors.push(format!("{}행: value 누락", row_num));
+            errors.push(format!("{}행: 값 누락", row_num));
             continue;
         }
 
@@ -554,7 +554,7 @@ pub async fn base_data_import(
             "RANGE" | "MANUAL" => match display_to_db(raw_value) {
                 Some(v) => v.to_string(),
                 None => {
-                    errors.push(format!("{}행: value '{}' 숫자 파싱 실패", row_num, raw_value));
+                    errors.push(format!("{}행: 값 '{}' 숫자 파싱 실패", row_num, raw_value));
                     continue;
                 }
             },
