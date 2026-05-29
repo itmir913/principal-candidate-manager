@@ -117,20 +117,19 @@ fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     }
 }
 
-/// COMPOSITE 영역: univ_id 조회/생성
+/// COMPOSITE 영역: univ_id 조회/생성 (열 이름 기반)
 async fn resolve_univ(
     db: &Db,
     area: &AreaInfo,
     cols: &[String],
-    un_col: usize,
-    tn_col: usize,
+    col: &std::collections::HashMap<String, usize>,
     row_num: usize,
     errors: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) -> Option<Option<i64>> {
     if area.lookup_scope == "COMPOSITE" {
-        let un = cols.get(un_col).map(|s| s.trim()).unwrap_or("");
-        let tn = cols.get(tn_col).map(|s| s.trim()).unwrap_or("");
+        let un = excel::get_col(cols, col, "대학명");
+        let tn = excel::get_col(cols, col, "전형명");
         if un.is_empty() || tn.is_empty() {
             errors.push(format!("{}행: COMPOSITE 영역은 대학명, 전형명 필수", row_num));
             return None;
@@ -238,8 +237,11 @@ pub async fn range_table_import(
         return Err((StatusCode::BAD_REQUEST, "RANGE 영역만 구간표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["기준값", "점수"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -253,18 +255,17 @@ pub async fn range_table_import(
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
-        let g = |j: usize| cols.get(j).map(|s| s.as_str()).unwrap_or("");
 
-        let th = match display_to_db(g(0)) {
+        let th = match display_to_db(excel::get_col(cols, &col, "기준값")) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: 기준값 파싱 실패 ('{}')", row_num, g(0))); continue; }
+            None => { errors.push(format!("{}행: 기준값 파싱 실패", row_num)); continue; }
         };
-        let sc = match display_to_db(g(1)) {
+        let sc = match display_to_db(excel::get_col(cols, &col, "점수")) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: 점수 파싱 실패 ('{}')", row_num, g(1))); continue; }
+            None => { errors.push(format!("{}행: 점수 파싱 실패", row_num)); continue; }
         };
 
-        let univ_id = match resolve_univ(&state.db, &area, cols, 2, 3, row_num, &mut errors, &mut warnings).await {
+        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
@@ -369,8 +370,11 @@ pub async fn category_map_import(
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 영역만 범주표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["범주", "점수"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -384,19 +388,18 @@ pub async fn category_map_import(
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
-        let g = |j: usize| cols.get(j).map(|s| s.as_str()).unwrap_or("");
 
-        let category = g(0).trim().to_string();
+        let category = excel::get_col(cols, &col, "범주").to_string();
         if category.is_empty() {
             errors.push(format!("{}행: 범주 누락", row_num));
             continue;
         }
-        let sc = match display_to_db(g(1)) {
+        let sc = match display_to_db(excel::get_col(cols, &col, "점수")) {
             Some(v) => v,
-            None => { errors.push(format!("{}행: 점수 파싱 실패 ('{}')", row_num, g(1))); continue; }
+            None => { errors.push(format!("{}행: 점수 파싱 실패", row_num)); continue; }
         };
 
-        let univ_id = match resolve_univ(&state.db, &area, cols, 2, 3, row_num, &mut errors, &mut warnings).await {
+        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
@@ -503,8 +506,11 @@ pub async fn base_data_import(
 ) -> Result<Json<ImportResult>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let bytes = read_file(multipart).await?;
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["학번", "값"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -518,15 +524,14 @@ pub async fn base_data_import(
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
-        let g = |j: usize| cols.get(j).map(|s| s.as_str()).unwrap_or("");
 
-        let student_code = g(0).trim();
+        let student_code = excel::get_col(cols, &col, "학번");
         if student_code.is_empty() {
             errors.push(format!("{}행: 학번 누락", row_num));
             continue;
         }
 
-        let raw_value = g(2).trim();
+        let raw_value = excel::get_col(cols, &col, "값");
         if raw_value.is_empty() {
             errors.push(format!("{}행: 값 누락", row_num));
             continue;
@@ -562,7 +567,7 @@ pub async fn base_data_import(
         };
 
         // COMPOSITE: 대학 조회/생성
-        let univ_id = match resolve_univ(&state.db, &area, cols, 3, 4, row_num, &mut errors, &mut warnings).await {
+        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };

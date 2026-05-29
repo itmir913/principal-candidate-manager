@@ -73,8 +73,11 @@ pub async fn import_classes(
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let rows = excel::parse_file_rows(&bytes)
+    let (headers, rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["학년", "반"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
     let mut updated = 0usize;
@@ -86,20 +89,22 @@ pub async fn import_classes(
     for (i, row) in rows.iter().enumerate() {
         let line = i + 2;
 
-        let grade: i64 = match row.first().and_then(|s| s.trim().parse().ok()) {
+        let grade: i64 = match excel::get_col(row, &col, "학년").parse::<i64>().ok() {
             Some(g) if g > 0 => g,
             _ => { errors.push(format!("{}행: 학년 값이 올바르지 않습니다", line)); continue; }
         };
-        let class_no: i64 = match row.get(1).and_then(|s| s.trim().parse().ok()) {
+        let class_no: i64 = match excel::get_col(row, &col, "반").parse::<i64>().ok() {
             Some(c) if c > 0 => c,
             _ => { errors.push(format!("{}행: 반 값이 올바르지 않습니다", line)); continue; }
         };
-        let teacher_name: Option<String> = row.get(2)
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        let password: Option<String> = row.get(3)
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
+        let teacher_name: Option<String> = {
+            let v = excel::get_col(row, &col, "담임명").to_string();
+            if v.is_empty() { None } else { Some(v) }
+        };
+        let password: Option<String> = {
+            let v = excel::get_col(row, &col, "비밀번호").to_string();
+            if v.is_empty() { None } else { Some(v) }
+        };
 
         // 비밀번호 최소 길이 검증 (4자 미만이면 해당 행 오류 처리)
         if let Some(ref pw) = password {

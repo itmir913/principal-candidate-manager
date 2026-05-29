@@ -149,8 +149,11 @@ pub async fn import_students(
         }
     };
 
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["학번", "이름", "재학여부"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
     let mut updated = 0usize;
@@ -161,7 +164,7 @@ pub async fn import_students(
 
     for (idx, cols) in file_rows.iter().enumerate() {
         let row_num = idx + 2;
-        let rec = row_to_record(cols);
+        let rec = row_to_record(cols, &col);
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", row_num, e));
         }
@@ -360,8 +363,11 @@ pub async fn import_enrolled(
             None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
         }
     };
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["이름", "학년", "반", "번호"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
     let mut updated = 0usize;
@@ -370,7 +376,7 @@ pub async fn import_enrolled(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for (idx, cols) in file_rows.iter().enumerate() {
-        let rec = row_to_enrolled_record(cols);
+        let rec = row_to_enrolled_record(cols, &col);
         if let Err(e) = upsert_enrolled_by_position(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", idx + 2, e));
         }
@@ -414,8 +420,11 @@ pub async fn import_graduated(
             None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
         }
     };
-    let file_rows = excel::parse_file_rows(&bytes)
+    let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let col = excel::col_map(&headers);
+    excel::require_cols(&col, &["학번", "이름", "졸업연도"])
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
     let mut updated = 0usize;
@@ -424,7 +433,7 @@ pub async fn import_graduated(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for (idx, cols) in file_rows.iter().enumerate() {
-        let rec = row_to_graduated_record(cols);
+        let rec = row_to_graduated_record(cols, &col);
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", idx + 2, e));
         }
@@ -606,45 +615,53 @@ fn build_graduated_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 
 // ── 파싱 ─────────────────────────────────────────────────────────
 
-fn row_to_record(cols: &[String]) -> StudentRecord {
-    let get = |i: usize| cols.get(i).cloned().unwrap_or_default();
-    let parse_i64 = |i: usize| get(i).trim().parse::<i64>().ok();
+fn row_to_record(
+    cols: &[String],
+    col: &std::collections::HashMap<String, usize>,
+) -> StudentRecord {
+    let get = |name| excel::get_col(cols, col, name);
+    let parse_i64 = |name| get(name).parse::<i64>().ok();
     StudentRecord {
-        student_code: get(0).trim().to_string(),
-        name:         get(1).trim().to_string(),
-        is_enrolled:  parse_i64(2).unwrap_or(1),
-        grade:        parse_i64(3),
-        class_no:     parse_i64(4),
-        seq_no:       parse_i64(5),
-        grad_year:    parse_i64(6),
+        student_code: get("학번").to_string(),
+        name:         get("이름").to_string(),
+        is_enrolled:  parse_i64("재학여부").unwrap_or(1),
+        grade:        parse_i64("학년"),
+        class_no:     parse_i64("반"),
+        seq_no:       parse_i64("번호"),
+        grad_year:    parse_i64("졸업연도"),
     }
 }
 
-fn row_to_enrolled_record(cols: &[String]) -> StudentRecord {
-    let get = |i: usize| cols.get(i).cloned().unwrap_or_default();
-    let parse_i64 = |i: usize| get(i).trim().parse::<i64>().ok();
-    // 양식 컬럼 순서: name(0), grade(1), class_no(2), seq_no(3)
+fn row_to_enrolled_record(
+    cols: &[String],
+    col: &std::collections::HashMap<String, usize>,
+) -> StudentRecord {
+    let get = |name| excel::get_col(cols, col, name);
+    let parse_i64 = |name| get(name).parse::<i64>().ok();
     StudentRecord {
-        student_code: String::new(), // 위치 기반 upsert에서 자동 생성
-        name:         get(0).trim().to_string(),
+        student_code: String::new(), // upsert_enrolled_by_position 에서 자동 생성
+        name:         get("이름").to_string(),
         is_enrolled:  1,
-        grade:        parse_i64(1),
-        class_no:     parse_i64(2),
-        seq_no:       parse_i64(3),
+        grade:        parse_i64("학년"),
+        class_no:     parse_i64("반"),
+        seq_no:       parse_i64("번호"),
         grad_year:    None,
     }
 }
 
-fn row_to_graduated_record(cols: &[String]) -> StudentRecord {
-    let get = |i: usize| cols.get(i).cloned().unwrap_or_default();
-    let parse_i64 = |i: usize| get(i).trim().parse::<i64>().ok();
+fn row_to_graduated_record(
+    cols: &[String],
+    col: &std::collections::HashMap<String, usize>,
+) -> StudentRecord {
+    let get = |name| excel::get_col(cols, col, name);
+    let parse_i64 = |name| get(name).parse::<i64>().ok();
     StudentRecord {
-        student_code: get(0).trim().to_string(),
-        name:         get(1).trim().to_string(),
+        student_code: get("학번").to_string(),
+        name:         get("이름").to_string(),
         is_enrolled:  0,
         grade:        None,
         class_no:     None,
         seq_no:       None,
-        grad_year:    parse_i64(2),
+        grad_year:    parse_i64("졸업연도"),
     }
 }
