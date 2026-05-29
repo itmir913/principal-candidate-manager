@@ -50,8 +50,8 @@
           <div class="flex-1">
             <label class="text-xs text-gray-500">데이터 조회 기준</label>
             <select v-model="newArea.lookup_scope" class="w-full border rounded px-2 py-1 mt-0.5">
-              <option value="SIMPLE">학생 공통</option>
-              <option value="COMPOSITE">대학별 개별</option>
+              <option value="SIMPLE">기본 조회</option>
+              <option value="COMPOSITE">대학별 환산점수 조회</option>
             </select>
           </div>
         </div>
@@ -303,7 +303,7 @@ function parseDisplayScore(raw) {
 }
 
 const CALC_TYPE_LABELS    = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
-const LOOKUP_SCOPE_LABELS = { SIMPLE: '학생 공통', COMPOSITE: '대학별 개별' }
+const LOOKUP_SCOPE_LABELS = { SIMPLE: '기본 조회', COMPOSITE: '대학별 환산점수 조회' }
 const MATCH_MODE_LABELS   = { UPPER: '이상 ▲', LOWER: '이하 ▼', EXACT: '정확히 일치' }
 const CATEGORY_AGG_LABELS = { SUM: '중복 선택 (합산)', MAX: '최대 1개 (최고점)' }
 function calcTypeLabel(v)    { return CALC_TYPE_LABELS[v]    ?? v }
