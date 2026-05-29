@@ -165,6 +165,21 @@ pub async fn put_numeric_table(
     Path(id): Path<i64>,
     Json(rows): Json<Vec<RangeRow>>,
 ) -> Result<StatusCode, ApiError> {
+    let max_score: i64 = sqlx::query_scalar("SELECT max_score FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", id)))?;
+
+    if let Some(row) = rows.iter().find(|r| r.score > max_score) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("점수({})가 전형요소 만점({})을 초과합니다",
+                row.score as f64 / 100_000.0, max_score as f64 / 100_000.0),
+        ));
+    }
+
     let mut tx = state
         .db
         .begin()
@@ -214,6 +229,21 @@ pub async fn put_category_map(
     Path(id): Path<i64>,
     Json(rows): Json<Vec<CategoryRow>>,
 ) -> Result<StatusCode, ApiError> {
+    let max_score: i64 = sqlx::query_scalar("SELECT max_score FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", id)))?;
+
+    if let Some(row) = rows.iter().find(|r| r.score > max_score) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("점수({})가 전형요소 만점({})을 초과합니다",
+                row.score as f64 / 100_000.0, max_score as f64 / 100_000.0),
+        ));
+    }
+
     let mut tx = state
         .db
         .begin()

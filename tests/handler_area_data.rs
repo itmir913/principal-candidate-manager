@@ -50,7 +50,7 @@ async fn insert_area(
 ) -> i64 {
     sqlx::query(
         "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope, multi_value) \
-         VALUES (?, 100000, ?, ?, ?, 'SIMPLE', ?)",
+         VALUES (?, 10000000, ?, ?, ?, 'SIMPLE', ?)",
     )
     .bind(format!("Area_{calc_type}_{multi_value}"))
     .bind(calc_type)

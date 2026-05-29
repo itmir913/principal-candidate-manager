@@ -26,10 +26,17 @@ async fn setup(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .await
     .unwrap();
 
-    let uid: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('한국대', '컴공', 5) RETURNING id",
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
     )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    )
+    .bind(univ_id)
     .fetch_one(pool)
     .await
     .unwrap();
@@ -41,7 +48,7 @@ async fn setup(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .await
     .unwrap();
 
-    (sid, uid, rid)
+    (sid, tid, rid)
 }
 
 // ── teacher_create_application ────────────────────────────────────
@@ -49,11 +56,11 @@ async fn setup(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
 #[tokio::test]
 async fn create_application_open_round_ok() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
+    let (sid, tid, rid) = setup(&pool).await;
     let res = teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, univ_id: uid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
     )
     .await;
     assert_eq!(res.unwrap(), StatusCode::CREATED);
@@ -67,8 +74,8 @@ async fn create_application_open_round_ok() {
 #[tokio::test]
 async fn create_application_duplicate_is_silently_ignored() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
-    let body = || Json(CreateApplicationBody { student_id: sid, univ_id: uid, round_id: rid });
+    let (sid, tid, rid) = setup(&pool).await;
+    let body = || Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid });
     teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
@@ -93,7 +100,7 @@ async fn create_application_duplicate_is_silently_ignored() {
 #[tokio::test]
 async fn create_application_closed_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, _) = setup(&pool).await;
+    let (sid, tid, _) = setup(&pool).await;
     let rid: i64 = sqlx::query_scalar(
         "INSERT INTO rounds (status, opened_at, closed_at) \
          VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
@@ -104,7 +111,7 @@ async fn create_application_closed_round_returns_bad_request() {
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, univ_id: uid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -113,11 +120,11 @@ async fn create_application_closed_round_returns_bad_request() {
 #[tokio::test]
 async fn create_application_round_not_found_returns_not_found() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, _) = setup(&pool).await;
+    let (sid, tid, _) = setup(&pool).await;
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, univ_id: uid, round_id: 9999 }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: 9999 }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
@@ -126,11 +133,11 @@ async fn create_application_round_not_found_returns_not_found() {
 #[tokio::test]
 async fn create_application_student_not_in_class_returns_forbidden() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
+    let (sid, tid, rid) = setup(&pool).await;
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(2, 2)),
-        Json(CreateApplicationBody { student_id: sid, univ_id: uid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);
@@ -141,13 +148,13 @@ async fn create_application_student_not_in_class_returns_forbidden() {
 #[tokio::test]
 async fn delete_application_open_round_ok() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
+    let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
@@ -155,7 +162,7 @@ async fn delete_application_open_round_ok() {
     teacher_delete_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        Path((sid, uid, rid)),
+        Path((sid, tid, rid)),
     )
     .await
     .unwrap();
@@ -169,7 +176,7 @@ async fn delete_application_open_round_ok() {
 #[tokio::test]
 async fn delete_application_closed_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, _) = setup(&pool).await;
+    let (sid, tid, _) = setup(&pool).await;
     let rid: i64 = sqlx::query_scalar(
         "INSERT INTO rounds (status, opened_at, closed_at) \
          VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
@@ -178,11 +185,11 @@ async fn delete_application_closed_round_returns_bad_request() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
@@ -190,7 +197,7 @@ async fn delete_application_closed_round_returns_bad_request() {
     let res = teacher_delete_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
-        Path((sid, uid, rid)),
+        Path((sid, tid, rid)),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -199,13 +206,13 @@ async fn delete_application_closed_round_returns_bad_request() {
 #[tokio::test]
 async fn delete_application_wrong_class_returns_forbidden() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
+    let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
@@ -213,7 +220,7 @@ async fn delete_application_wrong_class_returns_forbidden() {
     let res = teacher_delete_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(2, 2)),
-        Path((sid, uid, rid)),
+        Path((sid, tid, rid)),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);
@@ -224,26 +231,26 @@ async fn delete_application_wrong_class_returns_forbidden() {
 #[tokio::test]
 async fn abandon_application_sets_abandoned_flag() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup(&pool).await;
+    let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
     .unwrap();
-    abandon_application(State(common::make_state(pool.clone())), Path((sid, uid, rid)))
+    abandon_application(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
         .await
         .unwrap();
     let abandoned: i64 = sqlx::query_scalar(
         "SELECT abandoned FROM applications \
-         WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .fetch_one(&pool)
     .await

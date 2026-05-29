@@ -343,7 +343,7 @@ async fn delete_student_with_base_data_returns_conflict() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '10000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '10000')",
     )
     .bind(sid)
     .bind(aid)
@@ -370,10 +370,16 @@ async fn delete_student_with_application_returns_conflict() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let uid: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('한국대', '컴공', 5) RETURNING id",
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
     )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    )
+    .bind(univ_id)
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -384,11 +390,11 @@ async fn delete_student_with_application_returns_conflict() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await

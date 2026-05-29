@@ -29,6 +29,7 @@ pub struct ImportResult {
 
 #[derive(sqlx::FromRow)]
 struct AreaInfo {
+    max_score: i64,
     calc_type: String,
     lookup_scope: String,
     multi_value: i64,
@@ -67,9 +68,14 @@ fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
     Ok(wb.save_to_buffer()?)
 }
 
+fn fmt_score(v: i64) -> String {
+    let s = format!("{:.5}", v as f64 / 100_000.0);
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     sqlx::query_as::<_, AreaInfo>(
-        "SELECT calc_type, lookup_scope, multi_value FROM areas WHERE id = ?",
+        "SELECT max_score, calc_type, lookup_scope, multi_value FROM areas WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(db)
@@ -302,6 +308,14 @@ pub async fn numeric_table_import(
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
 
+        if sc > area.max_score {
+            errors.push(format!(
+                "{}행: 점수({})가 전형요소 만점({})을 초과합니다",
+                row_num, fmt_score(sc), fmt_score(area.max_score)
+            ));
+            continue;
+        }
+
         let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
@@ -447,6 +461,14 @@ pub async fn category_map_import(
             Ok(v) => v,
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
+
+        if sc > area.max_score {
+            errors.push(format!(
+                "{}행: 점수({})가 전형요소 만점({})을 초과합니다",
+                row_num, fmt_score(sc), fmt_score(area.max_score)
+            ));
+            continue;
+        }
 
         let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,

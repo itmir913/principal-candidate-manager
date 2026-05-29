@@ -232,13 +232,19 @@ async fn insert_area(
 }
 
 async fn insert_university(pool: &sqlx::SqlitePool) -> i64 {
-    sqlx::query(
-        "INSERT INTO universities (univ_name, track_name, capacity) VALUES ('한국대', '컴퓨터공학', 5)",
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
     )
-    .execute(pool)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴퓨터공학', 5) RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(pool)
     .await
     .unwrap()
-    .last_insert_rowid()
 }
 
 #[tokio::test]
@@ -249,7 +255,7 @@ async fn calc_range_simple_upper() {
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
         sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(th)
@@ -259,7 +265,7 @@ async fn calc_range_simple_upper() {
         .unwrap();
     }
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '125000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '125000')",
     )
     .bind(sid)
     .bind(aid)
@@ -286,7 +292,7 @@ async fn calc_range_simple_lower() {
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
         sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(th)
@@ -296,7 +302,7 @@ async fn calc_range_simple_lower() {
         .unwrap();
     }
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '150000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '150000')",
     )
     .bind(sid)
     .bind(aid)
@@ -323,7 +329,7 @@ async fn calc_range_composite() {
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "COMPOSITE").await;
 
     sqlx::query(
-        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, ?, 100000, 80000)",
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, ?, 100000, 80000)",
     )
     .bind(aid)
     .bind(uid)
@@ -331,7 +337,7 @@ async fn calc_range_composite() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, ?, '150000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, ?, '150000')",
     )
     .bind(sid)
     .bind(aid)
@@ -359,7 +365,7 @@ async fn calc_category_sum() {
 
     for (cat, sc) in [("회장", 30_000i64), ("봉사", 20_000)] {
         sqlx::query(
-            "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(cat)
@@ -368,7 +374,7 @@ async fn calc_category_sum() {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
+            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid)
         .bind(aid)
@@ -397,7 +403,7 @@ async fn calc_category_max() {
 
     for (cat, sc) in [("회장", 30_000i64), ("부회장", 20_000)] {
         sqlx::query(
-            "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid)
         .bind(cat)
@@ -406,7 +412,7 @@ async fn calc_category_max() {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
+            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid)
         .bind(aid)
@@ -434,7 +440,7 @@ async fn calc_manual() {
     let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '75000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '75000')",
     )
     .bind(sid)
     .bind(aid)
@@ -460,7 +466,7 @@ async fn calc_no_base_data_returns_zero() {
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 50000)",
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 100000, 50000)",
     )
     .bind(aid)
     .execute(&pool)
@@ -488,11 +494,11 @@ async fn calc_category_sum_capped_at_max_score() {
 
     for (cat, sc) in [("회장", 50_000i64), ("부회장", 40_000), ("임원", 20_000)] {
         sqlx::query(
-            "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid).bind(cat).bind(sc).execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
+            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid).bind(aid).bind(cat).execute(&pool).await.unwrap();
     }
@@ -517,13 +523,13 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
 
     for (th, sc) in [(0i64, 100_000i64), (10_000, 80_000), (50_000, 50_000)] {
         sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
     }
     // value=70_000 은 최대 threshold(50_000)를 초과 → 50_000점 반환 기대
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '70000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '70000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -546,7 +552,7 @@ async fn calc_manual_capped_at_max_score() {
     let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
     // insert_area: max_score=100_000, 저장값 200_000 > 100_000 → 100_000 반환 기대
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '200000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '200000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -569,11 +575,11 @@ async fn calc_range_upper_capped_at_max_score() {
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, "SIMPLE").await;
     // insert_area: max_score=100_000, 구간표 점수=200_000 > 100_000 → 100_000 반환 기대
     sqlx::query(
-        "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, 100000, 200000)",
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 100000, 200000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '100000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '100000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -596,11 +602,11 @@ async fn calc_category_max_capped_at_max_score() {
     let aid = insert_area(&pool, "CATEGORY", None, Some("MAX"), "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '회장', 200000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '회장', 200000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '회장', 1)",
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '회장', 1)",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -626,11 +632,11 @@ async fn calc_category_deduction_returns_negative_score() {
     let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '규정위반', 1)",
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '규정위반', 1)",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -650,7 +656,7 @@ async fn calc_category_deduction_student_without_violation_gets_zero() {
     let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     // base_data에 아무 것도 없음
@@ -670,7 +676,7 @@ async fn calc_manual_deduction_returns_negative_score() {
     let aid = insert_area(&pool, "MANUAL", None, None, "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '-500000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '-500000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -696,11 +702,11 @@ async fn calc_pure_deduction_area_max_score_zero() {
     .fetch_one(&pool).await.unwrap();
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -500000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '위반', -500000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -725,7 +731,7 @@ async fn calc_pure_deduction_area_no_violation_gets_zero() {
     .fetch_one(&pool).await.unwrap();
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -500000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '위반', -500000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     // base_data 없음 → scores.is_empty() → Ok(0)
@@ -746,11 +752,11 @@ async fn calc_deduction_does_not_cap_at_max_score() {
     let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), "SIMPLE").await;
 
     sqlx::query(
-        "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, NULL, '위반', -300000)",
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '위반', -300000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '위반', 1)",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -770,12 +776,12 @@ async fn calc_range_exact_match_hit() {
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
         sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
     }
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '200000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '200000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -799,13 +805,13 @@ async fn calc_range_exact_match_miss_returns_error() {
 
     for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000)] {
         sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)",
         )
         .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
     }
     // 150_000은 구간표에 없음
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '150000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '150000')",
     )
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
@@ -836,10 +842,16 @@ async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .fetch_one(pool)
     .await
     .unwrap();
-    let uid: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('한국대', '컴공', 5) RETURNING id",
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
     )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    )
+    .bind(univ_id)
     .fetch_one(pool)
     .await
     .unwrap();
@@ -849,7 +861,7 @@ async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .fetch_one(pool)
     .await
     .unwrap();
-    (sid, uid, rid)
+    (sid, tid, rid)
 }
 
 #[tokio::test]
@@ -871,14 +883,14 @@ async fn calculate_scores_no_applications_returns_zero_count() {
 #[tokio::test]
 async fn calculate_scores_creates_result_rows_and_ranking() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup_full(&pool).await;
+    let (sid, tid, rid) = setup_full(&pool).await;
 
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
@@ -929,10 +941,16 @@ async fn calculate_scores_ranks_higher_score_first() {
     .await
     .unwrap();
 
-    let uid: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('한국대', '컴공', 5) RETURNING id",
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
     )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    )
+    .bind(univ_id)
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -952,7 +970,7 @@ async fn calculate_scores_ranks_higher_score_first() {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '8000000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '8000000')",
     )
     .bind(sid1)
     .bind(aid)
@@ -960,7 +978,7 @@ async fn calculate_scores_ranks_higher_score_first() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '6000000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '6000000')",
     )
     .bind(sid2)
     .bind(aid)
@@ -970,11 +988,11 @@ async fn calculate_scores_ranks_higher_score_first() {
 
     for sid in [sid1, sid2] {
         sqlx::query(
-            "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+            "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
              VALUES (?, ?, ?, 1, 0)",
         )
         .bind(sid)
-        .bind(uid)
+        .bind(tid)
         .bind(rid)
         .execute(&pool)
         .await
@@ -1006,22 +1024,22 @@ async fn calculate_scores_ranks_higher_score_first() {
 #[tokio::test]
 async fn recommend_on_open_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup_full(&pool).await;
-    let res = recommend_result(State(common::make_state(pool)), Path((sid, uid, rid))).await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn recommend_on_closed_round_sets_flag() {
     let pool = common::create_test_pool().await;
-    let (sid, uid, rid) = setup_full(&pool).await;
+    let (sid, tid, rid) = setup_full(&pool).await;
 
     sqlx::query(
-        "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .execute(&pool)
     .await
@@ -1037,15 +1055,15 @@ async fn recommend_on_closed_round_sets_flag() {
     .await
     .unwrap();
 
-    recommend_result(State(common::make_state(pool.clone())), Path((sid, uid, rid)))
+    recommend_result(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
         .await
         .unwrap();
 
     let recommended: i64 = sqlx::query_scalar(
-        "SELECT recommended FROM results WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+        "SELECT recommended FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
-    .bind(uid)
+    .bind(tid)
     .bind(rid)
     .fetch_one(&pool)
     .await
