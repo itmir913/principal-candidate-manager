@@ -190,7 +190,6 @@ pub async fn numeric_table_export(
     let area = get_area(&state.db, id).await?;
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
-
     if area.lookup_scope == "COMPOSITE" {
         for (i, h) in ["기준값", "점수", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
@@ -202,7 +201,7 @@ pub async fn numeric_table_export(
              FROM numeric_table rt
              LEFT JOIN universities u ON rt.univ_id = u.id
              WHERE rt.area_id = ?
-             ORDER BY rt.univ_id, rt.threshold",
+             ORDER BY u.univ_name, u.track_name, rt.score DESC, rt.threshold",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -221,7 +220,7 @@ pub async fn numeric_table_export(
         }
         let rows = sqlx::query(
             "SELECT threshold, score FROM numeric_table
-             WHERE area_id = ? AND univ_id IS NULL ORDER BY threshold",
+             WHERE area_id = ? AND univ_id IS NULL ORDER BY score DESC, threshold",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -346,7 +345,7 @@ pub async fn category_map_export(
              FROM category_map cm
              LEFT JOIN universities u ON cm.univ_id = u.id
              WHERE cm.area_id = ?
-             ORDER BY cm.univ_id, cm.category",
+             ORDER BY u.univ_name, u.track_name, cm.score DESC, cm.category",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -365,7 +364,7 @@ pub async fn category_map_export(
         }
         let rows = sqlx::query(
             "SELECT category, score FROM category_map
-             WHERE area_id = ? AND univ_id IS NULL ORDER BY category",
+             WHERE area_id = ? AND univ_id IS NULL ORDER BY score DESC, category",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -677,7 +676,7 @@ pub async fn numeric_table_list(
          FROM numeric_table rt
          LEFT JOIN universities u ON rt.univ_id = u.id
          WHERE rt.area_id = ?
-         ORDER BY rt.univ_id, rt.threshold",
+         ORDER BY u.univ_name, u.track_name, rt.score DESC, rt.threshold",
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -711,7 +710,7 @@ pub async fn category_map_list(
          FROM category_map cm
          LEFT JOIN universities u ON cm.univ_id = u.id
          WHERE cm.area_id = ?
-         ORDER BY cm.univ_id, cm.category",
+         ORDER BY u.univ_name, u.track_name, cm.score DESC, cm.category",
     )
     .bind(id)
     .fetch_all(&state.db)
