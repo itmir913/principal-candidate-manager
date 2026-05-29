@@ -155,13 +155,13 @@
         <div v-if="view === 'results'">
           <div class="flex items-center gap-3 mb-4 flex-wrap">
             <select
-              v-model="selectedUnivId"
+              v-model="selectedTrackId"
               class="border rounded px-2 py-1 text-sm"
               @change="loadResults"
             >
               <option value="">전체 대학</option>
-              <option v-for="u in univsInRound" :key="u.id" :value="u.id">
-                {{ u.univ_name }} {{ u.track_name }}
+              <option v-for="t in tracksInRound" :key="t.id" :value="t.id">
+                {{ t.univ_name }} {{ t.track_name }}
               </option>
             </select>
             <button
@@ -183,7 +183,12 @@
             <div class="flex items-center gap-2 mb-2">
               <h4 class="text-sm font-semibold text-gray-700">{{ key }}</h4>
               <span class="text-xs text-gray-400">
-                정원 {{ group.capacity }}명 / 잔여 {{ group.remaining }}석
+                <template v-if="group.unitQuota != null">
+                  모집단위 정원 {{ group.unitQuota }}명 / 잔여 {{ group.remaining }}석
+                </template>
+                <template v-else>
+                  모집단위 정원 무제한
+                </template>
               </span>
             </div>
             <table class="w-full text-sm border rounded overflow-hidden">
@@ -253,7 +258,7 @@ import {
   getRounds, openRound, closeRound,
   calculateScores, getResults, recommendResult,
   getApplications, abandonApplication,
-  getUniversities, getAreas,
+  getAllTracks, getAreas,
   exportResultsExcel,
   scorePreview,
 } from '../../api/admin.js'
@@ -271,17 +276,17 @@ const loading = ref(false)
 const apps    = ref([])
 const results = ref([])
 const areas   = ref([])
-const univs   = ref([])
+const tracks  = ref([])   // 전체 모집단위 (unit_quota 포함)
 
 const calcLoading = ref(false)
 const calcMsg     = ref(null)
 
-const selectedUnivId = ref('')
+const selectedTrackId = ref('')
 
 const previews = ref({})
 
 function previewKey(app) {
-  return `${app.student_id}-${app.univ_id}`
+  return `${app.student_id}-${app.track_id}`
 }
 
 async function togglePreview(app) {
@@ -295,7 +300,7 @@ async function togglePreview(app) {
 
   previews.value = { ...previews.value, [key]: { open: true, loading: true, data: null } }
   try {
-    const data = await scorePreview(app.student_id, app.univ_id)
+    const data = await scorePreview(app.student_id, app.track_id)
     previews.value = { ...previews.value, [key]: { open: true, loading: false, data } }
   } catch {
     previews.value = { ...previews.value, [key]: { open: true, loading: false, data: null } }
@@ -319,11 +324,11 @@ const appsByUniv = computed(() => {
   return map
 })
 
-const univsInRound = computed(() => {
+const tracksInRound = computed(() => {
   const seen = new Set()
   return results.value
-    .filter(r => { if (seen.has(r.univ_id)) return false; seen.add(r.univ_id); return true })
-    .map(r => ({ id: r.univ_id, univ_name: r.univ_name, track_name: r.track_name }))
+    .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
+    .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
 })
 
 const resultsByUniv = computed(() => {
@@ -331,10 +336,10 @@ const resultsByUniv = computed(() => {
   for (const r of results.value) {
     const key = `${r.univ_name} ${r.track_name}`
     if (!map[key]) {
-      const u = univs.value.find(u => u.id === r.univ_id)
-      const capacity = u?.capacity ?? 0
-      const recommended = results.value.filter(x => x.univ_id === r.univ_id && x.recommended).length
-      map[key] = { capacity, remaining: capacity - recommended, results: [] }
+      const t = tracks.value.find(t => t.id === r.track_id)
+      const unitQuota = t?.unit_quota ?? null
+      const recommended = results.value.filter(x => x.track_id === r.track_id && x.recommended).length
+      map[key] = { unitQuota, remaining: unitQuota != null ? unitQuota - recommended : null, results: [] }
     }
     map[key].results.push(r)
   }
@@ -371,12 +376,11 @@ async function loadApps() {
 
 async function loadResults() {
   if (!selected.value) return
-  results.value = await getResults(selected.value.id, selectedUnivId.value || null)
+  results.value = await getResults(selected.value.id, selectedTrackId.value || null)
 }
 
 async function loadAreas() {
-  areas.value = await getAreas()
-  univs.value = await getUniversities()
+  ;[areas.value, tracks.value] = await Promise.all([getAreas(), getAllTracks()])
 }
 
 async function handleOpenRound() {
@@ -425,7 +429,7 @@ async function handleCalculate() {
 async function handleAbandon(app) {
   if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까?`)) return
   try {
-    await abandonApplication(app.student_id, app.univ_id, app.round_id)
+    await abandonApplication(app.student_id, app.track_id, app.round_id)
     await loadApps()
   } catch (e) {
     alert(e.response?.data || e.message)
@@ -450,7 +454,7 @@ async function downloadExcel() {
 async function handleRecommend(r) {
   if (!confirm(`${r.name} 학생을 추천 확정하시겠습니까?`)) return
   try {
-    await recommendResult(r.student_id, r.univ_id, r.round_id)
+    await recommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
     alert(e.response?.data || e.message)

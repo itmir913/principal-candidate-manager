@@ -1,5 +1,6 @@
 -- ================================================================
--- 학교장추천 선발 시스템 — Schema v8  (migration v0 → v1)
+-- 학교장추천 선발 시스템 — Schema v9
+-- universities(대학 마스터) / univ_tracks(모집단위) 2단계 분리
 -- Float-Free Architecture (×100000 완전 정수화) + Abandon 박제 로직
 -- ================================================================
 
@@ -67,8 +68,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
 -- AREAS
 -- max_score: INTEGER (×100000)
 -- lookup_scope:
---   SIMPLE    = univ_id와 무관한 전역 전형요소
---   COMPOSITE = 지원 대학별로 점수가 달라지는 전형요소
+--   SIMPLE    = univ_tracks와 무관한 전역 전형요소
+--   COMPOSITE = 지원 모집단위별로 점수가 달라지는 전형요소
 -- calc_type:
 --   NUMERIC  = 숫자 측정값을 점수 테이블에서 조회 (match_mode 필수)
 --   CATEGORY = 텍스트 범주 선택 후 매핑 (category_agg 필수)
@@ -94,50 +95,58 @@ CREATE TABLE IF NOT EXISTS areas (
 );
 
 -- ================================================================
+-- UNIVERSITIES (대학 마스터)
+-- total_quota: NULL = 전체 모집단위 합산 제한 없음
+-- prioritize_enrolled: 0=동일기준, 1=재학생우선
+-- ================================================================
+CREATE TABLE IF NOT EXISTS universities (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    univ_name           TEXT    NOT NULL UNIQUE,
+    total_quota         INTEGER,
+    prioritize_enrolled INTEGER NOT NULL DEFAULT 0
+                                CHECK(prioritize_enrolled IN (0, 1))
+);
+
+-- ================================================================
+-- UNIV_TRACKS (모집단위)
+-- unit_quota: NULL = 해당 모집단위 제한 없음
+-- ================================================================
+CREATE TABLE IF NOT EXISTS univ_tracks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    univ_id     INTEGER NOT NULL REFERENCES universities(id) ON DELETE CASCADE,
+    track_name  TEXT    NOT NULL,
+    unit_quota  INTEGER,
+    UNIQUE (univ_id, track_name)
+);
+
+-- ================================================================
 -- NUMERIC_TABLE  (NUMERIC calc_type 전용)
 -- threshold: INTEGER (×100000, 원본 측정값)
---   예) 내신 1.25등급 → 125000 / 봉사 30.5시간 → 3050000
 -- score: INTEGER (×100000)
--- univ_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(대학별)
--- Out-of-bounds: UPPER → 0점, LOWER → 최대threshold 행 점수
--- 구간 비교는 정수 대소비교만 사용 (Float-Free Zone)
+-- track_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(모집단위별)
 -- ================================================================
 CREATE TABLE IF NOT EXISTS numeric_table (
     area_id   INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    univ_id   INTEGER REFERENCES universities(id),  -- NULL=SIMPLE, id=COMPOSITE
+    track_id  INTEGER REFERENCES univ_tracks(id),
     threshold INTEGER NOT NULL,   -- ×100000
     score     INTEGER NOT NULL    -- ×100000
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_numeric_table
-    ON numeric_table(area_id, COALESCE(univ_id, 0), threshold);
+    ON numeric_table(area_id, COALESCE(track_id, 0), threshold);
 
 -- ================================================================
 -- CATEGORY_MAP
 -- score: INTEGER (×100000)
--- univ_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(대학별)
+-- track_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(모집단위별)
 -- ================================================================
 CREATE TABLE IF NOT EXISTS category_map (
     area_id  INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    univ_id  INTEGER REFERENCES universities(id),  -- NULL=SIMPLE, id=COMPOSITE
+    track_id INTEGER REFERENCES univ_tracks(id),
     category TEXT    NOT NULL,
-    score    INTEGER NOT NULL     -- ×10000
+    score    INTEGER NOT NULL     -- ×100000
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_category_map
-    ON category_map(area_id, COALESCE(univ_id, 0), category);
-
--- ================================================================
--- UNIVERSITIES
--- prioritize_enrolled: 0=동일기준, 1=재학생우선
--- ================================================================
-CREATE TABLE IF NOT EXISTS universities (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    univ_name            TEXT    NOT NULL,
-    track_name           TEXT    NOT NULL,
-    capacity             INTEGER NOT NULL,
-    prioritize_enrolled  INTEGER NOT NULL DEFAULT 0
-                                 CHECK(prioritize_enrolled IN (0, 1)),
-    UNIQUE (univ_name, track_name)
-);
+    ON category_map(area_id, COALESCE(track_id, 0), category);
 
 -- ================================================================
 -- BASE_DATA
@@ -145,25 +154,23 @@ CREATE TABLE IF NOT EXISTS universities (
 --   NUMERIC  : "3050000" (원본 측정값 ×100000 정수 문자열)
 --   CATEGORY : "회장"    (범주값)
 --   MANUAL   : "850000"  (점수 ×100000 정수 문자열)
--- 투명화 계층: 교사 입력 "30.5" → 백엔드 즉시 ×100000 → DB "3050000"
---             DB "3050000" → API 응답 시 /100000 → Vue 표시 "30.5"
--- multi_value: areas.multi_value 비정규화 — partial index 조건으로 사용
+-- track_id: NULL → SIMPLE, NOT NULL → COMPOSITE
 -- ================================================================
 CREATE TABLE IF NOT EXISTS base_data (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id  INTEGER NOT NULL REFERENCES students(id),
     area_id     INTEGER NOT NULL REFERENCES areas(id),
-    univ_id     INTEGER REFERENCES universities(id),
+    track_id    INTEGER REFERENCES univ_tracks(id),
     value       TEXT    NOT NULL,
     multi_value INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1))
 );
--- 단일값 전형요소: (학생, 전형요소, 대학) 당 정확히 1행
+-- 단일값 전형요소: (학생, 전형요소, 모집단위) 당 정확히 1행
 CREATE UNIQUE INDEX IF NOT EXISTS idx_base_data_single
-    ON base_data(student_id, area_id, COALESCE(univ_id, 0))
+    ON base_data(student_id, area_id, COALESCE(track_id, 0))
     WHERE multi_value = 0;
--- 복수값 전형요소: 동일 (학생, 전형요소, 대학, 값) 중복 방지
+-- 복수값 전형요소: 동일 (학생, 전형요소, 모집단위, 값) 중복 방지
 CREATE UNIQUE INDEX IF NOT EXISTS idx_base_data_multi
-    ON base_data(student_id, area_id, COALESCE(univ_id, 0), value)
+    ON base_data(student_id, area_id, COALESCE(track_id, 0), value)
     WHERE multi_value = 1;
 CREATE INDEX IF NOT EXISTS idx_base_data_student
     ON base_data(student_id);
@@ -174,11 +181,11 @@ CREATE INDEX IF NOT EXISTS idx_base_data_student
 -- ================================================================
 CREATE TABLE IF NOT EXISTS applications (
     student_id INTEGER NOT NULL REFERENCES students(id),
-    univ_id    INTEGER NOT NULL REFERENCES universities(id),
+    track_id   INTEGER NOT NULL REFERENCES univ_tracks(id),
     round_id   INTEGER NOT NULL REFERENCES rounds(id),
     confirmed  INTEGER NOT NULL DEFAULT 0 CHECK(confirmed IN (0, 1)),
     abandoned  INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
-    PRIMARY KEY (student_id, univ_id, round_id)
+    PRIMARY KEY (student_id, track_id, round_id)
 );
 CREATE INDEX IF NOT EXISTS idx_applications_round
     ON applications(round_id);
@@ -199,7 +206,7 @@ BEGIN
     WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED'
       AND (
           OLD.student_id != NEW.student_id
-          OR OLD.univ_id    != NEW.univ_id
+          OR OLD.track_id   != NEW.track_id
           OR OLD.round_id   != NEW.round_id
           OR OLD.confirmed  != NEW.confirmed
           OR (OLD.abandoned = 1 AND NEW.abandoned = 0)
@@ -217,16 +224,16 @@ END;
 -- ================================================================
 CREATE TABLE IF NOT EXISTS results (
     student_id     INTEGER NOT NULL,
-    univ_id        INTEGER NOT NULL,
+    track_id       INTEGER NOT NULL,
     round_id       INTEGER NOT NULL,
     score_detail   TEXT    NOT NULL DEFAULT '{}',
     total_score    INTEGER NOT NULL DEFAULT 0,
     ranking        INTEGER,
     recommended    INTEGER NOT NULL DEFAULT 0 CHECK(recommended IN (0, 1)),
     calculated_at  TEXT    NOT NULL,
-    PRIMARY KEY (student_id, univ_id, round_id),
-    FOREIGN KEY (student_id, univ_id, round_id)
-        REFERENCES applications(student_id, univ_id, round_id)
+    PRIMARY KEY (student_id, track_id, round_id),
+    FOREIGN KEY (student_id, track_id, round_id)
+        REFERENCES applications(student_id, track_id, round_id)
 );
-CREATE INDEX IF NOT EXISTS idx_results_round_univ
-    ON results(round_id, univ_id);
+CREATE INDEX IF NOT EXISTS idx_results_round_track
+    ON results(round_id, track_id);

@@ -78,16 +78,37 @@ async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", id)))
 }
 
-/// 대학이 없으면 자동 생성 후 (id, 생성여부) 반환
-async fn find_or_create_univ(
+/// 대학+모집단위가 없으면 자동 생성 후 (track_id, 생성여부) 반환
+async fn find_or_create_track(
     db: &Db,
     univ_name: &str,
     track_name: &str,
 ) -> Result<(i64, bool), ApiError> {
-    if let Some(id) = sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM universities WHERE univ_name = ? AND track_name = ?",
+    // 1단계: 대학 마스터 조회 or 생성
+    let univ_id: i64 = if let Some(id) = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM universities WHERE univ_name = ?",
     )
     .bind(univ_name)
+    .fetch_optional(db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        id
+    } else {
+        sqlx::query_scalar(
+            "INSERT INTO universities (univ_name) VALUES (?) RETURNING id",
+        )
+        .bind(univ_name)
+        .fetch_one(db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    };
+
+    // 2단계: 모집단위 조회 or 생성
+    if let Some(id) = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM univ_tracks WHERE univ_id = ? AND track_name = ?",
+    )
+    .bind(univ_id)
     .bind(track_name)
     .fetch_optional(db)
     .await
@@ -95,15 +116,16 @@ async fn find_or_create_univ(
     {
         return Ok((id, false));
     }
+
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, track_name, capacity, prioritize_enrolled)
-         VALUES (?, ?, 0, 0) RETURNING id",
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, ?) RETURNING id",
     )
-    .bind(univ_name)
+    .bind(univ_id)
     .bind(track_name)
     .fetch_one(db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok((id, true))
 }
 
@@ -131,8 +153,8 @@ fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     }
 }
 
-/// COMPOSITE 전형요소: univ_id 조회/생성 (열 이름 기반)
-async fn resolve_univ(
+/// COMPOSITE 전형요소: track_id 조회/생성 (열 이름 기반)
+async fn resolve_track(
     db: &Db,
     area: &AreaInfo,
     cols: &[String],
@@ -148,15 +170,15 @@ async fn resolve_univ(
             errors.push(format!("{}행: COMPOSITE 전형요소는 대학명, 모집단위명 필수", row_num));
             return None;
         }
-        match find_or_create_univ(db, un, tn).await {
-            Ok((uid, created)) => {
+        match find_or_create_track(db, un, tn).await {
+            Ok((track_id, created)) => {
                 if created {
-                    warnings.push(format!("'{}/{}' 대학 자동 추가됨", un, tn));
+                    warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", un, tn));
                 }
-                Some(Some(uid))
+                Some(Some(track_id))
             }
             Err(e) => {
-                errors.push(format!("{}행: 대학 처리 오류 — {}", row_num, e.1));
+                errors.push(format!("{}행: 모집단위 처리 오류 — {}", row_num, e.1));
                 None
             }
         }
@@ -197,11 +219,12 @@ pub async fn numeric_table_export(
         let rows = sqlx::query(
             "SELECT rt.threshold, rt.score,
                     COALESCE(u.univ_name, '') AS univ_name,
-                    COALESCE(u.track_name, '') AS track_name
+                    COALESCE(ut.track_name, '') AS track_name
              FROM numeric_table rt
-             LEFT JOIN universities u ON rt.univ_id = u.id
+             LEFT JOIN univ_tracks ut ON rt.track_id = ut.id
+             LEFT JOIN universities u ON ut.univ_id = u.id
              WHERE rt.area_id = ?
-             ORDER BY u.univ_name, u.track_name, rt.score DESC, rt.threshold",
+             ORDER BY u.univ_name, ut.track_name, rt.score DESC, rt.threshold",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -220,7 +243,7 @@ pub async fn numeric_table_export(
         }
         let rows = sqlx::query(
             "SELECT threshold, score FROM numeric_table
-             WHERE area_id = ? AND univ_id IS NULL ORDER BY score DESC, threshold",
+             WHERE area_id = ? AND track_id IS NULL ORDER BY score DESC, threshold",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -279,21 +302,21 @@ pub async fn numeric_table_import(
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
 
-        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
 
-        if !seen.insert((univ_id, th)) {
+        if !seen.insert((track_id, th)) {
             errors.push(format!("{}행: 기준값 '{}' 중복 — 같은 기준값은 한 번만 등록할 수 있습니다",
                 row_num, excel::get_col(cols, &col, "기준값")));
             continue;
         }
 
         match sqlx::query(
-            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, ?, ?, ?)",
+            "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, ?, ?, ?)",
         )
-        .bind(id).bind(univ_id).bind(th).bind(sc)
+        .bind(id).bind(track_id).bind(th).bind(sc)
         .execute(&mut *tx).await {
             Ok(_) => rows += 1,
             Err(e) => errors.push(format!("{}행: {}", row_num, e)),
@@ -341,11 +364,12 @@ pub async fn category_map_export(
         let rows = sqlx::query(
             "SELECT cm.category, cm.score,
                     COALESCE(u.univ_name, '') AS univ_name,
-                    COALESCE(u.track_name, '') AS track_name
+                    COALESCE(ut.track_name, '') AS track_name
              FROM category_map cm
-             LEFT JOIN universities u ON cm.univ_id = u.id
+             LEFT JOIN univ_tracks ut ON cm.track_id = ut.id
+             LEFT JOIN universities u ON ut.univ_id = u.id
              WHERE cm.area_id = ?
-             ORDER BY u.univ_name, u.track_name, cm.score DESC, cm.category",
+             ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -364,7 +388,7 @@ pub async fn category_map_export(
         }
         let rows = sqlx::query(
             "SELECT category, score FROM category_map
-             WHERE area_id = ? AND univ_id IS NULL ORDER BY score DESC, category",
+             WHERE area_id = ? AND track_id IS NULL ORDER BY score DESC, category",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -424,20 +448,20 @@ pub async fn category_map_import(
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
 
-        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
 
-        if !seen.insert((univ_id, category.clone())) {
+        if !seen.insert((track_id, category.clone())) {
             errors.push(format!("{}행: 범주 '{}' 중복 — 같은 범주는 한 번만 등록할 수 있습니다", row_num, category));
             continue;
         }
 
         match sqlx::query(
-            "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, ?, ?, ?)",
+            "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, ?, ?, ?)",
         )
-        .bind(id).bind(univ_id).bind(&category).bind(sc)
+        .bind(id).bind(track_id).bind(&category).bind(sc)
         .execute(&mut *tx).await {
             Ok(_) => rows += 1,
             Err(e) => errors.push(format!("{}행: {}", row_num, e)),
@@ -483,12 +507,13 @@ pub async fn base_data_export(
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
-            "SELECT s.student_code, s.name, bd.value, u.univ_name, u.track_name
+            "SELECT s.student_code, s.name, bd.value, u.univ_name, ut.track_name
              FROM base_data bd
              JOIN students s ON bd.student_id = s.id
-             JOIN universities u ON bd.univ_id = u.id
+             JOIN univ_tracks ut ON bd.track_id = ut.id
+             JOIN universities u ON ut.univ_id = u.id
              WHERE bd.area_id = ?
-             ORDER BY u.univ_name, u.track_name, s.grade, s.class_no, s.seq_no",
+             ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -510,7 +535,7 @@ pub async fn base_data_export(
             "SELECT s.student_code, s.name, bd.value
              FROM base_data bd
              JOIN students s ON bd.student_id = s.id
-             WHERE bd.area_id = ? AND bd.univ_id IS NULL
+             WHERE bd.area_id = ? AND bd.track_id IS NULL
              ORDER BY s.grade, s.class_no, s.seq_no",
         )
         .bind(id)
@@ -554,7 +579,7 @@ pub async fn base_data_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
-    // multi_value=0 전형요소: (student_id, univ_id) 중복 추적 — 첫 번째 행 우선
+    // multi_value=0 전형요소: (student_id, track_id) 중복 추적 — 첫 번째 행 우선
     let single_value = area.multi_value == 0;
     let mut seen: HashSet<(i64, Option<i64>)> = HashSet::new();
 
@@ -602,14 +627,14 @@ pub async fn base_data_import(
             _ => raw_value.to_string(),
         };
 
-        // COMPOSITE: 대학 조회/생성
-        let univ_id = match resolve_univ(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        // COMPOSITE: 모집단위 조회/생성
+        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
 
-        // 단일값 전형요소: 동일 (student, univ) 중복 행은 전체 import 거부
-        if single_value && !seen.insert((student_id, univ_id)) {
+        // 단일값 전형요소: 동일 (student, track) 중복 행은 전체 import 거부
+        if single_value && !seen.insert((student_id, track_id)) {
             errors.push(format!(
                 "{}행: 학생코드 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
                 row_num, student_code
@@ -618,9 +643,9 @@ pub async fn base_data_import(
         }
 
         match sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(student_id).bind(id).bind(univ_id).bind(&db_value).bind(area.multi_value)
+        .bind(student_id).bind(id).bind(track_id).bind(&db_value).bind(area.multi_value)
         .execute(&mut *tx).await {
             Ok(_) => rows += 1,
             Err(e) => errors.push(format!("{}행: {}", row_num, e)),
@@ -672,11 +697,12 @@ pub async fn numeric_table_list(
     let rows = sqlx::query(
         "SELECT rt.threshold, rt.score,
                 COALESCE(u.univ_name, '') AS univ_name,
-                COALESCE(u.track_name, '') AS track_name
+                COALESCE(ut.track_name, '') AS track_name
          FROM numeric_table rt
-         LEFT JOIN universities u ON rt.univ_id = u.id
+         LEFT JOIN univ_tracks ut ON rt.track_id = ut.id
+         LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE rt.area_id = ?
-         ORDER BY u.univ_name, u.track_name, rt.score DESC, rt.threshold",
+         ORDER BY u.univ_name, ut.track_name, rt.score DESC, rt.threshold",
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -706,11 +732,12 @@ pub async fn category_map_list(
     let rows = sqlx::query(
         "SELECT cm.category, cm.score,
                 COALESCE(u.univ_name, '') AS univ_name,
-                COALESCE(u.track_name, '') AS track_name
+                COALESCE(ut.track_name, '') AS track_name
          FROM category_map cm
-         LEFT JOIN universities u ON cm.univ_id = u.id
+         LEFT JOIN univ_tracks ut ON cm.track_id = ut.id
+         LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE cm.area_id = ?
-         ORDER BY u.univ_name, u.track_name, cm.score DESC, cm.category",
+         ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category",
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -740,12 +767,13 @@ pub async fn base_data_list(
     let rows = sqlx::query(
         "SELECT s.student_code, s.name, bd.value,
                 COALESCE(u.univ_name, '') AS univ_name,
-                COALESCE(u.track_name, '') AS track_name
+                COALESCE(ut.track_name, '') AS track_name
          FROM base_data bd
          JOIN students s ON bd.student_id = s.id
-         LEFT JOIN universities u ON bd.univ_id = u.id
+         LEFT JOIN univ_tracks ut ON bd.track_id = ut.id
+         LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE bd.area_id = ?
-         ORDER BY bd.univ_id, s.grade, s.class_no, s.seq_no",
+         ORDER BY bd.track_id, s.grade, s.class_no, s.seq_no",
     )
     .bind(id)
     .fetch_all(&state.db)

@@ -233,7 +233,7 @@ async fn insert_area(
 
 async fn insert_university(pool: &sqlx::SqlitePool) -> i64 {
     sqlx::query(
-        "INSERT INTO universities (univ_name, track_name, capacity) VALUES ('서울대', '컴퓨터공학', 5)",
+        "INSERT INTO universities (univ_name, track_name, capacity) VALUES ('한국대', '컴퓨터공학', 5)",
     )
     .execute(pool)
     .await
@@ -838,7 +838,7 @@ async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .unwrap();
     let uid: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('서울대', '컴공', 5) RETURNING id",
+         VALUES ('한국대', '컴공', 5) RETURNING id",
     )
     .fetch_one(pool)
     .await
@@ -931,7 +931,7 @@ async fn calculate_scores_ranks_higher_score_first() {
 
     let uid: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('서울대', '컴공', 5) RETURNING id",
+         VALUES ('한국대', '컴공', 5) RETURNING id",
     )
     .fetch_one(&pool)
     .await

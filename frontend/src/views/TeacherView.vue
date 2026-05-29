@@ -68,18 +68,18 @@
             <div class="flex-1">
               <label class="block text-xs text-gray-500 mb-1">지원 대학/모집단위명</label>
               <select
-                v-model="newApp.univId"
+                v-model="newApp.trackId"
                 class="w-full border rounded px-2 py-1.5 text-sm"
               >
                 <option value="">대학을 선택하세요</option>
-                <option v-for="u in univs" :key="u.id" :value="u.id">
-                  {{ u.univ_name }} — {{ u.track_name }}
+                <option v-for="t in univs" :key="t.id" :value="t.id">
+                  {{ t.univ_name }} — {{ t.track_name }}
                 </option>
               </select>
             </div>
             <button
               class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
-              :disabled="!newApp.studentId || !newApp.univId || submitting"
+              :disabled="!newApp.studentId || !newApp.trackId || submitting"
               @click="addApplication"
             >{{ submitting ? '등록 중...' : '등록' }}</button>
           </div>
@@ -119,7 +119,7 @@
                 <td class="px-4 py-3 text-gray-500 text-xs">{{ s.student_code }}</td>
                 <td class="px-4 py-3">
                   <div v-if="getStudentApps(s.id).length === 0" class="text-gray-300 text-xs">-</div>
-                  <div v-for="app in getStudentApps(s.id)" :key="app.univ_id"
+                  <div v-for="app in getStudentApps(s.id)" :key="app.track_id"
                        class="flex items-center gap-2 mb-1">
                     <span class="text-gray-700">{{ app.univ_name }} — {{ app.track_name }}</span>
                     <span v-if="app.abandoned" class="text-xs text-red-400">(포기)</span>
@@ -172,7 +172,7 @@
                 <tbody>
                   <tr
                     v-for="r in student.results"
-                    :key="r.univ_id"
+                    :key="r.track_id"
                     class="border-b last:border-b-0"
                     :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : ''"
                   >
@@ -230,7 +230,7 @@ import { useAuthStore } from '../stores/auth.js'
 import {
   getCurrentRound,
   teacherGetStudents,
-  teacherGetUniversities,
+  teacherGetAllTracks,
   teacherGetApplications,
   teacherCreateApplication,
   teacherDeleteApplication,
@@ -255,7 +255,7 @@ const applications = ref([])
 const teacherResults = ref([])
 const resultsLoading = ref(false)
 
-const newApp = ref({ studentId: '', univId: '' })
+const newApp = ref({ studentId: '', trackId: '' })
 const submitting = ref(false)
 const addError   = ref('')
 
@@ -286,14 +286,14 @@ function getStudentApps(studentId) {
 }
 
 async function loadAll() {
-  const [round, sts, us] = await Promise.all([
+  const [round, sts, ts] = await Promise.all([
     getCurrentRound(),
     teacherGetStudents(),
-    teacherGetUniversities(),
+    teacherGetAllTracks(),
   ])
   currentRound.value = round
   students.value = sts
-  univs.value = us
+  univs.value = ts
 
   if (round) {
     applications.value = await teacherGetApplications(round.id)
@@ -319,17 +319,17 @@ async function switchTab(key) {
 }
 
 async function addApplication() {
-  if (!newApp.value.studentId || !newApp.value.univId) return
+  if (!newApp.value.studentId || !newApp.value.trackId) return
   submitting.value = true
   addError.value = ''
   try {
     await teacherCreateApplication({
       student_id: newApp.value.studentId,
-      univ_id:    newApp.value.univId,
+      track_id:   newApp.value.trackId,
       round_id:   currentRound.value.id,
     })
     newApp.value.studentId = ''
-    newApp.value.univId    = ''
+    newApp.value.trackId   = ''
     applications.value = await teacherGetApplications(currentRound.value.id)
   } catch (e) {
     addError.value = e.response?.data || e.message
@@ -339,9 +339,9 @@ async function addApplication() {
 }
 
 async function removeApplication(app) {
-  if (!confirm(`${app.name} 학생의 ${app.univ_name} 지원을 취소하시겠습니까?`)) return
+  if (!confirm(`${app.name} 학생의 ${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?`)) return
   try {
-    await teacherDeleteApplication(app.student_id, app.univ_id, app.round_id)
+    await teacherDeleteApplication(app.student_id, app.track_id, app.round_id)
     applications.value = await teacherGetApplications(currentRound.value.id)
   } catch (e) {
     alert(e.response?.data || e.message)

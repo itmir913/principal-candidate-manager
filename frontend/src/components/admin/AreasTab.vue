@@ -108,7 +108,7 @@
           <span><span class="text-gray-400 mr-1">계산 유형</span>{{ calcTypeLabel(selected.calc_type) }}</span>
           <span v-if="selected.calc_type === 'NUMERIC'"><span class="text-gray-400 mr-1">탐색 방향</span>{{ matchModeLabel(selected.match_mode) }}</span>
           <span v-if="selected.calc_type === 'CATEGORY'"><span class="text-gray-400 mr-1">범주 집계</span>{{ categoryAggLabel(selected.category_agg) }}</span>
-          <span><span class="text-gray-400 mr-1">교사 직접 입력</span>{{ selected.teacher_editable ? '허용' : '불가' }}</span>
+          <span><span class="text-gray-400 mr-1">담임교사 입력</span>{{ selected.teacher_editable ? '허용' : '불가' }}</span>
         </div>
         <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
           전형요소는 등록 후 수정할 수 없습니다. 설정을 변경하려면 삭제 후 재등록하세요.

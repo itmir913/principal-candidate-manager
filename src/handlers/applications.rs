@@ -40,7 +40,7 @@ type ApiError = (StatusCode, String);
 #[derive(Serialize, FromRow)]
 pub struct ApplicationRow {
     pub student_id: i64,
-    pub univ_id: i64,
+    pub track_id: i64,
     pub round_id: i64,
     pub confirmed: i64,
     pub abandoned: i64,
@@ -68,7 +68,7 @@ pub struct StudentRow {
 #[derive(Deserialize)]
 pub struct ApplicationListQuery {
     pub round_id: Option<i64>,
-    pub univ_id: Option<i64>,
+    pub track_id: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -79,7 +79,7 @@ pub struct TeacherAppListQuery {
 #[derive(Deserialize)]
 pub struct CreateApplicationBody {
     pub student_id: i64,
-    pub univ_id: i64,
+    pub track_id: i64,
     pub round_id: i64,
 }
 
@@ -90,18 +90,19 @@ pub async fn admin_list_applications(
     Query(q): Query<ApplicationListQuery>,
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = sqlx::query_as::<_, ApplicationRow>(
-        "SELECT a.student_id, a.univ_id, a.round_id, a.confirmed, a.abandoned,
+        "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, u.track_name
+                u.univ_name, ut.track_name
          FROM applications a
          JOIN students s ON a.student_id = s.id
-         JOIN universities u ON a.univ_id = u.id
+         JOIN univ_tracks ut ON a.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          WHERE (? IS NULL OR a.round_id = ?)
-           AND (? IS NULL OR a.univ_id = ?)
-         ORDER BY u.univ_name, u.track_name, s.grade, s.class_no, s.seq_no",
+           AND (? IS NULL OR a.track_id = ?)
+         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no",
     )
     .bind(q.round_id).bind(q.round_id)
-    .bind(q.univ_id).bind(q.univ_id)
+    .bind(q.track_id).bind(q.track_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -110,13 +111,13 @@ pub async fn admin_list_applications(
 
 pub async fn abandon_application(
     State(state): State<AppState>,
-    Path((sid, uid, rid)): Path<(i64, i64, i64)>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
     sqlx::query(
         "UPDATE applications SET abandoned = 1
-         WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
-    .bind(sid).bind(uid).bind(rid)
+    .bind(sid).bind(tid).bind(rid)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -148,12 +149,13 @@ pub async fn teacher_list_applications(
     Query(q): Query<TeacherAppListQuery>,
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = sqlx::query_as::<_, ApplicationRow>(
-        "SELECT a.student_id, a.univ_id, a.round_id, a.confirmed, a.abandoned,
+        "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, u.track_name
+                u.univ_name, ut.track_name
          FROM applications a
          JOIN students s ON a.student_id = s.id
-         JOIN universities u ON a.univ_id = u.id
+         JOIN univ_tracks ut ON a.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          WHERE s.grade = ? AND s.class_no = ?
            AND (? IS NULL OR a.round_id = ?)
          ORDER BY s.seq_no, u.univ_name",
@@ -200,11 +202,11 @@ pub async fn teacher_create_application(
     }
 
     sqlx::query(
-        "INSERT OR IGNORE INTO applications (student_id, univ_id, round_id, confirmed, abandoned)
+        "INSERT OR IGNORE INTO applications (student_id, track_id, round_id, confirmed, abandoned)
          VALUES (?, ?, ?, 1, 0)",
     )
     .bind(body.student_id)
-    .bind(body.univ_id)
+    .bind(body.track_id)
     .bind(body.round_id)
     .execute(&state.db)
     .await
@@ -216,7 +218,7 @@ pub async fn teacher_create_application(
 pub async fn teacher_delete_application(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
-    Path((sid, uid, rid)): Path<(i64, i64, i64)>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
     let round_status: Option<String> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
@@ -245,9 +247,9 @@ pub async fn teacher_delete_application(
     }
 
     sqlx::query(
-        "DELETE FROM applications WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+        "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
-    .bind(sid).bind(uid).bind(rid)
+    .bind(sid).bind(tid).bind(rid)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

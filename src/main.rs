@@ -165,6 +165,11 @@ fn build_router(state: AppState) -> Router {
         .route("/universities", post(handlers::universities::create_university))
         .route("/universities/:id", put(handlers::universities::update_university))
         .route("/universities/:id", delete(handlers::universities::delete_university))
+        .route("/universities/:id/tracks", get(handlers::universities::list_tracks))
+        .route("/universities/:id/tracks", post(handlers::universities::create_track))
+        .route("/univ-tracks", get(handlers::universities::list_all_tracks))
+        .route("/univ-tracks/:id", put(handlers::universities::update_track))
+        .route("/univ-tracks/:id", delete(handlers::universities::delete_track))
         // 5단계: 라운드 관리
         .route("/rounds", get(handlers::rounds::list_rounds))
         .route("/rounds/open", post(handlers::rounds::open_round))
@@ -177,11 +182,11 @@ fn build_router(state: AppState) -> Router {
         // 5단계: 지원·추천
         .route("/applications", get(handlers::applications::admin_list_applications))
         .route(
-            "/applications/:sid/:uid/:rid/abandon",
+            "/applications/:sid/:tid/:rid/abandon",
             put(handlers::applications::abandon_application),
         )
         .route(
-            "/results/:sid/:uid/:rid/recommend",
+            "/results/:sid/:tid/:rid/recommend",
             put(handlers::scoring::recommend_result),
         )
         .route_layer(axum_middleware::from_fn_with_state(
@@ -192,10 +197,11 @@ fn build_router(state: AppState) -> Router {
     let teacher_routes = Router::new()
         .route("/students", get(handlers::applications::teacher_list_students))
         .route("/universities", get(handlers::universities::list_universities))
+        .route("/univ-tracks", get(handlers::universities::list_all_tracks))
         .route("/applications", get(handlers::applications::teacher_list_applications))
         .route("/applications", post(handlers::applications::teacher_create_application))
         .route(
-            "/applications/:sid/:uid/:rid",
+            "/applications/:sid/:tid/:rid",
             delete(handlers::applications::teacher_delete_application),
         )
         .route("/password", put(handlers::applications::teacher_change_password))

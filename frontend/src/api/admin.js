@@ -101,7 +101,7 @@ export const importGraduated = (file) => {
 
 export const deleteStudent = (id) => axios.delete(`/api/students/${id}`)
 
-// ── 대학 관리 ──────────────────────────────────────────────────
+// ── 대학 마스터 관리 ───────────────────────────────────────────
 export const getUniversities = () => axios.get('/api/universities').then(r => r.data)
 
 export const createUniversity = (body) =>
@@ -112,22 +112,37 @@ export const updateUniversity = (id, body) =>
 
 export const deleteUniversity = (id) => axios.delete(`/api/universities/${id}`)
 
+// ── 모집단위 관리 ──────────────────────────────────────────────
+export const getUnivTracks = (univId) =>
+  axios.get(`/api/universities/${univId}/tracks`).then(r => r.data)
+
+export const getAllTracks = () =>
+  axios.get('/api/univ-tracks').then(r => r.data)
+
+export const createTrack = (univId, body) =>
+  axios.post(`/api/universities/${univId}/tracks`, body).then(r => r.data)
+
+export const updateTrack = (id, body) =>
+  axios.put(`/api/univ-tracks/${id}`, body).then(r => r.data)
+
+export const deleteTrack = (id) => axios.delete(`/api/univ-tracks/${id}`)
+
 // ── 라운드 관리 ────────────────────────────────────────────────
 export const getRounds = () => axios.get('/api/rounds').then(r => r.data)
 export const openRound = () => axios.post('/api/rounds/open').then(r => r.data)
 export const closeRound = (id) => axios.put(`/api/rounds/${id}/close`)
 export const calculateScores = (roundId) =>
   axios.post(`/api/rounds/${roundId}/calculate`).then(r => r.data)
-export const getResults = (roundId, univId) =>
-  axios.get(`/api/rounds/${roundId}/results`, { params: univId ? { univ_id: univId } : {} }).then(r => r.data)
-export const recommendResult = (sid, uid, rid) =>
-  axios.put(`/api/results/${sid}/${uid}/${rid}/recommend`)
+export const getResults = (roundId, trackId) =>
+  axios.get(`/api/rounds/${roundId}/results`, { params: trackId ? { track_id: trackId } : {} }).then(r => r.data)
+export const recommendResult = (sid, tid, rid) =>
+  axios.put(`/api/results/${sid}/${tid}/${rid}/recommend`)
 
 // ── 지원 관리 (admin) ──────────────────────────────────────────
-export const getApplications = (roundId, univId) =>
-  axios.get('/api/applications', { params: { round_id: roundId, univ_id: univId || undefined } }).then(r => r.data)
-export const abandonApplication = (sid, uid, rid) =>
-  axios.put(`/api/applications/${sid}/${uid}/${rid}/abandon`)
+export const getApplications = (roundId, trackId) =>
+  axios.get('/api/applications', { params: { round_id: roundId, track_id: trackId || undefined } }).then(r => r.data)
+export const abandonApplication = (sid, tid, rid) =>
+  axios.put(`/api/applications/${sid}/${tid}/${rid}/abandon`)
 
 // ── 현재 라운드 (공용) ─────────────────────────────────────────
 export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => r.data)
@@ -141,5 +156,5 @@ export const changeAdminPassword = (currentPassword, newPassword) =>
   axios.put('/api/auth/admin/password', { current_password: currentPassword, new_password: newPassword })
 
 // ── 점수 미리보기 ──────────────────────────────────────────────
-export const scorePreview = (studentId, univId) =>
-  axios.get('/api/score-preview', { params: { student_id: studentId, univ_id: univId } }).then(r => r.data)
+export const scorePreview = (studentId, trackId) =>
+  axios.get('/api/score-preview', { params: { student_id: studentId, track_id: trackId } }).then(r => r.data)

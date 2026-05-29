@@ -27,13 +27,13 @@ pub struct AreaRow {
 #[derive(FromRow)]
 struct AppRef {
     student_id: i64,
-    univ_id: i64,
+    track_id: i64,
 }
 
 #[derive(Serialize, FromRow)]
 pub struct ResultRow {
     pub student_id: i64,
-    pub univ_id: i64,
+    pub track_id: i64,
     pub round_id: i64,
     pub total_score: i64,
     pub score_detail: String,
@@ -52,7 +52,7 @@ pub struct ResultRow {
 
 #[derive(Deserialize)]
 pub struct ResultQuery {
-    pub univ_id: Option<i64>,
+    pub track_id: Option<i64>,
 }
 
 // ── Scoring helpers ───────────────────────────────────────────────
@@ -88,11 +88,11 @@ pub async fn calc_area_score(
     db: &Db,
     student_id: i64,
     area: &AreaRow,
-    univ_id: i64,
+    track_id: i64,
 ) -> Result<i64, String> {
-    // COMPOSITE 전형요소는 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
-    let lookup_univ: Option<i64> = if area.lookup_scope == "COMPOSITE" {
-        Some(univ_id)
+    // COMPOSITE 전형요소는 모집단위별 데이터 사용, SIMPLE은 전역 데이터
+    let lookup_track: Option<i64> = if area.lookup_scope == "COMPOSITE" {
+        Some(track_id)
     } else {
         None
     };
@@ -102,9 +102,9 @@ pub async fn calc_area_score(
             let value_str: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
-                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
+                   AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
-            .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
+            .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
             let Some(vs) = value_str else { return Ok(0); };
@@ -113,10 +113,10 @@ pub async fn calc_area_score(
 
             let rows: Vec<(i64, i64)> = sqlx::query(
                 "SELECT threshold, score FROM numeric_table
-                 WHERE area_id = ? AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))
+                 WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
                  ORDER BY threshold",
             )
-            .bind(area.id).bind(lookup_univ).bind(lookup_univ)
+            .bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_all(db).await.map_err(|e| e.to_string())?
             .into_iter()
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
@@ -129,9 +129,9 @@ pub async fn calc_area_score(
             let values: Vec<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
-                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
+                   AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
-            .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
+            .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_all(db).await.map_err(|e| e.to_string())?;
 
             let mut scores: Vec<i64> = Vec::new();
@@ -139,9 +139,9 @@ pub async fn calc_area_score(
                 let sc: Option<i64> = sqlx::query_scalar(
                     "SELECT score FROM category_map
                      WHERE area_id = ? AND category = ?
-                       AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
+                       AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
                 )
-                .bind(area.id).bind(cat.as_str()).bind(lookup_univ).bind(lookup_univ)
+                .bind(area.id).bind(cat.as_str()).bind(lookup_track).bind(lookup_track)
                 .fetch_optional(db).await.map_err(|e| e.to_string())?;
                 if let Some(s) = sc { scores.push(s); }
             }
@@ -157,9 +157,9 @@ pub async fn calc_area_score(
             let v: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
-                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
+                   AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
-            .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
+            .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
             v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
@@ -197,7 +197,7 @@ pub async fn calculate_scores(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let applications: Vec<AppRef> = sqlx::query_as::<_, AppRef>(
-        "SELECT student_id, univ_id FROM applications WHERE round_id = ? AND confirmed = 1",
+        "SELECT student_id, track_id FROM applications WHERE round_id = ? AND confirmed = 1",
     )
     .bind(round_id)
     .fetch_all(&state.db)
@@ -208,12 +208,12 @@ pub async fn calculate_scores(
     let mut count = 0usize;
 
     // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행
-    let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, univ_id, detail_json, total)
+    let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, track_id, detail_json, total)
     for app in &applications {
         let mut detail: HashMap<String, i64> = HashMap::new();
         let mut total: i64 = 0;
         for area in &areas {
-            let sc = calc_area_score(&state.db, app.student_id, area, app.univ_id)
+            let sc = calc_area_score(&state.db, app.student_id, area, app.track_id)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
             detail.insert(area.id.to_string(), sc);
@@ -221,25 +221,25 @@ pub async fn calculate_scores(
         }
         let detail_json = serde_json::to_string(&detail)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        score_rows.push((app.student_id, app.univ_id, detail_json, total));
+        score_rows.push((app.student_id, app.track_id, detail_json, total));
     }
 
     // results 쓰기 + 순위 계산 전체를 하나의 트랜잭션으로
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for (student_id, univ_id, detail_json, total) in &score_rows {
+    for (student_id, track_id, detail_json, total) in &score_rows {
         sqlx::query(
             "INSERT INTO results
-               (student_id, univ_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
+               (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
              VALUES (?, ?, ?, ?, ?, NULL, 0, ?)
-             ON CONFLICT (student_id, univ_id, round_id)
+             ON CONFLICT (student_id, track_id, round_id)
              DO UPDATE SET score_detail   = excluded.score_detail,
                            total_score    = excluded.total_score,
                            ranking        = NULL,
                            calculated_at  = excluded.calculated_at",
         )
-        .bind(student_id).bind(univ_id).bind(round_id)
+        .bind(student_id).bind(track_id).bind(round_id)
         .bind(detail_json).bind(total).bind(&now)
         .execute(&mut *tx)
         .await
@@ -248,15 +248,17 @@ pub async fn calculate_scores(
     }
 
     // 대학별 순위 재계산 (트랜잭션 내에서 읽어야 방금 쓴 점수가 보임)
-    let mut univ_ids: Vec<i64> = applications.iter().map(|a| a.univ_id).collect();
-    univ_ids.sort_unstable();
-    univ_ids.dedup();
+    let mut track_ids: Vec<i64> = applications.iter().map(|a| a.track_id).collect();
+    track_ids.sort_unstable();
+    track_ids.dedup();
 
-    for uid in univ_ids {
+    for tid in track_ids {
         let prioritize: i64 = sqlx::query_scalar(
-            "SELECT prioritize_enrolled FROM universities WHERE id = ?",
+            "SELECT u.prioritize_enrolled
+             FROM univ_tracks ut JOIN universities u ON ut.univ_id = u.id
+             WHERE ut.id = ?",
         )
-        .bind(uid)
+        .bind(tid)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -265,9 +267,9 @@ pub async fn calculate_scores(
             "SELECT r.student_id, r.total_score, s.is_enrolled
              FROM results r
              JOIN students s ON r.student_id = s.id
-             WHERE r.round_id = ? AND r.univ_id = ?",
+             WHERE r.round_id = ? AND r.track_id = ?",
         )
-        .bind(round_id).bind(uid)
+        .bind(round_id).bind(tid)
         .fetch_all(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -289,9 +291,9 @@ pub async fn calculate_scores(
 
         for (rank, (sid, _, _)) in ranked.iter().enumerate() {
             sqlx::query(
-                "UPDATE results SET ranking = ? WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+                "UPDATE results SET ranking = ? WHERE student_id = ? AND track_id = ? AND round_id = ?",
             )
-            .bind((rank + 1) as i64).bind(sid).bind(uid).bind(round_id)
+            .bind((rank + 1) as i64).bind(sid).bind(tid).bind(round_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -310,23 +312,24 @@ pub async fn get_results(
     Query(q): Query<ResultQuery>,
 ) -> Result<Json<Vec<ResultRow>>, ApiError> {
     let rows = sqlx::query_as::<_, ResultRow>(
-        "SELECT r.student_id, r.univ_id, r.round_id,
+        "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, u.track_name
+                u.univ_name, ut.track_name
          FROM results r
          JOIN students s ON r.student_id = s.id
-         JOIN universities u ON r.univ_id = u.id
+         JOIN univ_tracks ut ON r.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          LEFT JOIN applications a ON a.student_id = r.student_id
-                                  AND a.univ_id   = r.univ_id
+                                  AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
-           AND (? IS NULL OR r.univ_id = ?)
-         ORDER BY r.univ_id, r.ranking NULLS LAST, r.total_score DESC",
+           AND (? IS NULL OR r.track_id = ?)
+         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC",
     )
     .bind(round_id)
-    .bind(q.univ_id).bind(q.univ_id)
+    .bind(q.track_id).bind(q.track_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -360,11 +363,12 @@ pub async fn export_results(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let univs: Vec<UnivRef> = sqlx::query_as::<_, UnivRef>(
-        "SELECT DISTINCT u.id, u.univ_name, u.track_name
+        "SELECT DISTINCT ut.id, u.univ_name, ut.track_name
          FROM results r
-         JOIN universities u ON r.univ_id = u.id
+         JOIN univ_tracks ut ON r.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          WHERE r.round_id = ?
-         ORDER BY u.univ_name, u.track_name",
+         ORDER BY u.univ_name, ut.track_name",
     )
     .bind(round_id)
     .fetch_all(&state.db)
@@ -372,19 +376,20 @@ pub async fn export_results(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let all_results = sqlx::query_as::<_, ResultRow>(
-        "SELECT r.student_id, r.univ_id, r.round_id,
+        "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, u.track_name
+                u.univ_name, ut.track_name
          FROM results r
          JOIN students s ON r.student_id = s.id
-         JOIN universities u ON r.univ_id = u.id
+         JOIN univ_tracks ut ON r.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          LEFT JOIN applications a ON a.student_id = r.student_id
-                                  AND a.univ_id   = r.univ_id
+                                  AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
-         ORDER BY r.univ_id, r.ranking NULLS LAST, r.total_score DESC",
+         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC",
     )
     .bind(round_id)
     .fetch_all(&state.db)
@@ -420,7 +425,7 @@ pub async fn export_results(
 
         // 데이터 행
         let univ_results: Vec<&ResultRow> =
-            all_results.iter().filter(|r| r.univ_id == univ.id).collect();
+            all_results.iter().filter(|r| r.track_id == univ.id).collect();
 
         for (i, r) in univ_results.iter().enumerate() {
             let row = (i + 1) as u32;
@@ -494,21 +499,22 @@ pub async fn teacher_get_results(
     };
 
     let rows = sqlx::query_as::<_, ResultRow>(
-        "SELECT r.student_id, r.univ_id, r.round_id,
+        "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, u.track_name
+                u.univ_name, ut.track_name
          FROM results r
          JOIN students s ON r.student_id = s.id
-         JOIN universities u ON r.univ_id = u.id
+         JOIN univ_tracks ut ON r.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
          LEFT JOIN applications a ON a.student_id = r.student_id
-                                  AND a.univ_id   = r.univ_id
+                                  AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
            AND s.grade = ?
            AND s.class_no = ?
-         ORDER BY s.seq_no, r.univ_id",
+         ORDER BY s.seq_no, r.track_id",
     )
     .bind(round_id)
     .bind(claims.grade)
@@ -525,7 +531,7 @@ pub async fn teacher_get_results(
 #[derive(Deserialize)]
 pub struct ScorePreviewQuery {
     pub student_id: i64,
-    pub univ_id: i64,
+    pub track_id: i64,
 }
 
 #[derive(Serialize)]
@@ -576,7 +582,7 @@ pub async fn score_preview(
             category_agg: aw.category_agg.clone(),
             lookup_scope: aw.lookup_scope.clone(),
         };
-        let score = calc_area_score(&state.db, q.student_id, &area, q.univ_id)
+        let score = calc_area_score(&state.db, q.student_id, &area, q.track_id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
         total += score;
@@ -591,7 +597,7 @@ pub async fn score_preview(
 
 pub async fn recommend_result(
     State(state): State<AppState>,
-    Path((sid, uid, rid)): Path<(i64, i64, i64)>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
     let status: Option<String> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
@@ -606,9 +612,9 @@ pub async fn recommend_result(
     }
 
     sqlx::query(
-        "UPDATE results SET recommended = 1 WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+        "UPDATE results SET recommended = 1 WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
-    .bind(sid).bind(uid).bind(rid)
+    .bind(sid).bind(tid).bind(rid)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

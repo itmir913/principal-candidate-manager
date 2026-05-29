@@ -372,7 +372,7 @@ async fn delete_student_with_application_returns_conflict() {
     .unwrap();
     let uid: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name, track_name, capacity) \
-         VALUES ('서울대', '컴공', 5) RETURNING id",
+         VALUES ('한국대', '컴공', 5) RETURNING id",
     )
     .fetch_one(&pool)
     .await

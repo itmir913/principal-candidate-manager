@@ -4,7 +4,8 @@ export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => 
 
 export const teacherGetStudents = () => axios.get('/api/teacher/students').then(r => r.data)
 
-export const teacherGetUniversities = () => axios.get('/api/teacher/universities').then(r => r.data)
+// 모집단위 목록 (대학명 포함) — 지원 등록 드롭다운용
+export const teacherGetAllTracks = () => axios.get('/api/teacher/univ-tracks').then(r => r.data)
 
 export const teacherGetApplications = (roundId) =>
   axios.get('/api/teacher/applications', { params: { round_id: roundId } }).then(r => r.data)
@@ -12,8 +13,8 @@ export const teacherGetApplications = (roundId) =>
 export const teacherCreateApplication = (body) =>
   axios.post('/api/teacher/applications', body)
 
-export const teacherDeleteApplication = (sid, uid, rid) =>
-  axios.delete(`/api/teacher/applications/${sid}/${uid}/${rid}`)
+export const teacherDeleteApplication = (sid, tid, rid) =>
+  axios.delete(`/api/teacher/applications/${sid}/${tid}/${rid}`)
 
 export const teacherChangePassword = (newPassword) =>
   axios.put('/api/teacher/password', { new_password: newPassword })
