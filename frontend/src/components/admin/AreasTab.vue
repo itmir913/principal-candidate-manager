@@ -113,8 +113,41 @@
           :calc-type="selected.calc_type"
           :area-name="selected.name"
           panel="score"
-          @result="scoreResult = $event" />
+          @result="onScoreResult" />
         <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
+
+        <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
+          <p v-if="scoreRows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
+            등록된 점수 기준 없음
+          </p>
+          <table v-else class="w-full text-sm border-collapse">
+            <thead class="sticky top-0 bg-gray-50">
+              <tr>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">
+                  {{ selected.calc_type === 'RANGE' ? '기준값' : '범주' }}
+                </th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">점수</th>
+                <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">전형명</th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in scoreRows" :key="i"
+                  :class="i % 2 === 1 ? 'bg-gray-50' : ''">
+                <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">
+                  {{ selected.calc_type === 'RANGE' ? row.threshold : row.category }}
+                </td>
+                <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.score }}</td>
+                <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                  <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.univ_name }}</td>
+                  <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.track_name }}</td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- 기초 데이터 탭 -->
@@ -127,8 +160,39 @@
           :calc-type="selected.calc_type"
           :area-name="selected.name"
           panel="base"
-          @result="baseResult = $event" />
+          @result="onBaseResult" />
         <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
+
+        <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
+          <p v-if="baseRows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
+            등록된 기초 데이터 없음
+          </p>
+          <table v-else class="w-full text-sm border-collapse">
+            <thead class="sticky top-0 bg-gray-50">
+              <tr>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">학생코드</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">이름</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">값</th>
+                <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">전형명</th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in baseRows" :key="i"
+                  :class="i % 2 === 1 ? 'bg-gray-50' : ''">
+                <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.student_code }}</td>
+                <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.name }}</td>
+                <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.value }}</td>
+                <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                  <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.univ_name }}</td>
+                  <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{{ row.track_name }}</td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -143,6 +207,7 @@ import {
   downloadRangeTableTemplate, exportRangeTable, importRangeTable,
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
   downloadBaseDataTemplate, exportBaseData, importBaseData,
+  getRangeTableList, getCategoryMapList, getBaseDataList,
 } from '../../api/admin.js'
 
 // ── 상태 ──────────────────────────────────────────────────────
@@ -152,6 +217,8 @@ const error    = ref('')
 const activeTab   = ref('score')
 const scoreResult = ref(null)
 const baseResult  = ref(null)
+const scoreRows   = ref([])
+const baseRows    = ref([])
 
 const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
@@ -173,7 +240,28 @@ function selectArea(area) {
   activeTab.value = area.calc_type === 'MANUAL' ? 'base' : 'score'
   scoreResult.value = null
   baseResult.value  = null
+  loadScoreRows()
+  loadBaseRows()
 }
+
+async function loadScoreRows() {
+  const area = selected.value
+  if (!area || area.calc_type === 'MANUAL') { scoreRows.value = []; return }
+  try {
+    scoreRows.value = area.calc_type === 'CATEGORY'
+      ? await getCategoryMapList(area.id)
+      : await getRangeTableList(area.id)
+  } catch { scoreRows.value = [] }
+}
+
+async function loadBaseRows() {
+  if (!selected.value) { baseRows.value = []; return }
+  try { baseRows.value = await getBaseDataList(selected.value.id) }
+  catch { baseRows.value = [] }
+}
+
+function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows() }
+function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows()  }
 
 async function addArea() {
   const body = {

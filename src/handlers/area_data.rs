@@ -586,6 +586,147 @@ pub async fn base_data_import(
     Ok(Json(ImportResult { rows, errors, warnings }))
 }
 
+// ── LIST (JSON 조회) ─────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct RangeTableListRow {
+    pub threshold: f64,
+    pub score: f64,
+    pub univ_name: Option<String>,
+    pub track_name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CategoryMapListRow {
+    pub category: String,
+    pub score: f64,
+    pub univ_name: Option<String>,
+    pub track_name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct BaseDataListRow {
+    pub student_code: String,
+    pub name: String,
+    pub value: String,
+    pub univ_name: Option<String>,
+    pub track_name: Option<String>,
+}
+
+/// GET /api/areas/:id/range-table/list
+pub async fn range_table_list(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<RangeTableListRow>>, ApiError> {
+    let area = get_area(&state.db, id).await?;
+    let composite = area.lookup_scope == "COMPOSITE";
+
+    let rows = sqlx::query(
+        "SELECT rt.threshold, rt.score,
+                COALESCE(u.univ_name, '') AS univ_name,
+                COALESCE(u.track_name, '') AS track_name
+         FROM range_table rt
+         LEFT JOIN universities u ON rt.univ_id = u.id
+         WHERE rt.area_id = ?
+         ORDER BY rt.univ_id, rt.threshold",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let result = rows
+        .iter()
+        .map(|row| RangeTableListRow {
+            threshold: db_to_display(row.get("threshold")),
+            score: db_to_display(row.get("score")),
+            univ_name: if composite { Some(row.get("univ_name")) } else { None },
+            track_name: if composite { Some(row.get("track_name")) } else { None },
+        })
+        .collect();
+    Ok(Json(result))
+}
+
+/// GET /api/areas/:id/category-map/list
+pub async fn category_map_list(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<CategoryMapListRow>>, ApiError> {
+    let area = get_area(&state.db, id).await?;
+    let composite = area.lookup_scope == "COMPOSITE";
+
+    let rows = sqlx::query(
+        "SELECT cm.category, cm.score,
+                COALESCE(u.univ_name, '') AS univ_name,
+                COALESCE(u.track_name, '') AS track_name
+         FROM category_map cm
+         LEFT JOIN universities u ON cm.univ_id = u.id
+         WHERE cm.area_id = ?
+         ORDER BY cm.univ_id, cm.category",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let result = rows
+        .iter()
+        .map(|row| CategoryMapListRow {
+            category: row.get("category"),
+            score: db_to_display(row.get("score")),
+            univ_name: if composite { Some(row.get("univ_name")) } else { None },
+            track_name: if composite { Some(row.get("track_name")) } else { None },
+        })
+        .collect();
+    Ok(Json(result))
+}
+
+/// GET /api/areas/:id/base-data/list
+pub async fn base_data_list(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<Vec<BaseDataListRow>>, ApiError> {
+    let area = get_area(&state.db, id).await?;
+    let composite = area.lookup_scope == "COMPOSITE";
+
+    let rows = sqlx::query(
+        "SELECT s.student_code, s.name, bd.value,
+                COALESCE(u.univ_name, '') AS univ_name,
+                COALESCE(u.track_name, '') AS track_name
+         FROM base_data bd
+         JOIN students s ON bd.student_id = s.id
+         LEFT JOIN universities u ON bd.univ_id = u.id
+         WHERE bd.area_id = ?
+         ORDER BY bd.univ_id, s.grade, s.class_no, s.seq_no",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let result = rows
+        .iter()
+        .map(|row| {
+            let raw: String = row.get("value");
+            let value = match area.calc_type.as_str() {
+                "RANGE" | "MANUAL" => raw
+                    .parse::<i64>()
+                    .map(|v| format!("{}", db_to_display(v)))
+                    .unwrap_or(raw),
+                _ => raw,
+            };
+            BaseDataListRow {
+                student_code: row.get("student_code"),
+                name: row.get("name"),
+                value,
+                univ_name: if composite { Some(row.get("univ_name")) } else { None },
+                track_name: if composite { Some(row.get("track_name")) } else { None },
+            }
+        })
+        .collect();
+    Ok(Json(result))
+}
+
 // ── xlsx 쓰기 헬퍼 ───────────────────────────────────────────────
 
 /// DB value 문자열 → xlsx 셀 (RANGE/MANUAL: ÷10000 숫자, CATEGORY: 문자열)

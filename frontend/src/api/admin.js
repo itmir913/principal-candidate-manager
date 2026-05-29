@@ -47,6 +47,14 @@ export const importCategoryMap = (id, file) => {
   return axios.post(`/api/areas/${id}/category-map/import`, fd).then(r => r.data)
 }
 
+// ── 점수 기준 / 기초 데이터 JSON 조회 ─────────────────────────
+export const getRangeTableList = (id) =>
+  axios.get(`/api/areas/${id}/range-table/list`).then(r => r.data)
+export const getCategoryMapList = (id) =>
+  axios.get(`/api/areas/${id}/category-map/list`).then(r => r.data)
+export const getBaseDataList = (id) =>
+  axios.get(`/api/areas/${id}/base-data/list`).then(r => r.data)
+
 // ── 기초 데이터 Excel ──────────────────────────────────────────
 export const downloadBaseDataTemplate = (id) =>
   axios.get(`/api/areas/${id}/base-data/template`, { responseType: 'blob' })
