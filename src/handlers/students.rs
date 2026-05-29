@@ -152,7 +152,7 @@ pub async fn import_students(
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
-    excel::require_cols(&col, &["학번", "이름", "재학여부"])
+    excel::require_cols(&col, &["학생코드", "이름", "재학여부"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
@@ -276,7 +276,7 @@ pub async fn upsert_student(
 // ── xlsx 생성 ────────────────────────────────────────────────────
 
 const HEADERS: &[&str] = &[
-    "학번", "이름", "재학여부",
+    "학생코드", "이름", "재학여부",
     "학년", "반", "번호", "졸업연도",
 ];
 
@@ -326,7 +326,7 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 const ENROLLED_IMPORT_HEADERS: &[&str] = &["학년", "반", "번호", "이름"];
 // 내보내기 헤더: 참조용으로 학번 포함
 const ENROLLED_EXPORT_HEADERS: &[&str] = &["학번", "이름", "학년", "반", "번호"];
-const GRADUATED_HEADERS: &[&str] = &["학번", "이름", "졸업연도"];
+const GRADUATED_HEADERS: &[&str] = &["학생코드", "이름", "졸업연도"];
 
 /// GET /api/students/enrolled/template
 pub async fn enrolled_template() -> Result<Response, ApiError> {
@@ -423,7 +423,7 @@ pub async fn import_graduated(
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
-    excel::require_cols(&col, &["학번", "이름", "졸업연도"])
+    excel::require_cols(&col, &["학생코드", "이름", "졸업연도"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
@@ -622,7 +622,7 @@ fn row_to_record(
     let get = |name| excel::get_col(cols, col, name);
     let parse_i64 = |name| get(name).parse::<i64>().ok();
     StudentRecord {
-        student_code: get("학번").to_string(),
+        student_code: get("학생코드").to_string(),
         name:         get("이름").to_string(),
         is_enrolled:  parse_i64("재학여부").unwrap_or(1),
         grade:        parse_i64("학년"),
@@ -656,7 +656,7 @@ fn row_to_graduated_record(
     let get = |name| excel::get_col(cols, col, name);
     let parse_i64 = |name| get(name).parse::<i64>().ok();
     StudentRecord {
-        student_code: get("학번").to_string(),
+        student_code: get("학생코드").to_string(),
         name:         get("이름").to_string(),
         is_enrolled:  0,
         grade:        None,
