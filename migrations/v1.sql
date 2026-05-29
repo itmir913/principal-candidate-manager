@@ -91,7 +91,9 @@ CREATE TABLE IF NOT EXISTS areas (
     category_agg     TEXT    CHECK(category_agg IN ('SUM', 'MAX')),
     -- 0=단일값(NUMERIC·MANUAL·단일선택CATEGORY), 1=복수값(복수선택CATEGORY 전용)
     multi_value      INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1)),
-    CHECK(calc_type = 'CATEGORY' OR multi_value = 0)
+    CHECK(calc_type = 'CATEGORY' OR multi_value = 0),
+    CHECK(calc_type = 'NUMERIC' OR match_mode IS NULL),
+    CHECK(calc_type = 'CATEGORY' OR category_agg IS NULL)
 );
 
 -- ================================================================
@@ -130,7 +132,7 @@ CREATE TABLE IF NOT EXISTS univ_tracks (
 -- ================================================================
 CREATE TABLE IF NOT EXISTS numeric_table (
     area_id   INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    track_id  INTEGER REFERENCES univ_tracks(id),
+    track_id  INTEGER REFERENCES univ_tracks(id) ON DELETE CASCADE,
     threshold INTEGER NOT NULL,   -- ×100000
     score     INTEGER NOT NULL    -- ×100000
 );
@@ -144,7 +146,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_numeric_table
 -- ================================================================
 CREATE TABLE IF NOT EXISTS category_map (
     area_id  INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    track_id INTEGER REFERENCES univ_tracks(id),
+    track_id INTEGER REFERENCES univ_tracks(id) ON DELETE CASCADE,
     category TEXT    NOT NULL,
     score    INTEGER NOT NULL     -- ×100000
 );
@@ -161,9 +163,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_category_map
 -- ================================================================
 CREATE TABLE IF NOT EXISTS base_data (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id  INTEGER NOT NULL REFERENCES students(id),
+    student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     area_id     INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    track_id    INTEGER REFERENCES univ_tracks(id),
+    track_id    INTEGER REFERENCES univ_tracks(id) ON DELETE CASCADE,
     value       TEXT    NOT NULL,
     multi_value INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1))
 );
