@@ -177,7 +177,7 @@ pub async fn export_classes(
         .set_name("학급목록")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for (i, h) in ["학년", "반", "담임명", "비밀번호"].iter().enumerate() {
+    for (i, h) in ["학년", "반", "담임명"].iter().enumerate() {
         ws.write_string(0, i as u16, *h).ok();
     }
     for (row_i, r) in rows.iter().enumerate() {
@@ -185,8 +185,6 @@ pub async fn export_classes(
         ws.write_number(ri, 0, r.grade as f64).ok();
         ws.write_number(ri, 1, r.class_no as f64).ok();
         ws.write_string(ri, 2, r.teacher_name.as_deref().unwrap_or("")).ok();
-        // 비밀번호는 bcrypt 해시로만 저장되어 평문 복원 불가 — 빈 칸으로 내보냄
-        // 재가져오기 시 빈 칸이면 기존 비밀번호 유지, 값 입력 시 새 비밀번호로 교체
     }
 
     let buf = wb
@@ -261,13 +259,17 @@ pub async fn upsert_class(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if count == 0 {
+        let hash = password_hash.ok_or((
+            StatusCode::BAD_REQUEST,
+            "신규 학급은 비밀번호를 설정해야 합니다".to_string(),
+        ))?;
         sqlx::query(
             "INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (?, ?, ?, ?)",
         )
         .bind(grade)
         .bind(class_no)
         .bind(body.teacher_name)
-        .bind(password_hash)
+        .bind(hash)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

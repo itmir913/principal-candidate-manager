@@ -7,7 +7,8 @@ use std::io::Cursor;
 // ── 공개 API ──────────────────────────────────────────────────────
 
 /// 파일 바이트 → 헤더 제외 행 목록 (xlsx/CSV 자동 판별)
-/// 기존 호환성 유지용 래퍼 — 내부적으로 parse_file_rows_with_headers 사용
+/// 기존 호환성 유지용 래퍼 — 테스트에서만 사용
+#[allow(dead_code)]
 pub fn parse_file_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
     let (_, rows) = parse_file_rows_with_headers(bytes)?;
     Ok(rows)

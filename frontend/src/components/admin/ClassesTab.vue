@@ -57,9 +57,15 @@
           class="w-32 border rounded px-2 py-1 text-sm" placeholder="홍길동" />
       </div>
       <div>
-        <label class="block text-xs text-gray-500 mb-1">비밀번호</label>
+        <label class="block text-xs text-gray-500 mb-1">
+          비밀번호 <span class="text-gray-400">(4자 이상)</span>
+        </label>
         <input v-model="newPassword" type="password"
-          class="w-32 border rounded px-2 py-1 text-sm" />
+          class="w-32 border rounded px-2 py-1 text-sm"
+          :class="newPassword && newPassword.length < 4 ? 'border-red-400 focus:ring-red-400' : ''" />
+        <p v-if="newPassword && newPassword.length < 4" class="text-xs text-red-500 mt-0.5">
+          4자 이상 입력하세요
+        </p>
       </div>
       <button
         class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-40"
@@ -177,9 +183,10 @@ async function saveEdit(row) {
 
 async function addRow() {
   if (!newGrade.value || !newClassNo.value) { error.value = '학년과 반을 입력하세요.'; return }
+  if (!newPassword.value) { error.value = '비밀번호를 설정해야 합니다.'; return }
   const body = {}
   if (newTeacherName.value) body.teacher_name = newTeacherName.value
-  if (newPassword.value) body.password = newPassword.value
+  body.password = newPassword.value
   saving.value = true
   error.value = ''
   try {
