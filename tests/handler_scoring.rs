@@ -66,6 +66,116 @@ fn unknown_direction_returns_zero() {
     assert_eq!(lookup_range_score(100_000, &sample_rows(), "UNKNOWN"), 0);
 }
 
+// ── lookup_range_score: 봉사시간(UPPER) 시나리오 ──────────────────
+//
+// 기준표: 40시간 이상→2점, 30시간 이상→1점, 30시간 미만→0점
+// DB 저장값(×100_000): threshold 0→0, 3_000_000→100_000, 4_000_000→200_000
+
+fn upper_volunteering_rows() -> Vec<(i64, i64)> {
+    vec![(0, 0), (3_000_000, 100_000), (4_000_000, 200_000)]
+}
+
+#[test]
+fn upper_volunteering_negative_value_returns_zero() {
+    // 음수 봉사시간(불가 입력) → 어떤 threshold도 통과 못 함 → unwrap_or(0) → 0점
+    assert_eq!(lookup_range_score(-1, &upper_volunteering_rows(), "UPPER"), 0);
+}
+
+#[test]
+fn upper_volunteering_exactly_0_hours() {
+    // 봉사 0시간 → threshold 0 매칭 → 0점
+    assert_eq!(lookup_range_score(0, &upper_volunteering_rows(), "UPPER"), 0);
+}
+
+#[test]
+fn upper_volunteering_below_30_hours() {
+    // 봉사 29시간 → threshold 0만 매칭, max=0 → 0점
+    assert_eq!(lookup_range_score(2_900_000, &upper_volunteering_rows(), "UPPER"), 0);
+}
+
+#[test]
+fn upper_volunteering_exactly_30_hours() {
+    // 봉사 30시간 → threshold 0, 3_000_000 매칭, max=3_000_000 → 1점
+    assert_eq!(lookup_range_score(3_000_000, &upper_volunteering_rows(), "UPPER"), 100_000);
+}
+
+#[test]
+fn upper_volunteering_between_30_and_40_hours() {
+    // 봉사 35시간 → threshold 0, 3_000_000 매칭, max=3_000_000 → 1점
+    assert_eq!(lookup_range_score(3_500_000, &upper_volunteering_rows(), "UPPER"), 100_000);
+}
+
+#[test]
+fn upper_volunteering_exactly_40_hours() {
+    // 봉사 40시간 → 모든 threshold 매칭, max=4_000_000 → 2점
+    assert_eq!(lookup_range_score(4_000_000, &upper_volunteering_rows(), "UPPER"), 200_000);
+}
+
+#[test]
+fn upper_volunteering_above_40_hours() {
+    // 봉사 50시간 → 모든 threshold 매칭, max=4_000_000 → 2점
+    assert_eq!(lookup_range_score(5_000_000, &upper_volunteering_rows(), "UPPER"), 200_000);
+}
+
+// ── lookup_range_score: 결석일수(LOWER) 시나리오 ──────────────────
+//
+// 기준표: 0일→10점, 1일→9점, 2일→8점, 3일→7점, 4일→6점, 5일 이상→5점
+// DB 저장값(×100_000): threshold 0→1_000_000, 100_000→900_000, ..., 500_000→500_000
+
+fn lower_absence_rows() -> Vec<(i64, i64)> {
+    vec![
+        (        0, 1_000_000),
+        (  100_000,   900_000),
+        (  200_000,   800_000),
+        (  300_000,   700_000),
+        (  400_000,   600_000),
+        (  500_000,   500_000),
+    ]
+}
+
+#[test]
+fn lower_absence_negative_value_uses_min_threshold() {
+    // 음수 결석(불가 입력) → 모든 threshold 통과, min=0 → 10점
+    assert_eq!(lookup_range_score(-1, &lower_absence_rows(), "LOWER"), 1_000_000);
+}
+
+#[test]
+fn lower_absence_exactly_0_days() {
+    // 결석 0일 → 모든 threshold 통과, min=0 → 10점
+    assert_eq!(lookup_range_score(0, &lower_absence_rows(), "LOWER"), 1_000_000);
+}
+
+#[test]
+fn lower_absence_exactly_1_day() {
+    // 결석 1일 → threshold 1,2,3,4,5 통과, min=1 → 9점
+    assert_eq!(lookup_range_score(100_000, &lower_absence_rows(), "LOWER"), 900_000);
+}
+
+#[test]
+fn lower_absence_exactly_3_days() {
+    // 결석 3일 → threshold 3,4,5 통과, min=3 → 7점
+    assert_eq!(lookup_range_score(300_000, &lower_absence_rows(), "LOWER"), 700_000);
+}
+
+#[test]
+fn lower_absence_exactly_5_days() {
+    // 결석 5일 → threshold 5만 통과, min=5 → 5점
+    assert_eq!(lookup_range_score(500_000, &lower_absence_rows(), "LOWER"), 500_000);
+}
+
+#[test]
+fn lower_absence_6_days_fallback_to_last_score() {
+    // 결석 6일 → 어떤 threshold도 통과 못 함(6 <= 5? No) → fallback: max threshold=5 → 5점
+    // "5일 이상이면 5점" 동작의 핵심 케이스
+    assert_eq!(lookup_range_score(600_000, &lower_absence_rows(), "LOWER"), 500_000);
+}
+
+#[test]
+fn lower_absence_far_above_max_threshold_fallback() {
+    // 결석 100일(크게 초과) → fallback → 5점
+    assert_eq!(lookup_range_score(10_000_000, &lower_absence_rows(), "LOWER"), 500_000);
+}
+
 // ── calc_area_score ───────────────────────────────────────────────
 
 async fn insert_student(pool: &sqlx::SqlitePool) -> i64 {
