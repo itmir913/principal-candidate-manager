@@ -86,14 +86,17 @@ async fn insert_area(
     agg: Option<&str>,
     scope: &str,
 ) -> i64 {
+    // CATEGORY는 복수값 허용(multi_value=1), 그 외 단일값(0)
+    let multi_value = if calc_type == "CATEGORY" { 1i64 } else { 0i64 };
     sqlx::query(
-        "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope) \
-         VALUES ('TestArea', 100000, ?, ?, ?, ?)",
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope, multi_value) \
+         VALUES ('TestArea', 100000, ?, ?, ?, ?, ?)",
     )
     .bind(calc_type)
     .bind(direction)
     .bind(agg)
     .bind(scope)
+    .bind(multi_value)
     .execute(pool)
     .await
     .unwrap()
@@ -237,7 +240,7 @@ async fn calc_category_sum() {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)",
+            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid)
         .bind(aid)
@@ -275,7 +278,7 @@ async fn calc_category_max() {
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)",
+            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid)
         .bind(aid)
@@ -361,7 +364,7 @@ async fn calc_category_sum_capped_at_max_score() {
         )
         .bind(aid).bind(cat).bind(sc).execute(&pool).await.unwrap();
         sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, ?)",
+            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
         )
         .bind(sid).bind(aid).bind(cat).execute(&pool).await.unwrap();
     }

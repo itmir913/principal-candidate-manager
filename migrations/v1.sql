@@ -87,7 +87,10 @@ CREATE TABLE IF NOT EXISTS areas (
     lookup_scope     TEXT    NOT NULL DEFAULT 'SIMPLE'
                              CHECK(lookup_scope IN ('SIMPLE', 'COMPOSITE')),
     match_mode       TEXT    CHECK(match_mode IN ('UPPER', 'LOWER', 'EXACT')),
-    category_agg     TEXT    CHECK(category_agg IN ('SUM', 'MAX'))
+    category_agg     TEXT    CHECK(category_agg IN ('SUM', 'MAX')),
+    -- 0=단일값(NUMERIC·MANUAL·단일선택CATEGORY), 1=복수값(복수선택CATEGORY 전용)
+    multi_value      INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1)),
+    CHECK(calc_type = 'CATEGORY' OR multi_value = 0)
 );
 
 -- ================================================================
@@ -144,16 +147,24 @@ CREATE TABLE IF NOT EXISTS universities (
 --   MANUAL   : "850000"  (점수 ×100000 정수 문자열)
 -- 투명화 계층: 교사 입력 "30.5" → 백엔드 즉시 ×100000 → DB "3050000"
 --             DB "3050000" → API 응답 시 /100000 → Vue 표시 "30.5"
+-- multi_value: areas.multi_value 비정규화 — partial index 조건으로 사용
 -- ================================================================
 CREATE TABLE IF NOT EXISTS base_data (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id INTEGER NOT NULL REFERENCES students(id),
-    area_id    INTEGER NOT NULL REFERENCES areas(id),
-    univ_id    INTEGER REFERENCES universities(id),
-    value      TEXT    NOT NULL
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id  INTEGER NOT NULL REFERENCES students(id),
+    area_id     INTEGER NOT NULL REFERENCES areas(id),
+    univ_id     INTEGER REFERENCES universities(id),
+    value       TEXT    NOT NULL,
+    multi_value INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_base_data
-    ON base_data(student_id, area_id, COALESCE(univ_id, 0), value);
+-- 단일값 전형요소: (학생, 전형요소, 대학) 당 정확히 1행
+CREATE UNIQUE INDEX IF NOT EXISTS idx_base_data_single
+    ON base_data(student_id, area_id, COALESCE(univ_id, 0))
+    WHERE multi_value = 0;
+-- 복수값 전형요소: 동일 (학생, 전형요소, 대학, 값) 중복 방지
+CREATE UNIQUE INDEX IF NOT EXISTS idx_base_data_multi
+    ON base_data(student_id, area_id, COALESCE(univ_id, 0), value)
+    WHERE multi_value = 1;
 CREATE INDEX IF NOT EXISTS idx_base_data_student
     ON base_data(student_id);
 

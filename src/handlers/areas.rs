@@ -20,6 +20,7 @@ pub struct AreaRow {
     pub lookup_scope: String,
     pub match_mode: Option<String>,
     pub category_agg: Option<String>,
+    pub multi_value: i64,
 }
 
 #[derive(Deserialize)]
@@ -31,6 +32,8 @@ pub struct CreateAreaBody {
     pub lookup_scope: String,
     pub match_mode: Option<String>,
     pub category_agg: Option<String>,
+    #[serde(default)]
+    pub multi_value: i64,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +45,7 @@ pub struct UpdateAreaBody {
     pub lookup_scope: Option<String>,
     pub match_mode: Option<String>,
     pub category_agg: Option<String>,
+    pub multi_value: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, FromRow)]
@@ -59,7 +63,7 @@ pub struct CategoryRow {
 pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRow>>, ApiError> {
     let rows = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, max_score, calc_type, teacher_editable, lookup_scope,
-                match_mode, category_agg
+                match_mode, category_agg, multi_value
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -79,11 +83,14 @@ pub async fn create_area(
     if body.calc_type == "CATEGORY" && body.category_agg.is_none() {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소는 category_agg(SUM/MAX)가 필수입니다".into()));
     }
+    if body.calc_type != "CATEGORY" && body.multi_value != 0 {
+        return Err((StatusCode::BAD_REQUEST, "multi_value=1은 CATEGORY 전형요소에만 허용됩니다".into()));
+    }
 
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope,
-                            match_mode, category_agg)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+                            match_mode, category_agg, multi_value)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id",
     )
     .bind(&body.name)
@@ -93,6 +100,7 @@ pub async fn create_area(
     .bind(&body.lookup_scope)
     .bind(&body.match_mode)
     .bind(&body.category_agg)
+    .bind(body.multi_value)
     .fetch_one(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -128,6 +136,7 @@ pub async fn update_area(
     update_field!(body.lookup_scope, "lookup_scope");
     update_field!(body.match_mode, "match_mode");
     update_field!(body.category_agg, "category_agg");
+    update_field!(body.multi_value, "multi_value");
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

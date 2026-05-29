@@ -97,8 +97,7 @@ pub async fn calc_area_score(
             let value_str: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
-                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))
-                 LIMIT 1",
+                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
             .fetch_optional(db).await?;
@@ -153,8 +152,7 @@ pub async fn calc_area_score(
             let v: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
-                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))
-                 LIMIT 1",
+                   AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
             .fetch_optional(db).await?;

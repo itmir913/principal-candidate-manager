@@ -1,6 +1,8 @@
 /// 전형요소별 데이터 Excel 업로드/다운로드 핸들러
 /// - 점수 기준: numeric_table (RANGE), category_map (CATEGORY)
 /// - 기초 데이터: base_data (모든 calc_type)
+use std::collections::HashSet;
+
 use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
@@ -29,6 +31,7 @@ pub struct ImportResult {
 struct AreaInfo {
     calc_type: String,
     lookup_scope: String,
+    multi_value: i64,
 }
 
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
@@ -63,7 +66,7 @@ fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
 
 async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     sqlx::query_as::<_, AreaInfo>(
-        "SELECT calc_type, lookup_scope FROM areas WHERE id = ?",
+        "SELECT calc_type, lookup_scope, multi_value FROM areas WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(db)
@@ -239,7 +242,7 @@ pub async fn numeric_table_import(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "NUMERIC" {
         return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
@@ -288,8 +291,12 @@ pub async fn numeric_table_import(
         }
     }
 
+    if !errors.is_empty() {
+        // tx이 drop되면 자동 rollback — 부분 삽입 없음
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+    }
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ImportResult { rows, errors, warnings }))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }
 
 // ── CATEGORY MAP ─────────────────────────────────────────────────
@@ -372,7 +379,7 @@ pub async fn category_map_import(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "CATEGORY" {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));
@@ -422,8 +429,11 @@ pub async fn category_map_import(
         }
     }
 
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+    }
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ImportResult { rows, errors, warnings }))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }
 
 // ── BASE DATA ────────────────────────────────────────────────────
@@ -511,7 +521,7 @@ pub async fn base_data_import(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     multipart: Multipart,
-) -> Result<Json<ImportResult>, ApiError> {
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
@@ -529,6 +539,9 @@ pub async fn base_data_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    // multi_value=0 전형요소: (student_id, univ_id) 중복 추적 — 첫 번째 행 우선
+    let single_value = area.multi_value == 0;
+    let mut seen: HashSet<(i64, Option<i64>)> = HashSet::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
@@ -580,18 +593,30 @@ pub async fn base_data_import(
             None => continue,
         };
 
+        // 단일값 전형요소: 동일 (student, univ) 중복 행은 전체 import 거부
+        if single_value && !seen.insert((student_id, univ_id)) {
+            errors.push(format!(
+                "{}행: 학번 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                row_num, student_code
+            ));
+            continue;
+        }
+
         match sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, ?, ?)",
+            "INSERT INTO base_data (student_id, area_id, univ_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(student_id).bind(id).bind(univ_id).bind(&db_value)
+        .bind(student_id).bind(id).bind(univ_id).bind(&db_value).bind(area.multi_value)
         .execute(&mut *tx).await {
             Ok(_) => rows += 1,
             Err(e) => errors.push(format!("{}행: {}", row_num, e)),
         }
     }
 
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+    }
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ImportResult { rows, errors, warnings }))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }
 
 // ── LIST (JSON 조회) ─────────────────────────────────────────────
