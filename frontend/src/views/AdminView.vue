@@ -101,7 +101,7 @@ const tabs = [
   { key: 'rounds',   label: '선발 관리' },
   { key: 'classes',  label: '학급 관리' },
   { key: 'students', label: '학생 관리' },
-  { key: 'areas',    label: '영역 설정' },
+  { key: 'areas',    label: '전형 요소 설정' },
   { key: 'univs',    label: '대학 설정' },
 ]
 const active = ref('rounds')

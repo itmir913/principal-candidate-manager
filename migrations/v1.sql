@@ -70,8 +70,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
 -- AREAS
 -- max_score: INTEGER (×10000)
 -- lookup_scope:
---   SIMPLE    = univ_id와 무관한 전역 영역
---   COMPOSITE = 지원 대학별로 점수가 달라지는 영역
+--   SIMPLE    = univ_id와 무관한 전역 전형요소
+--   COMPOSITE = 지원 대학별로 점수가 달라지는 전형요소
 -- ================================================================
 CREATE TABLE IF NOT EXISTS areas (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,

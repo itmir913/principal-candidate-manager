@@ -80,7 +80,7 @@ pub async fn calc_area_score(
     area: &AreaRow,
     univ_id: i64,
 ) -> Result<i64, sqlx::Error> {
-    // COMPOSITE 영역은 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
+    // COMPOSITE 전형 요소는 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
     let lookup_univ: Option<i64> = if area.lookup_scope == "COMPOSITE" {
         Some(univ_id)
     } else {

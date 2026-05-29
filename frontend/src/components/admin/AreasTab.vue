@@ -1,9 +1,9 @@
 <template>
   <div class="flex gap-4 min-h-0">
-    <!-- ── 좌측: 영역 목록 ── -->
+    <!-- ── 좌측: 전형 요소 목록 ── -->
     <div class="w-72 shrink-0">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-gray-700">영역 목록</h2>
+        <h2 class="text-lg font-semibold text-gray-700">전형 요소 목록</h2>
         <button class="px-2 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
           @click="openAddForm">+ 추가</button>
       </div>
@@ -24,17 +24,17 @@
           <button class="text-red-400 text-xs hover:text-red-600 ml-2 shrink-0"
             @click.stop="removeArea(area.id)">삭제</button>
         </li>
-        <li v-if="areas.length === 0" class="text-gray-400 text-sm px-2">영역 없음</li>
+        <li v-if="areas.length === 0" class="text-gray-400 text-sm px-2">등록된 전형 요소 없음</li>
       </ul>
 
-      <!-- 영역 추가 폼 -->
+      <!-- 전형 요소 추가 폼 -->
       <div v-if="showAddForm" class="mt-3 p-3 border border-blue-200 rounded bg-blue-50 space-y-2 text-sm">
         <div>
-          <label class="text-xs text-gray-500">이름</label>
+          <label class="text-xs text-gray-500">전형 요소 이름</label>
           <input v-model="newArea.name" type="text" class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
         <div>
-          <label class="text-xs text-gray-500">최대점수 (표시값)</label>
+          <label class="text-xs text-gray-500">최고 점수(비율)</label>
           <input v-model.number="newArea.max_score_display" type="number" step="0.0001"
             class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
@@ -54,7 +54,7 @@
         </div>
         <div class="flex items-center gap-2">
           <input v-model="newArea.teacher_editable" type="checkbox" id="te" />
-          <label for="te" class="text-xs text-gray-500">교사 편집 가능</label>
+          <label for="te" class="text-xs text-gray-500">담임교사 수동 입력</label>
         </div>
         <div v-if="newArea.calc_type === 'RANGE'">
           <label class="text-xs text-gray-500">range_direction</label>
@@ -75,7 +75,7 @@
       </div>
     </div>
 
-    <!-- ── 우측: 영역 상세 (서브탭) ── -->
+    <!-- ── 우측: 전형 요소 상세 (서브탭) ── -->
     <div class="flex-1 min-w-0" v-if="selected">
       <div class="flex items-center gap-2 mb-3">
         <h3 class="text-base font-semibold text-gray-800">{{ selected.name }}</h3>
@@ -111,6 +111,7 @@
         <ExcelPanel
           :area-id="selected.id"
           :calc-type="selected.calc_type"
+          :area-name="selected.name"
           panel="score"
           @result="scoreResult = $event" />
         <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
@@ -124,13 +125,14 @@
         <ExcelPanel
           :area-id="selected.id"
           :calc-type="selected.calc_type"
+          :area-name="selected.name"
           panel="base"
           @result="baseResult = $event" />
         <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
       </div>
     </div>
 
-    <p v-else class="text-gray-400 text-sm mt-2">왼쪽에서 영역을 선택하세요.</p>
+    <p v-else class="text-gray-400 text-sm mt-2">왼쪽에서 전형 요소를 선택하세요.</p>
   </div>
 </template>
 
@@ -160,7 +162,7 @@ function defaultNewArea() {
            range_direction: '', category_agg: '' }
 }
 
-// ── 영역 목록 ─────────────────────────────────────────────────
+// ── 전형 요소 목록 ─────────────────────────────────────────────────
 async function load() {
   try { areas.value = await getAreas() }
   catch (e) { error.value = e.response?.data ?? e.message }
@@ -191,7 +193,7 @@ async function addArea() {
 }
 
 async function removeArea(id) {
-  if (!confirm('영역을 삭제하면 구간표·범주표·기초데이터도 함께 삭제됩니다. 계속할까요?')) return
+  if (!confirm('전형 요소를 삭제하면 구간표·범주표·기초데이터도 함께 삭제됩니다. 계속할까요?')) return
   try {
     await deleteArea(id)
     if (selected.value?.id === id) selected.value = null
@@ -219,6 +221,7 @@ const ExcelPanel = defineComponent({
   props: {
     areaId:   { type: Number, required: true },
     calcType: { type: String, required: true },
+    areaName: { type: String, required: true },
     panel:    { type: String, required: true }, // 'score' | 'base'
   },
   emits: ['result'],
@@ -233,10 +236,12 @@ const ExcelPanel = defineComponent({
           const res = props.calcType === 'CATEGORY'
             ? await downloadCategoryMapTemplate(props.areaId)
             : await downloadRangeTableTemplate(props.areaId)
-          saveBlob(res, props.calcType === 'CATEGORY' ? 'category_map_template.xlsx' : 'range_table_template.xlsx')
+          saveBlob(res, props.calcType === 'CATEGORY'
+            ? `${props.areaName}_category_map_template.xlsx`
+            : `${props.areaName}_range_table_template.xlsx`)
         } else {
           const res = await downloadBaseDataTemplate(props.areaId)
-          saveBlob(res, 'base_data_template.xlsx')
+          saveBlob(res, `${props.areaName}_base_data_template.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
     }
@@ -248,10 +253,12 @@ const ExcelPanel = defineComponent({
           const res = props.calcType === 'CATEGORY'
             ? await exportCategoryMap(props.areaId)
             : await exportRangeTable(props.areaId)
-          saveBlob(res, props.calcType === 'CATEGORY' ? 'category_map.xlsx' : 'range_table.xlsx')
+          saveBlob(res, props.calcType === 'CATEGORY'
+            ? `${props.areaName}_category_map.xlsx`
+            : `${props.areaName}_range_table.xlsx`)
         } else {
           const res = await exportBaseData(props.areaId)
-          saveBlob(res, 'base_data.xlsx')
+          saveBlob(res, `${props.areaName}_base_data.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
     }

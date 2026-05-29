@@ -1,4 +1,4 @@
-/// 영역별 데이터 Excel 업로드/다운로드 핸들러
+/// 전형 요소별 데이터 Excel 업로드/다운로드 핸들러
 /// - 점수 기준: range_table (RANGE), category_map (CATEGORY)
 /// - 기초 데이터: base_data (모든 calc_type)
 use axum::{
@@ -61,7 +61,7 @@ async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     .fetch_optional(db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, format!("영역 id={} 없음", id)))
+    .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형 요소 id={} 없음", id)))
 }
 
 /// 대학이 없으면 자동 생성 후 (id, 생성여부) 반환
@@ -117,7 +117,7 @@ fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     }
 }
 
-/// COMPOSITE 영역: univ_id 조회/생성 (열 이름 기반)
+/// COMPOSITE 전형 요소: univ_id 조회/생성 (열 이름 기반)
 async fn resolve_univ(
     db: &Db,
     area: &AreaInfo,
@@ -131,7 +131,7 @@ async fn resolve_univ(
         let un = excel::get_col(cols, col, "대학명");
         let tn = excel::get_col(cols, col, "전형명");
         if un.is_empty() || tn.is_empty() {
-            errors.push(format!("{}행: COMPOSITE 영역은 대학명, 전형명 필수", row_num));
+            errors.push(format!("{}행: COMPOSITE 전형 요소는 대학명, 전형명 필수", row_num));
             return None;
         }
         match find_or_create_univ(db, un, tn).await {
@@ -160,7 +160,7 @@ pub async fn range_table_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "RANGE" {
-        return Err((StatusCode::BAD_REQUEST, "RANGE 영역만 구간표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "RANGE 전형 요소만 구간표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "기준값");
     let buf = simple_template(&headers)
@@ -234,7 +234,7 @@ pub async fn range_table_import(
 ) -> Result<Json<ImportResult>, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "RANGE" {
-        return Err((StatusCode::BAD_REQUEST, "RANGE 영역만 구간표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "RANGE 전형 요소만 구간표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
@@ -293,7 +293,7 @@ pub async fn category_map_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "CATEGORY" {
-        return Err((StatusCode::BAD_REQUEST, "CATEGORY 영역만 범주표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형 요소만 범주표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "범주");
     let buf = simple_template(&headers)
@@ -367,7 +367,7 @@ pub async fn category_map_import(
 ) -> Result<Json<ImportResult>, ApiError> {
     let area = get_area(&state.db, id).await?;
     if area.calc_type != "CATEGORY" {
-        return Err((StatusCode::BAD_REQUEST, "CATEGORY 영역만 범주표를 사용합니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형 요소만 범주표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
