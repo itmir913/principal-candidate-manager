@@ -90,26 +90,32 @@ CREATE TABLE IF NOT EXISTS areas (
 -- threshold: INTEGER (×10000, 원본 측정값)
 --   예) 내신 1.25등급 → 12500 / 봉사 30.5시간 → 305000
 -- score: INTEGER (×10000)
+-- univ_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(대학별)
 -- Out-of-bounds → 0점 (백엔드 의무 구현)
 -- 구간 비교는 정수 대소비교만 사용 (Float-Free Zone)
 -- ================================================================
 CREATE TABLE IF NOT EXISTS range_table (
-    area_id    INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
-    threshold  INTEGER NOT NULL,   -- ×10000
-    score      INTEGER NOT NULL,
-    PRIMARY KEY (area_id, threshold)
+    area_id   INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    univ_id   INTEGER REFERENCES universities(id),  -- NULL=SIMPLE, id=COMPOSITE
+    threshold INTEGER NOT NULL,   -- ×10000
+    score     INTEGER NOT NULL    -- ×10000
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_range_table
+    ON range_table(area_id, COALESCE(univ_id, 0), threshold);
 
 -- ================================================================
 -- CATEGORY_MAP
 -- score: INTEGER (×10000)
+-- univ_id: NULL → SIMPLE(전역), NOT NULL → COMPOSITE(대학별)
 -- ================================================================
 CREATE TABLE IF NOT EXISTS category_map (
     area_id  INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    univ_id  INTEGER REFERENCES universities(id),  -- NULL=SIMPLE, id=COMPOSITE
     category TEXT    NOT NULL,
-    score    INTEGER NOT NULL,
-    PRIMARY KEY (area_id, category)
+    score    INTEGER NOT NULL     -- ×10000
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_category_map
+    ON category_map(area_id, COALESCE(univ_id, 0), category);
 
 -- ================================================================
 -- UNIVERSITIES

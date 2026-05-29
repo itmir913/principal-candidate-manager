@@ -124,6 +124,10 @@ fn build_router(state: AppState) -> Router {
         .merge(protected_auth);
 
     let admin_routes = Router::new()
+        .route("/students", get(handlers::students::list_students))
+        .route("/students/template", get(handlers::students::download_template))
+        .route("/students/export", get(handlers::students::export_students))
+        .route("/students/import", post(handlers::students::import_students))
         .route("/classes", get(handlers::classes::list_classes))
         .route(
             "/classes/:grade/:class_no",

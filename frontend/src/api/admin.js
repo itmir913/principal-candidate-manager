@@ -25,6 +25,23 @@ export const getCategoryMap = (id) =>
 export const putCategoryMap = (id, rows) =>
   axios.put(`/api/areas/${id}/category-map`, rows)
 
+// ── 학생 관리 ──────────────────────────────────────────────────
+export const getStudents = (params = {}) =>
+  axios.get('/api/students', { params }).then(r => r.data)
+
+export const downloadStudentTemplate = () =>
+  axios.get('/api/students/template', { responseType: 'blob' })
+
+export const exportStudents = () =>
+  axios.get('/api/students/export', { responseType: 'blob' })
+
+export const importStudents = (file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return axios.post('/api/students/import', fd).then(r => r.data)
+}
+
+// ── 대학 관리 ──────────────────────────────────────────────────
 export const getUniversities = () => axios.get('/api/universities').then(r => r.data)
 
 export const createUniversity = (body) =>
