@@ -188,7 +188,7 @@ async function runImport(apiFn, label, evt) {
   try {
     const data = await apiFn(file)
     result.value = { label, ...data }
-    await loadStudents()
+    await Promise.all([loadStudents(), loadGradeOptions()])
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }
