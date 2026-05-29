@@ -80,6 +80,9 @@ pub async fn import_classes(
     let mut updated = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     for (i, row) in rows.iter().enumerate() {
         let line = i + 2;
 
@@ -98,11 +101,19 @@ pub async fn import_classes(
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        // bcrypt는 CPU 작업이므로 트랜잭션 진입 전에 미리 계산
+        let password_hash: Option<String> = if let Some(ref pw) = password {
+            Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?)
+        } else {
+            None
+        };
+
         let exists: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM classes WHERE grade = ? AND class_no = ?)",
         )
         .bind(grade).bind(class_no)
-        .fetch_one(&state.db)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -110,34 +121,29 @@ pub async fn import_classes(
             if let Some(ref name) = teacher_name {
                 sqlx::query("UPDATE classes SET teacher_name = ? WHERE grade = ? AND class_no = ?")
                     .bind(name).bind(grade).bind(class_no)
-                    .execute(&state.db).await
+                    .execute(&mut *tx).await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
-            if let Some(ref pw) = password {
-                let hash = bcrypt::hash(pw, bcrypt::DEFAULT_COST)
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if let Some(ref hash) = password_hash {
                 sqlx::query("UPDATE classes SET password_hash = ? WHERE grade = ? AND class_no = ?")
                     .bind(hash).bind(grade).bind(class_no)
-                    .execute(&state.db).await
+                    .execute(&mut *tx).await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
             updated += 1;
         } else {
-            let hash = if let Some(ref pw) = password {
-                Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST)
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?)
-            } else {
-                None
-            };
             sqlx::query(
                 "INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (?, ?, ?, ?)",
             )
-            .bind(grade).bind(class_no).bind(teacher_name).bind(hash)
-            .execute(&state.db).await
+            .bind(grade).bind(class_no).bind(teacher_name).bind(password_hash)
+            .execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             inserted += 1;
         }
     }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "inserted": inserted, "updated": updated, "errors": errors })))
 }
@@ -212,24 +218,27 @@ pub async fn upsert_class(
     Path((grade, class_no)): Path<(i64, i64)>,
     Json(body): Json<UpsertClassBody>,
 ) -> Result<StatusCode, ApiError> {
+    // bcrypt는 CPU 작업이므로 트랜잭션 밖에서 미리 계산
+    let password_hash = if let Some(ref pw) = body.password {
+        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?)
+    } else {
+        None
+    };
+
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ?",
     )
     .bind(grade)
     .bind(class_no)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if count == 0 {
-        let password_hash = if let Some(ref pw) = body.password {
-            Some(
-                bcrypt::hash(pw, bcrypt::DEFAULT_COST)
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
-            )
-        } else {
-            None
-        };
         sqlx::query(
             "INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (?, ?, ?, ?)",
         )
@@ -237,7 +246,7 @@ pub async fn upsert_class(
         .bind(class_no)
         .bind(body.teacher_name)
         .bind(password_hash)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     } else {
@@ -246,22 +255,23 @@ pub async fn upsert_class(
                 .bind(name)
                 .bind(grade)
                 .bind(class_no)
-                .execute(&state.db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
-        if let Some(ref pw) = body.password {
-            let hash = bcrypt::hash(pw, bcrypt::DEFAULT_COST)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if let Some(ref hash) = password_hash {
             sqlx::query("UPDATE classes SET password_hash = ? WHERE grade = ? AND class_no = ?")
                 .bind(hash)
                 .bind(grade)
                 .bind(class_no)
-                .execute(&state.db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
     }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

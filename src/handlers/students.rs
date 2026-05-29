@@ -125,13 +125,19 @@ pub async fn import_students(
     let mut updated = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     for (idx, cols) in file_rows.iter().enumerate() {
         let row_num = idx + 2;
         let rec = row_to_record(cols);
-        if let Err(e) = upsert_student(&state, &rec, &mut inserted, &mut updated).await {
+        if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", row_num, e));
         }
     }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(ImportResult { inserted, updated, errors }))
 }
@@ -139,7 +145,7 @@ pub async fn import_students(
 // ── DB upsert ─────────────────────────────────────────────────────
 
 async fn upsert_student(
-    state: &AppState,
+    conn: &mut sqlx::SqliteConnection,
     rec: &StudentRecord,
     inserted: &mut usize,
     updated: &mut usize,
@@ -162,7 +168,7 @@ async fn upsert_student(
         )
         .bind(grade)
         .bind(class_no)
-        .fetch_one(&state.db)
+        .fetch_one(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -173,7 +179,7 @@ async fn upsert_student(
         let exists: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE student_code = ?")
                 .bind(&rec.student_code)
-                .fetch_one(&state.db)
+                .fetch_one(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
@@ -183,7 +189,7 @@ async fn upsert_student(
                  is_enrolled=1, grad_year=NULL WHERE student_code=?",
             )
             .bind(&rec.name).bind(grade).bind(class_no).bind(seq_no).bind(&rec.student_code)
-            .execute(&state.db)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
             *updated += 1;
@@ -193,7 +199,7 @@ async fn upsert_student(
                  VALUES (?, ?, ?, ?, ?, 1)",
             )
             .bind(&rec.student_code).bind(&rec.name).bind(grade).bind(class_no).bind(seq_no)
-            .execute(&state.db)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
             *inserted += 1;
@@ -204,7 +210,7 @@ async fn upsert_student(
         let exists: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE student_code = ?")
                 .bind(&rec.student_code)
-                .fetch_one(&state.db)
+                .fetch_one(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
@@ -214,7 +220,7 @@ async fn upsert_student(
                  is_enrolled=0, grad_year=? WHERE student_code=?",
             )
             .bind(&rec.name).bind(grad_year).bind(&rec.student_code)
-            .execute(&state.db)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
             *updated += 1;
@@ -224,7 +230,7 @@ async fn upsert_student(
                  VALUES (?, ?, 0, ?)",
             )
             .bind(&rec.student_code).bind(&rec.name).bind(grad_year)
-            .execute(&state.db)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
             *inserted += 1;

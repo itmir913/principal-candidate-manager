@@ -197,10 +197,11 @@ pub async fn calculate_scores(
     let now = chrono::Utc::now().to_rfc3339();
     let mut count = 0usize;
 
+    // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행
+    let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, univ_id, detail_json, total)
     for app in &applications {
         let mut detail: HashMap<String, i64> = HashMap::new();
         let mut total: i64 = 0;
-
         for area in &areas {
             let sc = calc_area_score(&state.db, app.student_id, area, app.univ_id)
                 .await
@@ -208,10 +209,16 @@ pub async fn calculate_scores(
             detail.insert(area.id.to_string(), sc);
             total += sc;
         }
-
         let detail_json = serde_json::to_string(&detail)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        score_rows.push((app.student_id, app.univ_id, detail_json, total));
+    }
 
+    // results 쓰기 + 순위 계산 전체를 하나의 트랜잭션으로
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (student_id, univ_id, detail_json, total) in &score_rows {
         sqlx::query(
             "INSERT INTO results
                (student_id, univ_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
@@ -222,16 +229,15 @@ pub async fn calculate_scores(
                            ranking        = NULL,
                            calculated_at  = excluded.calculated_at",
         )
-        .bind(app.student_id).bind(app.univ_id).bind(round_id)
-        .bind(&detail_json).bind(total).bind(&now)
-        .execute(&state.db)
+        .bind(student_id).bind(univ_id).bind(round_id)
+        .bind(detail_json).bind(total).bind(&now)
+        .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
         count += 1;
     }
 
-    // 대학별 순위 재계산
+    // 대학별 순위 재계산 (트랜잭션 내에서 읽어야 방금 쓴 점수가 보임)
     let mut univ_ids: Vec<i64> = applications.iter().map(|a| a.univ_id).collect();
     univ_ids.sort_unstable();
     univ_ids.dedup();
@@ -241,7 +247,7 @@ pub async fn calculate_scores(
             "SELECT prioritize_enrolled FROM universities WHERE id = ?",
         )
         .bind(uid)
-        .fetch_one(&state.db)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -252,7 +258,7 @@ pub async fn calculate_scores(
              WHERE r.round_id = ? AND r.univ_id = ?",
         )
         .bind(round_id).bind(uid)
-        .fetch_all(&state.db)
+        .fetch_all(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -276,11 +282,14 @@ pub async fn calculate_scores(
                 "UPDATE results SET ranking = ? WHERE student_id = ? AND univ_id = ? AND round_id = ?",
             )
             .bind((rank + 1) as i64).bind(sid).bind(uid).bind(round_id)
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
     }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "calculated": count })))
 }

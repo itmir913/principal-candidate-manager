@@ -98,13 +98,16 @@ pub async fn update_area(
     Path(id): Path<i64>,
     Json(body): Json<UpdateAreaBody>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     macro_rules! update_field {
         ($field:expr, $col:literal) => {
             if let Some(v) = $field {
                 sqlx::query(concat!("UPDATE areas SET ", $col, " = ? WHERE id = ?"))
                     .bind(v)
                     .bind(id)
-                    .execute(&state.db)
+                    .execute(&mut *tx)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
@@ -118,6 +121,9 @@ pub async fn update_area(
     update_field!(body.lookup_scope, "lookup_scope");
     update_field!(body.range_direction, "range_direction");
     update_field!(body.category_agg, "category_agg");
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
