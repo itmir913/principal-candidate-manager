@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "setup": "node setup.js",
-    "dev":   "concurrently \"cargo watch -- cargo run --features dev\" \"wait-on -t 180000 http://localhost:8080/api/health && npm --prefix frontend run dev\"",
-    "test":  "cargo test",
+    "dev": "concurrently \"cargo run --features dev\" \"wait-on -t 180000 http://localhost:8080/api/health && npm --prefix frontend run dev\"",
+    "dev:watch": "concurrently \"cargo watch -- cargo run --features dev\" \"wait-on -t 180000 http://localhost:8080/api/health && npm --prefix frontend run dev\"",
+    "test": "cargo test",
     "build": "npm --prefix frontend run build && cargo build --release"
   },
   "devDependencies": {
