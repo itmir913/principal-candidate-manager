@@ -52,14 +52,14 @@ struct GradeClassRow {
     class_no: i64,
 }
 
-struct StudentRecord {
-    student_code: String,
-    name: String,
-    is_enrolled: i64,
-    grade: Option<i64>,
-    class_no: Option<i64>,
-    seq_no: Option<i64>,
-    grad_year: Option<i64>,
+pub struct StudentRecord {
+    pub student_code: String,
+    pub name: String,
+    pub is_enrolled: i64,
+    pub grade: Option<i64>,
+    pub class_no: Option<i64>,
+    pub seq_no: Option<i64>,
+    pub grad_year: Option<i64>,
 }
 
 // ── 핸들러 ───────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ pub async fn import_students(
 
 // ── DB upsert ─────────────────────────────────────────────────────
 
-async fn upsert_student(
+pub async fn upsert_student(
     conn: &mut sqlx::SqliteConnection,
     rec: &StudentRecord,
     inserted: &mut usize,
@@ -444,7 +444,7 @@ pub async fn import_graduated(
 
 // ── 재학생 위치 기반 upsert (student_code 자동 생성) ──────────────
 
-async fn upsert_enrolled_by_position(
+pub async fn upsert_enrolled_by_position(
     conn: &mut sqlx::SqliteConnection,
     rec: &StudentRecord,
     inserted: &mut usize,
@@ -496,7 +496,7 @@ async fn upsert_enrolled_by_position(
     Ok(())
 }
 
-async fn find_unique_code(conn: &mut sqlx::SqliteConnection, base: &str) -> Result<String, String> {
+pub async fn find_unique_code(conn: &mut sqlx::SqliteConnection, base: &str) -> Result<String, String> {
     let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE student_code = ?")
         .bind(base).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
     if exists == 0 {
@@ -663,370 +663,5 @@ fn row_to_graduated_record(
         class_no:     None,
         seq_no:       None,
         grad_year:    parse_i64("졸업연도"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{db::create_test_pool, state::AppState};
-    use axum::{extract::{Path, State}, http::StatusCode};
-
-    fn make_state(pool: sqlx::SqlitePool) -> AppState {
-        AppState { db: pool, jwt_secret: "test".into() }
-    }
-
-    async fn insert_class(pool: &sqlx::SqlitePool, grade: i64, class_no: i64) {
-        let hash = bcrypt::hash("pass", 4u32).unwrap();
-        sqlx::query(
-            "INSERT INTO classes (grade, class_no, password_hash) VALUES (?, ?, ?)",
-        )
-        .bind(grade).bind(class_no).bind(&hash)
-        .execute(pool).await.unwrap();
-    }
-
-    fn enrolled_rec(code: &str, name: &str, g: i64, c: i64, s: i64) -> StudentRecord {
-        StudentRecord {
-            student_code: code.into(),
-            name: name.into(),
-            is_enrolled: 1,
-            grade: Some(g),
-            class_no: Some(c),
-            seq_no: Some(s),
-            grad_year: None,
-        }
-    }
-
-    fn graduated_rec(code: &str, name: &str, year: i64) -> StudentRecord {
-        StudentRecord {
-            student_code: code.into(),
-            name: name.into(),
-            is_enrolled: 0,
-            grade: None,
-            class_no: None,
-            seq_no: None,
-            grad_year: Some(year),
-        }
-    }
-
-    // ── upsert_student ────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn upsert_student_empty_code_returns_error() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: "".into(),
-            name: "홍길동".into(),
-            is_enrolled: 0,
-            grade: None, class_no: None, seq_no: None,
-            grad_year: Some(2024),
-        };
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("student_code"));
-    }
-
-    #[tokio::test]
-    async fn upsert_student_empty_name_returns_error() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: "SC001".into(),
-            name: "".into(),
-            is_enrolled: 0,
-            grade: None, class_no: None, seq_no: None,
-            grad_year: Some(2024),
-        };
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("name"));
-    }
-
-    #[tokio::test]
-    async fn upsert_student_enrolled_missing_position_returns_error() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: "SC001".into(),
-            name: "홍길동".into(),
-            is_enrolled: 1,
-            grade: None, class_no: None, seq_no: None, // 없음
-            grad_year: None,
-        };
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-    }
-
-    #[tokio::test]
-    async fn upsert_student_enrolled_class_not_found_returns_error() {
-        let pool = create_test_pool().await;
-        // 학급 미등록
-        let mut tx = pool.begin().await.unwrap();
-        let rec = enrolled_rec("SC001", "홍길동", 1, 1, 1);
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("학급 목록에 없습니다"));
-    }
-
-    #[tokio::test]
-    async fn upsert_student_enrolled_inserts_new_student() {
-        let pool = create_test_pool().await;
-        insert_class(&pool, 1, 1).await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = enrolled_rec("SC001", "홍길동", 1, 1, 1);
-        let mut ins = 0; let mut upd = 0;
-        upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(ins, 1);
-        assert_eq!(upd, 0);
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
-            .fetch_one(&pool).await.unwrap();
-        assert_eq!(count, 1);
-    }
-
-    #[tokio::test]
-    async fn upsert_student_enrolled_updates_existing() {
-        let pool = create_test_pool().await;
-        insert_class(&pool, 1, 1).await;
-        // 첫 번째 삽입
-        let mut tx = pool.begin().await.unwrap();
-        let rec = enrolled_rec("SC001", "홍길동", 1, 1, 1);
-        let mut ins = 0; let mut upd = 0;
-        upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await.unwrap();
-        tx.commit().await.unwrap();
-        // 두 번째 — 같은 코드, 이름 변경
-        let mut tx2 = pool.begin().await.unwrap();
-        let rec2 = enrolled_rec("SC001", "이순신", 1, 1, 1);
-        upsert_student(&mut *tx2, &rec2, &mut ins, &mut upd).await.unwrap();
-        tx2.commit().await.unwrap();
-        assert_eq!(ins, 1);
-        assert_eq!(upd, 1);
-        let name: String = sqlx::query_scalar("SELECT name FROM students WHERE student_code = 'SC001'")
-            .fetch_one(&pool).await.unwrap();
-        assert_eq!(name, "이순신");
-    }
-
-    #[tokio::test]
-    async fn upsert_student_graduated_missing_year_returns_error() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: "GR001".into(),
-            name: "졸업생".into(),
-            is_enrolled: 0,
-            grade: None, class_no: None, seq_no: None,
-            grad_year: None, // 필수값 누락
-        };
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("grad_year"));
-    }
-
-    #[tokio::test]
-    async fn upsert_student_graduated_inserts_ok() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = graduated_rec("GR001", "졸업생", 2024);
-        let mut ins = 0; let mut upd = 0;
-        upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(ins, 1);
-    }
-
-    // ── upsert_enrolled_by_position ───────────────────────────────────
-
-    #[tokio::test]
-    async fn enrolled_by_position_generates_student_code() {
-        let pool = create_test_pool().await;
-        insert_class(&pool, 1, 1).await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: String::new(),
-            name: "홍길동".into(),
-            is_enrolled: 1,
-            grade: Some(1), class_no: Some(1), seq_no: Some(1),
-            grad_year: None,
-        };
-        let mut ins = 0; let mut upd = 0;
-        upsert_enrolled_by_position(&mut *tx, &rec, &mut ins, &mut upd).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(ins, 1);
-        let code: String =
-            sqlx::query_scalar("SELECT student_code FROM students WHERE name = '홍길동'")
-                .fetch_one(&pool).await.unwrap();
-        assert!(!code.is_empty());
-    }
-
-    #[tokio::test]
-    async fn enrolled_by_position_updates_existing_by_position() {
-        let pool = create_test_pool().await;
-        insert_class(&pool, 1, 1).await;
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: String::new(),
-            name: "홍길동".into(),
-            is_enrolled: 1,
-            grade: Some(1), class_no: Some(1), seq_no: Some(1),
-            grad_year: None,
-        };
-        let mut ins = 0; let mut upd = 0;
-        upsert_enrolled_by_position(&mut *tx, &rec, &mut ins, &mut upd).await.unwrap();
-        let rec2 = StudentRecord { name: "이순신".into(), ..rec };
-        upsert_enrolled_by_position(&mut *tx, &rec2, &mut ins, &mut upd).await.unwrap();
-        tx.commit().await.unwrap();
-        assert_eq!(ins, 1);
-        assert_eq!(upd, 1);
-        let name: String =
-            sqlx::query_scalar(
-                "SELECT name FROM students WHERE grade = 1 AND class_no = 1 AND seq_no = 1",
-            )
-            .fetch_one(&pool).await.unwrap();
-        assert_eq!(name, "이순신");
-    }
-
-    #[tokio::test]
-    async fn enrolled_by_position_missing_class_returns_error() {
-        let pool = create_test_pool().await;
-        // 학급 미등록
-        let mut tx = pool.begin().await.unwrap();
-        let rec = StudentRecord {
-            student_code: String::new(),
-            name: "홍길동".into(),
-            is_enrolled: 1,
-            grade: Some(2), class_no: Some(3), seq_no: Some(1),
-            grad_year: None,
-        };
-        let mut ins = 0; let mut upd = 0;
-        let res = upsert_enrolled_by_position(&mut *tx, &rec, &mut ins, &mut upd).await;
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("학급 목록에 없습니다"));
-    }
-
-    // ── find_unique_code ──────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn find_unique_code_returns_base_when_no_collision() {
-        let pool = create_test_pool().await;
-        let mut tx = pool.begin().await.unwrap();
-        let code = find_unique_code(&mut *tx, "20251101").await.unwrap();
-        assert_eq!(code, "20251101");
-    }
-
-    #[tokio::test]
-    async fn find_unique_code_returns_suffix_on_collision() {
-        let pool = create_test_pool().await;
-        // base code를 미리 점유
-        sqlx::query(
-            "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
-             VALUES ('20251101', '기존학생', 0, 2024)",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let mut tx = pool.begin().await.unwrap();
-        let code = find_unique_code(&mut *tx, "20251101").await.unwrap();
-        assert_eq!(code, "20251101-2");
-    }
-
-    #[tokio::test]
-    async fn find_unique_code_increments_suffix_until_free() {
-        let pool = create_test_pool().await;
-        // base + -2 모두 점유
-        for suffix in &["20251101", "20251101-2"] {
-            sqlx::query(
-                "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES (?, '기존학생', 0, 2024)",
-            )
-            .bind(suffix)
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
-        let mut tx = pool.begin().await.unwrap();
-        let code = find_unique_code(&mut *tx, "20251101").await.unwrap();
-        assert_eq!(code, "20251101-3");
-    }
-
-    // ── delete_student ────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn delete_student_no_refs_ok() {
-        let pool = create_test_pool().await;
-        let sid: i64 = sqlx::query_scalar(
-            "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
-             VALUES ('S001', '홍길동', 0, 2024) RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        delete_student(State(make_state(pool.clone())), Path(sid))
-            .await
-            .unwrap();
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
-            .fetch_one(&pool).await.unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[tokio::test]
-    async fn delete_student_with_base_data_returns_conflict() {
-        let pool = create_test_pool().await;
-        let sid: i64 = sqlx::query_scalar(
-            "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
-             VALUES ('S001', '홍길동', 0, 2024) RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        let aid: i64 = sqlx::query_scalar(
-            "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
-             VALUES ('내신', 100000, 'RANGE', 'SIMPLE') RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '10000')",
-        )
-        .bind(sid).bind(aid)
-        .execute(&pool)
-        .await
-        .unwrap();
-        let res = delete_student(State(make_state(pool)), Path(sid)).await;
-        assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
-    }
-
-    #[tokio::test]
-    async fn delete_student_with_application_returns_conflict() {
-        let pool = create_test_pool().await;
-        let hash = bcrypt::hash("pass", 4u32).unwrap();
-        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
-            .bind(&hash).execute(&pool).await.unwrap();
-        let sid: i64 = sqlx::query_scalar(
-            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
-             VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
-        )
-        .fetch_one(&pool).await.unwrap();
-        let uid: i64 = sqlx::query_scalar(
-            "INSERT INTO universities (univ_name, track_name, capacity) \
-             VALUES ('서울대', '컴공', 5) RETURNING id",
-        )
-        .fetch_one(&pool).await.unwrap();
-        let rid: i64 = sqlx::query_scalar(
-            "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01') RETURNING id",
-        )
-        .fetch_one(&pool).await.unwrap();
-        sqlx::query(
-            "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
-             VALUES (?, ?, ?, 1, 0)",
-        )
-        .bind(sid).bind(uid).bind(rid)
-        .execute(&pool).await.unwrap();
-        let res = delete_student(State(make_state(pool)), Path(sid)).await;
-        assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
     }
 }

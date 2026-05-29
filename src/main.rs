@@ -1,9 +1,5 @@
-mod auth;
-mod db;
-mod excel;
-mod handlers;
-mod middleware;
-mod state;
+use principal_candidate_manager::{db, handlers, middleware};
+use principal_candidate_manager::state::AppState;
 
 use axum::{
     middleware as axum_middleware,
@@ -12,7 +8,6 @@ use axum::{
 };
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use state::AppState;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
