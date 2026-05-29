@@ -191,7 +191,7 @@
                 <tr>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-12">순위</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생명</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생코드</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학년/반</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학</th>
                   <th

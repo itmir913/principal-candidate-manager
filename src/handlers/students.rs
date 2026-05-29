@@ -324,10 +324,10 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 
 // ── 재학생 전용 ───────────────────────────────────────────────────
 
-// 가져오기 양식 헤더: 학번 제외 (백엔드에서 자동 생성)
+// 가져오기 양식 헤더: 학생코드 제외 (백엔드에서 자동 생성)
 const ENROLLED_IMPORT_HEADERS: &[&str] = &["학년", "반", "번호", "이름"];
-// 내보내기 헤더: 참조용으로 학번 포함
-const ENROLLED_EXPORT_HEADERS: &[&str] = &["학번", "이름", "학년", "반", "번호"];
+// 내보내기 헤더: 참조용으로 학생코드 포함
+const ENROLLED_EXPORT_HEADERS: &[&str] = &["학생코드", "이름", "학년", "반", "번호"];
 const GRADUATED_HEADERS: &[&str] = &["학생코드", "이름", "졸업연도"];
 
 /// GET /api/students/enrolled/template
@@ -518,7 +518,7 @@ pub async fn find_unique_code(conn: &mut sqlx::SqliteConnection, base: &str) -> 
             return Ok(candidate);
         }
     }
-    Err(format!("학번 자동 생성 실패: {} 충돌이 너무 많습니다", base))
+    Err(format!("학생코드 자동 생성 실패: {} 충돌이 너무 많습니다", base))
 }
 
 // ── 학생 삭제 ─────────────────────────────────────────────────────

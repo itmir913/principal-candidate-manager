@@ -54,15 +54,15 @@ fn col_map_and_get_col() {
 
 #[test]
 fn require_cols_ok() {
-    let headers = vec!["학번".to_string(), "이름".to_string()];
+    let headers = vec!["학생코드".to_string(), "이름".to_string()];
     let map = col_map(&headers);
-    assert!(require_cols(&map, &["학번", "이름"]).is_ok());
+    assert!(require_cols(&map, &["학생코드", "이름"]).is_ok());
 }
 
 #[test]
 fn require_cols_missing() {
     let headers = vec!["이름".to_string()];
     let map = col_map(&headers);
-    let err = require_cols(&map, &["학번", "이름"]).unwrap_err();
-    assert!(err.contains("학번"));
+    let err = require_cols(&map, &["학생코드", "이름"]).unwrap_err();
+    assert!(err.contains("학생코드"));
 }

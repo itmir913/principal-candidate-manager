@@ -67,7 +67,7 @@
       <table class="w-full text-sm border-collapse">
         <thead>
           <tr class="bg-gray-100 text-gray-600 text-left">
-            <th class="px-3 py-2 border-b">학번</th>
+            <th class="px-3 py-2 border-b">학생코드</th>
             <th class="px-3 py-2 border-b">이름</th>
             <th class="px-3 py-2 border-b">구분</th>
             <th class="px-3 py-2 border-b">학년</th>

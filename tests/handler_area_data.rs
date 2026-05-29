@@ -73,7 +73,7 @@ async fn numeric_import_dedup_rejects_entire_import() {
     let state = common::make_state(pool.clone());
 
     // S001이 두 번 등장 → 전체 import 거부(422), DB에 아무것도 저장되지 않음
-    let csv = "학번,값\nS001,30.5\nS001,25.0\n";
+    let csv = "학생코드,값\nS001,30.5\nS001,25.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), build_multipart(csv).await)
             .await
@@ -99,7 +99,7 @@ async fn manual_import_dedup_rejects_entire_import() {
     let aid = insert_area(&pool, "MANUAL", None, None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학번,값\nS001,85.0\nS001,90.0\n";
+    let csv = "학생코드,값\nS001,85.0\nS001,90.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), build_multipart(csv).await)
             .await
@@ -125,7 +125,7 @@ async fn category_multi_import_allows_multiple_values_per_student() {
     let state = common::make_state(pool.clone());
 
     // CATEGORY multi_value=1: 같은 학생이 서로 다른 범주 → 두 행 모두 삽입
-    let csv = "학번,값\nS001,회장\nS001,부회장\n";
+    let csv = "학생코드,값\nS001,회장\nS001,부회장\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), build_multipart(csv).await)
             .await
@@ -151,7 +151,7 @@ async fn numeric_import_multiple_students_succeeds() {
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학번,값\nS001,30.5\nS002,25.0\n";
+    let csv = "학생코드,값\nS001,30.5\nS002,25.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), build_multipart(csv).await)
             .await
@@ -171,13 +171,13 @@ async fn numeric_import_multiple_students_succeeds() {
 
 #[tokio::test]
 async fn import_unknown_student_rejects_entire_import() {
-    // 존재하지 않는 학번이 포함된 경우에도 전체 import 거부
+    // 존재하지 않는 학생코드이 포함된 경우에도 전체 import 거부
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학번,값\nS001,30.5\nS999,25.0\n"; // S999 미등록
+    let csv = "학생코드,값\nS001,30.5\nS999,25.0\n"; // S999 미등록
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), build_multipart(csv).await)
             .await
@@ -207,7 +207,7 @@ async fn numeric_base_data_import_negative_value_allowed() {
     insert_student(&pool, "S001").await;
     let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
 
-    let csv = "학번,값\nS001,-1.0\n";
+    let csv = "학생코드,값\nS001,-1.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(common::make_state(pool.clone())), Path(aid), build_multipart(csv).await)
             .await.unwrap();
@@ -227,7 +227,7 @@ async fn manual_base_data_import_negative_value_allowed() {
     insert_student(&pool, "S001").await;
     let aid = insert_area(&pool, "MANUAL", None, None, 0).await;
 
-    let csv = "학번,값\nS001,-5.0\n";
+    let csv = "학생코드,값\nS001,-5.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(common::make_state(pool.clone())), Path(aid), build_multipart(csv).await)
             .await.unwrap();

@@ -448,9 +448,9 @@ pub async fn base_data_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     let headers: Vec<&str> = if area.lookup_scope == "COMPOSITE" {
-        vec!["학번", "이름", "값", "대학명", "전형명"]
+        vec!["학생코드", "이름", "값", "대학명", "전형명"]
     } else {
-        vec!["학번", "이름", "값"]
+        vec!["학생코드", "이름", "값"]
     };
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -467,7 +467,7 @@ pub async fn base_data_export(
     let ws = wb.add_worksheet();
 
     if area.lookup_scope == "COMPOSITE" {
-        for (i, h) in ["학번", "이름", "값", "대학명", "전형명"].iter().enumerate() {
+        for (i, h) in ["학생코드", "이름", "값", "대학명", "전형명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -491,7 +491,7 @@ pub async fn base_data_export(
             ws.write_string(r, 4, row.get::<&str, _>("track_name")).ok();
         }
     } else {
-        for (i, h) in ["학번", "이름", "값"].iter().enumerate() {
+        for (i, h) in ["학생코드", "이름", "값"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
         let rows = sqlx::query(
@@ -530,7 +530,7 @@ pub async fn base_data_import(
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
-    excel::require_cols(&col, &["학번", "값"])
+    excel::require_cols(&col, &["학생코드", "값"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut tx = state.db.begin().await
@@ -549,9 +549,9 @@ pub async fn base_data_import(
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
 
-        let student_code = excel::get_col(cols, &col, "학번");
+        let student_code = excel::get_col(cols, &col, "학생코드");
         if student_code.is_empty() {
-            errors.push(format!("{}행: 학번 누락", row_num));
+            errors.push(format!("{}행: 학생코드 누락", row_num));
             continue;
         }
 
@@ -561,7 +561,7 @@ pub async fn base_data_import(
             continue;
         }
 
-        // 학번으로 학생 조회 (없으면 오류)
+        // 학생코드로 학생 조회 (없으면 오류)
         let student_id: Option<i64> = sqlx::query_scalar(
             "SELECT id FROM students WHERE student_code = ?",
         )
@@ -573,7 +573,7 @@ pub async fn base_data_import(
         let student_id = match student_id {
             Some(sid) => sid,
             None => {
-                errors.push(format!("{}행: 학번 '{}' 없음 (학생을 먼저 등록하세요)", row_num, student_code));
+                errors.push(format!("{}행: 학생코드 '{}' 없음 (학생을 먼저 등록하세요)", row_num, student_code));
                 continue;
             }
         };
@@ -599,7 +599,7 @@ pub async fn base_data_import(
         // 단일값 전형요소: 동일 (student, univ) 중복 행은 전체 import 거부
         if single_value && !seen.insert((student_id, univ_id)) {
             errors.push(format!(
-                "{}행: 학번 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                "{}행: 학생코드 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
                 row_num, student_code
             ));
             continue;

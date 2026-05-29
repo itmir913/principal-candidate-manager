@@ -399,7 +399,7 @@ pub async fn export_results(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         // 헤더 행
-        let fixed_headers = ["순위", "학생명", "학번", "학년", "반", "번호", "재학구분"];
+        let fixed_headers = ["순위", "학생명", "학생코드", "학년", "반", "번호", "재학구분"];
         let mut col = 0u16;
         for h in &fixed_headers {
             ws.write_string(0, col, *h).ok();

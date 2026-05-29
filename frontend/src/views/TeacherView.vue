@@ -104,7 +104,7 @@
               <tr class="border-b bg-gray-50">
                 <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-12">번호</th>
                 <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">이름</th>
-                <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">학번</th>
+                <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">학생코드</th>
                 <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">지원 대학</th>
               </tr>
             </thead>

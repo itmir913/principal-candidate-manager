@@ -139,7 +139,7 @@ export function getScoreExample(area) {
 export function getBaseExample(area) {
   const ex = BASE_EXAMPLES[area.calc_type] ?? BASE_EXAMPLES.MANUAL
   const composite = area.lookup_scope === 'COMPOSITE'
-  const headers = ['학번', '이름', '값', ...(composite ? COMPOSITE_COLS : [])]
+  const headers = ['학생코드', '이름', '값', ...(composite ? COMPOSITE_COLS : [])]
   const rows = composite
     ? ex.rows.map(r => [...r, ...COMPOSITE_VALS])
     : ex.rows.map(r => [...r])
