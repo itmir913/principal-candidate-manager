@@ -16,54 +16,72 @@ fn sample_rows() -> Vec<(i64, i64)> {
 
 #[test]
 fn upper_exact_match() {
-    assert_eq!(lookup_range_score(200_000, &sample_rows(), "UPPER"), 30_000);
+    assert_eq!(lookup_range_score(200_000, &sample_rows(), "UPPER").unwrap(), 30_000);
 }
 
 #[test]
 fn upper_between_thresholds() {
-    assert_eq!(lookup_range_score(150_000, &sample_rows(), "UPPER"), 50_000);
+    assert_eq!(lookup_range_score(150_000, &sample_rows(), "UPPER").unwrap(), 50_000);
 }
 
 #[test]
 fn upper_above_all_thresholds() {
-    assert_eq!(lookup_range_score(350_000, &sample_rows(), "UPPER"), 10_000);
+    assert_eq!(lookup_range_score(350_000, &sample_rows(), "UPPER").unwrap(), 10_000);
 }
 
 #[test]
 fn upper_below_all_thresholds() {
-    assert_eq!(lookup_range_score(50_000, &sample_rows(), "UPPER"), 0);
+    assert_eq!(lookup_range_score(50_000, &sample_rows(), "UPPER").unwrap(), 0);
 }
 
 #[test]
 fn lower_exact_match() {
-    assert_eq!(lookup_range_score(200_000, &sample_rows(), "LOWER"), 30_000);
+    assert_eq!(lookup_range_score(200_000, &sample_rows(), "LOWER").unwrap(), 30_000);
 }
 
 #[test]
 fn lower_between_thresholds() {
-    assert_eq!(lookup_range_score(150_000, &sample_rows(), "LOWER"), 30_000);
+    assert_eq!(lookup_range_score(150_000, &sample_rows(), "LOWER").unwrap(), 30_000);
 }
 
 #[test]
 fn lower_above_all_thresholds() {
     // value가 최대 threshold를 초과하면 최대 threshold 행의 점수 반환 ("5일 이상 → 5점" 케이스)
-    assert_eq!(lookup_range_score(400_000, &sample_rows(), "LOWER"), 10_000);
+    assert_eq!(lookup_range_score(400_000, &sample_rows(), "LOWER").unwrap(), 10_000);
 }
 
 #[test]
 fn lower_below_all_thresholds() {
-    assert_eq!(lookup_range_score(50_000, &sample_rows(), "LOWER"), 50_000);
+    assert_eq!(lookup_range_score(50_000, &sample_rows(), "LOWER").unwrap(), 50_000);
 }
 
 #[test]
 fn empty_rows_return_zero() {
-    assert_eq!(lookup_range_score(100_000, &[], "UPPER"), 0);
-    assert_eq!(lookup_range_score(100_000, &[], "LOWER"), 0);
+    assert_eq!(lookup_range_score(100_000, &[], "UPPER").unwrap(), 0);
+    assert_eq!(lookup_range_score(100_000, &[], "LOWER").unwrap(), 0);
 }
 
 #[test]
-fn unknown_direction_returns_zero() {
-    assert_eq!(lookup_range_score(100_000, &sample_rows(), "UNKNOWN"), 0);
+fn unknown_direction_returns_error() {
+    assert!(lookup_range_score(100_000, &sample_rows(), "UNKNOWN").is_err());
+}
+
+// ── lookup_range_score: EXACT 시나리오 ───────────────────────────────
+
+#[test]
+fn exact_hit_returns_score() {
+    assert_eq!(lookup_range_score(200_000, &sample_rows(), "EXACT").unwrap(), 30_000);
+}
+
+#[test]
+fn exact_miss_returns_error() {
+    // 150_000은 구간표에 없음 → Err
+    assert!(lookup_range_score(150_000, &sample_rows(), "EXACT").is_err());
+}
+
+#[test]
+fn exact_empty_rows_returns_error() {
+    assert!(lookup_range_score(100_000, &[], "EXACT").is_err());
 }
 
 // ── lookup_range_score: 봉사시간(UPPER) 시나리오 ──────────────────
@@ -78,43 +96,43 @@ fn upper_volunteering_rows() -> Vec<(i64, i64)> {
 #[test]
 fn upper_volunteering_negative_value_returns_zero() {
     // 음수 봉사시간(불가 입력) → 어떤 threshold도 통과 못 함 → unwrap_or(0) → 0점
-    assert_eq!(lookup_range_score(-1, &upper_volunteering_rows(), "UPPER"), 0);
+    assert_eq!(lookup_range_score(-1, &upper_volunteering_rows(), "UPPER").unwrap(), 0);
 }
 
 #[test]
 fn upper_volunteering_exactly_0_hours() {
     // 봉사 0시간 → threshold 0 매칭 → 0점
-    assert_eq!(lookup_range_score(0, &upper_volunteering_rows(), "UPPER"), 0);
+    assert_eq!(lookup_range_score(0, &upper_volunteering_rows(), "UPPER").unwrap(), 0);
 }
 
 #[test]
 fn upper_volunteering_below_30_hours() {
     // 봉사 29시간 → threshold 0만 매칭, max=0 → 0점
-    assert_eq!(lookup_range_score(2_900_000, &upper_volunteering_rows(), "UPPER"), 0);
+    assert_eq!(lookup_range_score(2_900_000, &upper_volunteering_rows(), "UPPER").unwrap(), 0);
 }
 
 #[test]
 fn upper_volunteering_exactly_30_hours() {
     // 봉사 30시간 → threshold 0, 3_000_000 매칭, max=3_000_000 → 1점
-    assert_eq!(lookup_range_score(3_000_000, &upper_volunteering_rows(), "UPPER"), 100_000);
+    assert_eq!(lookup_range_score(3_000_000, &upper_volunteering_rows(), "UPPER").unwrap(), 100_000);
 }
 
 #[test]
 fn upper_volunteering_between_30_and_40_hours() {
     // 봉사 35시간 → threshold 0, 3_000_000 매칭, max=3_000_000 → 1점
-    assert_eq!(lookup_range_score(3_500_000, &upper_volunteering_rows(), "UPPER"), 100_000);
+    assert_eq!(lookup_range_score(3_500_000, &upper_volunteering_rows(), "UPPER").unwrap(), 100_000);
 }
 
 #[test]
 fn upper_volunteering_exactly_40_hours() {
     // 봉사 40시간 → 모든 threshold 매칭, max=4_000_000 → 2점
-    assert_eq!(lookup_range_score(4_000_000, &upper_volunteering_rows(), "UPPER"), 200_000);
+    assert_eq!(lookup_range_score(4_000_000, &upper_volunteering_rows(), "UPPER").unwrap(), 200_000);
 }
 
 #[test]
 fn upper_volunteering_above_40_hours() {
     // 봉사 50시간 → 모든 threshold 매칭, max=4_000_000 → 2점
-    assert_eq!(lookup_range_score(5_000_000, &upper_volunteering_rows(), "UPPER"), 200_000);
+    assert_eq!(lookup_range_score(5_000_000, &upper_volunteering_rows(), "UPPER").unwrap(), 200_000);
 }
 
 // ── lookup_range_score: 결석일수(LOWER) 시나리오 ──────────────────
@@ -136,44 +154,44 @@ fn lower_absence_rows() -> Vec<(i64, i64)> {
 #[test]
 fn lower_absence_negative_value_uses_min_threshold() {
     // 음수 결석(불가 입력) → 모든 threshold 통과, min=0 → 10점
-    assert_eq!(lookup_range_score(-1, &lower_absence_rows(), "LOWER"), 1_000_000);
+    assert_eq!(lookup_range_score(-1, &lower_absence_rows(), "LOWER").unwrap(), 1_000_000);
 }
 
 #[test]
 fn lower_absence_exactly_0_days() {
     // 결석 0일 → 모든 threshold 통과, min=0 → 10점
-    assert_eq!(lookup_range_score(0, &lower_absence_rows(), "LOWER"), 1_000_000);
+    assert_eq!(lookup_range_score(0, &lower_absence_rows(), "LOWER").unwrap(), 1_000_000);
 }
 
 #[test]
 fn lower_absence_exactly_1_day() {
     // 결석 1일 → threshold 1,2,3,4,5 통과, min=1 → 9점
-    assert_eq!(lookup_range_score(100_000, &lower_absence_rows(), "LOWER"), 900_000);
+    assert_eq!(lookup_range_score(100_000, &lower_absence_rows(), "LOWER").unwrap(), 900_000);
 }
 
 #[test]
 fn lower_absence_exactly_3_days() {
     // 결석 3일 → threshold 3,4,5 통과, min=3 → 7점
-    assert_eq!(lookup_range_score(300_000, &lower_absence_rows(), "LOWER"), 700_000);
+    assert_eq!(lookup_range_score(300_000, &lower_absence_rows(), "LOWER").unwrap(), 700_000);
 }
 
 #[test]
 fn lower_absence_exactly_5_days() {
     // 결석 5일 → threshold 5만 통과, min=5 → 5점
-    assert_eq!(lookup_range_score(500_000, &lower_absence_rows(), "LOWER"), 500_000);
+    assert_eq!(lookup_range_score(500_000, &lower_absence_rows(), "LOWER").unwrap(), 500_000);
 }
 
 #[test]
 fn lower_absence_6_days_fallback_to_last_score() {
     // 결석 6일 → 어떤 threshold도 통과 못 함(6 <= 5? No) → fallback: max threshold=5 → 5점
     // "5일 이상이면 5점" 동작의 핵심 케이스
-    assert_eq!(lookup_range_score(600_000, &lower_absence_rows(), "LOWER"), 500_000);
+    assert_eq!(lookup_range_score(600_000, &lower_absence_rows(), "LOWER").unwrap(), 500_000);
 }
 
 #[test]
 fn lower_absence_far_above_max_threshold_fallback() {
     // 결석 100일(크게 초과) → fallback → 5점
-    assert_eq!(lookup_range_score(10_000_000, &lower_absence_rows(), "LOWER"), 500_000);
+    assert_eq!(lookup_range_score(10_000_000, &lower_absence_rows(), "LOWER").unwrap(), 500_000);
 }
 
 // ── calc_area_score ───────────────────────────────────────────────
@@ -741,6 +759,65 @@ async fn calc_deduction_does_not_cap_at_max_score() {
         match_mode: None, category_agg: Some("SUM".into()), lookup_scope: "SIMPLE".into(),
     };
     assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -300_000);
+}
+
+#[tokio::test]
+async fn calc_range_exact_match_hit() {
+    // EXACT: 값이 threshold와 정확히 일치 → 해당 점수 반환
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "NUMERIC", Some("EXACT"), None, "SIMPLE").await;
+
+    for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000), (300_000, 10_000)] {
+        sqlx::query(
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+        )
+        .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '200000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "NUMERIC".into(),
+        max_score: 100_000,
+        match_mode: Some("EXACT".into()),
+        category_agg: None,
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+}
+
+#[tokio::test]
+async fn calc_range_exact_match_miss_returns_error() {
+    // EXACT: 일치하는 threshold 없음 → Err
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, "NUMERIC", Some("EXACT"), None, "SIMPLE").await;
+
+    for (th, sc) in [(100_000i64, 50_000i64), (200_000, 30_000)] {
+        sqlx::query(
+            "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, NULL, ?, ?)",
+        )
+        .bind(aid).bind(th).bind(sc).execute(&pool).await.unwrap();
+    }
+    // 150_000은 구간표에 없음
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '150000')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: "NUMERIC".into(),
+        max_score: 100_000,
+        match_mode: Some("EXACT".into()),
+        category_agg: None,
+        lookup_scope: "SIMPLE".into(),
+    };
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
 }
 
 // ── calculate_scores 통합 ─────────────────────────────────────────

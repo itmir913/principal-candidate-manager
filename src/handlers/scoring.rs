@@ -57,25 +57,30 @@ pub struct ResultQuery {
 
 // ── Scoring helpers ───────────────────────────────────────────────
 
-pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> i64 {
+pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> Result<i64, String> {
     match direction {
-        "UPPER" => rows
+        "UPPER" => Ok(rows
             .iter()
             .filter(|(th, _)| value >= *th)
             .max_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
-            .unwrap_or(0),
+            .unwrap_or(0)),
         // threshold가 허용 상한선 역할: value <= threshold인 행 중 최소 threshold 선택.
         // value가 최대 threshold를 초과하면("5일 이상: 5점") 최대 threshold 행의 점수 사용.
-        "LOWER" => rows
+        "LOWER" => Ok(rows
             .iter()
             .filter(|(th, _)| value <= *th)
             .min_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
             .unwrap_or_else(|| {
                 rows.iter().max_by_key(|(th, _)| *th).map(|(_, sc)| *sc).unwrap_or(0)
-            }),
-        _ => 0,
+            })),
+        "EXACT" => rows
+            .iter()
+            .find(|(th, _)| *th == value)
+            .map(|(_, sc)| *sc)
+            .ok_or_else(|| format!("EXACT 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다", value)),
+        _ => Err(format!("알 수 없는 match_mode: {}", direction)),
     }
 }
 
@@ -84,7 +89,7 @@ pub async fn calc_area_score(
     student_id: i64,
     area: &AreaRow,
     univ_id: i64,
-) -> Result<i64, sqlx::Error> {
+) -> Result<i64, String> {
     // COMPOSITE 전형요소는 지원 대학별 데이터 사용, SIMPLE은 전역 데이터
     let lookup_univ: Option<i64> = if area.lookup_scope == "COMPOSITE" {
         Some(univ_id)
@@ -100,7 +105,7 @@ pub async fn calc_area_score(
                    AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
-            .fetch_optional(db).await?;
+            .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
             let Some(vs) = value_str else { return Ok(0); };
             let value: i64 = vs.trim().parse().unwrap_or(0);
@@ -112,12 +117,12 @@ pub async fn calc_area_score(
                  ORDER BY threshold",
             )
             .bind(area.id).bind(lookup_univ).bind(lookup_univ)
-            .fetch_all(db).await?
+            .fetch_all(db).await.map_err(|e| e.to_string())?
             .into_iter()
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
             .collect();
 
-            lookup_range_score(value, &rows, mode)
+            lookup_range_score(value, &rows, mode)?
         }
 
         "CATEGORY" => {
@@ -127,7 +132,7 @@ pub async fn calc_area_score(
                    AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
-            .fetch_all(db).await?;
+            .fetch_all(db).await.map_err(|e| e.to_string())?;
 
             let mut scores: Vec<i64> = Vec::new();
             for cat in &values {
@@ -137,7 +142,7 @@ pub async fn calc_area_score(
                        AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
                 )
                 .bind(area.id).bind(cat.as_str()).bind(lookup_univ).bind(lookup_univ)
-                .fetch_optional(db).await?;
+                .fetch_optional(db).await.map_err(|e| e.to_string())?;
                 if let Some(s) = sc { scores.push(s); }
             }
 
@@ -155,7 +160,7 @@ pub async fn calc_area_score(
                    AND (univ_id = ? OR (? IS NULL AND univ_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
-            .fetch_optional(db).await?;
+            .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
             v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
         }
@@ -210,7 +215,7 @@ pub async fn calculate_scores(
         for area in &areas {
             let sc = calc_area_score(&state.db, app.student_id, area, app.univ_id)
                 .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
             detail.insert(area.id.to_string(), sc);
             total += sc;
         }
@@ -573,7 +578,7 @@ pub async fn score_preview(
         };
         let score = calc_area_score(&state.db, q.student_id, &area, q.univ_id)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
         total += score;
         detail.push(AreaPreview { area_id: aw.id, area_name: aw.name.clone(), score });
     }
