@@ -64,11 +64,14 @@ pub async fn admin_login(
     if hash.is_empty() {
         let new_hash = bcrypt::hash(&body.password, bcrypt::DEFAULT_COST)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        sqlx::query("UPDATE app_configs SET value = ? WHERE key = 'admin_password_hash'")
-            .bind(&new_hash)
-            .execute(&state.db)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO app_configs (key, value) VALUES ('admin_password_hash', ?) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(&new_hash)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     } else {
         let ok = bcrypt::verify(&body.password, &hash)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
