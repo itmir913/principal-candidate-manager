@@ -1,5 +1,6 @@
 mod auth;
 mod db;
+mod excel;
 mod handlers;
 mod middleware;
 mod state;
@@ -139,8 +140,17 @@ fn build_router(state: AppState) -> Router {
         .route("/areas/:id", delete(handlers::areas::delete_area))
         .route("/areas/:id/range-table", get(handlers::areas::get_range_table))
         .route("/areas/:id/range-table", put(handlers::areas::put_range_table))
+        .route("/areas/:id/range-table/template", get(handlers::area_data::range_table_template))
+        .route("/areas/:id/range-table/export",   get(handlers::area_data::range_table_export))
+        .route("/areas/:id/range-table/import",  post(handlers::area_data::range_table_import))
         .route("/areas/:id/category-map", get(handlers::areas::get_category_map))
         .route("/areas/:id/category-map", put(handlers::areas::put_category_map))
+        .route("/areas/:id/category-map/template", get(handlers::area_data::category_map_template))
+        .route("/areas/:id/category-map/export",   get(handlers::area_data::category_map_export))
+        .route("/areas/:id/category-map/import",  post(handlers::area_data::category_map_import))
+        .route("/areas/:id/base-data/template", get(handlers::area_data::base_data_template))
+        .route("/areas/:id/base-data/export",   get(handlers::area_data::base_data_export))
+        .route("/areas/:id/base-data/import",  post(handlers::area_data::base_data_import))
         .route("/universities", get(handlers::universities::list_universities))
         .route("/universities", post(handlers::universities::create_university))
         .route("/universities/:id", put(handlers::universities::update_university))

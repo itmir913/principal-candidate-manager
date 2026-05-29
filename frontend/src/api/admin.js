@@ -13,17 +13,35 @@ export const updateArea = (id, body) => axios.put(`/api/areas/${id}`, body).then
 
 export const deleteArea = (id) => axios.delete(`/api/areas/${id}`)
 
-export const getRangeTable = (id) =>
-  axios.get(`/api/areas/${id}/range-table`).then(r => r.data)
+// ── 점수 기준 Excel (range-table) ──────────────────────────────
+export const downloadRangeTableTemplate = (id) =>
+  axios.get(`/api/areas/${id}/range-table/template`, { responseType: 'blob' })
+export const exportRangeTable = (id) =>
+  axios.get(`/api/areas/${id}/range-table/export`, { responseType: 'blob' })
+export const importRangeTable = (id, file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post(`/api/areas/${id}/range-table/import`, fd).then(r => r.data)
+}
 
-export const putRangeTable = (id, rows) =>
-  axios.put(`/api/areas/${id}/range-table`, rows)
+// ── 점수 기준 Excel (category-map) ─────────────────────────────
+export const downloadCategoryMapTemplate = (id) =>
+  axios.get(`/api/areas/${id}/category-map/template`, { responseType: 'blob' })
+export const exportCategoryMap = (id) =>
+  axios.get(`/api/areas/${id}/category-map/export`, { responseType: 'blob' })
+export const importCategoryMap = (id, file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post(`/api/areas/${id}/category-map/import`, fd).then(r => r.data)
+}
 
-export const getCategoryMap = (id) =>
-  axios.get(`/api/areas/${id}/category-map`).then(r => r.data)
-
-export const putCategoryMap = (id, rows) =>
-  axios.put(`/api/areas/${id}/category-map`, rows)
+// ── 기초 데이터 Excel ──────────────────────────────────────────
+export const downloadBaseDataTemplate = (id) =>
+  axios.get(`/api/areas/${id}/base-data/template`, { responseType: 'blob' })
+export const exportBaseData = (id) =>
+  axios.get(`/api/areas/${id}/base-data/export`, { responseType: 'blob' })
+export const importBaseData = (id, file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post(`/api/areas/${id}/base-data/import`, fd).then(r => r.data)
+}
 
 // ── 학생 관리 ──────────────────────────────────────────────────
 export const getStudents = (params = {}) =>
