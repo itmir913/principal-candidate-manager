@@ -170,11 +170,11 @@ const categories = [
     key: 'enrolled',
     label: '재학생',
     dlTemplate: async () => {
-      try { saveBlob(await downloadEnrolledTemplate(), 'enrolled_template.xlsx') }
+      try { saveBlob(await downloadEnrolledTemplate(), 'students_enrolled_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     dlExport: async () => {
-      try { saveBlob(await exportEnrolled(), 'enrolled.xlsx') }
+      try { saveBlob(await exportEnrolled(), 'students_enrolled.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     onImport: (e) => runImport(importEnrolled, '재학생', e),
@@ -183,11 +183,11 @@ const categories = [
     key: 'graduated',
     label: '졸업생',
     dlTemplate: async () => {
-      try { saveBlob(await downloadGraduatedTemplate(), 'graduated_template.xlsx') }
+      try { saveBlob(await downloadGraduatedTemplate(), 'students_graduated_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     dlExport: async () => {
-      try { saveBlob(await exportGraduated(), 'graduated.xlsx') }
+      try { saveBlob(await exportGraduated(), 'students_graduated.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     onImport: (e) => runImport(importGraduated, '졸업생', e),
@@ -196,11 +196,11 @@ const categories = [
     key: 'all',
     label: '전체',
     dlTemplate: async () => {
-      try { saveBlob(await downloadStudentTemplate(), 'students_template.xlsx') }
+      try { saveBlob(await downloadStudentTemplate(), 'students_all_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     dlExport: async () => {
-      try { saveBlob(await exportStudents(), 'students.xlsx') }
+      try { saveBlob(await exportStudents(), 'students_all.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
     },
     onImport: (e) => runImport(importStudents, '전체', e),
