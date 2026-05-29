@@ -266,6 +266,7 @@ pub async fn numeric_table_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut seen: HashSet<(Option<i64>, i64)> = HashSet::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
@@ -283,6 +284,12 @@ pub async fn numeric_table_import(
             Some(v) => v,
             None => continue,
         };
+
+        if !seen.insert((univ_id, th)) {
+            errors.push(format!("{}행: 기준값 '{}' 중복 — 같은 기준값은 한 번만 등록할 수 있습니다",
+                row_num, excel::get_col(cols, &col, "기준값")));
+            continue;
+        }
 
         match sqlx::query(
             "INSERT INTO numeric_table (area_id, univ_id, threshold, score) VALUES (?, ?, ?, ?)",
@@ -403,6 +410,7 @@ pub async fn category_map_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut seen: HashSet<(Option<i64>, String)> = HashSet::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
@@ -421,6 +429,11 @@ pub async fn category_map_import(
             Some(v) => v,
             None => continue,
         };
+
+        if !seen.insert((univ_id, category.clone())) {
+            errors.push(format!("{}행: 범주 '{}' 중복 — 같은 범주는 한 번만 등록할 수 있습니다", row_num, category));
+            continue;
+        }
 
         match sqlx::query(
             "INSERT INTO category_map (area_id, univ_id, category, score) VALUES (?, ?, ?, ?)",
