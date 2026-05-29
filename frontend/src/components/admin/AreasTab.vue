@@ -35,7 +35,7 @@
         </div>
         <div>
           <label class="text-xs text-gray-500">만점 (반영 비율)</label>
-          <input v-model.number="newArea.max_score_display" type="number" step="0.0001"
+          <input v-model="newArea.max_score_display" type="number" step="0.00001"
             class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
         <div class="flex gap-2">
@@ -232,9 +232,19 @@ const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
 
 function defaultNewArea() {
-  return { name: '', max_score_display: 0, calc_type: 'NUMERIC',
+  return { name: '', max_score_display: '', calc_type: 'NUMERIC',
            lookup_scope: 'SIMPLE', teacher_editable: true,
            match_mode: '', category_agg: '' }
+}
+
+function parseDisplayScore(raw) {
+  const s = String(raw).trim()
+  if (!s) return null
+  const f = parseFloat(s)
+  if (isNaN(f) || f <= 0) return null
+  const dot = s.indexOf('.')
+  if (dot !== -1 && s.slice(dot + 1).replace(/0+$/, '').length > 5) return null
+  return Math.round(f * 100000)
 }
 
 const CALC_TYPE_LABELS = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
@@ -278,9 +288,14 @@ function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows() }
 function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows()  }
 
 async function addArea() {
+  const maxScore = parseDisplayScore(newArea.value.max_score_display)
+  if (maxScore === null) {
+    error.value = '만점: 양수이고 소수점 최대 5자리까지 입력하세요'
+    return
+  }
   const body = {
     name: newArea.value.name,
-    max_score: Math.round(newArea.value.max_score_display * 100000),
+    max_score: maxScore,
     calc_type: newArea.value.calc_type,
     lookup_scope: newArea.value.lookup_scope,
     teacher_editable: newArea.value.teacher_editable ? 1 : 0,
