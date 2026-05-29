@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-gray-50">
     <!-- 헤더 -->
     <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
-      <h1 class="text-xl font-bold text-gray-800">학교장추천전형 관리</h1>
+      <h1 class="text-xl font-bold text-gray-800">학교장 추천자 선발 관리 시스템</h1>
       <div class="flex items-center gap-2">
         <button
           class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
@@ -98,7 +98,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const tabs = [
-  { key: 'rounds',   label: '선발 관리' },
+  { key: 'rounds',   label: '라운드 관리' },
   { key: 'classes',  label: '학급 관리' },
   { key: 'students', label: '학생 관리' },
   { key: 'areas',    label: '전형요소 설정' },

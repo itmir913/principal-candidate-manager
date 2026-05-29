@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 관리 (명렬표)</h2>
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 명단 관리</h2>
 
     <!-- 분류별 가져오기/내보내기 -->
     <div class="mb-4 border border-gray-200 rounded divide-y divide-gray-200">
