@@ -10,6 +10,7 @@ use axum::{
     Router,
 };
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use state::AppState;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -24,6 +25,59 @@ mod frontend {
     pub struct Assets;
 }
 
+const DEFAULT_PORT: u16 = 8080;
+const CONFIG_FILENAME: &str = "config.json";
+
+#[derive(Serialize, Deserialize)]
+struct Config {
+    port: u16,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config { port: DEFAULT_PORT }
+    }
+}
+
+/// exe 위치 기준으로 config.json을 읽는다.
+/// 파일이 없으면 기본값으로 생성한다.
+/// 파싱에 실패하면 경고 로그 후 기본값을 반환한다.
+fn load_config() -> Config {
+    let config_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(CONFIG_FILENAME)))
+        .unwrap_or_else(|| std::path::PathBuf::from(CONFIG_FILENAME));
+
+    match std::fs::read_to_string(&config_path) {
+        Ok(contents) => match serde_json::from_str::<Config>(&contents) {
+            Ok(cfg) => {
+                tracing::info!("config loaded: port={}", cfg.port);
+                cfg
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "config.json 파싱 실패 ({}), 기본값 사용: port={}",
+                    e,
+                    DEFAULT_PORT
+                );
+                Config::default()
+            }
+        },
+        Err(_) => {
+            // 파일 없음 → 기본값으로 생성 시도
+            let default_cfg = Config::default();
+            if let Ok(json) = serde_json::to_string_pretty(&default_cfg) {
+                if let Err(e) = std::fs::write(&config_path, json) {
+                    tracing::warn!("config.json 생성 실패: {}", e);
+                } else {
+                    tracing::info!("config.json 생성됨: {:?}", config_path);
+                }
+            }
+            default_cfg
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -33,6 +87,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let config = load_config();
 
     let db = db::init_pool("data.db").await?;
     tracing::info!("database ready");
@@ -45,8 +101,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = build_router(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    tracing::info!("listening on http://0.0.0.0:8080");
+    let addr = format!("0.0.0.0:{}", config.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    tracing::info!("listening on http://{}", addr);
     axum::serve(listener, app).await?;
 
     Ok(())
