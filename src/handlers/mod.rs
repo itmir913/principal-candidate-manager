@@ -1,6 +1,9 @@
+pub mod applications;
 pub mod area_data;
 pub mod areas;
 pub mod auth;
 pub mod classes;
+pub mod rounds;
+pub mod scoring;
 pub mod students;
 pub mod universities;

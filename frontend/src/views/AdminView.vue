@@ -44,19 +44,22 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const tabs = [
+  { key: 'rounds',   label: '선발 관리' },
   { key: 'classes',  label: '학급 관리' },
   { key: 'students', label: '학생 관리' },
   { key: 'areas',    label: '영역 설정' },
   { key: 'univs',    label: '대학 설정' },
 ]
-const active = ref('classes')
+const active = ref('rounds')
 
+const RoundsTab   = defineAsyncComponent(() => import('../components/admin/RoundsTab.vue'))
 const ClassesTab  = defineAsyncComponent(() => import('../components/admin/ClassesTab.vue'))
 const StudentsTab = defineAsyncComponent(() => import('../components/admin/StudentsTab.vue'))
 const AreasTab    = defineAsyncComponent(() => import('../components/admin/AreasTab.vue'))
 const UnivTab     = defineAsyncComponent(() => import('../components/admin/UniversitiesTab.vue'))
 
 const currentTab = computed(() => {
+  if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'classes')  return ClassesTab
   if (active.value === 'students') return StudentsTab
   if (active.value === 'areas')    return AreasTab

@@ -69,3 +69,23 @@ export const updateUniversity = (id, body) =>
   axios.put(`/api/universities/${id}`, body).then(r => r.data)
 
 export const deleteUniversity = (id) => axios.delete(`/api/universities/${id}`)
+
+// ── 라운드 관리 ────────────────────────────────────────────────
+export const getRounds = () => axios.get('/api/rounds').then(r => r.data)
+export const openRound = () => axios.post('/api/rounds/open').then(r => r.data)
+export const closeRound = (id) => axios.put(`/api/rounds/${id}/close`)
+export const calculateScores = (roundId) =>
+  axios.post(`/api/rounds/${roundId}/calculate`).then(r => r.data)
+export const getResults = (roundId, univId) =>
+  axios.get(`/api/rounds/${roundId}/results`, { params: univId ? { univ_id: univId } : {} }).then(r => r.data)
+export const recommendResult = (sid, uid, rid) =>
+  axios.put(`/api/results/${sid}/${uid}/${rid}/recommend`)
+
+// ── 지원 관리 (admin) ──────────────────────────────────────────
+export const getApplications = (roundId, univId) =>
+  axios.get('/api/applications', { params: { round_id: roundId, univ_id: univId || undefined } }).then(r => r.data)
+export const abandonApplication = (sid, uid, rid) =>
+  axios.put(`/api/applications/${sid}/${uid}/${rid}/abandon`)
+
+// ── 현재 라운드 (공용) ─────────────────────────────────────────
+export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => r.data)

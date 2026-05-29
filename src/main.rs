@@ -155,15 +155,47 @@ fn build_router(state: AppState) -> Router {
         .route("/universities", post(handlers::universities::create_university))
         .route("/universities/:id", put(handlers::universities::update_university))
         .route("/universities/:id", delete(handlers::universities::delete_university))
+        // 5단계: 라운드 관리
+        .route("/rounds", get(handlers::rounds::list_rounds))
+        .route("/rounds/open", post(handlers::rounds::open_round))
+        .route("/rounds/:id/close", put(handlers::rounds::close_round))
+        .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
+        .route("/rounds/:id/results", get(handlers::scoring::get_results))
+        // 5단계: 지원·추천
+        .route("/applications", get(handlers::applications::admin_list_applications))
+        .route(
+            "/applications/:sid/:uid/:rid/abandon",
+            put(handlers::applications::abandon_application),
+        )
+        .route(
+            "/results/:sid/:uid/:rid/recommend",
+            put(handlers::scoring::recommend_result),
+        )
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::require_admin,
         ));
 
+    let teacher_routes = Router::new()
+        .route("/students", get(handlers::applications::teacher_list_students))
+        .route("/universities", get(handlers::universities::list_universities))
+        .route("/applications", get(handlers::applications::teacher_list_applications))
+        .route("/applications", post(handlers::applications::teacher_create_application))
+        .route(
+            "/applications/:sid/:uid/:rid",
+            delete(handlers::applications::teacher_delete_application),
+        )
+        .route_layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            middleware::require_teacher,
+        ));
+
     let api = Router::new()
         .route("/health", get(health))
+        .route("/rounds/current", get(handlers::rounds::get_current_round))
         .nest("/auth", auth_routes)
-        .merge(admin_routes);
+        .merge(admin_routes)
+        .nest("/teacher", teacher_routes);
 
     let app = Router::new()
         .nest("/api", api)
