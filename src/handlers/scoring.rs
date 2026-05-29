@@ -875,3 +875,181 @@ pub async fn recommend_result(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::{db::create_test_pool, state::AppState};
+    use axum::{extract::{Path, State}, http::StatusCode};
+
+    fn make_state(pool: sqlx::SqlitePool) -> AppState {
+        AppState { db: pool, jwt_secret: "test".into() }
+    }
+
+    /// 최소 픽스처: 학급·학생·대학·라운드 한 세트 반환
+    async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
+        let hash = bcrypt::hash("pass", 4u32).unwrap();
+        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+            .bind(&hash).execute(pool).await.unwrap();
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+        ).fetch_one(pool).await.unwrap();
+        let uid: i64 = sqlx::query_scalar(
+            "INSERT INTO universities (univ_name, track_name, capacity) \
+             VALUES ('서울대', '컴공', 5) RETURNING id",
+        ).fetch_one(pool).await.unwrap();
+        let rid: i64 = sqlx::query_scalar(
+            "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01T00:00:00Z') RETURNING id",
+        ).fetch_one(pool).await.unwrap();
+        (sid, uid, rid)
+    }
+
+    // ── calculate_scores ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn calculate_scores_nonexistent_round_returns_not_found() {
+        let pool = create_test_pool().await;
+        let res = calculate_scores(State(make_state(pool)), Path(9999i64)).await;
+        assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn calculate_scores_no_applications_returns_zero_count() {
+        let pool = create_test_pool().await;
+        let (_, _, rid) = setup_full(&pool).await;
+        let axum::Json(result) =
+            calculate_scores(State(make_state(pool)), Path(rid)).await.unwrap();
+        assert_eq!(result["calculated"], 0);
+    }
+
+    #[tokio::test]
+    async fn calculate_scores_creates_result_rows_and_ranking() {
+        let pool = create_test_pool().await;
+        let (sid, uid, rid) = setup_full(&pool).await;
+
+        // 지원 등록
+        sqlx::query(
+            "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+             VALUES (?, ?, ?, 1, 0)",
+        )
+        .bind(sid).bind(uid).bind(rid)
+        .execute(&pool).await.unwrap();
+
+        let axum::Json(result) =
+            calculate_scores(State(make_state(pool.clone())), Path(rid)).await.unwrap();
+        assert_eq!(result["calculated"], 1);
+
+        // results 행 확인
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM results WHERE round_id = ?")
+            .bind(rid).fetch_one(&pool).await.unwrap();
+        assert_eq!(count, 1);
+
+        // 순위 설정 확인
+        let ranking: Option<i64> =
+            sqlx::query_scalar("SELECT ranking FROM results WHERE round_id = ?")
+                .bind(rid).fetch_one(&pool).await.unwrap();
+        assert_eq!(ranking, Some(1));
+    }
+
+    #[tokio::test]
+    async fn calculate_scores_ranks_higher_score_first() {
+        let pool = create_test_pool().await;
+        let hash = bcrypt::hash("pass", 4u32).unwrap();
+        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+            .bind(&hash).execute(&pool).await.unwrap();
+
+        // 학생 2명
+        let sid1: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+        ).fetch_one(&pool).await.unwrap();
+        let sid2: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES ('S002', '이순신', 1, 1, 2, 1) RETURNING id",
+        ).fetch_one(&pool).await.unwrap();
+
+        let uid: i64 = sqlx::query_scalar(
+            "INSERT INTO universities (univ_name, track_name, capacity) \
+             VALUES ('서울대', '컴공', 5) RETURNING id",
+        ).fetch_one(&pool).await.unwrap();
+        let rid: i64 = sqlx::query_scalar(
+            "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01T00:00:00Z') RETURNING id",
+        ).fetch_one(&pool).await.unwrap();
+
+        // MANUAL 영역 생성
+        let aid: i64 = sqlx::query_scalar(
+            "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+             VALUES ('수동점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+        ).fetch_one(&pool).await.unwrap();
+
+        // sid1: 점수 높음 (800점), sid2: 낮음 (600점)
+        sqlx::query(
+            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '8000000')",
+        ).bind(sid1).bind(aid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO base_data (student_id, area_id, univ_id, value) VALUES (?, ?, NULL, '6000000')",
+        ).bind(sid2).bind(aid).execute(&pool).await.unwrap();
+
+        // 지원 2건
+        for sid in [sid1, sid2] {
+            sqlx::query(
+                "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+                 VALUES (?, ?, ?, 1, 0)",
+            ).bind(sid).bind(uid).bind(rid).execute(&pool).await.unwrap();
+        }
+
+        calculate_scores(State(make_state(pool.clone())), Path(rid)).await.unwrap();
+
+        let rank1: Option<i64> =
+            sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
+                .bind(sid1).bind(rid).fetch_one(&pool).await.unwrap();
+        let rank2: Option<i64> =
+            sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
+                .bind(sid2).bind(rid).fetch_one(&pool).await.unwrap();
+        assert_eq!(rank1, Some(1)); // 높은 점수 → 1위
+        assert_eq!(rank2, Some(2));
+    }
+
+    // ── recommend_result ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn recommend_on_open_round_returns_bad_request() {
+        let pool = create_test_pool().await;
+        let (sid, uid, rid) = setup_full(&pool).await;
+        // OPEN 라운드 → 추천 불가
+        let res = recommend_result(State(make_state(pool)), Path((sid, uid, rid))).await;
+        assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn recommend_on_closed_round_sets_flag() {
+        let pool = create_test_pool().await;
+        let (sid, uid, rid) = setup_full(&pool).await;
+
+        // 지원 + 점수계산 + 라운드 마감
+        sqlx::query(
+            "INSERT INTO applications (student_id, univ_id, round_id, confirmed, abandoned) \
+             VALUES (?, ?, ?, 1, 0)",
+        )
+        .bind(sid).bind(uid).bind(rid)
+        .execute(&pool).await.unwrap();
+
+        calculate_scores(State(make_state(pool.clone())), Path(rid)).await.unwrap();
+
+        sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+            .bind(rid).execute(&pool).await.unwrap();
+
+        recommend_result(State(make_state(pool.clone())), Path((sid, uid, rid)))
+            .await
+            .unwrap();
+
+        let recommended: i64 =
+            sqlx::query_scalar(
+                "SELECT recommended FROM results WHERE student_id = ? AND univ_id = ? AND round_id = ?",
+            )
+            .bind(sid).bind(uid).bind(rid)
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(recommended, 1);
+    }
+}
