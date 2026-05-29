@@ -171,7 +171,7 @@ pub async fn export_classes(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "classes.xlsx"))
+    Ok(excel::xlsx_response(buf, &format!("classes_{}.xlsx", excel::now_tag())))
 }
 
 pub async fn upsert_class(

@@ -19,6 +19,11 @@ pub fn is_xlsx(bytes: &[u8]) -> bool {
     bytes.starts_with(b"PK")
 }
 
+/// 현재 로컬 시각을 `YYYYMMDD_HHMMSS` 형식으로 반환
+pub fn now_tag() -> String {
+    chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
+}
+
 /// xlsx 다운로드 응답 생성
 pub fn xlsx_response(buf: Vec<u8>, filename: &str) -> Response {
     Response::builder()

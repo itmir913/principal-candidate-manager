@@ -97,7 +97,7 @@ pub async fn export_students(State(state): State<AppState>) -> Result<Response, 
 
     let buf = build_export_xlsx(&rows)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "students.xlsx"))
+    Ok(excel::xlsx_response(buf, &format!("students_{}.xlsx", excel::now_tag())))
 }
 
 /// POST /api/students/import

@@ -224,7 +224,7 @@ pub async fn range_table_export(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "range_table.xlsx"))
+    Ok(excel::xlsx_response(buf, &format!("range_table_{}.xlsx", excel::now_tag())))
 }
 
 /// POST /api/areas/:id/range-table/import
@@ -355,7 +355,7 @@ pub async fn category_map_export(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "category_map.xlsx"))
+    Ok(excel::xlsx_response(buf, &format!("category_map_{}.xlsx", excel::now_tag())))
 }
 
 /// POST /api/areas/:id/category-map/import
@@ -492,7 +492,7 @@ pub async fn base_data_export(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(excel::xlsx_response(buf, "base_data.xlsx"))
+    Ok(excel::xlsx_response(buf, &format!("base_data_{}.xlsx", excel::now_tag())))
 }
 
 /// POST /api/areas/:id/base-data/import
