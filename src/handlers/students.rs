@@ -570,7 +570,7 @@ fn build_enrolled_template_xlsx() -> anyhow::Result<Vec<u8>> {
         ws.write_string(0, i as u16, *h)?;
     }
     // 샘플 행: grade, class_no, seq_no, name
-    ws.write_number(1, 0, 1.0)?;
+    ws.write_number(1, 0, 3.0)?;
     ws.write_number(1, 1, 1.0)?;
     ws.write_number(1, 2, 1.0)?;
     ws.write_string(1, 3, "홍길동")?;

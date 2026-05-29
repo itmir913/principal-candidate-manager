@@ -48,7 +48,7 @@ pub async fn classes_template() -> Result<Response, ApiError> {
     for (i, h) in ["학년", "반", "담임명", "비밀번호"].iter().enumerate() {
         ws.write_string(0, i as u16, *h).ok();
     }
-    ws.write_number(1, 0, 1.0).ok();
+    ws.write_number(1, 0, 3.0).ok();
     ws.write_number(1, 1, 1.0).ok();
     ws.write_string(1, 2, "홍길동").ok();
     ws.write_string(1, 3, "pass1234").ok();
