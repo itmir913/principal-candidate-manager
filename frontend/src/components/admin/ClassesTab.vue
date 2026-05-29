@@ -32,7 +32,7 @@
     <div v-if="importResult" class="mb-4 p-3 rounded border text-sm"
       :class="importResult.errors.length ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'">
       <p class="font-medium mb-1">
-        업로드 완료 — 신규 {{ importResult.inserted }}건, 수정 {{ importResult.updated }}건
+        {{ importResult.errors.length ? '오류 발생 — 가져오기 실패' : `완료 — 신규 ${importResult.inserted}건, 수정 ${importResult.updated}건` }}
       </p>
       <ul v-if="importResult.errors.length" class="list-disc list-inside text-yellow-700 space-y-0.5">
         <li v-for="(e, i) in importResult.errors" :key="i">{{ e }}</li>
@@ -260,7 +260,12 @@ async function onFileChange(evt) {
     importResult.value = await importClasses(file)
     await load()
   } catch (e) {
-    error.value = e.response?.data ?? e.message
+    const d = e.response?.data
+    if (d != null && typeof d === 'object' && Array.isArray(d.errors)) {
+      importResult.value = d
+    } else {
+      error.value = typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
+    }
   } finally {
     uploading.value = false
     evt.target.value = ''

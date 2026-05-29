@@ -461,7 +461,14 @@ const ExcelPanel = defineComponent({
           result = await importBaseData(props.areaId, file)
         }
         emit('result', result)
-      } catch (e) { err.value = e.response?.data ?? e.message }
+      } catch (e) {
+        const d = e.response?.data
+        if (d != null && typeof d === 'object' && Array.isArray(d.errors)) {
+          emit('result', d)
+        } else {
+          err.value = typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
+        }
+      }
       finally { uploading.value = false; evt.target.value = '' }
     }
 
@@ -499,7 +506,9 @@ const ImportResultBox = defineComponent({
         class: `p-3 rounded border text-sm ${hasErrors ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'}`,
       }, [
         h('p', { class: 'font-medium mb-1' },
-          `업로드 완료 — ${r.rows ?? (r.inserted != null ? `신규 ${r.inserted}명, 수정 ${r.updated}명` : '')} 처리됨`),
+          hasErrors
+            ? '오류 발생 — 가져오기 실패'
+            : `완료 — ${r.rows != null ? `${r.rows}건` : r.inserted != null ? `신규 ${r.inserted}명, 수정 ${r.updated}명` : ''} 처리됨`),
         hasWarnings
           ? h('ul', { class: 'list-disc list-inside text-blue-700 text-xs mb-1' },
               r.warnings.map((w, i) => h('li', { key: i }, w)))

@@ -25,7 +25,7 @@
     <div v-if="result" class="mb-4 p-3 rounded border text-sm"
       :class="result.errors.length ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'">
       <p class="font-medium mb-1">
-        [{{ result.label }}] 완료 — 신규 {{ result.inserted }}명, 수정 {{ result.updated }}명
+        [{{ result.label }}] {{ result.errors.length ? '오류 발생 — 가져오기 실패' : `완료 — 신규 ${result.inserted}명, 수정 ${result.updated}명` }}
       </p>
       <ul v-if="result.errors.length" class="list-disc list-inside text-yellow-700 space-y-0.5">
         <li v-for="(e, i) in result.errors" :key="i">{{ e }}</li>
@@ -190,7 +190,12 @@ async function runImport(apiFn, label, evt) {
     result.value = { label, ...data }
     await Promise.all([loadStudents(), loadGradeOptions()])
   } catch (e) {
-    error.value = e.response?.data ?? e.message
+    const d = e.response?.data
+    if (d != null && typeof d === 'object' && Array.isArray(d.errors)) {
+      result.value = { label, ...d }
+    } else {
+      error.value = typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
+    }
   }
   evt.target.value = ''
 }
