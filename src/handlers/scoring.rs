@@ -92,7 +92,7 @@ pub async fn calc_area_score(
         None
     };
 
-    match area.calc_type.as_str() {
+    let raw: i64 = match area.calc_type.as_str() {
         "RANGE" => {
             let value_str: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
@@ -118,7 +118,7 @@ pub async fn calc_area_score(
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
             .collect();
 
-            Ok(lookup_range_score(value, &rows, direction))
+            lookup_range_score(value, &rows, direction)
         }
 
         "CATEGORY" => {
@@ -143,10 +143,10 @@ pub async fn calc_area_score(
             }
 
             if scores.is_empty() { return Ok(0); }
-            Ok(match area.category_agg.as_deref().unwrap_or("SUM") {
+            match area.category_agg.as_deref().unwrap_or("SUM") {
                 "MAX" => *scores.iter().max().unwrap_or(&0),
-                _ => scores.iter().sum::<i64>().min(area.max_score),
-            })
+                _ => scores.iter().sum::<i64>(),
+            }
         }
 
         "MANUAL" => {
@@ -159,11 +159,13 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_univ).bind(lookup_univ)
             .fetch_optional(db).await?;
 
-            Ok(v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0))
+            v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
         }
 
-        _ => Ok(0),
-    }
+        _ => return Ok(0),
+    };
+
+    Ok(raw.min(area.max_score))
 }
 
 // ── Handlers ──────────────────────────────────────────────────────
