@@ -97,29 +97,57 @@
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학년/반</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium">포기처리</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium">미리보기</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="app in group" :key="app.student_id" class="border-t">
-                  <td class="px-3 py-2">{{ app.name }}</td>
-                  <td class="px-3 py-2 text-gray-500">
-                    <span v-if="app.grade">{{ app.grade }}학년 {{ app.class_no }}반</span>
-                    <span v-else class="text-gray-300">졸업</span>
-                  </td>
-                  <td class="px-3 py-2">
-                    <span :class="app.is_enrolled ? 'text-green-600' : 'text-gray-400'">
-                      {{ app.is_enrolled ? '재학' : '졸업' }}
-                    </span>
-                  </td>
-                  <td class="px-3 py-2 text-center">
-                    <span v-if="app.abandoned" class="text-xs text-red-500">포기</span>
-                    <button
-                      v-else-if="selected.status === 'CLOSED'"
-                      class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
-                      @click="handleAbandon(app)"
-                    >포기</button>
-                  </td>
-                </tr>
+                <template v-for="app in group" :key="app.student_id">
+                  <tr class="border-t">
+                    <td class="px-3 py-2">{{ app.name }}</td>
+                    <td class="px-3 py-2 text-gray-500">
+                      <span v-if="app.grade">{{ app.grade }}학년 {{ app.class_no }}반</span>
+                      <span v-else class="text-gray-300">졸업</span>
+                    </td>
+                    <td class="px-3 py-2">
+                      <span :class="app.is_enrolled ? 'text-green-600' : 'text-gray-400'">
+                        {{ app.is_enrolled ? '재학' : '졸업' }}
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <span v-if="app.abandoned" class="text-xs text-red-500">포기</span>
+                      <button
+                        v-else-if="selected.status === 'CLOSED'"
+                        class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
+                        @click="handleAbandon(app)"
+                      >포기</button>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <button
+                        class="text-xs px-2 py-0.5 border rounded text-gray-500 hover:bg-gray-50"
+                        :disabled="previews[previewKey(app)]?.loading"
+                        @click="togglePreview(app)"
+                      >{{ previews[previewKey(app)]?.open ? '접기' : '미리보기' }}</button>
+                    </td>
+                  </tr>
+                  <tr v-if="previews[previewKey(app)]?.open" class="border-t bg-indigo-50">
+                    <td colspan="5" class="px-5 py-3">
+                      <div v-if="previews[previewKey(app)]?.loading" class="text-xs text-gray-400">계산 중...</div>
+                      <div v-else-if="previews[previewKey(app)]?.data">
+                        <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                          <div v-for="item in previews[previewKey(app)].data.detail" :key="item.area_id"
+                               class="flex items-center gap-1.5">
+                            <span class="text-gray-500">{{ item.area_name }}</span>
+                            <span class="font-semibold text-gray-800">{{ (item.score / 10000).toFixed(2) }}</span>
+                          </div>
+                        </div>
+                        <div class="mt-1.5 text-xs font-bold text-indigo-700">
+                          예상 총점: {{ (previews[previewKey(app)].data.total / 10000).toFixed(2) }}
+                        </div>
+                      </div>
+                      <div v-else class="text-xs text-red-400">불러오기 실패</div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -229,6 +257,7 @@ import {
   getApplications, abandonApplication,
   getUniversities, getAreas,
   exportResultsExcel,
+  scorePreview,
 } from '../../api/admin.js'
 
 const rounds  = ref([])
@@ -245,6 +274,30 @@ const calcLoading = ref(false)
 const calcMsg     = ref(null)
 
 const selectedUnivId = ref('')
+
+const previews = ref({})
+
+function previewKey(app) {
+  return `${app.student_id}-${app.univ_id}`
+}
+
+async function togglePreview(app) {
+  const key = previewKey(app)
+  const existing = previews.value[key]
+
+  if (existing?.open) {
+    previews.value = { ...previews.value, [key]: { ...existing, open: false } }
+    return
+  }
+
+  previews.value = { ...previews.value, [key]: { open: true, loading: true, data: null } }
+  try {
+    const data = await scorePreview(app.student_id, app.univ_id)
+    previews.value = { ...previews.value, [key]: { open: true, loading: false, data } }
+  } catch {
+    previews.value = { ...previews.value, [key]: { open: true, loading: false, data: null } }
+  }
+}
 
 const subTabs = [
   { key: 'apps',    label: '지원 현황' },
@@ -304,6 +357,7 @@ async function loadRounds() {
 async function selectRound(r) {
   selected.value = r
   calcMsg.value = null
+  previews.value = {}
   await Promise.all([loadApps(), loadResults(), loadAreas()])
 }
 

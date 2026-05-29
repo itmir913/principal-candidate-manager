@@ -17,3 +17,6 @@ export const teacherDeleteApplication = (sid, uid, rid) =>
 
 export const teacherChangePassword = (newPassword) =>
   axios.put('/api/teacher/password', { new_password: newPassword })
+
+export const teacherGetResults = (roundId) =>
+  axios.get('/api/teacher/results', { params: roundId != null ? { round_id: roundId } : {} }).then(r => r.data)

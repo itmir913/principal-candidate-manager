@@ -2,14 +2,14 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
-    Json,
+    Extension, Json,
 };
 use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 
-use crate::{excel, state::AppState};
+use crate::{auth::TeacherClaims, excel, state::AppState};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
@@ -445,6 +445,127 @@ pub async fn export_results(
     let filename = format!("results_round_{}.xlsx", round_id);
     Ok(excel::xlsx_response(buf, &filename))
 }
+
+// ── Teacher results ───────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct TeacherResultQuery {
+    pub round_id: Option<i64>,
+}
+
+pub async fn teacher_get_results(
+    State(state): State<AppState>,
+    Extension(claims): Extension<TeacherClaims>,
+    Query(q): Query<TeacherResultQuery>,
+) -> Result<Json<Vec<ResultRow>>, ApiError> {
+    let round_id = match q.round_id {
+        Some(rid) => rid,
+        None => {
+            let rid: Option<i64> = sqlx::query_scalar(
+                "SELECT id FROM rounds ORDER BY id DESC LIMIT 1",
+            )
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            match rid {
+                Some(id) => id,
+                None => return Ok(Json(vec![])),
+            }
+        }
+    };
+
+    let rows = sqlx::query_as::<_, ResultRow>(
+        "SELECT r.student_id, r.univ_id, r.round_id,
+                r.total_score, r.score_detail, r.ranking, r.recommended,
+                COALESCE(a.abandoned, 0) AS abandoned,
+                s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                u.univ_name, u.track_name
+         FROM results r
+         JOIN students s ON r.student_id = s.id
+         JOIN universities u ON r.univ_id = u.id
+         LEFT JOIN applications a ON a.student_id = r.student_id
+                                  AND a.univ_id   = r.univ_id
+                                  AND a.round_id  = r.round_id
+         WHERE r.round_id = ?
+           AND s.grade = ?
+           AND s.class_no = ?
+         ORDER BY s.seq_no, r.univ_id",
+    )
+    .bind(round_id)
+    .bind(claims.grade)
+    .bind(claims.class_no)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(rows))
+}
+
+// ── Score preview ─────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct ScorePreviewQuery {
+    pub student_id: i64,
+    pub univ_id: i64,
+}
+
+#[derive(Serialize)]
+pub struct AreaPreview {
+    pub area_id: i64,
+    pub area_name: String,
+    pub score: i64,
+}
+
+#[derive(Serialize)]
+pub struct ScorePreviewResponse {
+    pub total: i64,
+    pub detail: Vec<AreaPreview>,
+}
+
+#[derive(FromRow)]
+struct AreaWithName {
+    id: i64,
+    name: String,
+    calc_type: String,
+    range_direction: Option<String>,
+    category_agg: Option<String>,
+    lookup_scope: String,
+}
+
+pub async fn score_preview(
+    State(state): State<AppState>,
+    Query(q): Query<ScorePreviewQuery>,
+) -> Result<Json<ScorePreviewResponse>, ApiError> {
+    let area_rows: Vec<AreaWithName> = sqlx::query_as::<_, AreaWithName>(
+        "SELECT id, name, calc_type, range_direction, category_agg, lookup_scope
+         FROM areas ORDER BY id",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut detail: Vec<AreaPreview> = Vec::new();
+    let mut total: i64 = 0;
+
+    for aw in &area_rows {
+        let area = AreaRow {
+            id: aw.id,
+            calc_type: aw.calc_type.clone(),
+            range_direction: aw.range_direction.clone(),
+            category_agg: aw.category_agg.clone(),
+            lookup_scope: aw.lookup_scope.clone(),
+        };
+        let score = calc_area_score(&state.db, q.student_id, &area, q.univ_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        total += score;
+        detail.push(AreaPreview { area_id: aw.id, area_name: aw.name.clone(), score });
+    }
+
+    Ok(Json(ScorePreviewResponse { total, detail }))
+}
+
+// ─────────────────────────────────────────────────────────────────
 
 pub async fn recommend_result(
     State(state): State<AppState>,

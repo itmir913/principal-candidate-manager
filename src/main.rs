@@ -162,6 +162,8 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
+        // 7단계: 점수 미리보기
+        .route("/score-preview", get(handlers::scoring::score_preview))
         // 5단계: 지원·추천
         .route("/applications", get(handlers::applications::admin_list_applications))
         .route(
@@ -187,6 +189,8 @@ fn build_router(state: AppState) -> Router {
             delete(handlers::applications::teacher_delete_application),
         )
         .route("/password", put(handlers::applications::teacher_change_password))
+        // 7단계: 담임 결과 조회
+        .route("/results", get(handlers::scoring::teacher_get_results))
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::require_teacher,
