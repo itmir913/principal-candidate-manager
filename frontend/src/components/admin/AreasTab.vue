@@ -34,7 +34,7 @@
           <input v-model="newArea.name" type="text" class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
         <div>
-          <label class="text-xs text-gray-500">최고 점수(비율)</label>
+          <label class="text-xs text-gray-500">만점 (반영 비율)</label>
           <input v-model.number="newArea.max_score_display" type="number" step="0.0001"
             class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
@@ -57,23 +57,23 @@
         </div>
         <div class="flex items-center gap-2">
           <input v-model="newArea.teacher_editable" type="checkbox" id="te" />
-          <label for="te" class="text-xs text-gray-500">담임교사 수동 입력</label>
+          <label for="te" class="text-xs text-gray-500">담임교사 입력 허용</label>
         </div>
         <div v-if="newArea.calc_type === 'NUMERIC'">
           <label class="text-xs text-gray-500">구간 탐색 방향 <span class="text-red-500">*</span></label>
           <select v-model="newArea.match_mode" class="w-full border rounded px-2 py-1 mt-0.5">
             <option value="">선택하세요</option>
-            <option value="UPPER">이상 ▲ (값이 클수록 유리)</option>
-            <option value="LOWER">이하 ▼ (값이 작을수록 유리)</option>
-            <option value="EXACT">정확 일치</option>
+            <option value="UPPER">해당 기준값 이상 ▲</option>
+            <option value="LOWER">해당 기준값 이하 ▼</option>
+            <option value="EXACT">정확히 일치</option>
           </select>
         </div>
         <div v-if="newArea.calc_type === 'CATEGORY'">
           <label class="text-xs text-gray-500">복수 활동 처리 방식 <span class="text-red-500">*</span></label>
           <select v-model="newArea.category_agg" class="w-full border rounded px-2 py-1 mt-0.5">
             <option value="">선택하세요</option>
-            <option value="SUM">전체 합산 (만점 상한 적용)</option>
-            <option value="MAX">최고 경력만 인정</option>
+            <option value="SUM">중복 선택 가능 (점수 합산)</option>
+            <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
           </select>
         </div>
         <div class="flex gap-1">

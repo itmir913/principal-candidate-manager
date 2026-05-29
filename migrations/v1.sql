@@ -76,7 +76,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
 -- match_mode (NUMERIC 전용):
 --   UPPER = threshold가 하한선 (값이 클수록 유리, 봉사시간 등)
 --   LOWER = threshold가 상한선 (값이 작을수록 유리, 결석일수 등)
---   EXACT = 정확 일치
+--   EXACT = 정확한 일치
 -- ================================================================
 CREATE TABLE IF NOT EXISTS areas (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
