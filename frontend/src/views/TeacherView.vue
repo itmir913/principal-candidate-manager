@@ -42,7 +42,7 @@
           <template v-if="currentRound">
             <span class="font-semibold">{{ currentRound.id }}차 라운드 진행 중</span>
             <span class="ml-2 text-green-600">— 지원 접수 기간입니다</span>
-            <span class="ml-2 text-green-500 text-xs">(개시일: {{ currentRound.opened_at?.slice(0, 10) }})</span>
+            <span class="ml-2 text-green-500 text-xs">(개시일: {{ fmtLocalDate(currentRound.opened_at) }})</span>
           </template>
           <template v-else>
             현재 지원 접수 기간이 아닙니다. 관리자에게 문의하세요.
@@ -280,6 +280,13 @@ const resultsByStudent = computed(() => {
   }
   return [...map.values()].sort((a, b) => (a.seq_no ?? 999) - (b.seq_no ?? 999))
 })
+
+function fmtLocalDate(s) {
+  if (!s) return ''
+  const d = new Date(s)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+}
 
 function getStudentApps(studentId) {
   return applications.value.filter(a => a.student_id === studentId)

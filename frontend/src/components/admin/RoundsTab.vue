@@ -265,7 +265,9 @@ import {
 
 function fmtDt(s) {
   if (!s) return ''
-  return s.slice(0, 19).replace('T', ' ')
+  const d = new Date(s)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 const rounds  = ref([])
