@@ -271,7 +271,7 @@ async fn do_import(
 
         if db_name.trim() != name.trim() {
             warnings.push(format!(
-                "{}행: {}학년 {}반 {}번 이름 불일치 (파일: '{}', DB: '{}')",
+                "{}행: {}학년 {}반 {}번 이름 불일치 — 가져오기 완료됨 (파일: '{}', DB: '{}')",
                 row_num, grade, class_no, seq_no, name, db_name
             ));
         }
