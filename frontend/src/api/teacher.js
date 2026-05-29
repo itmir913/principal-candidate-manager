@@ -14,3 +14,6 @@ export const teacherCreateApplication = (body) =>
 
 export const teacherDeleteApplication = (sid, uid, rid) =>
   axios.delete(`/api/teacher/applications/${sid}/${uid}/${rid}`)
+
+export const teacherChangePassword = (newPassword) =>
+  axios.put('/api/teacher/password', { new_password: newPassword })

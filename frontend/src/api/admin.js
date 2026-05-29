@@ -89,3 +89,11 @@ export const abandonApplication = (sid, uid, rid) =>
 
 // ── 현재 라운드 (공용) ─────────────────────────────────────────
 export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => r.data)
+
+// ── 결과 Excel 내보내기 ────────────────────────────────────────
+export const exportResultsExcel = (roundId) =>
+  axios.get(`/api/rounds/${roundId}/results/export`, { responseType: 'blob' })
+
+// ── 관리자 비밀번호 변경 ───────────────────────────────────────
+export const changeAdminPassword = (newPassword) =>
+  axios.put('/api/auth/admin/password', { new_password: newPassword })

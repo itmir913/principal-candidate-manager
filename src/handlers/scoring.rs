@@ -1,13 +1,15 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
     Json,
 };
+use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 
-use crate::state::AppState;
+use crate::{excel, state::AppState};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
@@ -310,6 +312,138 @@ pub async fn get_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
+}
+
+// ── Results Excel export ──────────────────────────────────────────
+
+#[derive(FromRow)]
+struct AreaName {
+    id: i64,
+    name: String,
+}
+
+#[derive(FromRow)]
+struct UnivRef {
+    id: i64,
+    univ_name: String,
+    track_name: String,
+}
+
+pub async fn export_results(
+    State(state): State<AppState>,
+    Path(round_id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let areas: Vec<AreaName> = sqlx::query_as::<_, AreaName>(
+        "SELECT id, name FROM areas ORDER BY id",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let univs: Vec<UnivRef> = sqlx::query_as::<_, UnivRef>(
+        "SELECT DISTINCT u.id, u.univ_name, u.track_name
+         FROM results r
+         JOIN universities u ON r.univ_id = u.id
+         WHERE r.round_id = ?
+         ORDER BY u.univ_name, u.track_name",
+    )
+    .bind(round_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let all_results = sqlx::query_as::<_, ResultRow>(
+        "SELECT r.student_id, r.univ_id, r.round_id,
+                r.total_score, r.score_detail, r.ranking, r.recommended,
+                COALESCE(a.abandoned, 0) AS abandoned,
+                s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                u.univ_name, u.track_name
+         FROM results r
+         JOIN students s ON r.student_id = s.id
+         JOIN universities u ON r.univ_id = u.id
+         LEFT JOIN applications a ON a.student_id = r.student_id
+                                  AND a.univ_id   = r.univ_id
+                                  AND a.round_id  = r.round_id
+         WHERE r.round_id = ?
+         ORDER BY r.univ_id, r.ranking NULLS LAST, r.total_score DESC",
+    )
+    .bind(round_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut wb = Workbook::new();
+
+    for univ in &univs {
+        let sheet_name: String = format!("{} {}", univ.univ_name, univ.track_name)
+            .chars()
+            .take(31)
+            .collect();
+        let ws = wb
+            .add_worksheet()
+            .set_name(&sheet_name)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // 헤더 행
+        let fixed_headers = ["순위", "학생명", "학번", "학년", "반", "번호", "재학구분"];
+        let mut col = 0u16;
+        for h in &fixed_headers {
+            ws.write_string(0, col, *h).ok();
+            col += 1;
+        }
+        for area in &areas {
+            ws.write_string(0, col, &area.name).ok();
+            col += 1;
+        }
+        ws.write_string(0, col, "총점").ok(); col += 1;
+        ws.write_string(0, col, "추천").ok(); col += 1;
+        ws.write_string(0, col, "포기").ok();
+
+        // 데이터 행
+        let univ_results: Vec<&ResultRow> =
+            all_results.iter().filter(|r| r.univ_id == univ.id).collect();
+
+        for (i, r) in univ_results.iter().enumerate() {
+            let row = (i + 1) as u32;
+            let mut col = 0u16;
+
+            if let Some(rank) = r.ranking {
+                ws.write_number(row, col, rank as f64).ok();
+            }
+            col += 1;
+
+            ws.write_string(row, col, &r.name).ok(); col += 1;
+            ws.write_string(row, col, &r.student_code).ok(); col += 1;
+
+            if let Some(g) = r.grade { ws.write_number(row, col, g as f64).ok(); }
+            col += 1;
+            if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).ok(); }
+            col += 1;
+            if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).ok(); }
+            col += 1;
+
+            ws.write_string(row, col, if r.is_enrolled == 1 { "재학" } else { "졸업" }).ok();
+            col += 1;
+
+            let detail: HashMap<String, i64> =
+                serde_json::from_str(&r.score_detail).unwrap_or_default();
+            for area in &areas {
+                let sc = detail.get(&area.id.to_string()).copied().unwrap_or(0);
+                ws.write_number(row, col, sc as f64 / 10000.0).ok();
+                col += 1;
+            }
+
+            ws.write_number(row, col, r.total_score as f64 / 10000.0).ok(); col += 1;
+            ws.write_string(row, col, if r.recommended == 1 { "추천" } else { "" }).ok(); col += 1;
+            ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).ok();
+        }
+    }
+
+    let buf = wb
+        .save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let filename = format!("results_round_{}.xlsx", round_id);
+    Ok(excel::xlsx_response(buf, &filename))
 }
 
 pub async fn recommend_result(

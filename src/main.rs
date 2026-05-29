@@ -161,6 +161,7 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/close", put(handlers::rounds::close_round))
         .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
+        .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
         // 5단계: 지원·추천
         .route("/applications", get(handlers::applications::admin_list_applications))
         .route(
@@ -185,6 +186,7 @@ fn build_router(state: AppState) -> Router {
             "/applications/:sid/:uid/:rid",
             delete(handlers::applications::teacher_delete_application),
         )
+        .route("/password", put(handlers::applications::teacher_change_password))
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::require_teacher,

@@ -8,6 +8,33 @@ use sqlx::FromRow;
 
 use crate::{auth::TeacherClaims, state::AppState};
 
+// ── 비밀번호 변경 ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct ChangePasswordBody {
+    pub new_password: String,
+}
+
+pub async fn teacher_change_password(
+    State(state): State<AppState>,
+    Extension(claims): Extension<TeacherClaims>,
+    Json(body): Json<ChangePasswordBody>,
+) -> Result<StatusCode, ApiError> {
+    if body.new_password.len() < 4 {
+        return Err((StatusCode::BAD_REQUEST, "비밀번호는 4자 이상이어야 합니다".into()));
+    }
+    let hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("UPDATE classes SET password_hash = ? WHERE grade = ? AND class_no = ?")
+        .bind(&hash)
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 type ApiError = (StatusCode, String);
 
 #[derive(Serialize, FromRow)]

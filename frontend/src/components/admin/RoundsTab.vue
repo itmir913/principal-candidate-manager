@@ -127,7 +127,7 @@
 
         <!-- 결과 탭 -->
         <div v-if="view === 'results'">
-          <div class="flex items-center gap-3 mb-4">
+          <div class="flex items-center gap-3 mb-4 flex-wrap">
             <select
               v-model="selectedUnivId"
               class="border rounded px-2 py-1 text-sm"
@@ -142,6 +142,11 @@
               class="px-3 py-1.5 text-sm border rounded text-gray-600 hover:bg-gray-50"
               @click="loadResults"
             >새로고침</button>
+            <button
+              class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
+              :disabled="results.length === 0"
+              @click="downloadExcel"
+            >Excel 내보내기</button>
           </div>
 
           <div v-if="results.length === 0" class="text-sm text-gray-400 py-6 text-center">
@@ -222,9 +227,9 @@ import {
   getRounds, openRound, closeRound,
   calculateScores, getResults, recommendResult,
   getApplications, abandonApplication,
-  getUniversities,
+  getUniversities, getAreas,
+  exportResultsExcel,
 } from '../../api/admin.js'
-import { getAreas } from '../../api/admin.js'
 
 const rounds  = ref([])
 const selected = ref(null)
@@ -365,6 +370,21 @@ async function handleAbandon(app) {
   try {
     await abandonApplication(app.student_id, app.univ_id, app.round_id)
     await loadApps()
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  }
+}
+
+async function downloadExcel() {
+  if (!selected.value) return
+  try {
+    const res = await exportResultsExcel(selected.value.id)
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `results_round_${selected.value.id}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
   } catch (e) {
     alert(e.response?.data || e.message)
   }
