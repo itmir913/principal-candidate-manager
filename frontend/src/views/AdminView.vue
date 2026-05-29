@@ -41,14 +41,37 @@
     <div v-if="showPwModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg shadow-xl p-6 w-80">
         <h2 class="text-base font-semibold text-gray-800 mb-4">관리자 비밀번호 변경</h2>
-        <input
-          v-model="newPw"
-          type="password"
-          placeholder="새 비밀번호"
-          class="w-full border rounded px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          @keyup.enter="changePw"
-        />
-        <p v-if="pwError" class="text-xs text-red-500 mb-2">{{ pwError }}</p>
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">현재 비밀번호</label>
+            <input
+              v-model="currentPw"
+              type="password"
+              autocomplete="current-password"
+              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호</label>
+            <input
+              v-model="newPw"
+              type="password"
+              autocomplete="new-password"
+              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호 재입력</label>
+            <input
+              v-model="confirmPw"
+              type="password"
+              autocomplete="new-password"
+              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              @keyup.enter="changePw"
+            />
+          </div>
+        </div>
+        <p v-if="pwError" class="text-xs text-red-500 mb-3">{{ pwError }}</p>
         <div class="flex gap-2 justify-end">
           <button
             class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
@@ -56,7 +79,7 @@
           >취소</button>
           <button
             class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
-            :disabled="!newPw || pwLoading"
+            :disabled="!currentPw || !newPw || !confirmPw || pwLoading"
             @click="changePw"
           >{{ pwLoading ? '변경 중...' : '변경' }}</button>
         </div>
@@ -98,22 +121,30 @@ const currentTab = computed(() => {
 })
 
 const showPwModal = ref(false)
+const currentPw = ref('')
 const newPw = ref('')
+const confirmPw = ref('')
 const pwError = ref('')
 const pwLoading = ref(false)
 
 function closePwModal() {
   showPwModal.value = false
+  currentPw.value = ''
   newPw.value = ''
+  confirmPw.value = ''
   pwError.value = ''
 }
 
 async function changePw() {
-  if (!newPw.value) return
+  if (!currentPw.value || !newPw.value || !confirmPw.value) return
+  if (newPw.value !== confirmPw.value) {
+    pwError.value = '새 비밀번호가 일치하지 않습니다.'
+    return
+  }
   pwLoading.value = true
   pwError.value = ''
   try {
-    await changeAdminPassword(newPw.value)
+    await changeAdminPassword(currentPw.value, newPw.value)
     closePwModal()
     alert('비밀번호가 변경되었습니다.')
   } catch (e) {

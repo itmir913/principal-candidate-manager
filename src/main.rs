@@ -125,6 +125,7 @@ fn build_router(state: AppState) -> Router {
         .merge(protected_auth);
 
     let admin_routes = Router::new()
+        // classes GET은 로그인 폼(반 목록 조회)에서도 필요하므로 공개 라우트에 별도 등록
         .route("/students", get(handlers::students::list_students))
         .route("/students/grade-options", get(handlers::students::grade_options))
         .route("/students/template", get(handlers::students::download_template))
@@ -137,7 +138,6 @@ fn build_router(state: AppState) -> Router {
         .route("/students/graduated/export", get(handlers::students::export_graduated))
         .route("/students/graduated/import", post(handlers::students::import_graduated))
         .route("/students/:id", delete(handlers::students::delete_student))
-        .route("/classes", get(handlers::classes::list_classes))
         .route("/classes/template", get(handlers::classes::classes_template))
         .route("/classes/export", get(handlers::classes::export_classes))
         .route("/classes/import", post(handlers::classes::import_classes))
@@ -211,6 +211,8 @@ fn build_router(state: AppState) -> Router {
     let api = Router::new()
         .route("/health", get(health))
         .route("/rounds/current", get(handlers::rounds::get_current_round))
+        // 로그인 폼에서 반 목록 조회 (인증 불필요)
+        .route("/classes", get(handlers::classes::list_classes))
         .nest("/auth", auth_routes)
         .merge(admin_routes)
         .nest("/teacher", teacher_routes);

@@ -129,8 +129,8 @@ export const exportResultsExcel = (roundId) =>
   axios.get(`/api/rounds/${roundId}/results/export`, { responseType: 'blob' })
 
 // ── 관리자 비밀번호 변경 ───────────────────────────────────────
-export const changeAdminPassword = (newPassword) =>
-  axios.put('/api/auth/admin/password', { new_password: newPassword })
+export const changeAdminPassword = (currentPassword, newPassword) =>
+  axios.put('/api/auth/admin/password', { current_password: currentPassword, new_password: newPassword })
 
 // ── 점수 미리보기 ──────────────────────────────────────────────
 export const scorePreview = (studentId, univId) =>
