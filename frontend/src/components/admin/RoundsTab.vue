@@ -24,17 +24,10 @@
           @click="selectRound(r)"
         >
           <span class="font-medium text-gray-800">{{ r.id }}차</span>
-          <div class="flex items-center gap-1">
-            <span
-              class="text-xs px-1.5 py-0.5 rounded-full"
-              :class="r.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-            >{{ r.status }}</span>
-            <button
-              v-if="r.status === 'OPEN'"
-              class="text-xs px-1.5 py-0.5 border rounded text-red-600 hover:bg-red-50"
-              @click.stop="handleCloseRound(r.id)"
-            >마감</button>
-          </div>
+          <span
+            class="text-xs px-1.5 py-0.5 rounded-full"
+            :class="r.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+          >{{ r.status }}</span>
         </li>
       </ul>
     </div>
@@ -47,14 +40,19 @@
 
       <template v-else>
         <!-- 상단 요약 -->
-        <div class="flex items-center gap-3 mb-4">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
           <span class="text-lg font-bold text-gray-800">{{ selected.id }}차 라운드</span>
           <span
             class="text-xs px-2 py-1 rounded-full font-medium"
             :class="selected.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
           >{{ selected.status }}</span>
-          <span class="text-xs text-gray-400">{{ selected.opened_at?.slice(0, 10) }} 개시</span>
-          <span v-if="selected.closed_at" class="text-xs text-gray-400">→ {{ selected.closed_at?.slice(0, 10) }} 마감</span>
+          <button
+            v-if="selected.status === 'OPEN'"
+            class="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
+            @click="handleCloseRound(selected.id)"
+          >마감</button>
+          <span class="text-xs text-gray-400">{{ fmtDt(selected.opened_at) }} 개시</span>
+          <span v-if="selected.closed_at" class="text-xs text-gray-400">→ {{ fmtDt(selected.closed_at) }} 마감</span>
         </div>
 
         <!-- 서브탭 -->
@@ -259,6 +257,11 @@ import {
   exportResultsExcel,
   scorePreview,
 } from '../../api/admin.js'
+
+function fmtDt(s) {
+  if (!s) return ''
+  return s.slice(0, 19).replace('T', ' ')
+}
 
 const rounds  = ref([])
 const selected = ref(null)

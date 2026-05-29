@@ -35,14 +35,28 @@
     <p v-if="error" class="text-red-500 text-sm mb-3">{{ error }}</p>
 
     <!-- 필터 -->
-    <div class="flex gap-2 mb-3 items-center">
-      <select v-model.number="filterGrade" class="border rounded px-2 py-1 text-sm">
-        <option :value="null">전체 학년</option>
-        <option v-for="g in [1,2,3]" :key="g" :value="g">{{ g }}학년</option>
+    <div class="flex gap-2 mb-3 items-center flex-wrap">
+      <select v-model="filterEnrolled" class="border rounded px-2 py-1 text-sm">
+        <option :value="null">전체</option>
+        <option :value="1">재학생</option>
+        <option :value="0">졸업생</option>
       </select>
-      <select v-model.number="filterClass" class="border rounded px-2 py-1 text-sm">
+      <select
+        v-model.number="filterGrade"
+        class="border rounded px-2 py-1 text-sm"
+        :disabled="filterEnrolled === 0"
+        @change="filterClass = null"
+      >
+        <option :value="null">전체 학년</option>
+        <option v-for="g in gradeOptions.grades" :key="g" :value="g">{{ g }}학년</option>
+      </select>
+      <select
+        v-model.number="filterClass"
+        class="border rounded px-2 py-1 text-sm"
+        :disabled="filterEnrolled === 0"
+      >
         <option :value="null">전체 반</option>
-        <option v-for="c in 20" :key="c" :value="c">{{ c }}반</option>
+        <option v-for="c in availableClasses" :key="c" :value="c">{{ c }}반</option>
       </select>
       <button class="text-sm text-blue-600 underline" @click="loadStudents">조회</button>
       <span class="ml-auto text-sm text-gray-500">총 {{ students.length }}명</span>
@@ -95,9 +109,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import {
   getStudents,
+  getStudentGradeOptions,
   downloadStudentTemplate,
   exportStudents,
   importStudents,
@@ -113,19 +128,46 @@ import {
 const students = ref([])
 const error = ref('')
 const result = ref(null)
+const filterEnrolled = ref(null)   // null=전체, 1=재학생, 0=졸업생
 const filterGrade = ref(null)
 const filterClass = ref(null)
+const gradeOptions = ref({ grades: [], by_grade: {} })
+
+// 선택 학년에 따라 드롭다운에 표시할 반 목록
+const availableClasses = computed(() => {
+  if (!filterGrade.value) {
+    const all = new Set()
+    Object.values(gradeOptions.value.by_grade).forEach(arr => arr.forEach(c => all.add(c)))
+    return [...all].sort((a, b) => a - b)
+  }
+  return gradeOptions.value.by_grade[String(filterGrade.value)] ?? []
+})
+
+// 졸업생 선택 시 학년·반 필터 초기화
+watch(filterEnrolled, (val) => {
+  if (val === 0) {
+    filterGrade.value = null
+    filterClass.value = null
+  }
+})
 
 async function loadStudents() {
   error.value = ''
   try {
     const params = {}
-    if (filterGrade.value) params.grade = filterGrade.value
-    if (filterClass.value) params.class_no = filterClass.value
+    if (filterGrade.value)              params.grade = filterGrade.value
+    if (filterClass.value)              params.class_no = filterClass.value
+    if (filterEnrolled.value !== null)  params.is_enrolled = filterEnrolled.value
     students.value = await getStudents(params)
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }
+}
+
+async function loadGradeOptions() {
+  try {
+    gradeOptions.value = await getStudentGradeOptions()
+  } catch { /* 실패해도 빈 목록으로 동작 */ }
 }
 
 function saveBlob(response, fallback) {
@@ -207,5 +249,8 @@ const categories = [
   },
 ]
 
-onMounted(loadStudents)
+onMounted(() => {
+  loadGradeOptions()
+  loadStudents()
+})
 </script>

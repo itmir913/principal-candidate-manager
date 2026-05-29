@@ -37,6 +37,19 @@ pub struct ImportResult {
 pub struct ListQuery {
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
+    pub is_enrolled: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct GradeOptions {
+    pub grades: Vec<i64>,
+    pub by_grade: std::collections::HashMap<String, Vec<i64>>,
+}
+
+#[derive(FromRow)]
+struct GradeClassRow {
+    grade: i64,
+    class_no: i64,
 }
 
 struct StudentRecord {
@@ -56,26 +69,44 @@ pub async fn list_students(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Vec<StudentRow>>, ApiError> {
-    let rows = match (q.grade, q.class_no) {
-        (Some(g), Some(c)) => sqlx::query_as::<_, StudentRow>(
-            "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year
-             FROM students WHERE grade = ? AND class_no = ? ORDER BY seq_no",
-        )
-        .bind(g)
-        .bind(c)
-        .fetch_all(&state.db)
-        .await,
+    let mut sql = "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year \
+                   FROM students WHERE 1=1".to_string();
+    if q.grade.is_some()       { sql += " AND grade = ?"; }
+    if q.class_no.is_some()    { sql += " AND class_no = ?"; }
+    if q.is_enrolled.is_some() { sql += " AND is_enrolled = ?"; }
+    sql += " ORDER BY is_enrolled DESC, grade, class_no, seq_no";
 
-        _ => sqlx::query_as::<_, StudentRow>(
-            "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year
-             FROM students ORDER BY grade, class_no, seq_no",
-        )
+    let mut query = sqlx::query_as::<_, StudentRow>(&sql);
+    if let Some(v) = q.grade       { query = query.bind(v); }
+    if let Some(v) = q.class_no    { query = query.bind(v); }
+    if let Some(v) = q.is_enrolled { query = query.bind(v); }
+
+    let rows = query
         .fetch_all(&state.db)
-        .await,
-    }
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(rows))
+}
+
+/// GET /api/students/grade-options — 재학생 기준 등록된 학년·반 목록
+pub async fn grade_options(State(state): State<AppState>) -> Result<Json<GradeOptions>, ApiError> {
+    let rows = sqlx::query_as::<_, GradeClassRow>(
+        "SELECT DISTINCT grade, class_no FROM students
+         WHERE is_enrolled = 1 AND grade IS NOT NULL AND class_no IS NOT NULL
+         ORDER BY grade, class_no",
+    )
+    .fetch_all(&state.db)
+    .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(rows))
+    let mut by_grade: std::collections::HashMap<String, Vec<i64>> = std::collections::HashMap::new();
+    for r in &rows {
+        by_grade.entry(r.grade.to_string()).or_default().push(r.class_no);
+    }
+    let mut grades: Vec<i64> = by_grade.keys().filter_map(|k| k.parse().ok()).collect();
+    grades.sort_unstable();
+
+    Ok(Json(GradeOptions { grades, by_grade }))
 }
 
 /// GET /api/students/template

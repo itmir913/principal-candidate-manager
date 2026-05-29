@@ -126,6 +126,7 @@ fn build_router(state: AppState) -> Router {
 
     let admin_routes = Router::new()
         .route("/students", get(handlers::students::list_students))
+        .route("/students/grade-options", get(handlers::students::grade_options))
         .route("/students/template", get(handlers::students::download_template))
         .route("/students/export", get(handlers::students::export_students))
         .route("/students/import", post(handlers::students::import_students))

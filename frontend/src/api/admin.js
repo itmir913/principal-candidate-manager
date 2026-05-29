@@ -61,6 +61,9 @@ export const importBaseData = (id, file) => {
 export const getStudents = (params = {}) =>
   axios.get('/api/students', { params }).then(r => r.data)
 
+export const getStudentGradeOptions = () =>
+  axios.get('/api/students/grade-options').then(r => r.data)
+
 export const downloadStudentTemplate = () =>
   axios.get('/api/students/template', { responseType: 'blob' })
 export const exportStudents = () =>
