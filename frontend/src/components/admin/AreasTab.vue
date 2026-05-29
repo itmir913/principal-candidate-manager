@@ -40,7 +40,7 @@
           <input v-model="newArea.name" type="text" class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
         <div>
-          <label class="text-xs text-gray-500">만점 (반영 비율)</label>
+          <label class="text-xs text-gray-500">만점(반영 비율)</label>
           <input v-model="newArea.max_score_display" type="number" step="0.00001"
             class="w-full border rounded px-2 py-1 mt-0.5" />
         </div>
@@ -61,10 +61,6 @@
             </select>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <input v-model="newArea.teacher_editable" type="checkbox" id="te" />
-          <label for="te" class="text-xs text-gray-500">담임교사 입력 허용</label>
-        </div>
         <div v-if="newArea.calc_type === 'NUMERIC'">
           <label class="text-xs text-gray-500">구간 탐색 방향 <span class="text-red-500">*</span></label>
           <select v-model="newArea.match_mode" class="w-full border rounded px-2 py-1 mt-0.5">
@@ -82,8 +78,12 @@
             <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
           </select>
         </div>
+        <div class="flex items-center gap-2">
+          <input v-model="newArea.teacher_editable" type="checkbox" id="te" />
+          <label for="te" class="text-xs text-gray-500">담임교사 입력 허용</label>
+        </div>
         <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
-          전형요소는 등록 후 수정할 수 없습니다.
+          전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
         </p>
         <div class="flex gap-1">
           <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded" @click="addArea">저장</button>
@@ -94,25 +94,50 @@
 
     <!-- ── 우측: 전형요소 상세 (서브탭) ── -->
     <div class="flex-1 min-w-0" v-if="selected">
-      <div class="flex items-center gap-2 mb-3">
-        <h3 class="text-base font-semibold text-gray-800">{{ selected.name }}</h3>
-        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ calcTypeLabel(selected.calc_type) }}</span>
-        <span class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 min-w-0">
+          <h3 class="text-base font-semibold text-gray-800 truncate">{{ selected.name }}</h3>
+          <span class="shrink-0 px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ calcTypeLabel(selected.calc_type) }}</span>
+          <span class="shrink-0 px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-500">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+        </div>
+        <button v-if="!showEditForm"
+          class="shrink-0 ml-2 px-2 py-0.5 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+          @click="openEditForm">수정</button>
       </div>
 
       <!-- 기본 정보 카드 -->
       <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
-        <div class="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
-          <span><span class="text-gray-400 mr-1">만점</span>{{ displayScore(selected.max_score) }}점</span>
-          <span><span class="text-gray-400 mr-1">조회 기준</span>{{ lookupScopeLabel(selected.lookup_scope) }}</span>
-          <span><span class="text-gray-400 mr-1">계산 유형</span>{{ calcTypeLabel(selected.calc_type) }}</span>
-          <span v-if="selected.calc_type === 'NUMERIC'"><span class="text-gray-400 mr-1">탐색 방향</span>{{ matchModeLabel(selected.match_mode) }}</span>
-          <span v-if="selected.calc_type === 'CATEGORY'"><span class="text-gray-400 mr-1">범주 집계</span>{{ categoryAggLabel(selected.category_agg) }}</span>
-          <span><span class="text-gray-400 mr-1">담임교사 입력</span>{{ selected.teacher_editable ? '허용' : '불가' }}</span>
-        </div>
-        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
-          전형요소는 등록 후 수정할 수 없습니다. 설정을 변경하려면 삭제 후 재등록하세요.
-        </p>
+        <template v-if="!showEditForm">
+          <div class="flex flex-wrap gap-x-6 gap-y-1 text-gray-700">
+            <span><span class="text-gray-400 mr-1">만점</span>{{ displayScore(selected.max_score) }}점</span>
+            <span><span class="text-gray-400 mr-1">조회 기준</span>{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+            <span><span class="text-gray-400 mr-1">계산 유형</span>{{ calcTypeLabel(selected.calc_type) }}</span>
+            <span v-if="selected.calc_type === 'NUMERIC'"><span class="text-gray-400 mr-1">탐색 방향</span>{{ matchModeLabel(selected.match_mode) }}</span>
+            <span v-if="selected.calc_type === 'CATEGORY'"><span class="text-gray-400 mr-1">범주 집계</span>{{ categoryAggLabel(selected.category_agg) }}</span>
+            <span><span class="text-gray-400 mr-1">담임교사 입력</span>{{ selected.teacher_editable ? '허용' : '불가' }}</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.</p>
+        </template>
+        <template v-else>
+          <div class="space-y-2">
+            <div>
+              <label class="text-xs text-gray-500">전형요소 이름</label>
+              <input v-model="editArea.name" type="text"
+                class="w-full border rounded px-2 py-1 mt-0.5" />
+            </div>
+            <div class="flex items-center gap-2">
+              <input v-model="editArea.teacher_editable" type="checkbox" id="edit-te" />
+              <label for="edit-te" class="text-xs text-gray-500">담임교사 입력 허용</label>
+            </div>
+            <p v-if="editError" class="text-xs text-red-500">{{ editError }}</p>
+            <div class="flex gap-1">
+              <button class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                @click="saveEdit">저장</button>
+              <button class="px-2 py-1 bg-gray-200 text-xs rounded hover:bg-gray-300"
+                @click="cancelEdit">취소</button>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- 서브탭 -->
@@ -271,7 +296,7 @@
 <script setup>
 import { ref, watch, onMounted, defineComponent, h, computed } from 'vue'
 import {
-  getAreas, createArea, deleteArea,
+  getAreas, createArea, updateArea, deleteArea,
   downloadNumericTableTemplate, exportNumericTable, importNumericTable,
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
   downloadBaseDataTemplate, exportBaseData, importBaseData,
@@ -291,6 +316,10 @@ const baseRows    = ref([])
 
 const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
+
+const showEditForm = ref(false)
+const editArea = ref({ name: '', teacher_editable: false })
+const editError = ref('')
 
 function defaultNewArea() {
   return { name: '', max_score_display: '', calc_type: 'NUMERIC',
@@ -335,6 +364,7 @@ async function load() {
 function selectArea(area) {
   selected.value = area
   activeTab.value = area.calc_type === 'MANUAL' ? 'base' : 'score'
+  showEditForm.value = false
 
   scoreResult.value = null
   baseResult.value  = null
@@ -390,6 +420,36 @@ async function removeArea(id) {
     if (selected.value?.id === id) selected.value = null
     await load()
   } catch (e) { error.value = e.response?.data ?? e.message }
+}
+
+function openEditForm() {
+  editArea.value = {
+    name: selected.value.name,
+    teacher_editable: !!selected.value.teacher_editable,
+  }
+  editError.value = ''
+  showEditForm.value = true
+}
+
+function cancelEdit() {
+  showEditForm.value = false
+}
+
+async function saveEdit() {
+  editError.value = ''
+  const body = {
+    name: editArea.value.name,
+    teacher_editable: editArea.value.teacher_editable ? 1 : 0,
+  }
+  try {
+    await updateArea(selected.value.id, body)
+    const prevId = selected.value.id
+    await load()
+    selected.value = areas.value.find(a => a.id === prevId) ?? null
+    showEditForm.value = false
+  } catch (e) {
+    editError.value = e.response?.data ?? e.message
+  }
 }
 
 function openAddForm() {

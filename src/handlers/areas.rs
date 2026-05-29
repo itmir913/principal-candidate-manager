@@ -39,13 +39,7 @@ pub struct CreateAreaBody {
 #[derive(Deserialize)]
 pub struct UpdateAreaBody {
     pub name: Option<String>,
-    pub max_score: Option<i64>,
-    pub calc_type: Option<String>,
     pub teacher_editable: Option<i64>,
-    pub lookup_scope: Option<String>,
-    pub match_mode: Option<String>,
-    pub category_agg: Option<String>,
-    pub multi_value: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, FromRow)]
@@ -116,36 +110,21 @@ pub async fn update_area(
     Path(id): Path<i64>,
     Json(body): Json<UpdateAreaBody>,
 ) -> Result<StatusCode, ApiError> {
-    if let Some(ms) = body.max_score {
-        if ms < 0 {
-            return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
-        }
-    }
-
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    macro_rules! update_field {
-        ($field:expr, $col:literal) => {
-            if let Some(v) = $field {
-                sqlx::query(concat!("UPDATE areas SET ", $col, " = ? WHERE id = ?"))
-                    .bind(v)
-                    .bind(id)
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            }
-        };
+    if let Some(v) = body.name {
+        sqlx::query("UPDATE areas SET name = ? WHERE id = ?")
+            .bind(v).bind(id)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
-
-    update_field!(body.name, "name");
-    update_field!(body.max_score, "max_score");
-    update_field!(body.calc_type, "calc_type");
-    update_field!(body.teacher_editable, "teacher_editable");
-    update_field!(body.lookup_scope, "lookup_scope");
-    update_field!(body.match_mode, "match_mode");
-    update_field!(body.category_agg, "category_agg");
-    update_field!(body.multi_value, "multi_value");
+    if let Some(v) = body.teacher_editable {
+        sqlx::query("UPDATE areas SET teacher_editable = ? WHERE id = ?")
+            .bind(v).bind(id)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
