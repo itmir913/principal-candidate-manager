@@ -24,6 +24,21 @@ export const useAuthStore = defineStore('auth', () => {
       }
       return config
     })
+    axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401) {
+          token.value = null
+          role.value = null
+          grade.value = null
+          classNo.value = null
+          _persist()
+          // 동적 import로 순환 참조 없이 라우터 접근
+          import('../router/index.js').then(m => m.default.push('/login'))
+        }
+        return Promise.reject(err)
+      }
+    )
   }
 
   async function checkStatus() {
