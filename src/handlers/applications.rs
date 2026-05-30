@@ -42,14 +42,14 @@ pub struct ApplicationRow {
     pub student_id: i64,
     pub track_id: i64,
     pub round_id: i64,
-    pub confirmed: i64,
-    pub abandoned: i64,
+    pub confirmed: bool,
+    pub abandoned: bool,
     pub student_code: String,
     pub name: String,
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
-    pub is_enrolled: i64,
+    pub is_enrolled: bool,
     pub univ_name: String,
     pub track_name: String,
 }
@@ -62,7 +62,7 @@ pub struct StudentRow {
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
-    pub is_enrolled: i64,
+    pub is_enrolled: bool,
 }
 
 #[derive(Deserialize)]
@@ -109,6 +109,7 @@ pub async fn admin_list_applications(
     Ok(Json(rows))
 }
 
+// URL: /applications/:sid/:tid/:rid/abandon  (sid=student_id, tid=track_id, rid=round_id)
 pub async fn abandon_application(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
@@ -215,6 +216,7 @@ pub async fn teacher_create_application(
     Ok(StatusCode::CREATED)
 }
 
+// URL: /applications/:sid/:tid/:rid  (sid=student_id, tid=track_id, rid=round_id)
 pub async fn teacher_delete_application(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,

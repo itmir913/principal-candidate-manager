@@ -32,7 +32,7 @@ pub(crate) struct AreaInfo {
     pub(crate) max_score: i64,
     pub(crate) calc_type: String,
     pub(crate) lookup_scope: String,
-    pub(crate) multi_value: i64,
+    pub(crate) multi_value: bool,
 }
 
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
@@ -602,7 +602,7 @@ pub async fn base_data_import(
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     // multi_value=0 전형요소: (student_id, track_id) 중복 추적 — 첫 번째 행 우선
-    let single_value = area.multi_value == 0;
+    let single_value = !area.multi_value;
     let mut seen: HashSet<(i64, Option<i64>)> = HashSet::new();
 
     for (i, cols) in file_rows.iter().enumerate() {

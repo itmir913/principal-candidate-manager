@@ -17,11 +17,11 @@ pub struct AreaRow {
     pub name: String,
     pub max_score: Score,
     pub calc_type: String,
-    pub teacher_editable: i64,
+    pub teacher_editable: bool,
     pub lookup_scope: String,
     pub match_mode: Option<String>,
     pub category_agg: Option<String>,
-    pub multi_value: i64,
+    pub multi_value: bool,
 }
 
 #[derive(Deserialize)]
@@ -29,18 +29,18 @@ pub struct CreateAreaBody {
     pub name: String,
     pub max_score: Score,
     pub calc_type: String,
-    pub teacher_editable: i64,
+    pub teacher_editable: bool,
     pub lookup_scope: String,
     pub match_mode: Option<String>,
     pub category_agg: Option<String>,
     #[serde(default)]
-    pub multi_value: i64,
+    pub multi_value: bool,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateAreaBody {
     pub name: Option<String>,
-    pub teacher_editable: Option<i64>,
+    pub teacher_editable: Option<bool>,
 }
 
 pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRow>>, ApiError> {
@@ -69,7 +69,7 @@ pub async fn create_area(
     if body.calc_type == "CATEGORY" && body.category_agg.is_none() {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소는 category_agg(SUM/MAX)가 필수입니다".into()));
     }
-    if body.calc_type != "CATEGORY" && body.multi_value != 0 {
+    if body.calc_type != "CATEGORY" && body.multi_value {
         return Err((StatusCode::BAD_REQUEST, "multi_value=1은 CATEGORY 전형요소에만 허용됩니다".into()));
     }
 

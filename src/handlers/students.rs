@@ -22,7 +22,7 @@ pub struct StudentRow {
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
-    pub is_enrolled: i64,
+    pub is_enrolled: bool,
     pub grad_year: Option<i64>,
 }
 
@@ -55,7 +55,7 @@ struct GradeClassRow {
 pub struct StudentRecord {
     pub student_code: String,
     pub name: String,
-    pub is_enrolled: i64,
+    pub is_enrolled: bool,
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
@@ -193,7 +193,7 @@ pub async fn upsert_student(
         return Err("name 누락".into());
     }
 
-    if rec.is_enrolled == 1 {
+    if rec.is_enrolled {
         let (grade, class_no, seq_no) = match (rec.grade, rec.class_no, rec.seq_no) {
             (Some(g), Some(c), Some(s)) => (g, c, s),
             _ => return Err("재학생은 grade, class_no, seq_no 필수".into()),
@@ -313,7 +313,7 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
         let r = r as u32 + 1;
         ws.write_string(r, 0, &row.student_code)?;
         ws.write_string(r, 1, &row.name)?;
-        ws.write_number(r, 2, row.is_enrolled as f64)?;
+        ws.write_number(r, 2, if row.is_enrolled { 1.0 } else { 0.0 })?;
         if let Some(v) = row.grade     { ws.write_number(r, 3, v as f64)?; }
         if let Some(v) = row.class_no  { ws.write_number(r, 4, v as f64)?; }
         if let Some(v) = row.seq_no    { ws.write_number(r, 5, v as f64)?; }
@@ -632,7 +632,7 @@ fn row_to_record(
     StudentRecord {
         student_code: get("학생코드").to_string(),
         name:         get("이름").to_string(),
-        is_enrolled:  parse_i64("재학여부").unwrap_or(1),
+        is_enrolled:  parse_i64("재학여부").map_or(true, |v| v != 0),
         grade:        parse_i64("학년"),
         class_no:     parse_i64("반"),
         seq_no:       parse_i64("번호"),
@@ -649,7 +649,7 @@ fn row_to_enrolled_record(
     StudentRecord {
         student_code: String::new(), // upsert_enrolled_by_position 에서 자동 생성
         name:         get("이름").to_string(),
-        is_enrolled:  1,
+        is_enrolled:  true,
         grade:        parse_i64("학년"),
         class_no:     parse_i64("반"),
         seq_no:       parse_i64("번호"),
@@ -666,7 +666,7 @@ fn row_to_graduated_record(
     StudentRecord {
         student_code: get("학생코드").to_string(),
         name:         get("이름").to_string(),
-        is_enrolled:  0,
+        is_enrolled:  false,
         grade:        None,
         class_no:     None,
         seq_no:       None,

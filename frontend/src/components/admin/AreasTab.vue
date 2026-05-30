@@ -474,7 +474,7 @@ async function addArea() {
     max_score: maxScore,
     calc_type: newArea.value.calc_type,
     lookup_scope: newArea.value.lookup_scope,
-    teacher_editable: newArea.value.teacher_editable ? 1 : 0,
+    teacher_editable: newArea.value.teacher_editable,
     match_mode: newArea.value.match_mode || null,
     category_agg: newArea.value.category_agg || null,
   }
@@ -497,7 +497,7 @@ async function removeArea(id) {
 function openEditForm() {
   editArea.value = {
     name: selected.value.name,
-    teacher_editable: !!selected.value.teacher_editable,
+    teacher_editable: selected.value.teacher_editable,
   }
   editError.value = ''
   showEditForm.value = true
@@ -511,7 +511,7 @@ async function saveEdit() {
   editError.value = ''
   const body = {
     name: editArea.value.name,
-    teacher_editable: editArea.value.teacher_editable ? 1 : 0,
+    teacher_editable: editArea.value.teacher_editable,
   }
   try {
     await updateArea(selected.value.id, body)

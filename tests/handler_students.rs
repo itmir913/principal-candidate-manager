@@ -12,7 +12,7 @@ fn enrolled_rec(code: &str, name: &str, g: i64, c: i64, s: i64) -> StudentRecord
     StudentRecord {
         student_code: code.into(),
         name: name.into(),
-        is_enrolled: 1,
+        is_enrolled: true,
         grade: Some(g),
         class_no: Some(c),
         seq_no: Some(s),
@@ -24,7 +24,7 @@ fn graduated_rec(code: &str, name: &str, year: i64) -> StudentRecord {
     StudentRecord {
         student_code: code.into(),
         name: name.into(),
-        is_enrolled: 0,
+        is_enrolled: false,
         grade: None,
         class_no: None,
         seq_no: None,
@@ -41,7 +41,7 @@ async fn upsert_student_empty_code_returns_error() {
     let rec = StudentRecord {
         student_code: "".into(),
         name: "홍길동".into(),
-        is_enrolled: 0,
+        is_enrolled: false,
         grade: None,
         class_no: None,
         seq_no: None,
@@ -61,7 +61,7 @@ async fn upsert_student_empty_name_returns_error() {
     let rec = StudentRecord {
         student_code: "SC001".into(),
         name: "".into(),
-        is_enrolled: 0,
+        is_enrolled: false,
         grade: None,
         class_no: None,
         seq_no: None,
@@ -81,7 +81,7 @@ async fn upsert_student_enrolled_missing_position_returns_error() {
     let rec = StudentRecord {
         student_code: "SC001".into(),
         name: "홍길동".into(),
-        is_enrolled: 1,
+        is_enrolled: true,
         grade: None,
         class_no: None,
         seq_no: None,
@@ -155,7 +155,7 @@ async fn upsert_student_graduated_missing_year_returns_error() {
     let rec = StudentRecord {
         student_code: "GR001".into(),
         name: "졸업생".into(),
-        is_enrolled: 0,
+        is_enrolled: false,
         grade: None,
         class_no: None,
         seq_no: None,
@@ -190,7 +190,7 @@ async fn enrolled_by_position_generates_student_code() {
     let rec = StudentRecord {
         student_code: String::new(),
         name: "홍길동".into(),
-        is_enrolled: 1,
+        is_enrolled: true,
         grade: Some(1),
         class_no: Some(1),
         seq_no: Some(1),
@@ -217,7 +217,7 @@ async fn enrolled_by_position_updates_existing_by_position() {
     let rec = StudentRecord {
         student_code: String::new(),
         name: "홍길동".into(),
-        is_enrolled: 1,
+        is_enrolled: true,
         grade: Some(1),
         class_no: Some(1),
         seq_no: Some(1),
@@ -247,7 +247,7 @@ async fn enrolled_by_position_missing_class_returns_error() {
     let rec = StudentRecord {
         student_code: String::new(),
         name: "홍길동".into(),
-        is_enrolled: 1,
+        is_enrolled: true,
         grade: Some(2),
         class_no: Some(3),
         seq_no: Some(1),

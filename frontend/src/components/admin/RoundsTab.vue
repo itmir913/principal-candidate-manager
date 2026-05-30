@@ -354,7 +354,7 @@ function getAreaScore(r, areaId) {
       ? JSON.parse(r.score_detail)
       : r.score_detail
     const v = detail[String(areaId)]
-    return v !== undefined ? (v as number).toFixed(2) : '-'
+    return v !== undefined ? Number(v).toFixed(2) : '-'
   } catch {
     return '-'
   }

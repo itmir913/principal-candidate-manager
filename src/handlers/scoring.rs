@@ -49,14 +49,14 @@ pub struct ResultRow {
     #[serde(serialize_with = "score_detail_as_map")]
     pub score_detail: String,
     pub ranking: Option<i64>,
-    pub recommended: i64,
-    pub abandoned: i64,
+    pub recommended: bool,
+    pub abandoned: bool,
     pub student_code: String,
     pub name: String,
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
-    pub is_enrolled: i64,
+    pub is_enrolled: bool,
     pub univ_name: String,
     pub track_name: String,
 }
@@ -184,9 +184,10 @@ pub async fn calc_area_score(
             }
 
             if scores.is_empty() { return Ok(0); }
-            match area.category_agg.as_deref().unwrap_or("SUM") {
-                "MAX" => *scores.iter().max().unwrap_or(&0),
-                _ => scores.iter().sum::<i64>(),
+            match area.category_agg.as_deref() {
+                Some("SUM") | None => scores.iter().sum::<i64>(),
+                Some("MAX") => *scores.iter().max().unwrap_or(&0),
+                Some(other) => return Err(format!("알 수 없는 category_agg: {}", other)),
             }
         }
 
@@ -290,7 +291,7 @@ pub async fn calculate_scores(
     track_ids.dedup();
 
     for tid in track_ids {
-        let prioritize: i64 = sqlx::query_scalar(
+        let prioritize: bool = sqlx::query_scalar(
             "SELECT u.prioritize_enrolled
              FROM univ_tracks ut JOIN universities u ON ut.univ_id = u.id
              WHERE ut.id = ?",
@@ -311,18 +312,18 @@ pub async fn calculate_scores(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        let mut ranked: Vec<(i64, Score, i64)> = rows
+        let mut ranked: Vec<(i64, Score, bool)> = rows
             .into_iter()
             .map(|r| (
                 r.get::<i64, _>("student_id"),
                 Score::from_raw(r.get::<i64, _>("total_score")),
-                r.get::<i64, _>("is_enrolled"),
+                r.get::<bool, _>("is_enrolled"),
             ))
             .collect();
 
         ranked.sort_by(|a, b| {
             b.1.cmp(&a.1).then_with(|| {
-                if prioritize == 1 { b.2.cmp(&a.2) } else { std::cmp::Ordering::Equal }
+                if prioritize { b.2.cmp(&a.2) } else { std::cmp::Ordering::Equal }
             })
         });
 
@@ -483,7 +484,7 @@ pub async fn export_results(
             if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).ok(); }
             col += 1;
 
-            ws.write_string(row, col, if r.is_enrolled == 1 { "재학" } else { "졸업" }).ok();
+            ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).ok();
             col += 1;
 
             let detail: HashMap<String, i64> =
@@ -495,8 +496,8 @@ pub async fn export_results(
             }
 
             ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).ok(); col += 1;
-            ws.write_string(row, col, if r.recommended == 1 { "추천" } else { "" }).ok(); col += 1;
-            ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).ok();
+            ws.write_string(row, col, if r.recommended { "추천" } else { "" }).ok(); col += 1;
+            ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).ok();
         }
     }
 
@@ -636,6 +637,7 @@ pub async fn score_preview(
 // ─────────────────────────────────────────────────────────────────
 
 
+// URL: /results/:sid/:tid/:rid/recommend  (sid=student_id, tid=track_id, rid=round_id)
 pub async fn recommend_result(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
