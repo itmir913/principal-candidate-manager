@@ -117,7 +117,7 @@
           <div v-else-if="areaContext.length > 0">
             <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">전형요소</div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div class="grid gap-3" :class="areaGridClass">
             <div
               v-for="area in areaContext"
               :key="area.area_id"
@@ -332,6 +332,12 @@ const studentApps = computed(() =>
 function getStudentAppCount(sid) {
   return applications.value.filter(a => a.student_id === sid).length
 }
+
+const areaGridClass = computed(() => {
+  const n = areaContext.value.length
+  if (n >= 5 && n <= 6) return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+  return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+})
 
 const canSave = computed(() =>
   !!selectedStudent.value && !!form.trackId && !!currentRound.value && !!form.departmentName.trim()
