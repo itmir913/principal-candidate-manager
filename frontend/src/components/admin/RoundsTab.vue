@@ -303,9 +303,10 @@ import {
   getRounds, openRound, closeRound, reopenRound, finalizeRound,
   calculateScores, getResults, recommendResult, unrecommendResult,
   getApplications, abandonApplication,
-  getAllTracks, getAreas,
+  getAreas,
   exportResultsExcel,
   exportRoundSummary,
+  getQuotaStats,
 } from '../../api/admin.js'
 
 function fmtDt(s) {
@@ -323,13 +324,13 @@ const loading = ref(false)
 const apps    = ref([])
 const results = ref([])
 const areas   = ref([])
-const tracks  = ref([])   // 전체 모집단위 (unit_quota 포함)
 
 const calcLoading        = ref(false)
 const calcMsg            = ref(null)
 const downloading        = ref(false)
 const downloadingSummary = ref(false)
 const expandedRows       = ref({})
+const quotaStats         = ref(null)
 
 const selectedTrackId = ref('')
 
@@ -369,21 +370,35 @@ const tracksInRound = computed(() => {
     .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
 })
 
+const trackQuotaMap = computed(() => {
+  const map = {}
+  if (!quotaStats.value) return map
+  for (const u of quotaStats.value.univs) {
+    for (const t of u.tracks) {
+      map[t.track_id] = {
+        unitQuota: t.unit_quota,
+        unitUsed: t.unit_used,
+        totalQuota: u.total_quota,
+        totalUsed: u.total_used,
+      }
+    }
+  }
+  return map
+})
+
 const resultsByUniv = computed(() => {
   const map = {}
   for (const r of results.value) {
     const key = `${r.univ_name} ${r.track_name}`
     if (!map[key]) {
-      const t = tracks.value.find(t => t.id === r.track_id)
-      const unitQuota = t?.unit_quota ?? null
-      const totalQuota = t?.total_quota ?? null
-      const recommended = results.value.filter(x => x.track_id === r.track_id && x.recommended).length
-      const univRecommended = results.value.filter(x => x.univ_name === r.univ_name && x.recommended).length
+      const q = trackQuotaMap.value[r.track_id]
+      const unitQuota = q?.unitQuota ?? null
+      const totalQuota = q?.totalQuota ?? null
       map[key] = {
         unitQuota,
         totalQuota,
-        remaining: unitQuota != null ? unitQuota - recommended : null,
-        univRemaining: totalQuota != null ? totalQuota - univRecommended : null,
+        remaining: unitQuota != null ? Math.max(0, unitQuota - (q?.unitUsed ?? 0)) : null,
+        univRemaining: totalQuota != null ? Math.max(0, totalQuota - (q?.totalUsed ?? 0)) : null,
         results: [],
       }
     }
@@ -421,7 +436,10 @@ async function loadApps() {
 
 async function loadResults() {
   if (!selected.value) return
-  results.value = await getResults(selected.value.id, selectedTrackId.value || null)
+  ;[results.value, quotaStats.value] = await Promise.all([
+    getResults(selected.value.id, selectedTrackId.value || null),
+    getQuotaStats(),
+  ])
   expandedRows.value = {}
 }
 
@@ -433,7 +451,7 @@ function toggleRow(key) {
 }
 
 async function loadAreas() {
-  ;[areas.value, tracks.value] = await Promise.all([getAreas(), getAllTracks()])
+  areas.value = await getAreas()
 }
 
 async function handleOpenRound() {
