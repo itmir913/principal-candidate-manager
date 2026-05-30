@@ -206,7 +206,7 @@
                   v-for="r in group.results"
                   :key="r.student_id"
                   class="border-t"
-                  :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : ''"
+                  :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : (selected.status === 'FINALIZED' ? 'bg-red-50' : '')"
                 >
                   <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
                   <td class="px-3 py-2 text-gray-500">
@@ -241,6 +241,7 @@
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
                       @click="handleRecommend(r)"
                     >추천 확정</button>
+                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-gray-400">추천 제외</span>
                     <span v-else class="text-xs text-gray-600 font-semibold">-</span>
                   </td>
                 </tr>

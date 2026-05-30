@@ -36,7 +36,7 @@
               v-for="r in student.results"
               :key="r.track_id"
               class="border-b last:border-b-0"
-              :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : ''"
+              :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : 'bg-red-50'"
             >
               <td class="px-6 py-2 text-gray-700">{{ r.univ_name }} — {{ r.track_name }}</td>
               <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
@@ -47,7 +47,7 @@
               <td class="px-3 py-2 text-center">
                 <span v-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
                 <span v-else-if="r.abandoned" class="text-xs text-red-400">포기</span>
-                <span v-else class="text-xs text-gray-300">-</span>
+                <span v-else class="text-xs text-red-400">추천 제외</span>
               </td>
             </tr>
           </tbody>
