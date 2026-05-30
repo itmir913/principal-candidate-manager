@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::{auth::TeacherClaims, state::AppState};
+use crate::{auth::TeacherClaims, enums::RoundStatus, state::AppState};
 
 // ── 비밀번호 변경 ──────────────────────────────────────────────────
 
@@ -174,7 +174,7 @@ pub async fn teacher_create_application(
     Extension(claims): Extension<TeacherClaims>,
     Json(body): Json<CreateApplicationBody>,
 ) -> Result<StatusCode, ApiError> {
-    let round_status: Option<String> = sqlx::query_scalar(
+    let round_status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(body.round_id)
@@ -182,8 +182,8 @@ pub async fn teacher_create_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    match round_status.as_deref() {
-        Some("OPEN") => {}
+    match round_status {
+        Some(RoundStatus::Open) => {}
         Some(_) => return Err((StatusCode::BAD_REQUEST, "라운드가 OPEN 상태가 아닙니다".into())),
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
@@ -222,7 +222,7 @@ pub async fn teacher_delete_application(
     Extension(claims): Extension<TeacherClaims>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
-    let round_status: Option<String> = sqlx::query_scalar(
+    let round_status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(rid)
@@ -230,7 +230,7 @@ pub async fn teacher_delete_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if round_status.as_deref() != Some("OPEN") {
+    if round_status != Some(RoundStatus::Open) {
         return Err((StatusCode::BAD_REQUEST, "OPEN 라운드의 지원만 취소할 수 있습니다".into()));
     }
 

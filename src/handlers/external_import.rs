@@ -189,7 +189,7 @@ async fn do_import(
     track_name: String,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(db, area_id).await?;
-    if area.lookup_scope != "COMPOSITE" {
+    if area.lookup_scope != crate::enums::LookupScope::Composite {
         return Err((
             StatusCode::BAD_REQUEST,
             "외부 가져오기는 대학별 환산점수 조회 전형요소에서만 사용할 수 있습니다".into(),
@@ -281,15 +281,17 @@ async fn do_import(
             continue;
         }
 
-        let db_value = match area.calc_type.as_str() {
-            "NUMERIC" | "MANUAL" => match parse_display_value(val_s) {
-                Ok(v) => v.to_string(),
-                Err(e) => {
-                    errors.push(format!("{}행: 값 — {}", row_num, e));
-                    continue;
+        let db_value = match area.calc_type {
+            crate::enums::CalcType::Numeric | crate::enums::CalcType::Manual => {
+                match parse_display_value(val_s) {
+                    Ok(v) => v.to_string(),
+                    Err(e) => {
+                        errors.push(format!("{}행: 값 — {}", row_num, e));
+                        continue;
+                    }
                 }
-            },
-            _ => val_s.to_string(),
+            }
+            crate::enums::CalcType::Category => val_s.to_string(),
         };
 
         match sqlx::query(

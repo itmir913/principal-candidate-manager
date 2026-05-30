@@ -6,6 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+use crate::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use crate::score::Score;
 use crate::state::AppState;
 
@@ -16,11 +17,11 @@ pub struct AreaRow {
     pub id: i64,
     pub name: String,
     pub max_score: Score,
-    pub calc_type: String,
+    pub calc_type: CalcType,
     pub teacher_editable: bool,
-    pub lookup_scope: String,
-    pub match_mode: Option<String>,
-    pub category_agg: Option<String>,
+    pub lookup_scope: LookupScope,
+    pub match_mode: Option<MatchMode>,
+    pub category_agg: Option<CategoryAgg>,
     pub multi_value: bool,
 }
 
@@ -28,11 +29,11 @@ pub struct AreaRow {
 pub struct CreateAreaBody {
     pub name: String,
     pub max_score: Score,
-    pub calc_type: String,
+    pub calc_type: CalcType,
     pub teacher_editable: bool,
-    pub lookup_scope: String,
-    pub match_mode: Option<String>,
-    pub category_agg: Option<String>,
+    pub lookup_scope: LookupScope,
+    pub match_mode: Option<MatchMode>,
+    pub category_agg: Option<CategoryAgg>,
     #[serde(default)]
     pub multi_value: bool,
 }
@@ -63,13 +64,13 @@ pub async fn create_area(
     if body.max_score.raw() < 0 {
         return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
-    if body.calc_type == "NUMERIC" && body.match_mode.is_none() {
+    if body.calc_type == CalcType::Numeric && body.match_mode.is_none() {
         return Err((StatusCode::BAD_REQUEST, "NUMERIC 전형요소는 match_mode(UPPER/LOWER/EXACT)가 필수입니다".into()));
     }
-    if body.calc_type == "CATEGORY" && body.category_agg.is_none() {
+    if body.calc_type == CalcType::Category && body.category_agg.is_none() {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소는 category_agg(SUM/MAX)가 필수입니다".into()));
     }
-    if body.calc_type != "CATEGORY" && body.multi_value {
+    if body.calc_type != CalcType::Category && body.multi_value {
         return Err((StatusCode::BAD_REQUEST, "multi_value=1은 CATEGORY 전형요소에만 허용됩니다".into()));
     }
 
@@ -81,11 +82,11 @@ pub async fn create_area(
     )
     .bind(&body.name)
     .bind(body.max_score.raw())
-    .bind(&body.calc_type)
+    .bind(body.calc_type)
     .bind(body.teacher_editable)
-    .bind(&body.lookup_scope)
-    .bind(&body.match_mode)
-    .bind(&body.category_agg)
+    .bind(body.lookup_scope)
+    .bind(body.match_mode)
+    .bind(body.category_agg)
     .bind(body.multi_value)
     .fetch_one(&state.db)
     .await
@@ -133,4 +134,3 @@ pub async fn delete_area(
 
     Ok(StatusCode::NO_CONTENT)
 }
-

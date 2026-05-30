@@ -5,6 +5,7 @@ use axum::{
     extract::{FromRequest, Multipart, Path, State},
     http::{Request, StatusCode},
 };
+use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
     base_data_import, category_map_import, numeric_table_import,
 };
@@ -43,16 +44,16 @@ async fn insert_student(pool: &sqlx::SqlitePool, code: &str) -> i64 {
 
 async fn insert_area(
     pool: &sqlx::SqlitePool,
-    calc_type: &str,
-    match_mode: Option<&str>,
-    category_agg: Option<&str>,
+    calc_type: CalcType,
+    match_mode: Option<MatchMode>,
+    category_agg: Option<CategoryAgg>,
     multi_value: i64,
 ) -> i64 {
     sqlx::query(
         "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope, multi_value) \
          VALUES (?, 10000000, ?, ?, ?, 'SIMPLE', ?)",
     )
-    .bind(format!("Area_{calc_type}_{multi_value}"))
+    .bind(format!("{:?}_{multi_value}", calc_type))
     .bind(calc_type)
     .bind(match_mode)
     .bind(category_agg)
@@ -69,7 +70,7 @@ async fn insert_area(
 async fn numeric_import_dedup_rejects_entire_import() {
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
     let state = common::make_state(pool.clone());
 
     // S001이 두 번 등장 → 전체 import 거부(422), DB에 아무것도 저장되지 않음
@@ -96,7 +97,7 @@ async fn numeric_import_dedup_rejects_entire_import() {
 async fn manual_import_dedup_rejects_entire_import() {
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "MANUAL", None, None, 0).await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
     let state = common::make_state(pool.clone());
 
     let csv = "학생코드,값\nS001,85.0\nS001,90.0\n";
@@ -121,7 +122,7 @@ async fn manual_import_dedup_rejects_entire_import() {
 async fn category_multi_import_allows_multiple_values_per_student() {
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), 1).await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
     let state = common::make_state(pool.clone());
 
     // CATEGORY multi_value=1: 같은 학생이 서로 다른 범주 → 두 행 모두 삽입
@@ -148,7 +149,7 @@ async fn numeric_import_multiple_students_succeeds() {
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
     insert_student(&pool, "S002").await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
     let state = common::make_state(pool.clone());
 
     let csv = "학생코드,값\nS001,30.5\nS002,25.0\n";
@@ -174,7 +175,7 @@ async fn import_unknown_student_rejects_entire_import() {
     // 존재하지 않는 학생코드이 포함된 경우에도 전체 import 거부
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
     let state = common::make_state(pool.clone());
 
     let csv = "학생코드,값\nS001,30.5\nS999,25.0\n"; // S999 미등록
@@ -205,7 +206,7 @@ async fn numeric_base_data_import_negative_value_allowed() {
     // NUMERIC base_data 음수 측정값 → 정상 저장 (감점 구간 탐색에 사용)
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "학생코드,값\nS001,-1.0\n";
     let (status, axum::Json(result)) =
@@ -225,7 +226,7 @@ async fn manual_base_data_import_negative_value_allowed() {
     // MANUAL base_data 음수 점수 → 정상 저장 (감점 직접 입력)
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;
-    let aid = insert_area(&pool, "MANUAL", None, None, 0).await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
 
     let csv = "학생코드,값\nS001,-5.0\n";
     let (status, axum::Json(result)) =
@@ -244,7 +245,7 @@ async fn manual_base_data_import_negative_value_allowed() {
 async fn numeric_table_import_negative_threshold_allowed() {
     // numeric_table 음수 기준값 → 정상 저장
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "기준값,점수\n-1.0,50.0\n";
     let (status, axum::Json(result)) =
@@ -263,7 +264,7 @@ async fn numeric_table_import_negative_threshold_allowed() {
 async fn numeric_table_import_negative_score_allowed() {
     // numeric_table 음수 점수 → 정상 저장 (감점 구간표)
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "기준값,점수\n1.0,-10.0\n";
     let (status, axum::Json(result)) =
@@ -282,7 +283,7 @@ async fn numeric_table_import_negative_score_allowed() {
 async fn numeric_table_import_six_decimal_places_rejected() {
     // numeric_table 소수 6자리 → 전체 거부
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "기준값,점수\n1.123456,50.0\n";
     let (status, axum::Json(result)) =
@@ -298,7 +299,7 @@ async fn numeric_table_import_six_decimal_places_rejected() {
 async fn category_map_import_negative_score_allowed() {
     // category_map 음수 점수 → 정상 저장 (범주 감점)
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), 1).await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
 
     let csv = "범주,점수\n규정위반,-3.0\n";
     let (status, axum::Json(result)) =
@@ -317,7 +318,7 @@ async fn category_map_import_negative_score_allowed() {
 async fn category_map_import_six_decimal_places_rejected() {
     // category_map 소수 6자리 점수 → 전체 거부
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "CATEGORY", None, Some("SUM"), 1).await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
 
     let csv = "범주,점수\n회장,10.123456\n";
     let (status, axum::Json(result)) =
@@ -333,7 +334,7 @@ async fn category_map_import_six_decimal_places_rejected() {
 async fn numeric_table_import_valid_five_decimal_places_succeeds() {
     // 소수 5자리는 정상 처리되어야 함
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "기준값,점수\n1.12345,50.00001\n";
     let (status, axum::Json(result)) =
@@ -353,7 +354,7 @@ async fn numeric_table_import_valid_five_decimal_places_succeeds() {
 async fn numeric_table_import_zero_threshold_and_score_succeeds() {
     // 0은 유효한 값 (음수 거부 기준이 엄격히 < 0 임을 검증)
     let pool = common::create_test_pool_shared().await;
-    let aid = insert_area(&pool, "NUMERIC", Some("UPPER"), None, 0).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
     let csv = "기준값,점수\n0,0\n1.0,50.0\n";
     let (status, axum::Json(result)) =

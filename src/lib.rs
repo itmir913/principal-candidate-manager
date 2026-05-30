@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod db;
+pub mod enums;
 pub mod excel;
 pub mod handlers;
 pub mod middleware;

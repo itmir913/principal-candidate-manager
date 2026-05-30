@@ -6,6 +6,7 @@ use axum::{
 use serde::Serialize;
 use sqlx::FromRow;
 
+use crate::enums::RoundStatus;
 use crate::state::AppState;
 
 type ApiError = (StatusCode, String);
@@ -13,7 +14,7 @@ type ApiError = (StatusCode, String);
 #[derive(Serialize, FromRow)]
 pub struct RoundRow {
     pub id: i64,
-    pub status: String,
+    pub status: RoundStatus,
     pub opened_at: String,
     pub closed_at: Option<String>,
 }

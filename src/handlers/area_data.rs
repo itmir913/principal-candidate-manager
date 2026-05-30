@@ -13,7 +13,10 @@ use rust_xlsxwriter::Workbook;
 use serde::Serialize;
 use sqlx::Row;
 
-use crate::{excel, score::Score, state::AppState};
+use crate::{
+    enums::{CalcType, LookupScope},
+    excel, score::Score, state::AppState,
+};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
@@ -30,8 +33,8 @@ pub struct ImportResult {
 #[derive(sqlx::FromRow)]
 pub(crate) struct AreaInfo {
     pub(crate) max_score: i64,
-    pub(crate) calc_type: String,
-    pub(crate) lookup_scope: String,
+    pub(crate) calc_type: CalcType,
+    pub(crate) lookup_scope: LookupScope,
     pub(crate) multi_value: bool,
 }
 
@@ -148,7 +151,7 @@ async fn read_file(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
 
 /// COMPOSITE 여부에 따라 헤더 결정
 fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
-    if area.lookup_scope == "COMPOSITE" {
+    if area.lookup_scope == LookupScope::Composite {
         vec![key_col, "점수", "대학명", "모집단위명"]
     } else {
         vec![key_col, "점수"]
@@ -165,7 +168,7 @@ async fn resolve_track(
     errors: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) -> Option<Option<i64>> {
-    if area.lookup_scope == "COMPOSITE" {
+    if area.lookup_scope == LookupScope::Composite {
         let un = excel::get_col(cols, col, "대학명");
         let tn = excel::get_col(cols, col, "모집단위명");
         match (un.is_empty(), tn.is_empty()) {
@@ -201,7 +204,7 @@ pub async fn numeric_table_template(
     Path(id): Path<i64>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "NUMERIC" {
+    if area.calc_type != CalcType::Numeric {
         return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "기준값");
@@ -218,7 +221,7 @@ pub async fn numeric_table_export(
     let area = get_area(&state.db, id).await?;
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
-    if area.lookup_scope == "COMPOSITE" {
+    if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["기준값", "점수", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
@@ -275,7 +278,7 @@ pub async fn numeric_table_import(
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "NUMERIC" {
+    if area.calc_type != CalcType::Numeric {
         return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
@@ -353,7 +356,7 @@ pub async fn category_map_template(
     Path(id): Path<i64>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "CATEGORY" {
+    if area.calc_type != CalcType::Category {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));
     }
     let headers = score_headers(&area, "범주");
@@ -371,7 +374,7 @@ pub async fn category_map_export(
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
 
-    if area.lookup_scope == "COMPOSITE" {
+    if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["범주", "점수", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
@@ -428,7 +431,7 @@ pub async fn category_map_import(
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
-    if area.calc_type != "CATEGORY" {
+    if area.calc_type != CalcType::Category {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));
     }
     let bytes = read_file(multipart).await?;
@@ -505,7 +508,7 @@ pub async fn base_data_template(
     Path(id): Path<i64>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
-    let headers: Vec<&str> = if area.lookup_scope == "COMPOSITE" {
+    let headers: Vec<&str> = if area.lookup_scope == LookupScope::Composite {
         vec!["학생코드", "이름", "값", "대학명", "모집단위명"]
     } else {
         vec!["학생코드", "이름", "값"]
@@ -524,7 +527,7 @@ pub async fn base_data_export(
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
 
-    if area.lookup_scope == "COMPOSITE" {
+    if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
             ws.write_string(0, i as u16, *h).ok();
         }
@@ -545,7 +548,7 @@ pub async fn base_data_export(
             let r = r as u32 + 1;
             ws.write_string(r, 0, row.get::<&str, _>("student_code")).ok();
             ws.write_string(r, 1, row.get::<&str, _>("name")).ok();
-            write_value(ws, r, 2, row.get::<&str, _>("value"), &area.calc_type);
+            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type);
             ws.write_string(r, 3, row.get::<&str, _>("univ_name")).ok();
             ws.write_string(r, 4, row.get::<&str, _>("track_name")).ok();
         }
@@ -568,7 +571,7 @@ pub async fn base_data_export(
             let r = r as u32 + 1;
             ws.write_string(r, 0, row.get::<&str, _>("student_code")).ok();
             ws.write_string(r, 1, row.get::<&str, _>("name")).ok();
-            write_value(ws, r, 2, row.get::<&str, _>("value"), &area.calc_type);
+            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type);
         }
     }
 
@@ -638,15 +641,15 @@ pub async fn base_data_import(
         };
 
         // value 변환 (NUMERIC/MANUAL: ×100000, CATEGORY: 그대로)
-        let db_value = match area.calc_type.as_str() {
-            "NUMERIC" | "MANUAL" => match parse_display_value(raw_value) {
+        let db_value = match area.calc_type {
+            CalcType::Numeric | CalcType::Manual => match parse_display_value(raw_value) {
                 Ok(v) => v.to_string(),
                 Err(e) => {
                     errors.push(format!("{}행: 값 — {}", row_num, e));
                     continue;
                 }
             },
-            _ => raw_value.to_string(),
+            CalcType::Category => raw_value.to_string(),
         };
 
         // COMPOSITE: 모집단위 조회/생성
@@ -714,7 +717,7 @@ pub async fn numeric_table_list(
     Path(id): Path<i64>,
 ) -> Result<Json<Vec<RangeTableListRow>>, ApiError> {
     let area = get_area(&state.db, id).await?;
-    let composite = area.lookup_scope == "COMPOSITE";
+    let composite = area.lookup_scope == LookupScope::Composite;
 
     let rows = sqlx::query(
         "SELECT rt.threshold, rt.score,
@@ -749,7 +752,7 @@ pub async fn category_map_list(
     Path(id): Path<i64>,
 ) -> Result<Json<Vec<CategoryMapListRow>>, ApiError> {
     let area = get_area(&state.db, id).await?;
-    let composite = area.lookup_scope == "COMPOSITE";
+    let composite = area.lookup_scope == LookupScope::Composite;
 
     let rows = sqlx::query(
         "SELECT cm.category, cm.score,
@@ -784,7 +787,7 @@ pub async fn base_data_list(
     Path(id): Path<i64>,
 ) -> Result<Json<Vec<BaseDataListRow>>, ApiError> {
     let area = get_area(&state.db, id).await?;
-    let composite = area.lookup_scope == "COMPOSITE";
+    let composite = area.lookup_scope == LookupScope::Composite;
 
     let rows = sqlx::query(
         "SELECT s.student_code, s.name, bd.value,
@@ -806,12 +809,12 @@ pub async fn base_data_list(
         .iter()
         .map(|row| {
             let raw: String = row.get("value");
-            let value = match area.calc_type.as_str() {
-                "NUMERIC" | "MANUAL" => raw
+            let value = match area.calc_type {
+                CalcType::Numeric | CalcType::Manual => raw
                     .parse::<i64>()
                     .map(|v| format!("{}", v as f64 / 100_000.0))
                     .unwrap_or(raw),
-                _ => raw,
+                CalcType::Category => raw,
             };
             BaseDataListRow {
                 student_code: row.get("student_code"),
@@ -828,16 +831,16 @@ pub async fn base_data_list(
 // ── xlsx 쓰기 헬퍼 ───────────────────────────────────────────────
 
 /// DB value 문자열 → xlsx 셀 (NUMERIC/MANUAL: ÷100000 숫자, CATEGORY: 문자열)
-fn write_value(ws: &mut rust_xlsxwriter::Worksheet, row: u32, col: u16, value: &str, calc_type: &str) {
+fn write_value(ws: &mut rust_xlsxwriter::Worksheet, row: u32, col: u16, value: &str, calc_type: CalcType) {
     match calc_type {
-        "NUMERIC" | "MANUAL" => {
+        CalcType::Numeric | CalcType::Manual => {
             if let Ok(v) = value.parse::<i64>() {
                 ws.write_number(row, col, v as f64 / 100_000.0).ok();
             } else {
                 ws.write_string(row, col, value).ok();
             }
         }
-        _ => {
+        CalcType::Category => {
             ws.write_string(row, col, value).ok();
         }
     }

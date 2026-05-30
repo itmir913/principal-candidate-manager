@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 
-use crate::{auth::TeacherClaims, excel, score::Score, state::AppState};
+use crate::{
+    auth::TeacherClaims,
+    enums::{CalcType, CategoryAgg, LookupScope, MatchMode, RoundStatus},
+    excel, score::Score, state::AppState,
+};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
@@ -27,11 +31,11 @@ fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error
 #[derive(FromRow)]
 pub struct AreaRow {
     pub id: i64,
-    pub calc_type: String,
+    pub calc_type: CalcType,
     pub max_score: i64,
-    pub match_mode: Option<String>,
-    pub category_agg: Option<String>,
-    pub lookup_scope: String,
+    pub match_mode: Option<MatchMode>,
+    pub category_agg: Option<CategoryAgg>,
+    pub lookup_scope: LookupScope,
 }
 
 #[derive(FromRow)]
@@ -68,9 +72,9 @@ pub struct ResultQuery {
 
 // ── Scoring helpers ───────────────────────────────────────────────
 
-pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> Result<i64, String> {
+pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode) -> Result<i64, String> {
     match direction {
-        "UPPER" => Ok(rows
+        MatchMode::Upper => Ok(rows
             .iter()
             .filter(|(th, _)| value >= *th)
             .max_by_key(|(th, _)| *th)
@@ -78,7 +82,7 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> R
             .unwrap_or(0)),
         // threshold가 허용 상한선 역할: value <= threshold인 행 중 최소 threshold 선택.
         // value가 최대 threshold를 초과하면("5일 이상: 5점") 최대 threshold 행의 점수 사용.
-        "LOWER" => Ok(rows
+        MatchMode::Lower => Ok(rows
             .iter()
             .filter(|(th, _)| value <= *th)
             .min_by_key(|(th, _)| *th)
@@ -86,12 +90,11 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: &str) -> R
             .unwrap_or_else(|| {
                 rows.iter().max_by_key(|(th, _)| *th).map(|(_, sc)| *sc).unwrap_or(0)
             })),
-        "EXACT" => rows
+        MatchMode::Exact => rows
             .iter()
             .find(|(th, _)| *th == value)
             .map(|(_, sc)| *sc)
             .ok_or_else(|| format!("EXACT 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다", value)),
-        _ => Err(format!("알 수 없는 match_mode: {}", direction)),
     }
 }
 
@@ -102,14 +105,14 @@ pub async fn calc_area_score(
     track_id: i64,
 ) -> Result<i64, String> {
     // COMPOSITE 전형요소는 모집단위별 데이터 사용, SIMPLE은 전역 데이터
-    let lookup_track: Option<i64> = if area.lookup_scope == "COMPOSITE" {
+    let lookup_track: Option<i64> = if area.lookup_scope == LookupScope::Composite {
         Some(track_id)
     } else {
         None
     };
 
-    let raw: i64 = match area.calc_type.as_str() {
-        "NUMERIC" => {
+    let raw: i64 = match area.calc_type {
+        CalcType::Numeric => {
             let value_str: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
@@ -120,7 +123,7 @@ pub async fn calc_area_score(
 
             let Some(vs) = value_str else { return Ok(0); };
             let value: i64 = vs.trim().parse().unwrap_or(0);
-            let mode = area.match_mode.as_deref()
+            let mode = area.match_mode
                 .ok_or_else(|| format!("전형요소 id={}: NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.id))?;
 
             let mut rows: Vec<(i64, i64)> = sqlx::query(
@@ -151,7 +154,7 @@ pub async fn calc_area_score(
             lookup_range_score(value, &rows, mode)?
         }
 
-        "CATEGORY" => {
+        CalcType::Category => {
             let values: Vec<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
@@ -184,14 +187,13 @@ pub async fn calc_area_score(
             }
 
             if scores.is_empty() { return Ok(0); }
-            match area.category_agg.as_deref() {
-                Some("SUM") | None => scores.iter().sum::<i64>(),
-                Some("MAX") => *scores.iter().max().unwrap_or(&0),
-                Some(other) => return Err(format!("알 수 없는 category_agg: {}", other)),
+            match area.category_agg {
+                Some(CategoryAgg::Sum) | None => scores.iter().sum::<i64>(),
+                Some(CategoryAgg::Max) => *scores.iter().max().unwrap_or(&0),
             }
         }
 
-        "MANUAL" => {
+        CalcType::Manual => {
             let v: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
@@ -202,8 +204,6 @@ pub async fn calc_area_score(
 
             v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
         }
-
-        _ => return Err(format!("알 수 없는 calc_type: {}", area.calc_type)),
     };
 
     Ok(raw.min(area.max_score))
@@ -589,11 +589,11 @@ pub struct ScorePreviewResponse {
 struct AreaWithName {
     id: i64,
     name: String,
-    calc_type: String,
+    calc_type: CalcType,
     max_score: i64,
-    match_mode: Option<String>,
-    category_agg: Option<String>,
-    lookup_scope: String,
+    match_mode: Option<MatchMode>,
+    category_agg: Option<CategoryAgg>,
+    lookup_scope: LookupScope,
 }
 
 pub async fn score_preview(
@@ -614,11 +614,11 @@ pub async fn score_preview(
     for aw in &area_rows {
         let area = AreaRow {
             id: aw.id,
-            calc_type: aw.calc_type.clone(),
+            calc_type: aw.calc_type,
             max_score: aw.max_score,
-            match_mode: aw.match_mode.clone(),
-            category_agg: aw.category_agg.clone(),
-            lookup_scope: aw.lookup_scope.clone(),
+            match_mode: aw.match_mode,
+            category_agg: aw.category_agg,
+            lookup_scope: aw.lookup_scope,
         };
         let score_raw = calc_area_score(&state.db, q.student_id, &area, q.track_id)
             .await
@@ -642,7 +642,7 @@ pub async fn recommend_result(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
-    let status: Option<String> = sqlx::query_scalar(
+    let status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(rid)
@@ -650,7 +650,7 @@ pub async fn recommend_result(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if status.as_deref() != Some("CLOSED") {
+    if status != Some(RoundStatus::Closed) {
         return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 확정이 가능합니다".into()));
     }
 

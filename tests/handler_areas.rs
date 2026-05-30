@@ -1,6 +1,7 @@
 mod common;
 
 use axum::{extract::State, http::StatusCode, Json};
+use principal_candidate_manager::enums::{CalcType, LookupScope};
 use principal_candidate_manager::handlers::areas::{create_area, CreateAreaBody};
 use principal_candidate_manager::score::Score;
 
@@ -8,9 +9,9 @@ fn manual_area_body(name: &str, max_score: Score) -> CreateAreaBody {
     CreateAreaBody {
         name: name.into(),
         max_score,
-        calc_type: "MANUAL".into(),
+        calc_type: CalcType::Manual,
         teacher_editable: true,
-        lookup_scope: "SIMPLE".into(),
+        lookup_scope: LookupScope::Simple,
         match_mode: None,
         category_agg: None,
         multi_value: false,
@@ -62,9 +63,9 @@ async fn create_numeric_area_without_match_mode_rejected() {
     let body = CreateAreaBody {
         name: "내신".into(),
         max_score: Score::from_raw(1_000_000),
-        calc_type: "NUMERIC".into(),
+        calc_type: CalcType::Numeric,
         teacher_editable: false,
-        lookup_scope: "SIMPLE".into(),
+        lookup_scope: LookupScope::Simple,
         match_mode: None,
         category_agg: None,
         multi_value: false,
@@ -80,9 +81,9 @@ async fn create_category_area_without_category_agg_rejected() {
     let body = CreateAreaBody {
         name: "활동".into(),
         max_score: Score::from_raw(1_000_000),
-        calc_type: "CATEGORY".into(),
+        calc_type: CalcType::Category,
         teacher_editable: false,
-        lookup_scope: "SIMPLE".into(),
+        lookup_scope: LookupScope::Simple,
         match_mode: None,
         category_agg: None,
         multi_value: false,
@@ -90,4 +91,3 @@ async fn create_category_area_without_category_agg_rejected() {
     let res = create_area(State(common::make_state(pool)), Json(body)).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
-
