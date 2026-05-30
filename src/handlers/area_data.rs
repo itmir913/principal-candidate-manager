@@ -4,13 +4,13 @@
 use std::collections::HashSet;
 
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::Response,
     Json,
 };
 use rust_xlsxwriter::Workbook;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use crate::{
@@ -29,6 +29,13 @@ pub struct ImportResult {
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 }
+
+#[derive(Deserialize)]
+pub struct StudentTypeQuery {
+    #[serde(default = "student_type_graduated")]
+    pub student_type: String,
+}
+fn student_type_graduated() -> String { "graduated".to_string() }
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct AreaInfo {
@@ -502,16 +509,26 @@ pub async fn category_map_import(
 
 // ── BASE DATA ────────────────────────────────────────────────────
 
-/// GET /api/areas/:id/base-data/template
+/// GET /api/areas/:id/base-data/template?student_type=enrolled|graduated
 pub async fn base_data_template(
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(q): Query<StudentTypeQuery>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
-    let headers: Vec<&str> = if area.lookup_scope == LookupScope::Composite {
-        vec!["학생코드", "이름", "값", "대학명", "모집단위명"]
+    let composite = area.lookup_scope == LookupScope::Composite;
+    let headers: Vec<&str> = if q.student_type == "enrolled" {
+        if composite {
+            vec!["학년", "반", "번호", "이름", "값", "대학명", "모집단위명"]
+        } else {
+            vec!["학년", "반", "번호", "이름", "값"]
+        }
     } else {
-        vec!["학생코드", "이름", "값"]
+        if composite {
+            vec!["학생코드", "이름", "값", "대학명", "모집단위명"]
+        } else {
+            vec!["학생코드", "이름", "값"]
+        }
     };
     let buf = simple_template(&headers)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -581,19 +598,26 @@ pub async fn base_data_export(
     Ok(excel::xlsx_response(buf, &format!("base_data_{}.xlsx", excel::now_tag())))
 }
 
-/// POST /api/areas/:id/base-data/import
+/// POST /api/areas/:id/base-data/import?student_type=enrolled|graduated
 pub async fn base_data_import(
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(q): Query<StudentTypeQuery>,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
+    let enrolled = q.student_type == "enrolled";
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
-    excel::require_cols(&col, &["학생코드", "값"])
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    if enrolled {
+        excel::require_cols(&col, &["학년", "반", "번호", "값"])
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    } else {
+        excel::require_cols(&col, &["학생코드", "값"])
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    }
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -611,10 +635,67 @@ pub async fn base_data_import(
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
 
-        let student_code = excel::get_col(cols, &col, "학생코드");
-        if student_code.is_empty() {
-            errors.push(format!("{}행: 학생코드 누락", row_num));
-            continue;
+        // ── 학생 조회 ──────────────────────────────────────────────
+        let student_id: i64;
+        let student_label: String;
+        if enrolled {
+            let grade_s   = excel::get_col(cols, &col, "학년");
+            let class_s   = excel::get_col(cols, &col, "반");
+            let seq_s     = excel::get_col(cols, &col, "번호");
+            if grade_s.is_empty() || class_s.is_empty() || seq_s.is_empty() {
+                errors.push(format!("{}행: 학년/반/번호 누락", row_num));
+                continue;
+            }
+            let grade: i64 = match grade_s.parse() {
+                Ok(v) => v,
+                Err(_) => { errors.push(format!("{}행: 학년 '{}' 숫자 변환 실패", row_num, grade_s)); continue; }
+            };
+            let class_no: i64 = match class_s.parse() {
+                Ok(v) => v,
+                Err(_) => { errors.push(format!("{}행: 반 '{}' 숫자 변환 실패", row_num, class_s)); continue; }
+            };
+            let seq_no: i64 = match seq_s.parse() {
+                Ok(v) => v,
+                Err(_) => { errors.push(format!("{}행: 번호 '{}' 숫자 변환 실패", row_num, seq_s)); continue; }
+            };
+            let sid: Option<i64> = sqlx::query_scalar(
+                "SELECT id FROM students WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
+            )
+            .bind(grade).bind(class_no).bind(seq_no)
+            .fetch_optional(&state.db).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            match sid {
+                Some(v) => {
+                    student_id = v;
+                    student_label = format!("{}학년 {}반 {}번", grade, class_no, seq_no);
+                }
+                None => {
+                    errors.push(format!("{}행: {}학년 {}반 {}번 — 등록된 재학생을 찾을 수 없습니다", row_num, grade, class_no, seq_no));
+                    continue;
+                }
+            }
+        } else {
+            let student_code = excel::get_col(cols, &col, "학생코드");
+            if student_code.is_empty() {
+                errors.push(format!("{}행: 학생코드 누락", row_num));
+                continue;
+            }
+            let sid: Option<i64> = sqlx::query_scalar(
+                "SELECT id FROM students WHERE student_code = ?",
+            )
+            .bind(student_code)
+            .fetch_optional(&state.db).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            match sid {
+                Some(v) => {
+                    student_id = v;
+                    student_label = format!("학생코드 '{}'", student_code);
+                }
+                None => {
+                    errors.push(format!("{}행: 학생코드 '{}' 없음 (학생을 먼저 등록하세요)", row_num, student_code));
+                    continue;
+                }
+            }
         }
 
         let raw_value = excel::get_col(cols, &col, "값");
@@ -622,23 +703,6 @@ pub async fn base_data_import(
             errors.push(format!("{}행: 값 누락", row_num));
             continue;
         }
-
-        // 학생코드로 학생 조회 (없으면 오류)
-        let student_id: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM students WHERE student_code = ?",
-        )
-        .bind(student_code)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-        let student_id = match student_id {
-            Some(sid) => sid,
-            None => {
-                errors.push(format!("{}행: 학생코드 '{}' 없음 (학생을 먼저 등록하세요)", row_num, student_code));
-                continue;
-            }
-        };
 
         // value 변환 (NUMERIC/MANUAL: ×100000, CATEGORY: 그대로)
         let db_value = match area.calc_type {
@@ -661,8 +725,8 @@ pub async fn base_data_import(
         // 단일값 전형요소: 동일 (student, track) 중복 행은 전체 import 거부
         if single_value && !seen.insert((student_id, track_id)) {
             errors.push(format!(
-                "{}행: 학생코드 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
-                row_num, student_code
+                "{}행: {} 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                row_num, student_label
             ));
             continue;
         }

@@ -612,6 +612,7 @@ const ExcelPanel = defineComponent({
   setup(props, { emit }) {
     const err = ref('')
     const uploading = ref(false)
+    const studentType = ref('enrolled')
 
     async function dlTemplate() {
       err.value = ''
@@ -624,8 +625,8 @@ const ExcelPanel = defineComponent({
             ? `${props.areaName}_category_map_template.xlsx`
             : `${props.areaName}_numeric_table_template.xlsx`)
         } else {
-          const res = await downloadBaseDataTemplate(props.areaId)
-          saveBlob(res, `${props.areaName}_base_data_template.xlsx`)
+          const res = await downloadBaseDataTemplate(props.areaId, studentType.value)
+          saveBlob(res, `${props.areaName}_base_data_${studentType.value}_template.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
     }
@@ -659,7 +660,7 @@ const ExcelPanel = defineComponent({
             ? await importCategoryMap(props.areaId, file)
             : await importNumericTable(props.areaId, file)
         } else {
-          result = await importBaseData(props.areaId, file)
+          result = await importBaseData(props.areaId, file, studentType.value)
         }
         emit('result', result)
       } catch (e) {
@@ -673,22 +674,47 @@ const ExcelPanel = defineComponent({
       finally { uploading.value = false; evt.target.value = '' }
     }
 
+    const btnBase = 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50'
+
     return () => h('div', { class: 'space-y-2' }, [
-      h('div', { class: 'flex flex-wrap gap-2' }, [
-        h('button', {
-          class: 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50',
-          onClick: dlTemplate,
-        }, '양식 다운로드'),
-        h('button', {
-          class: 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50',
-          onClick: dlExport,
-        }, '목록 내보내기'),
+      h('div', { class: 'flex flex-wrap gap-2 items-center' }, [
+
+        // ── 기초 데이터: 재학생/졸업생 라디오 + 양식 다운로드 + 불러오기
+        ...(props.panel === 'base' ? [
+          h('label', { class: 'flex items-center gap-1 text-sm cursor-pointer' }, [
+            h('input', {
+              type: 'radio',
+              name: `st-${props.areaId}`,
+              checked: studentType.value === 'enrolled',
+              onChange: () => { studentType.value = 'enrolled' },
+            }),
+            '재학생',
+          ]),
+          h('label', { class: 'flex items-center gap-1 text-sm cursor-pointer' }, [
+            h('input', {
+              type: 'radio',
+              name: `st-${props.areaId}`,
+              checked: studentType.value === 'graduated',
+              onChange: () => { studentType.value = 'graduated' },
+            }),
+            '졸업생',
+          ]),
+        ] : []),
+
+        // ── 양식 다운로드 (score 패널은 기존 그대로)
+        h('button', { class: btnBase, onClick: dlTemplate }, '양식 다운로드'),
+
+        // ── 불러오기
         h('label', {
           class: `px-3 py-1.5 text-sm rounded cursor-pointer ${uploading.value ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
         }, [
-          uploading.value ? '가져오는 중…' : '가져오기',
+          uploading.value ? '가져오는 중…' : '불러오기',
           h('input', { type: 'file', accept: '.xlsx,.csv', class: 'hidden', onChange: onFile }),
         ]),
+
+        // ── 구분선 + 전체 목록 다운로드
+        h('span', { class: 'text-gray-300 select-none' }, '|'),
+        h('button', { class: btnBase, onClick: dlExport }, '전체 목록 다운로드'),
       ]),
       err.value ? h('p', { class: 'text-red-500 text-sm' }, err.value) : null,
     ])

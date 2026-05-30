@@ -56,13 +56,13 @@ export const getBaseDataList = (id) =>
   axios.get(`/api/areas/${id}/base-data/list`).then(r => r.data)
 
 // ── 기초 데이터 Excel ──────────────────────────────────────────
-export const downloadBaseDataTemplate = (id) =>
-  axios.get(`/api/areas/${id}/base-data/template`, { responseType: 'blob' })
+export const downloadBaseDataTemplate = (id, studentType) =>
+  axios.get(`/api/areas/${id}/base-data/template`, { responseType: 'blob', params: { student_type: studentType } })
 export const exportBaseData = (id) =>
   axios.get(`/api/areas/${id}/base-data/export`, { responseType: 'blob' })
-export const importBaseData = (id, file) => {
+export const importBaseData = (id, file, studentType) => {
   const fd = new FormData(); fd.append('file', file)
-  return axios.post(`/api/areas/${id}/base-data/import`, fd).then(r => r.data)
+  return axios.post(`/api/areas/${id}/base-data/import`, fd, { params: { student_type: studentType } }).then(r => r.data)
 }
 
 // ── 외부 가져오기 (대교협·유니브 석차연명부) ──────────────────
