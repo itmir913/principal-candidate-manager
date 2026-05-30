@@ -182,6 +182,7 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
+        .route("/rounds/:id/summary/export", get(handlers::scoring::export_round_summary))
         // 7단계: 점수 미리보기
         .route("/score-preview", get(handlers::scoring::score_preview))
         // 5단계: 지원·추천

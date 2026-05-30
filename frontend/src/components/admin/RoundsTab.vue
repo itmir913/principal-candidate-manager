@@ -177,6 +177,11 @@
               :disabled="results.length === 0 || downloading"
               @click="downloadExcel"
             >전체 지원자 목록 다운로드</button>
+            <button
+              class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
+              :disabled="selected.status === 'OPEN' || downloadingSummary"
+              @click="downloadSummary"
+            >라운드 결과 다운로드</button>
           </div>
 
           <div v-if="results.length === 0" class="text-sm text-gray-400 py-6 text-center">
@@ -287,6 +292,7 @@ import {
   getApplications, abandonApplication,
   getAllTracks, getAreas,
   exportResultsExcel,
+  exportRoundSummary,
 } from '../../api/admin.js'
 
 function fmtDt(s) {
@@ -306,9 +312,10 @@ const results = ref([])
 const areas   = ref([])
 const tracks  = ref([])   // 전체 모집단위 (unit_quota 포함)
 
-const calcLoading = ref(false)
-const calcMsg     = ref(null)
-const downloading = ref(false)
+const calcLoading       = ref(false)
+const calcMsg           = ref(null)
+const downloading       = ref(false)
+const downloadingSummary = ref(false)
 
 const selectedTrackId = ref('')
 
@@ -495,6 +502,24 @@ async function downloadExcel() {
     alert(e.response?.data || e.message)
   } finally {
     downloading.value = false
+  }
+}
+
+async function downloadSummary() {
+  if (!selected.value) return
+  downloadingSummary.value = true
+  try {
+    const res = await exportRoundSummary(selected.value.id)
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `round_${selected.value.id}_summary.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  } finally {
+    downloadingSummary.value = false
   }
 }
 

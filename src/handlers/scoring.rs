@@ -565,6 +565,92 @@ pub async fn export_results(
     Ok(excel::xlsx_response(buf, &filename))
 }
 
+// ── Round summary Excel export ────────────────────────────────────
+
+#[derive(FromRow)]
+struct RoundSummaryRow {
+    univ_name: String,
+    track_name: String,
+    unit_quota: Option<i64>,
+    before_count: i64,
+    this_count: i64,
+}
+
+pub async fn export_round_summary(
+    State(state): State<AppState>,
+    Path(round_id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let rows: Vec<RoundSummaryRow> = sqlx::query_as::<_, RoundSummaryRow>(
+        "SELECT u.univ_name, ut.track_name, ut.unit_quota,
+                CAST((SELECT COUNT(*) FROM results r2
+                      JOIN applications a2 ON a2.student_id = r2.student_id
+                                          AND a2.track_id  = r2.track_id
+                                          AND a2.round_id  = r2.round_id
+                      WHERE r2.track_id  = ut.id
+                        AND r2.recommended = 1
+                        AND a2.abandoned   = 0
+                        AND r2.round_id    < ?) AS INTEGER) AS before_count,
+                CAST((SELECT COUNT(*) FROM results r3
+                      JOIN applications a3 ON a3.student_id = r3.student_id
+                                          AND a3.track_id  = r3.track_id
+                                          AND a3.round_id  = r3.round_id
+                      WHERE r3.track_id  = ut.id
+                        AND r3.recommended = 1
+                        AND a3.abandoned   = 0
+                        AND r3.round_id    = ?) AS INTEGER) AS this_count
+         FROM univ_tracks ut
+         JOIN universities u ON u.id = ut.univ_id
+         ORDER BY u.univ_name, ut.track_name",
+    )
+    .bind(round_id)
+    .bind(round_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut wb = Workbook::new();
+    let ws = wb
+        .add_worksheet()
+        .set_name("라운드결과")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let headers = [
+        "대학", "모집단위", "전체 정원",
+        "라운드 전 잔여석", "이번 라운드 추천 인원", "남은 잔여석",
+    ];
+    for (col, h) in headers.iter().enumerate() {
+        ws.write_string(0, col as u16, *h).ok();
+    }
+
+    for (i, row) in rows.iter().enumerate() {
+        let r = (i + 1) as u32;
+        ws.write_string(r, 0, &row.univ_name).ok();
+        ws.write_string(r, 1, &row.track_name).ok();
+        match row.unit_quota {
+            Some(q) => {
+                let before_remaining = (q - row.before_count).max(0);
+                let after_remaining = (q - row.before_count - row.this_count).max(0);
+                ws.write_number(r, 2, q as f64).ok();
+                ws.write_number(r, 3, before_remaining as f64).ok();
+                ws.write_number(r, 4, row.this_count as f64).ok();
+                ws.write_number(r, 5, after_remaining as f64).ok();
+            }
+            None => {
+                ws.write_string(r, 2, "무제한").ok();
+                ws.write_string(r, 3, "무제한").ok();
+                ws.write_number(r, 4, row.this_count as f64).ok();
+                ws.write_string(r, 5, "무제한").ok();
+            }
+        }
+    }
+
+    let buf = wb
+        .save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let filename = format!("round_{}_summary_{}.xlsx", round_id, excel::now_tag());
+    Ok(excel::xlsx_response(buf, &filename))
+}
+
 // ── Teacher results ───────────────────────────────────────────────
 
 #[derive(Serialize, FromRow)]

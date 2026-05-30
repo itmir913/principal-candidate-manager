@@ -179,6 +179,9 @@ export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => 
 export const exportResultsExcel = (roundId) =>
   axios.get(`/api/rounds/${roundId}/results/export`, { responseType: 'blob' })
 
+export const exportRoundSummary = (roundId) =>
+  axios.get(`/api/rounds/${roundId}/summary/export`, { responseType: 'blob' })
+
 // ── 관리자 비밀번호 변경 ───────────────────────────────────────
 export const changeAdminPassword = (currentPassword, newPassword) =>
   axios.put('/api/auth/admin/password', { current_password: currentPassword, new_password: newPassword })
