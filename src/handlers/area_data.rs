@@ -13,7 +13,7 @@ use rust_xlsxwriter::Workbook;
 use serde::Serialize;
 use sqlx::Row;
 
-use crate::{excel, state::AppState};
+use crate::{excel, score::Score, state::AppState};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
@@ -36,10 +36,6 @@ pub(crate) struct AreaInfo {
 }
 
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
-
-fn db_to_display(v: i64) -> f64 {
-    v as f64 / 100_000.0
-}
 
 /// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
 /// 음수 허용: 감점 전형요소(특정 범주 해당 학생 감점)를 지원하기 위해 음수 점수가 가능.
@@ -242,8 +238,8 @@ pub async fn numeric_table_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_number(r, 0, db_to_display(row.get("threshold"))).ok();
-            ws.write_number(r, 1, db_to_display(row.get("score"))).ok();
+            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).ok();
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
             ws.write_string(r, 2, row.get::<&str, _>("univ_name")).ok();
             ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
         }
@@ -261,8 +257,8 @@ pub async fn numeric_table_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_number(r, 0, db_to_display(row.get("threshold"))).ok();
-            ws.write_number(r, 1, db_to_display(row.get("score"))).ok();
+            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).ok();
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
         }
     }
 
@@ -396,7 +392,7 @@ pub async fn category_map_export(
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
             ws.write_string(r, 0, row.get::<&str, _>("category")).ok();
-            ws.write_number(r, 1, db_to_display(row.get("score"))).ok();
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
             ws.write_string(r, 2, row.get::<&str, _>("univ_name")).ok();
             ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
         }
@@ -415,7 +411,7 @@ pub async fn category_map_export(
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
             ws.write_string(r, 0, row.get::<&str, _>("category")).ok();
-            ws.write_number(r, 1, db_to_display(row.get("score"))).ok();
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
         }
     }
 
@@ -689,8 +685,8 @@ pub async fn base_data_import(
 
 #[derive(Serialize)]
 pub struct RangeTableListRow {
-    pub threshold: f64,
-    pub score: f64,
+    pub threshold: Score,
+    pub score: Score,
     pub univ_name: Option<String>,
     pub track_name: Option<String>,
 }
@@ -698,7 +694,7 @@ pub struct RangeTableListRow {
 #[derive(Serialize)]
 pub struct CategoryMapListRow {
     pub category: String,
-    pub score: f64,
+    pub score: Score,
     pub univ_name: Option<String>,
     pub track_name: Option<String>,
 }
@@ -738,8 +734,8 @@ pub async fn numeric_table_list(
     let result = rows
         .iter()
         .map(|row| RangeTableListRow {
-            threshold: db_to_display(row.get("threshold")),
-            score: db_to_display(row.get("score")),
+            threshold: Score::from_raw(row.get("threshold")),
+            score: Score::from_raw(row.get("score")),
             univ_name: if composite { Some(row.get("univ_name")) } else { None },
             track_name: if composite { Some(row.get("track_name")) } else { None },
         })
@@ -774,7 +770,7 @@ pub async fn category_map_list(
         .iter()
         .map(|row| CategoryMapListRow {
             category: row.get("category"),
-            score: db_to_display(row.get("score")),
+            score: Score::from_raw(row.get("score")),
             univ_name: if composite { Some(row.get("univ_name")) } else { None },
             track_name: if composite { Some(row.get("track_name")) } else { None },
         })
@@ -813,7 +809,7 @@ pub async fn base_data_list(
             let value = match area.calc_type.as_str() {
                 "NUMERIC" | "MANUAL" => raw
                     .parse::<i64>()
-                    .map(|v| format!("{}", db_to_display(v)))
+                    .map(|v| format!("{}", v as f64 / 100_000.0))
                     .unwrap_or(raw),
                 _ => raw,
             };
@@ -836,7 +832,7 @@ fn write_value(ws: &mut rust_xlsxwriter::Worksheet, row: u32, col: u16, value: &
     match calc_type {
         "NUMERIC" | "MANUAL" => {
             if let Ok(v) = value.parse::<i64>() {
-                ws.write_number(row, col, db_to_display(v)).ok();
+                ws.write_number(row, col, v as f64 / 100_000.0).ok();
             } else {
                 ws.write_string(row, col, value).ok();
             }

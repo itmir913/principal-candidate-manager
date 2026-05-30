@@ -4,8 +4,9 @@ use axum::{extract::{Path, State}, http::StatusCode, Json};
 use principal_candidate_manager::handlers::areas::{
     create_area, put_category_map, put_numeric_table, CategoryRow, CreateAreaBody, RangeRow,
 };
+use principal_candidate_manager::score::Score;
 
-fn manual_area_body(name: &str, max_score: f64) -> CreateAreaBody {
+fn manual_area_body(name: &str, max_score: Score) -> CreateAreaBody {
     CreateAreaBody {
         name: name.into(),
         max_score,
@@ -46,7 +47,7 @@ async fn create_area_zero_max_score_succeeds() {
     let pool = common::create_test_pool().await;
     let (status, _) = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("순수감점", 0.0)),
+        Json(manual_area_body("순수감점", Score::from_raw(0))),
     )
     .await
     .unwrap();
@@ -58,7 +59,7 @@ async fn create_area_negative_max_score_rejected() {
     let pool = common::create_test_pool().await;
     let res = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("test", -1.0)),
+        Json(manual_area_body("test", Score::from_raw(-100_000))),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -69,7 +70,7 @@ async fn create_area_valid_max_score_succeeds() {
     let pool = common::create_test_pool().await;
     let res = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("수기입력", 10.0)),
+        Json(manual_area_body("수기입력", Score::from_raw(1_000_000))),
     )
     .await;
     let (status, _) = res.unwrap();
@@ -82,7 +83,7 @@ async fn create_numeric_area_without_match_mode_rejected() {
     let pool = common::create_test_pool().await;
     let body = CreateAreaBody {
         name: "내신".into(),
-        max_score: 10.0,
+        max_score: Score::from_raw(1_000_000),
         calc_type: "NUMERIC".into(),
         teacher_editable: 0,
         lookup_scope: "SIMPLE".into(),
@@ -100,7 +101,7 @@ async fn create_category_area_without_category_agg_rejected() {
     let pool = common::create_test_pool().await;
     let body = CreateAreaBody {
         name: "활동".into(),
-        max_score: 10.0,
+        max_score: Score::from_raw(1_000_000),
         calc_type: "CATEGORY".into(),
         teacher_editable: 0,
         lookup_scope: "SIMPLE".into(),

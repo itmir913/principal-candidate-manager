@@ -9,21 +9,17 @@ use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 
-use crate::{auth::TeacherClaims, excel, state::AppState};
+use crate::{auth::TeacherClaims, excel, score::Score, state::AppState};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
-
-fn score_as_f64<S: Serializer>(val: &i64, s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_f64(*val as f64 / 100_000.0)
-}
 
 fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeMap;
     let raw: HashMap<String, i64> = serde_json::from_str(val).unwrap_or_default();
     let mut m = s.serialize_map(Some(raw.len()))?;
     for (k, v) in &raw {
-        m.serialize_entry(k, &(*v as f64 / 100_000.0))?;
+        m.serialize_entry(k, &Score::from_raw(*v))?;
     }
     m.end()
 }
@@ -49,8 +45,7 @@ pub struct ResultRow {
     pub student_id: i64,
     pub track_id: i64,
     pub round_id: i64,
-    #[serde(serialize_with = "score_as_f64")]
-    pub total_score: i64,
+    pub total_score: Score,
     #[serde(serialize_with = "score_detail_as_map")]
     pub score_detail: String,
     pub ranking: Option<i64>,
@@ -315,11 +310,11 @@ pub async fn calculate_scores(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        let mut ranked: Vec<(i64, i64, i64)> = rows
+        let mut ranked: Vec<(i64, Score, i64)> = rows
             .into_iter()
             .map(|r| (
                 r.get::<i64, _>("student_id"),
-                r.get::<i64, _>("total_score"),
+                Score::from_raw(r.get::<i64, _>("total_score")),
                 r.get::<i64, _>("is_enrolled"),
             ))
             .collect();
@@ -498,7 +493,7 @@ pub async fn export_results(
                 col += 1;
             }
 
-            ws.write_number(row, col, r.total_score as f64 / 100_000.0).ok(); col += 1;
+            ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).ok(); col += 1;
             ws.write_string(row, col, if r.recommended == 1 { "추천" } else { "" }).ok(); col += 1;
             ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).ok();
         }
@@ -579,12 +574,12 @@ pub struct ScorePreviewQuery {
 pub struct AreaPreview {
     pub area_id: i64,
     pub area_name: String,
-    pub score: f64,
+    pub score: Score,
 }
 
 #[derive(Serialize)]
 pub struct ScorePreviewResponse {
-    pub total: f64,
+    pub total: Score,
     pub detail: Vec<AreaPreview>,
 }
 
@@ -630,11 +625,11 @@ pub async fn score_preview(
         detail.push(AreaPreview {
             area_id: aw.id,
             area_name: aw.name.clone(),
-            score: score_raw as f64 / 100_000.0,
+            score: Score::from_raw(score_raw),
         });
     }
 
-    Ok(Json(ScorePreviewResponse { total: total_raw as f64 / 100_000.0, detail }))
+    Ok(Json(ScorePreviewResponse { total: Score::from_raw(total_raw), detail }))
 }
 
 // ─────────────────────────────────────────────────────────────────

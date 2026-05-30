@@ -3,13 +3,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize, Serializer};
-
-fn score_as_f64<S: Serializer>(val: &i64, s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_f64(*val as f64 / 100_000.0)
-}
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+use crate::score::Score;
 use crate::state::AppState;
 
 type ApiError = (StatusCode, String);
@@ -18,8 +15,7 @@ type ApiError = (StatusCode, String);
 pub struct AreaRow {
     pub id: i64,
     pub name: String,
-    #[serde(serialize_with = "score_as_f64")]
-    pub max_score: i64,
+    pub max_score: Score,
     pub calc_type: String,
     pub teacher_editable: i64,
     pub lookup_scope: String,
@@ -31,7 +27,7 @@ pub struct AreaRow {
 #[derive(Deserialize)]
 pub struct CreateAreaBody {
     pub name: String,
-    pub max_score: f64,
+    pub max_score: Score,
     pub calc_type: String,
     pub teacher_editable: i64,
     pub lookup_scope: String,
@@ -76,10 +72,9 @@ pub async fn create_area(
     State(state): State<AppState>,
     Json(body): Json<CreateAreaBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
-    if body.max_score < 0.0 {
+    if body.max_score.raw() < 0 {
         return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
-    let max_score_db = (body.max_score * 100_000.0).round() as i64;
     if body.calc_type == "NUMERIC" && body.match_mode.is_none() {
         return Err((StatusCode::BAD_REQUEST, "NUMERIC 전형요소는 match_mode(UPPER/LOWER/EXACT)가 필수입니다".into()));
     }
@@ -97,7 +92,7 @@ pub async fn create_area(
          RETURNING id",
     )
     .bind(&body.name)
-    .bind(max_score_db)
+    .bind(body.max_score.raw())
     .bind(&body.calc_type)
     .bind(body.teacher_editable)
     .bind(&body.lookup_scope)
