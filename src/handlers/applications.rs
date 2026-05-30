@@ -618,8 +618,9 @@ pub async fn teacher_delete_application(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // results를 먼저 삭제해야 FK 제약 위반 없음 (results → applications 참조)
     sqlx::query(
-        "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+        "DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
     .bind(tid)
@@ -628,9 +629,8 @@ pub async fn teacher_delete_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // recommended=0인 results만 삭제 (추천 확정된 것은 보호)
     sqlx::query(
-        "DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ? AND recommended = 0",
+        "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
     .bind(tid)
