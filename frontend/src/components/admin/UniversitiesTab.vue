@@ -283,12 +283,12 @@
         <template v-else>
           <!-- 라운드별 그룹 -->
           <div
-            v-for="(group, idx) in groupedByRound"
+            v-for="group in groupedByRound"
             :key="group.round_id"
             class="mb-4"
           >
             <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              {{ idx + 1 }}차 ({{ group.entries.length }}명)
+              {{ group.round_id }}차 ({{ group.entries.length }}명)
             </h4>
             <table class="w-full text-xs border-collapse">
               <thead>
