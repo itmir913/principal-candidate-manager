@@ -4,7 +4,7 @@
       불러오는 중...
     </div>
 
-    <div v-else-if="resultsByRound.length === 0" class="bg-white border rounded-lg px-4 py-8 text-center text-sm text-gray-400">
+    <div v-else-if="resultsByRound.length === 0 && !currentRound" class="bg-white border rounded-lg px-4 py-8 text-center text-sm text-gray-400">
       라운드가 아직 마감되지 않았습니다. 관리자가 라운드를 마감할 때까지 기다려주세요.
     </div>
 
@@ -68,17 +68,30 @@
         </table>
       </div>
     </div>
+
+    <!-- 진행중인 라운드 플레이스홀더 -->
+    <div v-if="!loading && currentRound" class="bg-white border rounded-lg overflow-hidden">
+      <div class="px-4 py-3 border-b bg-gray-50">
+        <h2 class="text-sm font-semibold text-gray-700">
+          {{ auth.grade }}학년 {{ auth.classNo }}반 — {{ currentRound.id }}라운드 결과
+        </h2>
+      </div>
+      <div class="px-4 py-8 text-center text-sm text-gray-400">
+        현재 진행중인 라운드입니다.
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
+import { getCurrentRound, teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
 
 const auth = useAuthStore()
 
 const results = ref([])
+const currentRound = ref(null)
 const loading = ref(false)
 
 const resultsByRound = computed(() => {
@@ -120,7 +133,10 @@ async function handleAbandon(r) {
 onMounted(async () => {
   loading.value = true
   try {
-    results.value = await teacherGetResults()
+    [results.value, currentRound.value] = await Promise.all([
+      teacherGetResults(),
+      getCurrentRound(),
+    ])
   } catch {
     results.value = []
   } finally {
