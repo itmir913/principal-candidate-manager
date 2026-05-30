@@ -441,7 +441,11 @@ async fn score_preview_manual_exceeds_max_score_returns_warning() {
 #[tokio::test]
 async fn create_application_with_base_data_saves_correctly() {
     let pool = common::create_test_pool_shared().await;
-    let (sid, tid, rid, num_aid, cat_aid, _, _) = setup_base(&pool).await;
+    let (sid, tid, rid, num_aid, cat_aid, man_aid, _) = setup_base(&pool).await;
+
+    // 관리자가 사전에 업로드한 면접점수 데이터 (teacher_editable=0)
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '800000', 0)")
+        .bind(sid).bind(man_aid).execute(&pool).await.unwrap();
 
     let res = teacher_create_application(
         State(common::make_state(pool.clone())),
@@ -517,7 +521,11 @@ async fn create_application_non_editable_area_rejected() {
 #[tokio::test]
 async fn create_application_base_data_overwritten_on_resave() {
     let pool = common::create_test_pool_shared().await;
-    let (sid, tid, rid, num_aid, _, _, _) = setup_base(&pool).await;
+    let (sid, tid, rid, num_aid, cat_aid, man_aid, _) = setup_base(&pool).await;
+
+    // 관리자가 사전에 업로드한 면접점수 데이터 (teacher_editable=0)
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '800000', 0)")
+        .bind(sid).bind(man_aid).execute(&pool).await.unwrap();
 
     // 첫 번째 저장
     teacher_create_application(
@@ -528,6 +536,7 @@ async fn create_application_base_data_overwritten_on_resave() {
             department_name: "컴퓨터공학과".into(),
             base_data_entries: vec![
                 BaseDataEntry { area_id: num_aid, values: vec!["30".into()] },
+                BaseDataEntry { area_id: cat_aid, values: vec!["회장".into()] },
             ],
         }),
     )
@@ -543,6 +552,7 @@ async fn create_application_base_data_overwritten_on_resave() {
             department_name: "전자공학과".into(),
             base_data_entries: vec![
                 BaseDataEntry { area_id: num_aid, values: vec!["45".into()] },
+                BaseDataEntry { area_id: cat_aid, values: vec!["부회장".into()] },
             ],
         }),
     )

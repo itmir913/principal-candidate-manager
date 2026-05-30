@@ -523,6 +523,21 @@ pub async fn category_map_import(
 
     for (track_id_or_zero,) in &groups {
         let track_id = if *track_id_or_zero == 0 { None } else { Some(*track_id_or_zero) };
+
+        // 양수 점수가 하나도 없으면(감점 전용 그룹) 0점 행 없이도 허용 — 미해당 학생의 0점이 암묵적 기본값
+        let has_positive: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM category_map WHERE area_id = ? AND COALESCE(track_id, 0) = ? AND score > 0)",
+        )
+        .bind(id)
+        .bind(track_id_or_zero)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if !has_positive {
+            continue;
+        }
+
         let has_zero: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM category_map WHERE area_id = ? AND COALESCE(track_id, 0) = ? AND score = 0)",
         )

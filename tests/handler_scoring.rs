@@ -1014,6 +1014,8 @@ async fn calculate_scores_nonexistent_round_returns_not_found() {
 async fn calculate_scores_no_applications_returns_zero_count() {
     let pool = common::create_test_pool().await;
     let (_, _, rid) = setup_full(&pool).await;
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
     let axum::Json(result) =
         calculate_scores(State(common::make_state(pool)), Path(rid)).await.unwrap();
     assert_eq!(result["calculated"], 0);
@@ -1034,6 +1036,9 @@ async fn calculate_scores_creates_result_rows_and_ranking() {
     .execute(&pool)
     .await
     .unwrap();
+
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
 
     let axum::Json(result) =
         calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
@@ -1138,6 +1143,9 @@ async fn calculate_scores_ranks_higher_score_first() {
         .unwrap();
     }
 
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+
     let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let rank1: Option<i64> =
@@ -1184,8 +1192,6 @@ async fn recommend_on_closed_round_sets_flag() {
     .await
     .unwrap();
 
-    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
-
     sqlx::query(
         "UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?",
     )
@@ -1193,6 +1199,8 @@ async fn recommend_on_closed_round_sets_flag() {
     .execute(&pool)
     .await
     .unwrap();
+
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     recommend_result(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
         .await

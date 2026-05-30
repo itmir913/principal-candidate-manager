@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use principal_candidate_manager::handlers::rounds::{
-    close_round, get_current_round, open_round,
+    close_round, finalize_round, get_current_round, open_round,
 };
 
 // ── open_round ────────────────────────────────────────────────────
@@ -32,12 +32,30 @@ async fn open_round_when_already_open_returns_conflict() {
 }
 
 #[tokio::test]
-async fn open_round_after_close_creates_new_round() {
+async fn open_round_after_close_returns_conflict() {
+    // CLOSED 상태에서는 새 라운드를 열 수 없음 — FINALIZED 후에만 가능
     let pool = common::create_test_pool().await;
     let (_, axum::Json(body)) =
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let id = body["id"].as_i64().unwrap();
     let _ = close_round(State(common::make_state(pool.clone())), Path(id))
+        .await
+        .unwrap();
+    let res = open_round(State(common::make_state(pool.clone()))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn open_round_after_finalize_creates_new_round() {
+    // FINALIZED 후에는 새 라운드를 열 수 있음
+    let pool = common::create_test_pool().await;
+    let (_, axum::Json(body)) =
+        open_round(State(common::make_state(pool.clone()))).await.unwrap();
+    let id = body["id"].as_i64().unwrap();
+    let _ = close_round(State(common::make_state(pool.clone())), Path(id))
+        .await
+        .unwrap();
+    let _ = finalize_round(State(common::make_state(pool.clone())), Path(id))
         .await
         .unwrap();
     let res = open_round(State(common::make_state(pool.clone()))).await;
