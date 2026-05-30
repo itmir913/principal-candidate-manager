@@ -25,7 +25,7 @@
     </div>
 
     <!-- ── 우측: 지원 등록 영역 ── -->
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 min-h-0 overflow-y-auto">
       <!-- 학생 미선택 -->
       <div v-if="!selectedStudent" class="bg-white border rounded-lg p-10 text-center text-gray-400 text-sm">
         좌측에서 학생을 선택하세요.
@@ -39,8 +39,8 @@
               {{ selectedStudent.name }} 학생의 {{ currentRound.id }}차 라운드 지원 현황
             </h2>
             <button
-              v-if="!showForm"
               class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              :class="showForm ? 'invisible' : ''"
               @click="openNewForm"
             >+ 새 지원 추가</button>
           </div>
