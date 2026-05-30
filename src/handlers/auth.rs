@@ -26,6 +26,14 @@ pub struct TokenResponse {
     pub token: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct TeacherTokenResponse {
+    pub token: String,
+    pub grade: i64,
+    pub class_no: i64,
+    pub teacher_name: Option<String>,
+}
+
 type ApiError = (StatusCode, String);
 
 #[derive(Serialize)]
@@ -88,9 +96,9 @@ pub async fn admin_login(
 pub async fn teacher_login(
     State(state): State<AppState>,
     Json(body): Json<TeacherLoginBody>,
-) -> Result<Json<TokenResponse>, ApiError> {
-    let hash: Option<String> = sqlx::query_scalar(
-        "SELECT COALESCE(password_hash, '') FROM classes WHERE grade = ? AND class_no = ?",
+) -> Result<Json<TeacherTokenResponse>, ApiError> {
+    let row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT COALESCE(password_hash, ''), teacher_name FROM classes WHERE grade = ? AND class_no = ?",
     )
     .bind(body.grade)
     .bind(body.class_no)
@@ -98,7 +106,7 @@ pub async fn teacher_login(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let hash = hash.ok_or((StatusCode::NOT_FOUND, "해당 반이 없습니다".into()))?;
+    let (hash, teacher_name) = row.ok_or((StatusCode::NOT_FOUND, "해당 반이 없습니다".into()))?;
 
     if hash.is_empty() {
         return Err((StatusCode::UNAUTHORIZED, "비밀번호가 설정되지 않았습니다".into()));
@@ -112,7 +120,7 @@ pub async fn teacher_login(
 
     let token = auth::encode_teacher_token(body.grade, body.class_no, &state.jwt_secret)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(TokenResponse { token }))
+    Ok(Json(TeacherTokenResponse { token, grade: body.grade, class_no: body.class_no, teacher_name }))
 }
 
 pub async fn change_admin_password(

@@ -4,7 +4,7 @@
     <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
       <div>
         <span class="text-lg font-bold text-gray-800">학교장 추천자 선발 관리 시스템</span>
-        <span class="ml-3 text-sm text-gray-500">{{ auth.grade }}학년 {{ auth.classNo }}반 담임</span>
+        <span class="ml-3 text-sm text-gray-500">{{ auth.grade }}학년 {{ auth.classNo }}반 담임<template v-if="auth.teacherName"> · {{ auth.teacherName }}</template></span>
       </div>
       <div class="flex items-center gap-2">
         <button

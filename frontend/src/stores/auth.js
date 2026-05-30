@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
   const role = ref(localStorage.getItem('pcm_role') || null)
   const grade = ref(localStorage.getItem('pcm_grade') != null ? Number(localStorage.getItem('pcm_grade')) : null)
   const classNo = ref(localStorage.getItem('pcm_class_no') != null ? Number(localStorage.getItem('pcm_class_no')) : null)
+  const teacherName = ref(localStorage.getItem('pcm_teacher_name') || null)
 
   // null = 아직 서버에 물어보지 않음 / false = 미설정 / true = 설정 완료
   const initialized = ref(null)
@@ -63,6 +64,9 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (classNo.value != null) localStorage.setItem('pcm_class_no', classNo.value)
     else localStorage.removeItem('pcm_class_no')
+
+    if (teacherName.value) localStorage.setItem('pcm_teacher_name', teacherName.value)
+    else localStorage.removeItem('pcm_teacher_name')
   }
 
   async function loginAdmin(password) {
@@ -83,8 +87,9 @@ export const useAuthStore = defineStore('auth', () => {
     })
     token.value = res.data.token
     role.value = 'teacher'
-    grade.value = gradeVal
-    classNo.value = classNoVal
+    grade.value = res.data.grade
+    classNo.value = res.data.class_no
+    teacherName.value = res.data.teacher_name || null
     _persist()
   }
 
@@ -93,11 +98,12 @@ export const useAuthStore = defineStore('auth', () => {
     role.value = null
     grade.value = null
     classNo.value = null
+    teacherName.value = null
     _persist()
   }
 
   return {
-    token, role, grade, classNo, initialized,
+    token, role, grade, classNo, teacherName, initialized,
     isAdmin, isTeacher,
     checkStatus, loginAdmin, loginTeacher, logout,
   }
