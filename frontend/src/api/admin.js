@@ -52,8 +52,8 @@ export const getNumericTableList = (id, page = 1, perPage = 50) =>
   axios.get(`/api/areas/${id}/numeric-table/list`, { params: { page, per_page: perPage } }).then(r => r.data)
 export const getCategoryMapList = (id, page = 1, perPage = 50) =>
   axios.get(`/api/areas/${id}/category-map/list`, { params: { page, per_page: perPage } }).then(r => r.data)
-export const getBaseDataList = (id, page = 1, perPage = 50) =>
-  axios.get(`/api/areas/${id}/base-data/list`, { params: { page, per_page: perPage } }).then(r => r.data)
+export const getBaseDataList = (id, page = 1, perPage = 50, studentType = 'enrolled') =>
+  axios.get(`/api/areas/${id}/base-data/list`, { params: { page, per_page: perPage, student_type: studentType } }).then(r => r.data)
 
 // ── 기초 데이터 Excel ──────────────────────────────────────────
 export const downloadBaseDataTemplate = (id, studentType) =>

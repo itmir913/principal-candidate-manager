@@ -42,6 +42,15 @@ pub struct PageQuery {
     #[serde(default = "default_page")]     pub page: i64,
     #[serde(default = "default_per_page")] pub per_page: i64,
 }
+
+#[derive(Deserialize)]
+pub struct BaseDataPageQuery {
+    #[serde(default = "default_page")]          pub page: i64,
+    #[serde(default = "default_per_page")]      pub per_page: i64,
+    #[serde(default = "student_type_enrolled")] pub student_type: String,
+}
+fn student_type_enrolled() -> String { "enrolled".to_string() }
+
 fn default_page() -> i64 { 1 }
 fn default_per_page() -> i64 { 50 }
 
@@ -1019,20 +1028,26 @@ pub async fn category_map_list(
 pub async fn base_data_list(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    Query(q): Query<PageQuery>,
+    Query(q): Query<BaseDataPageQuery>,
 ) -> Result<Json<BaseDataPage>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
+    let is_enrolled_val = if q.student_type != "graduated" { 1i64 } else { 0i64 };
 
     let per_page = q.per_page.max(1);
     let page = q.page.max(1);
     let offset = (page - 1) * per_page;
 
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
-        .bind(id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM base_data bd
+         JOIN students s ON bd.student_id = s.id
+         WHERE bd.area_id = ? AND s.is_enrolled = ?",
+    )
+    .bind(id)
+    .bind(is_enrolled_val)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
         "SELECT s.student_code, s.name, bd.value,
@@ -1042,11 +1057,12 @@ pub async fn base_data_list(
          JOIN students s ON bd.student_id = s.id
          LEFT JOIN univ_tracks ut ON bd.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
-         WHERE bd.area_id = ?
+         WHERE bd.area_id = ? AND s.is_enrolled = ?
          ORDER BY bd.track_id, s.grade, s.class_no, s.seq_no
          LIMIT ? OFFSET ?",
     )
     .bind(id)
+    .bind(is_enrolled_val)
     .bind(per_page)
     .bind(offset)
     .fetch_all(&state.db)

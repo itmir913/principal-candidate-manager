@@ -468,6 +468,7 @@ function displayScore(v) {
 const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
 
 const baseStudentType = ref('enrolled')
+watch(baseStudentType, () => loadBaseRows(1))
 
 const scoreEx = computed(() => selected.value ? getScoreExample(selected.value) : null)
 const baseEx  = computed(() => selected.value ? getBaseExample(selected.value, baseStudentType.value) : null)
@@ -504,7 +505,7 @@ async function loadScoreRows(page = 1) {
 async function loadBaseRows(page = 1) {
   if (!selected.value) { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }; return }
   try {
-    const data = await getBaseDataList(selected.value.id, page, basePage.value.per_page)
+    const data = await getBaseDataList(selected.value.id, page, basePage.value.per_page, baseStudentType.value)
     basePage.value = data
   } catch { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 } }
 }
@@ -772,7 +773,7 @@ const ExcelPanel = defineComponent({
       ]),
       h('p', { class: 'text-xs text-amber-600' },
         props.panel === 'base'
-          ? '※ 불러오기 시 선택한 유형(재학생/졸업생)의 기존 기초데이터가 모두 교체됩니다.'
+          ? `※ 불러오기 시 ${props.studentType === 'enrolled' ? '재학생' : '졸업생'} 기존 기초데이터가 모두 교체됩니다.`
           : '※ 불러오기 시 기존 점수 기준이 모두 교체됩니다.'),
       err.value ? h('p', { class: 'text-red-500 text-sm' }, err.value) : null,
     ])
