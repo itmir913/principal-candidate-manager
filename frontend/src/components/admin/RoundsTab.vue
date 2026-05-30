@@ -219,7 +219,10 @@
                   v-for="r in group.results"
                   :key="r.student_id"
                   class="border-t"
-                  :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : (selected.status === 'FINALIZED' ? 'bg-red-50' : '')"
+                  :class="{
+                    'bg-red-50': selected.status === 'FINALIZED' && (r.abandoned || !r.recommended),
+                    'bg-green-50': selected.status === 'FINALIZED' && r.recommended && !r.abandoned
+                  }"
                 >
                   <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
                   <td class="px-3 py-2 text-gray-500">

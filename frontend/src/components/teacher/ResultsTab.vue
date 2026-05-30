@@ -57,7 +57,10 @@
                 v-for="r in student.results"
                 :key="r.track_id"
                 class="border-b last:border-b-0"
-                :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : 'bg-red-50'"
+                :class="{
+                  'bg-green-50': r.recommended && !r.abandoned,
+                  'bg-red-50': !r.recommended || r.abandoned
+                }"
               >
                 <td class="px-6 py-2 text-gray-700">{{ r.univ_name }}</td>
                 <td class="px-3 py-2 text-gray-700">{{ r.track_name }}</td>
