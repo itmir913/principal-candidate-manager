@@ -377,9 +377,11 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
             .collect();
 
         ranked.sort_by(|a, b| {
-            b.1.cmp(&a.1).then_with(|| {
-                if prioritize { b.2.cmp(&a.2) } else { std::cmp::Ordering::Equal }
-            })
+            if prioritize {
+                b.2.cmp(&a.2).then_with(|| b.1.cmp(&a.1))
+            } else {
+                b.1.cmp(&a.1)
+            }
         });
 
         for (rank, (sid, _, _)) in ranked.iter().enumerate() {
