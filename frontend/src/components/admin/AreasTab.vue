@@ -196,7 +196,7 @@
         <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
 
         <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
-          <p v-if="scoreRows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
+          <p v-if="scorePage.rows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
             등록된 점수 기준 없음
           </p>
           <table v-else class="w-full text-sm border-collapse">
@@ -213,7 +213,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in scoreRows" :key="i"
+              <tr v-for="(row, i) in scorePage.rows" :key="i"
                   :class="i % 2 === 1 ? 'bg-gray-50' : ''">
                 <td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">
                   {{ selected.calc_type === 'NUMERIC' ? row.threshold : row.category }}
@@ -226,6 +226,25 @@
               </tr>
             </tbody>
           </table>
+        </div>
+        <div v-if="scorePage.total > 0"
+             class="mt-2 flex items-center justify-center gap-3 text-sm text-gray-600">
+          <button
+            class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            :disabled="scorePage.page <= 1"
+            @click="loadScoreRows(scorePage.page - 1)">
+            &lt; 이전
+          </button>
+          <span>
+            {{ scorePage.page }} / {{ Math.ceil(scorePage.total / scorePage.per_page) }} 페이지
+            (총 {{ scorePage.total }}행)
+          </span>
+          <button
+            class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            :disabled="scorePage.page >= Math.ceil(scorePage.total / scorePage.per_page)"
+            @click="loadScoreRows(scorePage.page + 1)">
+            다음 &gt;
+          </button>
         </div>
       </div>
 
@@ -415,7 +434,7 @@ const error    = ref('')
 const activeTab   = ref('score')
 const scoreResult = ref(null)
 const baseResult  = ref(null)
-const scoreRows   = ref([])
+const scorePage   = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 const basePage    = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 
 const showAddForm = ref(false)
@@ -464,18 +483,20 @@ function selectArea(area) {
 
   scoreResult.value = null
   baseResult.value  = null
-  loadScoreRows()
+  loadScoreRows(1)
   loadBaseRows(1)
 }
 
-async function loadScoreRows() {
+async function loadScoreRows(page = 1) {
   const area = selected.value
-  if (!area || area.calc_type === 'MANUAL') { scoreRows.value = []; return }
+  const empty = { rows: [], total: 0, page: 1, per_page: 50 }
+  if (!area || area.calc_type === 'MANUAL') { scorePage.value = empty; return }
   try {
-    scoreRows.value = area.calc_type === 'CATEGORY'
-      ? await getCategoryMapList(area.id)
-      : await getNumericTableList(area.id)
-  } catch { scoreRows.value = [] }
+    const data = area.calc_type === 'CATEGORY'
+      ? await getCategoryMapList(area.id, page, scorePage.value.per_page)
+      : await getNumericTableList(area.id, page, scorePage.value.per_page)
+    scorePage.value = data
+  } catch { scorePage.value = empty }
 }
 
 async function loadBaseRows(page = 1) {
@@ -486,7 +507,7 @@ async function loadBaseRows(page = 1) {
   } catch { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 } }
 }
 
-function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows() }
+function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows(1) }
 function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows(1)  }
 
 async function addArea() {

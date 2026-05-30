@@ -767,11 +767,27 @@ pub struct RangeTableListRow {
 }
 
 #[derive(Serialize)]
+pub struct NumericTablePage {
+    pub rows: Vec<RangeTableListRow>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
+#[derive(Serialize)]
 pub struct CategoryMapListRow {
     pub category: String,
     pub score: Score,
     pub univ_name: Option<String>,
     pub track_name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CategoryMapPage {
+    pub rows: Vec<CategoryMapListRow>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -795,9 +811,20 @@ pub struct BaseDataPage {
 pub async fn numeric_table_list(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<Vec<RangeTableListRow>>, ApiError> {
+    Query(q): Query<PageQuery>,
+) -> Result<Json<NumericTablePage>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
+
+    let per_page = q.per_page.max(1);
+    let page = q.page.max(1);
+    let offset = (page - 1) * per_page;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM numeric_table WHERE area_id = ?")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
         "SELECT rt.threshold, rt.score,
@@ -807,9 +834,12 @@ pub async fn numeric_table_list(
          LEFT JOIN univ_tracks ut ON rt.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE rt.area_id = ?
-         ORDER BY u.univ_name, ut.track_name, rt.score DESC, rt.threshold",
+         ORDER BY u.univ_name, ut.track_name, rt.score DESC, rt.threshold
+         LIMIT ? OFFSET ?",
     )
     .bind(id)
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -823,16 +853,27 @@ pub async fn numeric_table_list(
             track_name: if composite { Some(row.get("track_name")) } else { None },
         })
         .collect();
-    Ok(Json(result))
+    Ok(Json(NumericTablePage { rows: result, total, page, per_page }))
 }
 
 /// GET /api/areas/:id/category-map/list
 pub async fn category_map_list(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<Vec<CategoryMapListRow>>, ApiError> {
+    Query(q): Query<PageQuery>,
+) -> Result<Json<CategoryMapPage>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
+
+    let per_page = q.per_page.max(1);
+    let page = q.page.max(1);
+    let offset = (page - 1) * per_page;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM category_map WHERE area_id = ?")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
         "SELECT cm.category, cm.score,
@@ -842,9 +883,12 @@ pub async fn category_map_list(
          LEFT JOIN univ_tracks ut ON cm.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE cm.area_id = ?
-         ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category",
+         ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category
+         LIMIT ? OFFSET ?",
     )
     .bind(id)
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -858,7 +902,7 @@ pub async fn category_map_list(
             track_name: if composite { Some(row.get("track_name")) } else { None },
         })
         .collect();
-    Ok(Json(result))
+    Ok(Json(CategoryMapPage { rows: result, total, page, per_page }))
 }
 
 /// GET /api/areas/:id/base-data/list

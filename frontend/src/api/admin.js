@@ -48,10 +48,10 @@ export const importCategoryMap = (id, file) => {
 }
 
 // ── 점수 기준 / 기초 데이터 JSON 조회 ─────────────────────────
-export const getNumericTableList = (id) =>
-  axios.get(`/api/areas/${id}/numeric-table/list`).then(r => r.data)
-export const getCategoryMapList = (id) =>
-  axios.get(`/api/areas/${id}/category-map/list`).then(r => r.data)
+export const getNumericTableList = (id, page = 1, perPage = 50) =>
+  axios.get(`/api/areas/${id}/numeric-table/list`, { params: { page, per_page: perPage } }).then(r => r.data)
+export const getCategoryMapList = (id, page = 1, perPage = 50) =>
+  axios.get(`/api/areas/${id}/category-map/list`, { params: { page, per_page: perPage } }).then(r => r.data)
 export const getBaseDataList = (id, page = 1, perPage = 50) =>
   axios.get(`/api/areas/${id}/base-data/list`, { params: { page, per_page: perPage } }).then(r => r.data)
 
