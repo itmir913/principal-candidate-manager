@@ -125,14 +125,18 @@
               :class="area.teacher_editable ? 'border-gray-200' : 'border-gray-100 bg-gray-50'"
             >
               <!-- 전형요소 헤더 -->
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-sm font-medium text-gray-800">{{ area.area_name }}</span>
-                <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{{ area.calc_type }}</span>
-                <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
-                <span
-                  v-if="!area.teacher_editable"
-                  class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
-                >관리자 입력 고정</span>
+              <div class="mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-gray-800">{{ area.area_name }}</span>
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{{ area.calc_type }}</span>
+                </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
+                  <span
+                    v-if="!area.teacher_editable"
+                    class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                  >관리자 입력 고정</span>
+                </div>
               </div>
 
               <!-- 점수표 (위) -->
