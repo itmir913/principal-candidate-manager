@@ -277,7 +277,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import {
   getCurrentRound,
@@ -334,17 +334,15 @@ function setTableRef(el, areaId) {
 }
 
 watch(scorePreview, () => {
-  nextTick(() => {
-    for (const areaId of Object.keys(tableRefs)) {
-      const container = tableRefs[areaId]
-      if (!container) continue
-      const highlighted = container.querySelector('[data-highlighted]')
-      if (highlighted) {
-        highlighted.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      }
+  for (const areaId of Object.keys(tableRefs)) {
+    const container = tableRefs[areaId]
+    if (!container) continue
+    const highlighted = container.querySelector('[data-highlighted]')
+    if (highlighted) {
+      highlighted.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
-  })
-}, { deep: true })
+  }
+}, { deep: true, flush: 'post' })
 
 // ── Computed ──────────────────────────────────────────────────────
 const studentApps = computed(() =>
