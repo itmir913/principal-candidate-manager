@@ -2,12 +2,13 @@ mod common;
 
 use axum::{
     body::Body,
-    extract::{FromRequest, Multipart, Path, State},
+    extract::{FromRequest, Multipart, Path, Query, State},
     http::{Request, StatusCode},
 };
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
     base_data_import, base_data_list, category_map_import, numeric_table_import,
+    PageQuery, StudentTypeQuery,
 };
 
 async fn build_multipart(csv: &str) -> Multipart {
@@ -28,6 +29,14 @@ async fn build_multipart(csv: &str) -> Multipart {
         .body(Body::from(body))
         .unwrap();
     Multipart::from_request(req, &()).await.unwrap()
+}
+
+fn graduated_query() -> Query<StudentTypeQuery> {
+    Query(StudentTypeQuery { student_type: "graduated".to_string() })
+}
+
+fn default_page_query() -> Query<PageQuery> {
+    Query(PageQuery { page: 1, per_page: 50 })
 }
 
 async fn insert_student(pool: &sqlx::SqlitePool, code: &str) -> i64 {
@@ -76,7 +85,7 @@ async fn numeric_import_dedup_rejects_entire_import() {
     // S001이 두 번 등장 → 전체 import 거부(422), DB에 아무것도 저장되지 않음
     let csv = "학생코드,값\nS001,30.5\nS001,25.0\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(state), Path(aid), build_multipart(csv).await)
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
             .unwrap();
 
@@ -102,7 +111,7 @@ async fn manual_import_dedup_rejects_entire_import() {
 
     let csv = "학생코드,값\nS001,85.0\nS001,90.0\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(state), Path(aid), build_multipart(csv).await)
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
             .unwrap();
 
@@ -128,7 +137,7 @@ async fn category_multi_import_allows_multiple_values_per_student() {
     // CATEGORY multi_value=1: 같은 학생이 서로 다른 범주 → 두 행 모두 삽입
     let csv = "학생코드,값\nS001,회장\nS001,부회장\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(state), Path(aid), build_multipart(csv).await)
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
             .unwrap();
 
@@ -154,7 +163,7 @@ async fn numeric_import_multiple_students_succeeds() {
 
     let csv = "학생코드,값\nS001,30.5\nS002,25.0\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(state), Path(aid), build_multipart(csv).await)
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
             .unwrap();
 
@@ -180,7 +189,7 @@ async fn import_unknown_student_rejects_entire_import() {
 
     let csv = "학생코드,값\nS001,30.5\nS999,25.0\n"; // S999 미등록
     let (status, axum::Json(result)) =
-        base_data_import(State(state), Path(aid), build_multipart(csv).await)
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
             .unwrap();
 
@@ -210,7 +219,7 @@ async fn numeric_base_data_import_negative_value_allowed() {
 
     let csv = "학생코드,값\nS001,-1.0\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(common::make_state(pool.clone())), Path(aid), build_multipart(csv).await)
+        base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
             .await.unwrap();
 
     assert_eq!(status, StatusCode::OK);
@@ -230,7 +239,7 @@ async fn manual_base_data_import_negative_value_allowed() {
 
     let csv = "학생코드,값\nS001,-5.0\n";
     let (status, axum::Json(result)) =
-        base_data_import(State(common::make_state(pool.clone())), Path(aid), build_multipart(csv).await)
+        base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
             .await.unwrap();
 
     assert_eq!(status, StatusCode::OK);
@@ -383,7 +392,7 @@ async fn base_data_list_numeric_corrupt_value_returns_500() {
     .await
     .unwrap();
 
-    let err = base_data_list(State(common::make_state(pool)), Path(aid))
+    let err = base_data_list(State(common::make_state(pool)), Path(aid), default_page_query())
         .await
         .unwrap_err();
     assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
@@ -406,7 +415,7 @@ async fn base_data_list_manual_corrupt_value_returns_500() {
     .await
     .unwrap();
 
-    let err = base_data_list(State(common::make_state(pool)), Path(aid))
+    let err = base_data_list(State(common::make_state(pool)), Path(aid), default_page_query())
         .await
         .unwrap_err();
     assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
@@ -428,9 +437,9 @@ async fn base_data_list_category_non_numeric_value_is_ok() {
     .await
     .unwrap();
 
-    let axum::Json(rows) = base_data_list(State(common::make_state(pool)), Path(aid))
+    let axum::Json(page) = base_data_list(State(common::make_state(pool)), Path(aid), default_page_query())
         .await
         .unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].value, "회장");
+    assert_eq!(page.rows.len(), 1);
+    assert_eq!(page.rows[0].value, "회장");
 }

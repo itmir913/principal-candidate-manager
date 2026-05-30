@@ -799,7 +799,7 @@ pub struct BaseDataListRow {
     pub track_name: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct BaseDataPage {
     pub rows: Vec<BaseDataListRow>,
     pub total: i64,
