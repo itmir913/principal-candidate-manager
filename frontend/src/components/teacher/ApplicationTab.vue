@@ -194,7 +194,7 @@
                     class="w-full border rounded px-2 py-1.5 text-sm"
                     :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
                     :disabled="!area.teacher_editable"
-                    :placeholder="area.teacher_editable ? '측정값 입력' : (area.current_values[0] ?? '데이터 없음')"
+                    :placeholder="area.teacher_editable ? '데이터 입력' : (area.current_values[0] ?? '데이터 없음')"
                     @input="onNumericInput(area, $event.target.value)"
                   />
                 </template>
