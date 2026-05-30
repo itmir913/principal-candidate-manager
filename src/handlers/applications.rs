@@ -12,6 +12,7 @@ use crate::{auth::TeacherClaims, enums::RoundStatus, state::AppState};
 
 #[derive(Deserialize)]
 pub struct ChangePasswordBody {
+    pub current_password: String,
     pub new_password: String,
 }
 
@@ -23,10 +24,26 @@ pub async fn teacher_change_password(
     if body.new_password.len() < 4 {
         return Err((StatusCode::BAD_REQUEST, "비밀번호는 4자 이상이어야 합니다".into()));
     }
-    let hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
+    let current_hash: String = sqlx::query_scalar(
+        "SELECT COALESCE(password_hash, '') FROM classes WHERE grade = ? AND class_no = ?",
+    )
+    .bind(claims.grade)
+    .bind(claims.class_no)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let ok = bcrypt::verify(&body.current_password, &current_hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if !ok {
+        return Err((StatusCode::UNAUTHORIZED, "현재 비밀번호가 틀렸습니다".into()));
+    }
+
+    // bcrypt는 CPU 집약 — DB 접근 전 미리 계산
+    let new_hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     sqlx::query("UPDATE classes SET password_hash = ? WHERE grade = ? AND class_no = ?")
-        .bind(&hash)
+        .bind(&new_hash)
         .bind(claims.grade)
         .bind(claims.class_no)
         .execute(&state.db)
