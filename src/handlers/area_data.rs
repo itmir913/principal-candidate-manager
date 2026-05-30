@@ -82,7 +82,7 @@ fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
     Ok(wb.save_to_buffer()?)
 }
 
-fn fmt_score(v: i64) -> String {
+pub(crate) fn fmt_score(v: i64) -> String {
     let s = format!("{:.5}", v as f64 / 100_000.0);
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }

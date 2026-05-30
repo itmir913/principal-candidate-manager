@@ -60,7 +60,7 @@ async fn create_application_open_round_ok() {
     let res = teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid, ..Default::default() }),
     )
     .await;
     assert_eq!(res.unwrap(), StatusCode::CREATED);
@@ -72,21 +72,28 @@ async fn create_application_open_round_ok() {
 }
 
 #[tokio::test]
-async fn create_application_duplicate_is_silently_ignored() {
+async fn create_application_duplicate_upserts_department_name() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup(&pool).await;
-    let body = || Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid });
     teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        body(),
+        Json(CreateApplicationBody {
+            student_id: sid, track_id: tid, round_id: rid,
+            department_name: "컴퓨터공학과".into(),
+            ..Default::default()
+        }),
     )
     .await
     .unwrap();
     let res = teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        body(),
+        Json(CreateApplicationBody {
+            student_id: sid, track_id: tid, round_id: rid,
+            department_name: "전자공학과".into(),
+            ..Default::default()
+        }),
     )
     .await;
     assert!(res.is_ok());
@@ -95,6 +102,14 @@ async fn create_application_duplicate_is_silently_ignored() {
         .await
         .unwrap();
     assert_eq!(count, 1);
+    let dept: String = sqlx::query_scalar(
+        "SELECT department_name FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(dept, "전자공학과");
 }
 
 #[tokio::test]
@@ -111,7 +126,7 @@ async fn create_application_closed_round_returns_bad_request() {
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid, ..Default::default() }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -124,7 +139,7 @@ async fn create_application_round_not_found_returns_not_found() {
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: 9999 }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: 9999, ..Default::default() }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
@@ -137,7 +152,7 @@ async fn create_application_student_not_in_class_returns_forbidden() {
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(2, 2)),
-        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid, ..Default::default() }),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);

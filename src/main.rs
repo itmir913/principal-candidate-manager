@@ -197,6 +197,7 @@ fn build_router(state: AppState) -> Router {
     let teacher_routes = Router::new()
         .route("/students", get(handlers::applications::teacher_list_students))
         .route("/universities", get(handlers::universities::list_universities))
+        .route("/universities/:id/tracks", get(handlers::universities::list_tracks))
         .route("/univ-tracks", get(handlers::universities::list_all_tracks))
         .route("/applications", get(handlers::applications::teacher_list_applications))
         .route("/applications", post(handlers::applications::teacher_create_application))
@@ -205,6 +206,8 @@ fn build_router(state: AppState) -> Router {
             delete(handlers::applications::teacher_delete_application),
         )
         .route("/password", put(handlers::applications::teacher_change_password))
+        .route("/area-context", get(handlers::teacher_areas::teacher_area_context))
+        .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))
         // 7단계: 담임 결과 조회
         .route("/results", get(handlers::scoring::teacher_get_results))
         .route_layer(axum_middleware::from_fn_with_state(

@@ -95,7 +95,7 @@ pub async fn list_universities(
 ) -> Result<Json<Vec<UnivRow>>, ApiError> {
     let rows = sqlx::query_as::<_, UnivRow>(
         "SELECT id, univ_name, total_quota, prioritize_enrolled
-         FROM universities ORDER BY id",
+         FROM universities ORDER BY univ_name",
     )
     .fetch_all(&state.db)
     .await
@@ -167,7 +167,7 @@ pub async fn list_tracks(
 ) -> Result<Json<Vec<TrackRow>>, ApiError> {
     let rows = sqlx::query_as::<_, TrackRow>(
         "SELECT id, univ_id, track_name, unit_quota, prioritize_enrolled
-         FROM univ_tracks WHERE univ_id = ? ORDER BY id",
+         FROM univ_tracks WHERE univ_id = ? ORDER BY track_name",
     )
     .bind(univ_id)
     .fetch_all(&state.db)

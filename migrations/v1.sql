@@ -1,5 +1,5 @@
 -- ================================================================
--- 학교장추천 선발 시스템 — Schema v9
+-- 학교장추천 선발 시스템 — Schema v10
 -- universities(대학 마스터) / univ_tracks(모집단위) 2단계 분리
 -- Float-Free Architecture (×100000 완전 정수화) + Abandon 박제 로직
 -- ================================================================
@@ -185,11 +185,12 @@ CREATE INDEX IF NOT EXISTS idx_base_data_student
 -- confirmed + abandoned: 독립 생명주기, 동시 1 허용
 -- ================================================================
 CREATE TABLE IF NOT EXISTS applications (
-    student_id INTEGER NOT NULL REFERENCES students(id),
-    track_id   INTEGER NOT NULL REFERENCES univ_tracks(id),
-    round_id   INTEGER NOT NULL REFERENCES rounds(id),
-    confirmed  INTEGER NOT NULL DEFAULT 0 CHECK(confirmed IN (0, 1)),
-    abandoned  INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
+    student_id      INTEGER NOT NULL REFERENCES students(id),
+    track_id        INTEGER NOT NULL REFERENCES univ_tracks(id),
+    round_id        INTEGER NOT NULL REFERENCES rounds(id),
+    confirmed       INTEGER NOT NULL DEFAULT 0 CHECK(confirmed IN (0, 1)),
+    abandoned       INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
+    department_name TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (student_id, track_id, round_id)
 );
 CREATE INDEX IF NOT EXISTS idx_applications_round
@@ -210,10 +211,11 @@ BEGIN
     SELECT RAISE(ABORT, 'Cannot update application: round is CLOSED. Only abandoned 0->1 is permitted.')
     WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED'
       AND (
-          OLD.student_id != NEW.student_id
-          OR OLD.track_id   != NEW.track_id
-          OR OLD.round_id   != NEW.round_id
-          OR OLD.confirmed  != NEW.confirmed
+          OLD.student_id      != NEW.student_id
+          OR OLD.track_id         != NEW.track_id
+          OR OLD.round_id         != NEW.round_id
+          OR OLD.confirmed        != NEW.confirmed
+          OR OLD.department_name  != NEW.department_name
           OR (OLD.abandoned = 1 AND NEW.abandoned = 0)
       );
 END;

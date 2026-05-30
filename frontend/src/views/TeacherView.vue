@@ -101,19 +101,19 @@ const router = useRouter()
 const auth   = useAuthStore()
 
 const tabs = [
-  { key: 'class',   label: '학급 관리' },
-  { key: 'data',    label: '성적 입력' },
-  { key: 'results', label: '결과 조회' },
+  { key: 'class',       label: '학급 관리' },
+  { key: 'application', label: '지원자 등록' },
+  { key: 'results',     label: '결과 조회' },
 ]
 const active = ref('class')
 
-const ClassTab   = defineAsyncComponent(() => import('../components/teacher/ClassTab.vue'))
-const DataTab    = defineAsyncComponent(() => import('../components/teacher/DataTab.vue'))
-const ResultsTab = defineAsyncComponent(() => import('../components/teacher/ResultsTab.vue'))
+const ClassTab       = defineAsyncComponent(() => import('../components/teacher/ClassTab.vue'))
+const ApplicationTab = defineAsyncComponent(() => import('../components/teacher/ApplicationTab.vue'))
+const ResultsTab     = defineAsyncComponent(() => import('../components/teacher/ResultsTab.vue'))
 
 const currentTab = computed(() => {
-  if (active.value === 'class')   return ClassTab
-  if (active.value === 'data')    return DataTab
+  if (active.value === 'class')       return ClassTab
+  if (active.value === 'application') return ApplicationTab
   return ResultsTab
 })
 
