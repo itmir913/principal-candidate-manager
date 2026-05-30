@@ -211,6 +211,10 @@ fn build_router(state: AppState) -> Router {
             "/applications/:sid/:tid/:rid",
             delete(handlers::applications::teacher_delete_application),
         )
+        .route(
+            "/applications/:sid/:tid/:rid/abandon",
+            put(handlers::applications::teacher_abandon_application),
+        )
         .route("/password", put(handlers::applications::teacher_change_password))
         .route("/area-context", get(handlers::teacher_areas::teacher_area_context))
         .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))

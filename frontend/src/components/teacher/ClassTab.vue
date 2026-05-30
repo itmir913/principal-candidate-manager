@@ -37,8 +37,10 @@
               :key="app.track_id"
               class="flex items-center gap-2 mb-1"
             >
-              <span class="text-gray-700">{{ app.univ_name }} — {{ app.track_name }}</span>
-              <span v-if="app.abandoned" class="text-xs text-red-400">(포기)</span>
+              <span class="text-gray-700">{{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}</span>
+              <span v-if="app.abandoned" class="text-xs text-red-400 font-semibold">(포기됨)</span>
+              <span v-else-if="app.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
+              <span v-else-if="app.recommended === false" class="text-xs text-red-400 font-semibold">추천 제외</span>
               <button
                 v-if="currentRound && !app.abandoned"
                 class="text-xs px-1.5 py-0.5 border border-gray-300 text-gray-400 rounded hover:border-red-300 hover:text-red-400"
@@ -73,23 +75,21 @@ function getStudentApps(studentId) {
 }
 
 async function loadAll() {
-  const [round, sts] = await Promise.all([
+  const [round, sts, apps] = await Promise.all([
     getCurrentRound(),
     teacherGetStudents(),
+    teacherGetApplications(),
   ])
   currentRound.value = round
   students.value = sts
-
-  if (round) {
-    applications.value = await teacherGetApplications(round.id)
-  }
+  applications.value = apps
 }
 
 async function removeApplication(app) {
   if (!confirm(`${app.name} 학생의 ${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?`)) return
   try {
     await teacherDeleteApplication(app.student_id, app.track_id, app.round_id)
-    applications.value = await teacherGetApplications(currentRound.value.id)
+    applications.value = await teacherGetApplications()
   } catch (e) {
     alert(e.response?.data || e.message)
   }

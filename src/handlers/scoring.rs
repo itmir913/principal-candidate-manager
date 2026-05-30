@@ -575,37 +575,7 @@ pub struct TeacherResultQuery {
 pub async fn teacher_get_results(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
-    Query(q): Query<TeacherResultQuery>,
 ) -> Result<Json<Vec<ResultRow>>, ApiError> {
-    let round_id = match q.round_id {
-        Some(rid) => rid,
-        None => {
-            let rid: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM rounds ORDER BY id DESC LIMIT 1",
-            )
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            match rid {
-                Some(id) => id,
-                None => return Ok(Json(vec![])),
-            }
-        }
-    };
-
-    // FINALIZED 라운드에서만 결과 공개
-    let status: Option<RoundStatus> = sqlx::query_scalar(
-        "SELECT status FROM rounds WHERE id = ?",
-    )
-    .bind(round_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if status != Some(RoundStatus::Finalized) {
-        return Ok(Json(vec![]));
-    }
-
     let rows = sqlx::query_as::<_, ResultRow>(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
@@ -617,15 +587,15 @@ pub async fn teacher_get_results(
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id
          JOIN universities u ON ut.univ_id = u.id
+         JOIN rounds rnd ON rnd.id = r.round_id
          LEFT JOIN applications a ON a.student_id = r.student_id
                                   AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
-         WHERE r.round_id = ?
+         WHERE rnd.status = 'FINALIZED'
            AND s.grade = ?
            AND s.class_no = ?
-         ORDER BY s.seq_no, r.track_id",
+         ORDER BY r.round_id, s.seq_no, r.track_id",
     )
-    .bind(round_id)
     .bind(claims.grade)
     .bind(claims.class_no)
     .fetch_all(&state.db)

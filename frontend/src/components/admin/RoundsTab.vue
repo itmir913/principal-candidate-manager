@@ -126,7 +126,7 @@
                   </td>
                   <td class="px-3 py-2 text-gray-600">{{ app.department_name }}</td>
                   <td class="px-3 py-2 text-center">
-                    <span v-if="app.abandoned" class="text-xs text-red-500">포기됨</span>
+                    <span v-if="app.abandoned" class="text-xs text-red-500 font-semibold">포기됨</span>
                     <button
                       v-else-if="selected.status === 'FINALIZED'"
                       class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
@@ -227,7 +227,7 @@
                     {{ r.total_score.toFixed(2) }}
                   </td>
                   <td class="px-3 py-2 text-center">
-                    <span v-if="r.abandoned" class="text-xs text-red-400">포기</span>
+                    <span v-if="r.abandoned" class="text-xs text-red-400 font-semibold">포기됨</span>
                     <template v-else-if="r.recommended">
                       <span class="text-xs text-green-600 font-semibold">추천 확정</span>
                       <button
@@ -241,7 +241,7 @@
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
                       @click="handleRecommend(r)"
                     >추천 확정</button>
-                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-gray-400">추천 제외</span>
+                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-gray-400 font-semibold">추천 제외</span>
                     <span v-else class="text-xs text-gray-600 font-semibold">-</span>
                   </td>
                 </tr>
@@ -439,7 +439,7 @@ async function handleCalculate() {
 }
 
 async function handleAbandon(app) {
-  if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까? 한 번 포기하면 절대 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 다시 지원해야 합니다.`)) return
+  if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까? 한 번 포기하면 다시 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 재지원해야 합니다.`)) return
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
     await loadApps()

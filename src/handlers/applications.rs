@@ -76,6 +76,7 @@ pub struct ApplicationRow {
     pub is_enrolled: bool,
     pub univ_name: String,
     pub track_name: String,
+    pub recommended: Option<bool>,
 }
 
 #[derive(Serialize, FromRow)]
@@ -128,11 +129,12 @@ pub async fn admin_list_applications(
     let rows = sqlx::query_as::<_, ApplicationRow>(
         "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name
+                u.univ_name, ut.track_name, r.recommended
          FROM applications a
          JOIN students s ON a.student_id = s.id
          JOIN univ_tracks ut ON a.track_id = ut.id
          JOIN universities u ON ut.univ_id = u.id
+         LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE (? IS NULL OR a.round_id = ?)
            AND (? IS NULL OR a.track_id = ?)
          ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no",
@@ -178,6 +180,51 @@ pub async fn abandon_application(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn teacher_abandon_application(
+    State(state): State<AppState>,
+    Extension(claims): Extension<TeacherClaims>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+) -> Result<StatusCode, ApiError> {
+    let status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(rid)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if status != Some(RoundStatus::Finalized) {
+        return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
+    }
+
+    let in_class: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM students WHERE id = ? AND grade = ? AND class_no = ?",
+    )
+    .bind(sid)
+    .bind(claims.grade)
+    .bind(claims.class_no)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if in_class.is_none() {
+        return Err((StatusCode::FORBIDDEN, "해당 학생이 이 반 소속이 아닙니다".into()));
+    }
+
+    sqlx::query(
+        "UPDATE applications SET abandoned = 1
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ── Teacher ────────────────────────────────────────────────────────
 
 pub async fn teacher_list_students(
@@ -205,11 +252,12 @@ pub async fn teacher_list_applications(
     let rows = sqlx::query_as::<_, ApplicationRow>(
         "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name
+                u.univ_name, ut.track_name, r.recommended
          FROM applications a
          JOIN students s ON a.student_id = s.id
          JOIN univ_tracks ut ON a.track_id = ut.id
          JOIN universities u ON ut.univ_id = u.id
+         LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE s.grade = ? AND s.class_no = ?
            AND (? IS NULL OR a.round_id = ?)
          ORDER BY s.seq_no, u.univ_name",

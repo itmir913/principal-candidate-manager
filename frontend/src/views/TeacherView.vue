@@ -116,7 +116,7 @@ const auth   = useAuthStore()
 const tabs = [
   { key: 'class',       label: '학급 관리' },
   { key: 'application', label: '지원자 등록' },
-  { key: 'results',     label: '결과 조회' },
+  { key: 'results',     label: '라운드 결과' },
 ]
 const active = ref('class')
 
