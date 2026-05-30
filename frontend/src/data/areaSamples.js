@@ -185,6 +185,7 @@ const SCORE_EXAMPLES = {
 // ── 기초 데이터 예시 (base_data) ──────────────────────────────
 
 const BASE_EXAMPLES = {
+  // 졸업생 양식 (학생코드 기반)
   NUMERIC: {
     desc: '수치 입력 — 점수 기준표와 비교하여 점수 산출',
     headers: ['학생코드', '이름', '값'],
@@ -239,6 +240,62 @@ const BASE_EXAMPLES = {
       ['20250003', '이영희', 8.5, '한국대', '자연계열'],
     ],
   },
+
+  // 재학생 양식 (학년·반·번호 기반)
+  NUMERIC_ENROLLED: {
+    desc: '수치 입력 — 점수 기준표와 비교하여 점수 산출',
+    headers: ['학년', '반', '번호', '이름', '값'],
+    rows: [
+      [3, 1, 1, '홍길동', 42],
+      [3, 1, 2, '김철수',  0],
+      [3, 1, 3, '이영희', 35],
+    ],
+  },
+  NUMERIC_ENROLLED_COMPOSITE: {
+    desc: '수치 입력 — 점수 기준표와 비교하여 점수 산출 (대학·전형별 기준)',
+    headers: ['학년', '반', '번호', '이름', '값', '대학명', '모집단위명'],
+    rows: [
+      [3, 1, 1, '홍길동', 42, '한국대', '자연계열'],
+      [3, 1, 2, '김철수',  0, '한국대', '자연계열'],
+      [3, 1, 3, '이영희', 35, '한국대', '자연계열'],
+    ],
+  },
+  CATEGORY_ENROLLED: {
+    desc: '범주 텍스트 입력 — 점수 기준표의 범주명과 정확히 일치해야 함',
+    headers: ['학년', '반', '번호', '이름', '값'],
+    rows: [
+      [3, 1, 1, '홍길동', '총학생자치회장'],
+      [3, 1, 2, '김철수', '학급자치회부원'],
+      [3, 1, 3, '이영희', '학급자치회장'],
+    ],
+  },
+  CATEGORY_ENROLLED_COMPOSITE: {
+    desc: '범주 텍스트 입력 — 점수 기준표의 범주명과 정확히 일치해야 함 (대학·전형별 기준)',
+    headers: ['학년', '반', '번호', '이름', '값', '대학명', '모집단위명'],
+    rows: [
+      [3, 1, 1, '홍길동', '총학생자치회장', '한국대', '자연계열'],
+      [3, 1, 2, '김철수', '학급자치회부원', '한국대', '자연계열'],
+      [3, 1, 3, '이영희', '학급자치회장',   '한국대', '자연계열'],
+    ],
+  },
+  MANUAL_ENROLLED: {
+    desc: '점수 직접 입력 (소수점 최대 5자리)',
+    headers: ['학년', '반', '번호', '이름', '값'],
+    rows: [
+      [3, 1, 1, '홍길동', 9.5],
+      [3, 1, 2, '김철수', 7.0],
+      [3, 1, 3, '이영희', 8.5],
+    ],
+  },
+  MANUAL_ENROLLED_COMPOSITE: {
+    desc: '점수 직접 입력 (소수점 최대 5자리, 대학·전형별 기준)',
+    headers: ['학년', '반', '번호', '이름', '값', '대학명', '모집단위명'],
+    rows: [
+      [3, 1, 1, '홍길동', 9.5, '한국대', '자연계열'],
+      [3, 1, 2, '김철수', 7.0, '한국대', '자연계열'],
+      [3, 1, 3, '이영희', 8.5, '한국대', '자연계열'],
+    ],
+  },
 }
 
 // ── 공개 API ──────────────────────────────────────────────────
@@ -264,13 +321,18 @@ export function getScoreExample(area) {
 /**
  * 기초 데이터 양식 예시 반환
  * @param {object} area - AreaRow (calc_type, lookup_scope)
+ * @param {'enrolled'|'graduated'} studentType
  * @returns {{ desc: string, headers: string[], rows: any[][] }}
  */
-export function getBaseExample(area) {
+export function getBaseExample(area, studentType = 'graduated') {
   const composite = area.lookup_scope === 'COMPOSITE'
   const baseKey = area.calc_type ?? 'MANUAL'
-  const key = composite ? `${baseKey}_COMPOSITE` : baseKey
-  const ex = BASE_EXAMPLES[key] ?? (composite ? BASE_EXAMPLES.MANUAL_COMPOSITE : BASE_EXAMPLES.MANUAL)
+  const enrolledSuffix = studentType === 'enrolled' ? '_ENROLLED' : ''
+  const key = composite ? `${baseKey}${enrolledSuffix}_COMPOSITE` : `${baseKey}${enrolledSuffix}`
+  const fallback = composite
+    ? (studentType === 'enrolled' ? BASE_EXAMPLES.MANUAL_ENROLLED_COMPOSITE : BASE_EXAMPLES.MANUAL_COMPOSITE)
+    : (studentType === 'enrolled' ? BASE_EXAMPLES.MANUAL_ENROLLED : BASE_EXAMPLES.MANUAL)
+  const ex = BASE_EXAMPLES[key] ?? fallback
 
   return { desc: ex.desc, headers: ex.headers, rows: ex.rows }
 }

@@ -249,13 +249,16 @@
           </table>
         </div>
         <p class="text-xs text-gray-500 mb-3">
-          학생코드로 학생을 찾습니다. 구간 조회·수기 입력은 실제 값으로 작성 (소수점 최대 5자리).
+          <template v-if="baseStudentType === 'enrolled'">학년·반·번호로 재학생을 찾아 값을 등록합니다.</template>
+          <template v-else>학생코드로 졸업생을 찾아 값을 등록합니다.</template>
+          수치형·수기 입력은 소수점 최대 5자리.
         </p>
         <ExcelPanel
           :area-id="selected.id"
           :calc-type="selected.calc_type"
           :area-name="selected.name"
           panel="base"
+          v-model:studentType="baseStudentType"
           @result="onBaseResult" />
 
         <!-- 외부 프로그램 가져오기 (COMPOSITE 전용) -->
@@ -424,8 +427,10 @@ function displayScore(v) {
 
 const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
 
+const baseStudentType = ref('enrolled')
+
 const scoreEx = computed(() => selected.value ? getScoreExample(selected.value) : null)
-const baseEx  = computed(() => selected.value ? getBaseExample(selected.value) : null)
+const baseEx  = computed(() => selected.value ? getBaseExample(selected.value, baseStudentType.value) : null)
 
 // ── 전형요소 목록 ─────────────────────────────────────────────────
 async function load() {
@@ -603,16 +608,16 @@ function saveBlob(response, filename) {
 // ── ExcelPanel (인라인 컴포넌트) ──────────────────────────────
 const ExcelPanel = defineComponent({
   props: {
-    areaId:   { type: Number, required: true },
-    calcType: { type: String, required: true },
-    areaName: { type: String, required: true },
-    panel:    { type: String, required: true }, // 'score' | 'base'
+    areaId:      { type: Number, required: true },
+    calcType:    { type: String, required: true },
+    areaName:    { type: String, required: true },
+    panel:       { type: String, required: true }, // 'score' | 'base'
+    studentType: { type: String, default: 'enrolled' },
   },
-  emits: ['result'],
+  emits: ['result', 'update:studentType'],
   setup(props, { emit }) {
     const err = ref('')
     const uploading = ref(false)
-    const studentType = ref('enrolled')
 
     async function dlTemplate() {
       err.value = ''
@@ -625,8 +630,8 @@ const ExcelPanel = defineComponent({
             ? `${props.areaName}_category_map_template.xlsx`
             : `${props.areaName}_numeric_table_template.xlsx`)
         } else {
-          const res = await downloadBaseDataTemplate(props.areaId, studentType.value)
-          saveBlob(res, `${props.areaName}_base_data_${studentType.value}_template.xlsx`)
+          const res = await downloadBaseDataTemplate(props.areaId, props.studentType)
+          saveBlob(res, `${props.areaName}_base_data_${props.studentType}_template.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
     }
@@ -660,7 +665,7 @@ const ExcelPanel = defineComponent({
             ? await importCategoryMap(props.areaId, file)
             : await importNumericTable(props.areaId, file)
         } else {
-          result = await importBaseData(props.areaId, file, studentType.value)
+          result = await importBaseData(props.areaId, file, props.studentType)
         }
         emit('result', result)
       } catch (e) {
@@ -685,8 +690,8 @@ const ExcelPanel = defineComponent({
             h('input', {
               type: 'radio',
               name: `st-${props.areaId}`,
-              checked: studentType.value === 'enrolled',
-              onChange: () => { studentType.value = 'enrolled' },
+              checked: props.studentType === 'enrolled',
+              onChange: () => emit('update:studentType', 'enrolled'),
             }),
             '재학생',
           ]),
@@ -694,8 +699,8 @@ const ExcelPanel = defineComponent({
             h('input', {
               type: 'radio',
               name: `st-${props.areaId}`,
-              checked: studentType.value === 'graduated',
-              onChange: () => { studentType.value = 'graduated' },
+              checked: props.studentType === 'graduated',
+              onChange: () => emit('update:studentType', 'graduated'),
             }),
             '졸업생',
           ]),
