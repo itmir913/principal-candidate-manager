@@ -280,8 +280,10 @@
           v-model:studentType="baseStudentType"
           @result="onBaseResult" />
 
-        <!-- 외부 프로그램 가져오기 (COMPOSITE 전용) -->
-        <div v-if="selected.lookup_scope === 'COMPOSITE'" class="mt-2 flex flex-wrap gap-2">
+        <!-- 외부 프로그램 가져오기 (COMPOSITE 전용, 재학생일 때만 표시) -->
+        <div v-if="selected.lookup_scope === 'COMPOSITE'"
+             v-show="baseStudentType === 'enrolled'"
+             class="mt-2 flex flex-wrap gap-2">
           <label class="px-3 py-1.5 text-sm border border-gray-300 rounded cursor-pointer hover:bg-gray-50 text-gray-700">
             대교협 석차연명부
             <input type="file" accept=".xlsx" class="hidden" @change="onExternalFile('daegyo', $event)" />
