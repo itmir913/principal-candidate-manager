@@ -354,8 +354,7 @@
   <!-- 외부 가져오기 모달 -->
   <Teleport to="body">
     <div v-if="extModal.open"
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-         @click.self="closeExtModal">
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div class="bg-white rounded-lg shadow-xl w-[520px] max-h-[90vh] overflow-y-auto p-6">
         <h3 class="text-base font-semibold text-gray-800 mb-1">{{ extModal.title }}</h3>
         <p class="text-xs text-gray-400 mb-4 truncate">{{ extModal.file?.name }}</p>
