@@ -24,7 +24,7 @@
       <template v-if="currentRound">
         <span class="font-semibold">{{ currentRound.id }}차 라운드 진행 중</span>
         <span class="ml-2">— 지원 접수 기간입니다</span>
-        <span class="ml-2 text-xs text-green-500">(개시일: {{ fmtLocalDate(currentRound.opened_at) }})</span>
+        <span class="ml-2 text-xs text-green-500">(개시일: {{ fmtLocalDate(currentRound.opened_at) }} ~ 진행중)</span>
       </template>
       <template v-else>
         현재 지원 접수 기간이 아닙니다. 관리자에게 문의하세요.
@@ -136,7 +136,7 @@ function fmtLocalDate(s) {
   if (!s) return ''
   const d = new Date(s)
   const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 onMounted(async () => {
