@@ -65,9 +65,9 @@
           <label class="text-xs text-gray-500">구간 탐색 방향 <span class="text-red-500">*</span></label>
           <select v-model="newArea.match_mode" class="w-full border rounded px-2 py-1 mt-0.5">
             <option value="">선택하세요</option>
-            <option value="UPPER">해당 기준값 이상 ▲</option>
-            <option value="LOWER">해당 기준값 이하 ▼</option>
-            <option value="EXACT">정확히 일치</option>
+            <option value="UPPER">▲ 기준값 이상(클수록 만점)</option>
+            <option value="LOWER">▼ 기준값 이하(작을수록 만점)</option>
+            <option value="EXACT">〓 정확히 일치</option>
           </select>
         </div>
         <div v-if="newArea.calc_type === 'CATEGORY'">
