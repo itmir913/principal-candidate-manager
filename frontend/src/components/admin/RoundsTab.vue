@@ -104,13 +104,13 @@
             <table class="w-full text-sm border rounded overflow-hidden">
               <thead class="bg-gray-50">
                 <tr>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번/학생코드</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-40">학번/학생코드</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-24">학생 이름</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-24">재학생 여부</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
-                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-24">추천</th>
-                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-24">포기처리</th>
-                  <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-28">추천</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-28">포기처리</th>
+                  <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium w-24">총점</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,7 +122,7 @@
                   <td class="px-3 py-2">{{ app.name }}</td>
                   <td class="px-3 py-2">
                     <span :class="app.is_enrolled ? 'text-green-600' : 'text-gray-400'">
-                      {{ app.is_enrolled ? '재학' : '졸업' }}
+                      {{ app.is_enrolled ? '재학생' : '졸업생' }}
                     </span>
                   </td>
                   <td class="px-3 py-2 text-gray-600">{{ app.department_name }}</td>
