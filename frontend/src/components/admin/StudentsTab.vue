@@ -74,11 +74,11 @@
         <option v-for="c in availableClasses" :key="c" :value="c">{{ c }}반</option>
       </select>
       <button class="text-sm text-blue-600 underline" @click="loadStudents">조회</button>
-      <span class="ml-auto text-sm text-gray-500">총 {{ students.length }}명</span>
+      <span class="ml-auto text-sm text-gray-500">총 {{ studentPage.total }}명</span>
     </div>
 
     <!-- 학생 목록 -->
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto border border-gray-200 rounded">
       <table class="w-full text-sm border-collapse">
         <thead>
           <tr class="bg-gray-100 text-gray-600 text-left">
@@ -93,7 +93,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in students" :key="s.id" class="hover:bg-gray-50">
+          <tr v-for="s in studentPage.rows" :key="s.id" class="hover:bg-gray-50">
             <td class="px-3 py-1.5 border-b font-mono text-xs">{{ s.student_code }}</td>
             <td class="px-3 py-1.5 border-b">{{ s.name }}</td>
             <td class="px-3 py-1.5 border-b">
@@ -112,13 +112,34 @@
               >삭제</button>
             </td>
           </tr>
-          <tr v-if="students.length === 0">
+          <tr v-if="studentPage.rows.length === 0">
             <td colspan="8" class="px-3 py-4 text-center text-gray-400">
               학생 데이터가 없습니다. 양식을 다운로드하여 작성 후 가져오기 하세요.
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- 페이지 네비게이션 -->
+    <div v-if="studentPage.total > 0"
+         class="mt-2 flex items-center justify-center gap-3 text-sm text-gray-600">
+      <button
+        class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        :disabled="studentPage.page <= 1"
+        @click="loadStudents(studentPage.page - 1)">
+        &lt; 이전
+      </button>
+      <span>
+        {{ studentPage.page }} / {{ Math.ceil(studentPage.total / studentPage.per_page) }} 페이지
+        (총 {{ studentPage.total }}명)
+      </span>
+      <button
+        class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        :disabled="studentPage.page >= Math.ceil(studentPage.total / studentPage.per_page)"
+        @click="loadStudents(studentPage.page + 1)">
+        다음 &gt;
+      </button>
     </div>
   </div>
 </template>
@@ -136,7 +157,7 @@ import {
   deleteStudent,
 } from '../../api/admin.js'
 
-const students = ref([])
+const studentPage = ref({ rows: [], total: 0, page: 1, per_page: 100 })
 const error = ref('')
 const result = ref(null)
 const filterEnrolled = ref(null)   // null=전체, 1=재학생, 0=졸업생
@@ -165,14 +186,14 @@ watch(filterEnrolled, (val) => {
   }
 })
 
-async function loadStudents() {
+async function loadStudents(page = 1) {
   error.value = ''
   try {
-    const params = {}
+    const params = { page, per_page: studentPage.value.per_page }
     if (filterGrade.value)              params.grade = filterGrade.value
     if (filterClass.value)              params.class_no = filterClass.value
     if (filterEnrolled.value !== null)  params.is_enrolled = filterEnrolled.value
-    students.value = await getStudents(params)
+    studentPage.value = await getStudents(params)
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }
@@ -223,7 +244,7 @@ async function remove(s) {
   error.value = ''
   try {
     await deleteStudent(s.id)
-    students.value = students.value.filter(x => x.id !== s.id)
+    await loadStudents(studentPage.value.page)
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }

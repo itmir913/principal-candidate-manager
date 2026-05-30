@@ -38,6 +38,18 @@ pub struct ListQuery {
     pub grade: Option<i64>,
     pub class_no: Option<i64>,
     pub is_enrolled: Option<i64>,
+    #[serde(default = "default_page")]     pub page: i64,
+    #[serde(default = "default_per_page")] pub per_page: i64,
+}
+fn default_page() -> i64 { 1 }
+fn default_per_page() -> i64 { 100 }
+
+#[derive(Serialize)]
+pub struct StudentPage {
+    pub rows: Vec<StudentRow>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
 }
 
 #[derive(Serialize)]
@@ -68,24 +80,47 @@ pub struct StudentRecord {
 pub async fn list_students(
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Vec<StudentRow>>, ApiError> {
+) -> Result<Json<StudentPage>, ApiError> {
+    let per_page = q.per_page.max(1);
+    let page = q.page.max(1);
+    let offset = (page - 1) * per_page;
+
+    // COUNT (동일 조건)
+    let mut count_sql = "SELECT COUNT(*) FROM students WHERE 1=1".to_string();
+    if q.grade.is_some()       { count_sql += " AND grade = ?"; }
+    if q.class_no.is_some()    { count_sql += " AND class_no = ?"; }
+    if q.is_enrolled.is_some() { count_sql += " AND is_enrolled = ?"; }
+
+    let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+    if let Some(v) = q.grade       { count_query = count_query.bind(v); }
+    if let Some(v) = q.class_no    { count_query = count_query.bind(v); }
+    if let Some(v) = q.is_enrolled { count_query = count_query.bind(v); }
+
+    let total = count_query
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 데이터 조회
     let mut sql = "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year \
                    FROM students WHERE 1=1".to_string();
     if q.grade.is_some()       { sql += " AND grade = ?"; }
     if q.class_no.is_some()    { sql += " AND class_no = ?"; }
     if q.is_enrolled.is_some() { sql += " AND is_enrolled = ?"; }
-    sql += " ORDER BY is_enrolled DESC, grade, class_no, seq_no";
+    sql += " ORDER BY is_enrolled DESC, grade, class_no, seq_no LIMIT ? OFFSET ?";
 
     let mut query = sqlx::query_as::<_, StudentRow>(&sql);
     if let Some(v) = q.grade       { query = query.bind(v); }
     if let Some(v) = q.class_no    { query = query.bind(v); }
     if let Some(v) = q.is_enrolled { query = query.bind(v); }
+    query = query.bind(per_page).bind(offset);
 
     let rows = query
         .fetch_all(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(rows))
+
+    Ok(Json(StudentPage { rows, total, page, per_page }))
 }
 
 /// GET /api/students/grade-options — 재학생 기준 등록된 학년·반 목록
