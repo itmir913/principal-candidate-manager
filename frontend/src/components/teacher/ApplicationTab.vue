@@ -126,16 +126,18 @@
             >
               <!-- 전형요소 헤더 -->
               <div class="mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-medium text-gray-800">{{ area.area_name }}</span>
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{{ area.calc_type }}</span>
-                </div>
-                <div class="flex items-center gap-2 mt-0.5">
-                  <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-sm font-medium text-gray-800 truncate">{{ area.area_name }}</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{{ area.calc_type }}</span>
+                  </div>
                   <span
                     v-if="!area.teacher_editable"
-                    class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                    class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0"
                   >관리자 입력 고정</span>
+                </div>
+                <div class="mt-0.5">
+                  <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
                 </div>
               </div>
 
