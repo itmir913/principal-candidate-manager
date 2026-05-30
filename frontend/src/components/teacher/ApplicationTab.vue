@@ -75,7 +75,7 @@
           <!-- 대학/모집단위/학과명 -->
           <div class="grid grid-cols-3 gap-3 mb-5">
             <div>
-              <label class="block text-xs text-gray-500 mb-1">대학</label>
+              <label class="block text-xs text-gray-500 mb-1">대학 <span class="text-red-500">*</span></label>
               <select
                 v-model="form.univId"
                 class="w-full border rounded px-2 py-1.5 text-sm"
@@ -86,7 +86,7 @@
               </select>
             </div>
             <div>
-              <label class="block text-xs text-gray-500 mb-1">모집단위</label>
+              <label class="block text-xs text-gray-500 mb-1">모집단위 <span class="text-red-500">*</span></label>
               <select
                 v-model="form.trackId"
                 class="w-full border rounded px-2 py-1.5 text-sm"
