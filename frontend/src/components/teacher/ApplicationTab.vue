@@ -445,7 +445,8 @@ async function onTrackChange() {
     const ctx = await teacherGetAreaContext(selectedStudent.value.id, form.trackId)
     areaContext.value = ctx
     initAreaValues(ctx)
-    // 기저장 값이 있는 항목에 대해 즉시 점수 계산
+    contextLoading.value = false
+    // 기저장 값이 있는 항목에 대해 즉시 점수 계산 (테이블 렌더링 후 실행)
     await triggerInitialPreviews(ctx)
   } finally {
     contextLoading.value = false
