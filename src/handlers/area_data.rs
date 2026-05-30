@@ -578,20 +578,73 @@ pub async fn base_data_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
-    let headers: Vec<&str> = if q.student_type == "enrolled" {
-        if composite {
+
+    // 재학생: 빈 양식만 반환
+    if q.student_type == "enrolled" {
+        let headers: Vec<&str> = if composite {
             vec!["학년", "반", "번호", "이름", "값", "대학명", "모집단위명"]
         } else {
             vec!["학년", "반", "번호", "이름", "값"]
+        };
+        let buf = simple_template(&headers)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        return Ok(excel::xlsx_response(buf, "base_data_template.xlsx"));
+    }
+
+    // 졸업생: 학생 명단 + (COMPOSITE이면 모집단위) 미리 채워서 반환
+    let graduates = sqlx::query(
+        "SELECT student_code, name FROM students WHERE is_enrolled = 0 ORDER BY student_code",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+
+    if composite {
+        for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
+            ws.write_string(0, i as u16, *h).ok();
+        }
+
+        let tracks = sqlx::query(
+            "SELECT u.univ_name, ut.track_name
+             FROM univ_tracks ut
+             JOIN universities u ON ut.univ_id = u.id
+             ORDER BY u.univ_name, ut.track_name",
+        )
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let mut row_i: u32 = 1;
+        for g in &graduates {
+            let code: &str = g.get("student_code");
+            let name: &str = g.get("name");
+            for t in &tracks {
+                let univ: &str = t.get("univ_name");
+                let track: &str = t.get("track_name");
+                ws.write_string(row_i, 0, code).ok();
+                ws.write_string(row_i, 1, name).ok();
+                // 값 열(2)은 공백
+                ws.write_string(row_i, 3, univ).ok();
+                ws.write_string(row_i, 4, track).ok();
+                row_i += 1;
+            }
         }
     } else {
-        if composite {
-            vec!["학생코드", "이름", "값", "대학명", "모집단위명"]
-        } else {
-            vec!["학생코드", "이름", "값"]
+        for (i, h) in ["학생코드", "이름", "값"].iter().enumerate() {
+            ws.write_string(0, i as u16, *h).ok();
         }
-    };
-    let buf = simple_template(&headers)
+        for (i, g) in graduates.iter().enumerate() {
+            let r = i as u32 + 1;
+            ws.write_string(r, 0, g.get::<&str, _>("student_code")).ok();
+            ws.write_string(r, 1, g.get::<&str, _>("name")).ok();
+            // 값 열(2)은 공백
+        }
+    }
+
+    let buf = wb.save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(excel::xlsx_response(buf, "base_data_template.xlsx"))
 }
