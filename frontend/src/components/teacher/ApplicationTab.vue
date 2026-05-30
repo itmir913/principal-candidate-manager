@@ -338,8 +338,18 @@ watch(scorePreview, () => {
     const container = tableRefs[areaId]
     if (!container) continue
     const highlighted = container.querySelector('[data-highlighted]')
-    if (highlighted) {
-      highlighted.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    if (!highlighted) continue
+
+    const theadHeight = container.querySelector('thead')?.offsetHeight ?? 0
+    const rowTop    = highlighted.offsetTop
+    const rowBottom = rowTop + highlighted.offsetHeight
+    const visTop    = container.scrollTop + theadHeight
+    const visBottom = container.scrollTop + container.clientHeight
+
+    if (rowTop < visTop) {
+      container.scrollTo({ top: rowTop - theadHeight, behavior: 'smooth' })
+    } else if (rowBottom > visBottom) {
+      container.scrollTo({ top: rowBottom - container.clientHeight, behavior: 'smooth' })
     }
   }
 }, { deep: true, flush: 'post' })
