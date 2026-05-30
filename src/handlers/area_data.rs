@@ -37,6 +37,14 @@ pub struct StudentTypeQuery {
 }
 fn student_type_graduated() -> String { "graduated".to_string() }
 
+#[derive(Deserialize)]
+pub struct PageQuery {
+    #[serde(default = "default_page")]     pub page: i64,
+    #[serde(default = "default_per_page")] pub per_page: i64,
+}
+fn default_page() -> i64 { 1 }
+fn default_per_page() -> i64 { 50 }
+
 #[derive(sqlx::FromRow)]
 pub(crate) struct AreaInfo {
     pub(crate) max_score: i64,
@@ -775,6 +783,14 @@ pub struct BaseDataListRow {
     pub track_name: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct BaseDataPage {
+    pub rows: Vec<BaseDataListRow>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
 /// GET /api/areas/:id/range-table/list
 pub async fn numeric_table_list(
     State(state): State<AppState>,
@@ -849,9 +865,20 @@ pub async fn category_map_list(
 pub async fn base_data_list(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<Json<Vec<BaseDataListRow>>, ApiError> {
+    Query(q): Query<PageQuery>,
+) -> Result<Json<BaseDataPage>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
+
+    let per_page = q.per_page.max(1);
+    let page = q.page.max(1);
+    let offset = (page - 1) * per_page;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
         "SELECT s.student_code, s.name, bd.value,
@@ -862,9 +889,12 @@ pub async fn base_data_list(
          LEFT JOIN univ_tracks ut ON bd.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE bd.area_id = ?
-         ORDER BY bd.track_id, s.grade, s.class_no, s.seq_no",
+         ORDER BY bd.track_id, s.grade, s.class_no, s.seq_no
+         LIMIT ? OFFSET ?",
     )
     .bind(id)
+    .bind(per_page)
+    .bind(offset)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -892,7 +922,8 @@ pub async fn base_data_list(
             })
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
-    Ok(Json(result))
+
+    Ok(Json(BaseDataPage { rows: result, total, page, per_page }))
 }
 
 // ── xlsx 쓰기 헬퍼 ───────────────────────────────────────────────
