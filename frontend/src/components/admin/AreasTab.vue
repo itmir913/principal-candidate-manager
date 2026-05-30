@@ -361,9 +361,10 @@
 
         <div class="space-y-3 mb-4">
           <div>
-            <label class="text-xs text-gray-500">대학명</label>
+            <label class="text-xs text-gray-500">대학명 <span class="text-red-500">*</span></label>
             <input v-model="extModal.univName" type="text"
-                   class="w-full border rounded px-2 py-1.5 mt-0.5 text-sm" />
+                   class="w-full border rounded px-2 py-1.5 mt-0.5 text-sm"
+                   placeholder="예: 서울대학교" />
           </div>
           <div>
             <label class="text-xs text-gray-500">모집단위명 <span class="text-red-500">*</span></label>
@@ -406,7 +407,7 @@
           <button class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
                   @click="closeExtModal">취소</button>
           <button class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                  :disabled="extModal.importing || !extModal.trackName.trim()"
+                  :disabled="extModal.importing || !extModal.univName.trim() || !extModal.trackName.trim()"
                   @click="doExtImport">
             {{ extModal.importing ? '가져오는 중…' : '가져오기' }}
           </button>

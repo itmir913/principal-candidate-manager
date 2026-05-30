@@ -173,6 +173,9 @@ async fn read_import_multipart(
 
     let bytes =
         file_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "파일이 없습니다".to_string()))?;
+    if univ_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
+    }
     if track_name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
     }
