@@ -120,9 +120,9 @@ pub async fn reopen_round(
         return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없거나 CLOSED 상태가 아닙니다".into()));
     }
 
-    // 추천 플래그 초기화
+    // 추천 플래그 및 순위 초기화 — 재계산 전 stale 데이터 노출 방지
     sqlx::query(
-        "UPDATE results SET recommended = 0 WHERE round_id = ?",
+        "UPDATE results SET recommended = 0, ranking = NULL WHERE round_id = ?",
     )
     .bind(id)
     .execute(&mut *tx)

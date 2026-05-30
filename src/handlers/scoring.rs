@@ -308,7 +308,9 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
                 let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
                     .await?;
                 detail.insert(area.id.to_string(), sc);
-                total += sc;
+                total = total.checked_add(sc).ok_or_else(|| {
+                    format!("점수 합산 오버플로우: 지원자 {} ({})", ctx.student_name, ctx.student_code)
+                })?;
             }
             let detail_json = serde_json::to_string(&detail).map_err(|e| e.to_string())?;
             rows.push((app.student_id, app.track_id, detail_json, total));
@@ -899,11 +901,15 @@ pub async fn unrecommend_result(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 상태 체크와 UPDATE를 같은 트랜잭션 안에서 처리 — FINALIZE race condition 방지
     let status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(rid)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -915,9 +921,12 @@ pub async fn unrecommend_result(
         "UPDATE results SET recommended = 0 WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid).bind(tid).bind(rid)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -544,7 +544,9 @@ pub async fn teacher_create_application(
             .await
             .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
         detail.insert(area.id.to_string(), sc);
-        total += sc;
+        total = total.checked_add(sc).ok_or_else(|| {
+            (StatusCode::INTERNAL_SERVER_ERROR, "점수 합산 오버플로우".to_string())
+        })?;
     }
 
     let detail_json = serde_json::to_string(&detail)
