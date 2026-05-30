@@ -45,7 +45,7 @@
           <span
             class="text-xs px-2 py-1 rounded-full font-medium"
             :class="selected.status === 'OPEN' ? 'bg-green-100 text-green-700' : selected.status === 'CLOSED' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
-          >{{ selected.status === 'FINALIZED' ? '마감완료' : selected.status }}</span>
+          >{{ { OPEN: '진행중', CLOSED: '종료', FINALIZED: '마감완료' }[selected.status] || selected.status }}</span>
           <template v-if="selected.status === 'OPEN'">
             <button
               class="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
