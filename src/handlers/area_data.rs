@@ -511,6 +511,44 @@ pub async fn category_map_import(
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
+
+    // 0점 항목 검증: (area_id, track_id) 그룹별로 score=0 행이 최소 1개 이상 필요
+    let groups: Vec<(i64,)> = sqlx::query_as::<_, (i64,)>(
+        "SELECT DISTINCT COALESCE(track_id, 0) FROM category_map WHERE area_id = ?",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (track_id_or_zero,) in &groups {
+        let track_id = if *track_id_or_zero == 0 { None } else { Some(*track_id_or_zero) };
+        let has_zero: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM category_map WHERE area_id = ? AND COALESCE(track_id, 0) = ? AND score = 0)",
+        )
+        .bind(id)
+        .bind(track_id_or_zero)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if !has_zero {
+            let track_label = if let Some(tid) = track_id {
+                format!(" (모집단위 id={})", tid)
+            } else {
+                " (공통)".to_string()
+            };
+            errors.push(format!(
+                "전형요소 점수 0점 기준(해당하지 않음)이 필수입니다{}: 가장 낮은 점수를 0점으로 설정해 주세요",
+                track_label
+            ));
+        }
+    }
+
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+    }
+
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }

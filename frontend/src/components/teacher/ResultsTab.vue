@@ -11,7 +11,7 @@
     </div>
 
     <div v-else-if="results.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
-      점수 계산 전입니다. 관리자에게 점수 계산을 요청하세요.
+      라운드가 아직 마감되지 않았습니다. 관리자가 라운드를 마감할 때까지 기다려주세요.
     </div>
 
     <template v-else>

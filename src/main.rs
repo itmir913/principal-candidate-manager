@@ -174,6 +174,8 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds", get(handlers::rounds::list_rounds))
         .route("/rounds/open", post(handlers::rounds::open_round))
         .route("/rounds/:id/close", put(handlers::rounds::close_round))
+        .route("/rounds/:id/reopen", put(handlers::rounds::reopen_round))
+        .route("/rounds/:id/finalize", put(handlers::rounds::finalize_round))
         .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
@@ -188,6 +190,10 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/results/:sid/:tid/:rid/recommend",
             put(handlers::scoring::recommend_result),
+        )
+        .route(
+            "/results/:sid/:tid/:rid/unrecommend",
+            put(handlers::scoring::unrecommend_result),
         )
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),

@@ -54,12 +54,17 @@ CREATE TABLE IF NOT EXISTS students (
 
 -- ================================================================
 -- ROUNDS
+-- status 생명주기: OPEN ⟷ CLOSED → FINALIZED
+--   OPEN      : 담임 지원 입력 기간
+--   CLOSED    : 담임 입력 차단, 관리자 점수 확인·추천 확정/취소 기간
+--   FINALIZED : 추천 확정 박제, 담임 포기 입력 가능, 결과 공개
 -- ================================================================
 CREATE TABLE IF NOT EXISTS rounds (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    status      TEXT NOT NULL CHECK(status IN ('OPEN', 'CLOSED')),
-    opened_at   TEXT NOT NULL,
-    closed_at   TEXT
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    status       TEXT NOT NULL CHECK(status IN ('OPEN', 'CLOSED', 'FINALIZED')),
+    opened_at    TEXT NOT NULL,
+    closed_at    TEXT,
+    finalized_at TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
     ON rounds(status) WHERE status = 'OPEN';
@@ -196,20 +201,23 @@ CREATE TABLE IF NOT EXISTS applications (
 CREATE INDEX IF NOT EXISTS idx_applications_round
     ON applications(round_id);
 
--- CLOSED 라운드 행 삭제 방지
+-- CLOSED / FINALIZED 라운드 행 삭제 방지
 CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_closed_application
 BEFORE DELETE ON applications
 BEGIN
-    SELECT RAISE(ABORT, 'Cannot delete application: round is CLOSED')
-    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED';
+    SELECT RAISE(ABORT, 'Cannot delete application: round is CLOSED or FINALIZED')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) IN ('CLOSED', 'FINALIZED');
 END;
 
--- CLOSED 라운드 무단 수정 방지 (abandoned 0→1 만 허용)
+-- CLOSED : 모든 업데이트 차단
+-- FINALIZED : abandoned 0→1 만 허용
 CREATE TRIGGER IF NOT EXISTS trg_prevent_update_closed_application
 BEFORE UPDATE ON applications
 BEGIN
-    SELECT RAISE(ABORT, 'Cannot update application: round is CLOSED. Only abandoned 0->1 is permitted.')
-    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED'
+    SELECT RAISE(ABORT, 'Cannot update application: round is CLOSED')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED';
+    SELECT RAISE(ABORT, 'Cannot update application: round is FINALIZED. Only abandoned 0->1 is permitted.')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'FINALIZED'
       AND (
           OLD.student_id      != NEW.student_id
           OR OLD.track_id         != NEW.track_id
@@ -244,3 +252,11 @@ CREATE TABLE IF NOT EXISTS results (
 );
 CREATE INDEX IF NOT EXISTS idx_results_round_track
     ON results(round_id, track_id);
+
+-- FINALIZED 라운드의 results 행 수정 전면 차단 (recommended 박제 보호)
+CREATE TRIGGER IF NOT EXISTS trg_prevent_update_finalized_result
+BEFORE UPDATE ON results
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot update result: round is FINALIZED')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'FINALIZED';
+END;

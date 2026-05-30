@@ -16,7 +16,6 @@ use crate::{
 };
 
 type ApiError = (StatusCode, String);
-type Db = sqlx::SqlitePool;
 
 fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::{Error, SerializeMap};
@@ -120,7 +119,7 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode)
 }
 
 pub async fn calc_area_score(
-    db: &Db,
+    db: &mut sqlx::SqliteConnection,
     student_id: i64,
     area: &AreaRow,
     track_id: i64,
@@ -141,7 +140,7 @@ pub async fn calc_area_score(
                    AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
-            .fetch_optional(db).await.map_err(|e| e.to_string())?;
+            .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
 
             let vs = value_str.ok_or_else(|| {
                 format!("전형요소 '{}': {} {} 지원자 {} ({})의 NUMERIC base_data가 없습니다",
@@ -160,7 +159,7 @@ pub async fn calc_area_score(
                  ORDER BY threshold",
             )
             .bind(area.id).bind(lookup_track).bind(lookup_track)
-            .fetch_all(db).await.map_err(|e| e.to_string())?
+            .fetch_all(&mut *db).await.map_err(|e| e.to_string())?
             .into_iter()
             .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
             .collect();
@@ -173,7 +172,7 @@ pub async fn calc_area_score(
                      ORDER BY threshold",
                 )
                 .bind(area.id)
-                .fetch_all(db).await.map_err(|e| e.to_string())?
+                .fetch_all(&mut *db).await.map_err(|e| e.to_string())?
                 .into_iter()
                 .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
                 .collect();
@@ -191,7 +190,7 @@ pub async fn calc_area_score(
                    AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
-            .fetch_all(db).await.map_err(|e| e.to_string())?;
+            .fetch_all(&mut *db).await.map_err(|e| e.to_string())?;
 
             let mut scores: Vec<i64> = Vec::new();
             for cat in &values {
@@ -201,7 +200,7 @@ pub async fn calc_area_score(
                        AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
                 )
                 .bind(area.id).bind(cat.as_str()).bind(lookup_track).bind(lookup_track)
-                .fetch_optional(db).await.map_err(|e| e.to_string())?;
+                .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
 
                 // 모집단위별 범주 기준이 없으면 공통(track_id IS NULL) 범주표로 폴백
                 if sc.is_none() && lookup_track.is_some() {
@@ -210,7 +209,7 @@ pub async fn calc_area_score(
                          WHERE area_id = ? AND category = ? AND track_id IS NULL",
                     )
                     .bind(area.id).bind(cat.as_str())
-                    .fetch_optional(db).await.map_err(|e| e.to_string())?;
+                    .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
                 }
 
                 match sc {
@@ -245,7 +244,7 @@ pub async fn calc_area_score(
                    AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
             )
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
-            .fetch_optional(db).await.map_err(|e| e.to_string())?;
+            .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
 
             match v {
                 None => return Err(format!(
@@ -269,16 +268,18 @@ pub async fn calculate_scores(
     State(state): State<AppState>,
     Path(round_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let round_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM rounds WHERE id = ?)",
+    let round_status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(round_id)
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if !round_exists {
-        return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into()));
+    match round_status {
+        Some(RoundStatus::Closed) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 점수 계산이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
@@ -305,6 +306,8 @@ pub async fn calculate_scores(
     let mut count = 0usize;
 
     // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행
+    let mut conn = state.db.acquire().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, track_id, detail_json, total)
     for app in &applications {
         let ctx = StudentTrackCtx {
@@ -316,7 +319,7 @@ pub async fn calculate_scores(
         let mut detail: HashMap<String, i64> = HashMap::new();
         let mut total: i64 = 0;
         for area in &areas {
-            let sc = calc_area_score(&state.db, app.student_id, area, app.track_id, &ctx)
+            let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
             detail.insert(area.id.to_string(), sc);
@@ -607,6 +610,19 @@ pub async fn teacher_get_results(
         }
     };
 
+    // FINALIZED 라운드에서만 결과 공개
+    let status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(round_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if status != Some(RoundStatus::Finalized) {
+        return Ok(Json(vec![]));
+    }
+
     let rows = sqlx::query_as::<_, ResultRow>(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
@@ -693,11 +709,13 @@ pub async fn score_preview(
         track_name: info.track_name,
     };
 
+    let mut conn = state.db.acquire().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let mut detail: Vec<AreaPreview> = Vec::new();
     let mut total_raw: i64 = 0;
 
     for aw in &area_rows {
-        let score_raw = calc_area_score(&state.db, q.student_id, aw, q.track_id, &ctx)
+        let score_raw = calc_area_score(&mut *conn, q.student_id, aw, q.track_id, &ctx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
         total_raw += score_raw;
@@ -733,6 +751,33 @@ pub async fn recommend_result(
 
     sqlx::query(
         "UPDATE results SET recommended = 1 WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn unrecommend_result(
+    State(state): State<AppState>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+) -> Result<StatusCode, ApiError> {
+    let status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(rid)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if status != Some(RoundStatus::Closed) {
+        return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 취소가 가능합니다".into()));
+    }
+
+    sqlx::query(
+        "UPDATE results SET recommended = 0 WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid).bind(tid).bind(rid)
     .execute(&state.db)

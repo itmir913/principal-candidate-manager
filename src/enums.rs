@@ -40,4 +40,5 @@ pub enum CategoryAgg {
 pub enum RoundStatus {
     Open,
     Closed,
+    Finalized,
 }

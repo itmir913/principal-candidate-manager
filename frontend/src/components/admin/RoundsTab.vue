@@ -44,15 +44,27 @@
           <span class="text-lg font-bold text-gray-800">{{ selected.id }}차 라운드</span>
           <span
             class="text-xs px-2 py-1 rounded-full font-medium"
-            :class="selected.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-          >{{ selected.status }}</span>
-          <button
-            v-if="selected.status === 'OPEN'"
-            class="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
-            @click="handleCloseRound(selected.id)"
-          >마감</button>
-          <span class="text-xs text-gray-400">{{ fmtDt(selected.opened_at) }} 개시</span>
-          <span v-if="selected.closed_at" class="text-xs text-gray-400">→ {{ fmtDt(selected.closed_at) }} 마감</span>
+            :class="selected.status === 'OPEN' ? 'bg-green-100 text-green-700' : selected.status === 'CLOSED' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+          >{{ selected.status === 'FINALIZED' ? '마감완료' : selected.status }}</span>
+          <template v-if="selected.status === 'OPEN'">
+            <button
+              class="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
+              @click="handleCloseRound(selected.id)"
+            >종료</button>
+          </template>
+          <template v-else-if="selected.status === 'CLOSED'">
+            <button
+              class="text-xs px-2.5 py-1 border border-gray-300 text-gray-600 rounded hover:bg-gray-50"
+              @click="handleReopenRound(selected.id)"
+            >다시 열기</button>
+            <button
+              class="text-xs px-2.5 py-1 border border-purple-300 text-purple-600 rounded hover:bg-purple-50"
+              @click="handleFinalizeRound(selected.id)"
+            >마감하기</button>
+          </template>
+          <span class="text-xs text-gray-400">{{ fmtDt(selected.opened_at) }} 최초 개시</span>
+          <span v-if="selected.closed_at" class="text-xs text-gray-400">→ {{ fmtDt(selected.closed_at) }} 입력 종료</span>
+          <span v-if="selected.finalized_at" class="text-xs text-gray-400">→ {{ fmtDt(selected.finalized_at) }} 최종 마감</span>
         </div>
 
         <!-- 서브탭 -->
@@ -73,6 +85,7 @@
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm text-gray-600">총 {{ apps.length }}건</span>
             <button
+              v-if="selected.status === 'CLOSED'"
               class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40"
               :disabled="calcLoading || apps.length === 0"
               @click="handleCalculate"
@@ -114,7 +127,7 @@
                     <td class="px-3 py-2 text-center">
                       <span v-if="app.abandoned" class="text-xs text-red-500">포기됨</span>
                       <button
-                        v-else-if="selected.status === 'CLOSED'"
+                        v-else-if="selected.status === 'FINALIZED'"
                         class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
                         @click="handleAbandon(app)"
                       >포기하기</button>
@@ -235,7 +248,14 @@
                   </td>
                   <td class="px-3 py-2 text-center">
                     <span v-if="r.abandoned" class="text-xs text-red-400">포기</span>
-                    <span v-else-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
+                    <template v-else-if="r.recommended">
+                      <span class="text-xs text-green-600 font-semibold">추천 확정</span>
+                      <button
+                        v-if="selected.status === 'CLOSED'"
+                        class="text-xs ml-1 px-1.5 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
+                        @click="handleUnrecommend(r)"
+                      >취소</button>
+                    </template>
                     <button
                       v-else-if="selected.status === 'CLOSED'"
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
@@ -255,8 +275,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import {
-  getRounds, openRound, closeRound,
-  calculateScores, getResults, recommendResult,
+  getRounds, openRound, closeRound, reopenRound, finalizeRound,
+  calculateScores, getResults, recommendResult, unrecommendResult,
   getApplications, abandonApplication,
   getAllTracks, getAreas,
   exportResultsExcel,
@@ -315,7 +335,7 @@ const subTabs = [
   { key: 'results', label: '결과' },
 ]
 
-const hasOpenRound = computed(() => rounds.value.some(r => r.status === 'OPEN'))
+const hasOpenRound = computed(() => rounds.value.some(r => r.status === 'OPEN' || r.status === 'CLOSED'))
 
 const appsByUniv = computed(() => {
   const map = {}
@@ -401,9 +421,37 @@ async function handleOpenRound() {
 }
 
 async function handleCloseRound(id) {
-  if (!confirm('라운드를 마감하시겠습니까?')) return
+  if (!confirm('라운드를 종료하시겠습니까? (담임 입력이 차단됩니다)')) return
   try {
     await closeRound(id)
+    await loadRounds()
+    if (selected.value?.id === id) {
+      const updated = rounds.value.find(r => r.id === id)
+      if (updated) selected.value = updated
+    }
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  }
+}
+
+async function handleReopenRound(id) {
+  if (!confirm('라운드를 다시 열시겠습니까? (추천 플래그가 초기화됩니다)')) return
+  try {
+    await reopenRound(id)
+    await loadRounds()
+    if (selected.value?.id === id) {
+      const updated = rounds.value.find(r => r.id === id)
+      if (updated) selected.value = updated
+    }
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  }
+}
+
+async function handleFinalizeRound(id) {
+  if (!confirm('라운드를 마감하시겠습니까? (추천 확정이 박제되고 결과가 공개됩니다)')) return
+  try {
+    await finalizeRound(id)
     await loadRounds()
     if (selected.value?.id === id) {
       const updated = rounds.value.find(r => r.id === id)
@@ -461,6 +509,16 @@ async function handleRecommend(r) {
   if (!confirm(`${r.name} 학생을 추천 확정하시겠습니까?`)) return
   try {
     await recommendResult(r.student_id, r.track_id, r.round_id)
+    await loadResults()
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  }
+}
+
+async function handleUnrecommend(r) {
+  if (!confirm(`${r.name} 학생의 추천을 취소하시겠습니까?`)) return
+  try {
+    await unrecommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
     alert(e.response?.data || e.message)

@@ -155,12 +155,16 @@ export const deleteTrack = (id) => axios.delete(`/api/univ-tracks/${id}`)
 export const getRounds = () => axios.get('/api/rounds').then(r => r.data)
 export const openRound = () => axios.post('/api/rounds/open').then(r => r.data)
 export const closeRound = (id) => axios.put(`/api/rounds/${id}/close`)
+export const reopenRound = (id) => axios.put(`/api/rounds/${id}/reopen`)
+export const finalizeRound = (id) => axios.put(`/api/rounds/${id}/finalize`)
 export const calculateScores = (roundId) =>
   axios.post(`/api/rounds/${roundId}/calculate`).then(r => r.data)
 export const getResults = (roundId, trackId) =>
   axios.get(`/api/rounds/${roundId}/results`, { params: trackId ? { track_id: trackId } : {} }).then(r => r.data)
 export const recommendResult = (sid, tid, rid) =>
   axios.put(`/api/results/${sid}/${tid}/${rid}/recommend`)
+export const unrecommendResult = (sid, tid, rid) =>
+  axios.put(`/api/results/${sid}/${tid}/${rid}/unrecommend`)
 
 // ── 지원 관리 (admin) ──────────────────────────────────────────
 export const getApplications = (roundId, trackId) =>

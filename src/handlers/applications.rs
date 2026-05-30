@@ -10,6 +10,7 @@ use crate::{
     auth::TeacherClaims,
     enums::{CalcType, LookupScope, RoundStatus},
     handlers::area_data::parse_display_value,
+    handlers::scoring::{calc_area_score, AreaRow, StudentTrackCtx},
     state::AppState,
 };
 
@@ -151,6 +152,19 @@ pub async fn abandon_application(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    // FINALIZED 라운드에서만 포기 입력 허용
+    let status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(rid)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if status != Some(RoundStatus::Finalized) {
+        return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
+    }
+
     sqlx::query(
         "UPDATE applications SET abandoned = 1
          WHERE student_id = ? AND track_id = ? AND round_id = ?",
@@ -219,10 +233,6 @@ pub async fn teacher_create_application(
     Extension(claims): Extension<TeacherClaims>,
     Json(body): Json<CreateApplicationBody>,
 ) -> Result<StatusCode, ApiError> {
-    if body.department_name.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "학과명은 필수입니다".into()));
-    }
-
     // 1. 라운드 OPEN 검증
     let round_status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
@@ -251,6 +261,10 @@ pub async fn teacher_create_application(
 
     if !ok {
         return Err((StatusCode::FORBIDDEN, "해당 학생은 담당 학급이 아닙니다".into()));
+    }
+
+    if body.department_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "학과명은 필수입니다".into()));
     }
 
     // 3. 전형요소 정보 일괄 로드 및 검증 (트랜잭션 진입 전)
@@ -370,7 +384,7 @@ pub async fn teacher_create_application(
         });
     }
 
-    // 5. 트랜잭션: 지원 upsert + 기초데이터 저장
+    // 5. 트랜잭션: 지원 upsert + 기초데이터 저장 + 점수 계산 + results 저장
     let mut tx = state
         .db
         .begin()
@@ -437,6 +451,75 @@ pub async fn teacher_create_application(
         }
     }
 
+    // 점수 계산을 위해 DB 데이터 로드 (트랜잭션 내에서)
+    let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
+        "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    #[derive(sqlx::FromRow)]
+    struct StudentTrackInfo {
+        student_code: String,
+        name: String,
+        univ_name: String,
+        track_name: String,
+    }
+    let info: StudentTrackInfo = sqlx::query_as::<_, StudentTrackInfo>(
+        "SELECT s.student_code, s.name, u.univ_name, ut.track_name
+         FROM students s, univ_tracks ut, universities u
+         WHERE s.id = ? AND ut.id = ? AND u.id = ut.univ_id",
+    )
+    .bind(body.student_id)
+    .bind(body.track_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let ctx = StudentTrackCtx {
+        student_code: info.student_code,
+        student_name: info.name,
+        univ_name: info.univ_name,
+        track_name: info.track_name,
+    };
+
+    // 점수 계산
+    let mut detail: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut total: i64 = 0;
+    for area in &areas {
+        let sc = calc_area_score(&mut *tx, body.student_id, area, body.track_id, &ctx)
+            .await
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+        detail.insert(area.id.to_string(), sc);
+        total += sc;
+    }
+
+    let detail_json = serde_json::to_string(&detail)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // results 저장
+    sqlx::query(
+        "INSERT INTO results
+           (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
+         VALUES (?, ?, ?, ?, ?, NULL, 0, ?)
+         ON CONFLICT (student_id, track_id, round_id)
+         DO UPDATE SET score_detail   = excluded.score_detail,
+                       total_score    = excluded.total_score,
+                       ranking        = NULL,
+                       calculated_at  = excluded.calculated_at",
+    )
+    .bind(body.student_id)
+    .bind(body.track_id)
+    .bind(body.round_id)
+    .bind(&detail_json)
+    .bind(total)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -479,15 +562,37 @@ pub async fn teacher_delete_application(
         return Err((StatusCode::FORBIDDEN, "해당 학생은 담당 학급이 아닙니다".into()));
     }
 
+    // 트랜잭션: applications와 results 함께 삭제
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
         "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
     .bind(tid)
     .bind(rid)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // recommended=0인 results만 삭제 (추천 확정된 것은 보호)
+    sqlx::query(
+        "DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ? AND recommended = 0",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

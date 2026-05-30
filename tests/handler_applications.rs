@@ -60,7 +60,7 @@ async fn create_application_open_round_ok() {
     let res = teacher_create_application(
         State(common::make_state(pool.clone())),
         Extension(common::teacher_claims(1, 1)),
-        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid, ..Default::default() }),
+        Json(CreateApplicationBody { student_id: sid, track_id: tid, round_id: rid, department_name: "컴퓨터공학과".into(), ..Default::default() }),
     )
     .await;
     assert_eq!(res.unwrap(), StatusCode::CREATED);
@@ -247,6 +247,12 @@ async fn delete_application_wrong_class_returns_forbidden() {
 async fn abandon_application_sets_abandoned_flag() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup(&pool).await;
+    // abandon은 FINALIZED 라운드에서만 허용
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
