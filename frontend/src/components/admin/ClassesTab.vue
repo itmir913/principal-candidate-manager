@@ -8,11 +8,6 @@
           :disabled="uploading || downloading"
           @click="dlTemplate"
         >양식 다운로드</button>
-        <button
-          class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="uploading || downloading"
-          @click="dlExport"
-        >목록 내보내기</button>
         <label
           class="px-3 py-1.5 text-sm rounded cursor-pointer"
           :class="uploading ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'"
@@ -25,6 +20,12 @@
           :disabled="showAddForm"
           @click="showAddForm = true"
         >+ 추가</button>
+        <span class="text-gray-300 select-none">|</span>
+        <button
+            class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
+            :disabled="uploading || downloading"
+            @click="dlExport"
+        >전체 목록 다운로드</button>
       </div>
     </div>
 

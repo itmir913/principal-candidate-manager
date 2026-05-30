@@ -160,11 +160,12 @@
               class="px-3 py-1.5 text-sm border rounded text-gray-600 hover:bg-gray-50"
               @click="loadResults"
             >새로고침</button>
+            <span class="text-gray-300 select-none">|</span>
             <button
               class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
               :disabled="results.length === 0 || downloading"
               @click="downloadExcel"
-            >목록 내보내기</button>
+            >전체 지원자 목록 다운로드</button>
           </div>
 
           <div v-if="results.length === 0" class="text-sm text-gray-400 py-6 text-center">
