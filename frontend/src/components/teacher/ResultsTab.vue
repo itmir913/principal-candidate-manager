@@ -25,6 +25,7 @@
           <thead>
             <tr class="border-b">
               <th class="text-left px-6 py-1.5 text-xs text-gray-400 font-medium">지원 대학</th>
+              <th class="text-left px-3 py-1.5 text-xs text-gray-400 font-medium">지원 학과</th>
               <th class="text-center px-3 py-1.5 text-xs text-gray-400 font-medium w-16">순위</th>
               <th class="text-right px-4 py-1.5 text-xs text-gray-400 font-medium w-20">총점</th>
               <th class="text-center px-3 py-1.5 text-xs text-gray-400 font-medium w-20">상태</th>
@@ -38,6 +39,7 @@
               :class="r.recommended ? 'bg-green-50' : r.abandoned ? 'bg-red-50 opacity-60' : ''"
             >
               <td class="px-6 py-2 text-gray-700">{{ r.univ_name }} — {{ r.track_name }}</td>
+              <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
               <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
               <td class="px-4 py-2 text-right font-semibold text-gray-800">
                 {{ r.total_score.toFixed(2) }}

@@ -75,6 +75,7 @@ pub struct ResultRow {
     pub is_enrolled: bool,
     pub univ_name: String,
     pub track_name: String,
+    pub department_name: String,
 }
 
 #[derive(Deserialize)]
@@ -430,7 +431,8 @@ pub async fn get_results(
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name
+                u.univ_name, ut.track_name,
+                COALESCE(a.department_name, '') AS department_name
          FROM results r
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id
@@ -458,13 +460,6 @@ struct AreaName {
     name: String,
 }
 
-#[derive(FromRow)]
-struct UnivRef {
-    id: i64,
-    univ_name: String,
-    track_name: String,
-}
-
 pub async fn export_results(
     State(state): State<AppState>,
     Path(round_id): Path<i64>,
@@ -476,25 +471,13 @@ pub async fn export_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let univs: Vec<UnivRef> = sqlx::query_as::<_, UnivRef>(
-        "SELECT DISTINCT ut.id, u.univ_name, ut.track_name
-         FROM results r
-         JOIN univ_tracks ut ON r.track_id = ut.id
-         JOIN universities u ON ut.univ_id = u.id
-         WHERE r.round_id = ?
-         ORDER BY u.univ_name, ut.track_name",
-    )
-    .bind(round_id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
     let all_results = sqlx::query_as::<_, ResultRow>(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name
+                u.univ_name, ut.track_name,
+                COALESCE(a.department_name, '') AS department_name
          FROM results r
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id
@@ -503,7 +486,7 @@ pub async fn export_results(
                                   AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
-         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC",
+         ORDER BY u.univ_name, ut.track_name, r.ranking NULLS LAST, r.total_score DESC",
     )
     .bind(round_id)
     .fetch_all(&state.db)
@@ -511,76 +494,68 @@ pub async fn export_results(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut wb = Workbook::new();
+    let ws = wb.add_worksheet()
+        .set_name("전체결과")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for univ in &univs {
-        let sheet_name: String = format!("{} {}", univ.univ_name, univ.track_name)
-            .chars()
-            .take(31)
-            .collect();
-        let ws = wb
-            .add_worksheet()
-            .set_name(&sheet_name)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // 헤더 행
+    let fixed_headers = ["순위", "대학", "모집단위", "지원학과", "학생명", "학생코드", "학년", "반", "번호", "재학구분"];
+    let mut col = 0u16;
+    for h in &fixed_headers {
+        ws.write_string(0, col, *h).ok();
+        col += 1;
+    }
+    for area in &areas {
+        ws.write_string(0, col, &area.name).ok();
+        col += 1;
+    }
+    ws.write_string(0, col, "총점").ok(); col += 1;
+    ws.write_string(0, col, "추천").ok(); col += 1;
+    ws.write_string(0, col, "포기").ok();
 
-        // 헤더 행
-        let fixed_headers = ["순위", "학생명", "학생코드", "학년", "반", "번호", "재학구분"];
+    // 데이터 행
+    for (i, r) in all_results.iter().enumerate() {
+        let row = (i + 1) as u32;
         let mut col = 0u16;
-        for h in &fixed_headers {
-            ws.write_string(0, col, *h).ok();
-            col += 1;
+
+        if let Some(rank) = r.ranking {
+            ws.write_number(row, col, rank as f64).ok();
         }
+        col += 1;
+
+        ws.write_string(row, col, &r.univ_name).ok(); col += 1;
+        ws.write_string(row, col, &r.track_name).ok(); col += 1;
+        ws.write_string(row, col, &r.department_name).ok(); col += 1;
+        ws.write_string(row, col, &r.name).ok(); col += 1;
+        ws.write_string(row, col, &r.student_code).ok(); col += 1;
+
+        if let Some(g) = r.grade { ws.write_number(row, col, g as f64).ok(); }
+        col += 1;
+        if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).ok(); }
+        col += 1;
+        if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).ok(); }
+        col += 1;
+
+        ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).ok();
+        col += 1;
+
+        let detail: HashMap<String, i64> = serde_json::from_str(&r.score_detail)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!(
+                "학생 id={} score_detail JSON 파싱 실패: {}", r.student_id, e
+            )))?;
         for area in &areas {
-            ws.write_string(0, col, &area.name).ok();
-            col += 1;
-        }
-        ws.write_string(0, col, "총점").ok(); col += 1;
-        ws.write_string(0, col, "추천").ok(); col += 1;
-        ws.write_string(0, col, "포기").ok();
-
-        // 데이터 행
-        let univ_results: Vec<&ResultRow> =
-            all_results.iter().filter(|r| r.track_id == univ.id).collect();
-
-        for (i, r) in univ_results.iter().enumerate() {
-            let row = (i + 1) as u32;
-            let mut col = 0u16;
-
-            if let Some(rank) = r.ranking {
-                ws.write_number(row, col, rank as f64).ok();
-            }
-            col += 1;
-
-            ws.write_string(row, col, &r.name).ok(); col += 1;
-            ws.write_string(row, col, &r.student_code).ok(); col += 1;
-
-            if let Some(g) = r.grade { ws.write_number(row, col, g as f64).ok(); }
-            col += 1;
-            if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).ok(); }
-            col += 1;
-            if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).ok(); }
-            col += 1;
-
-            ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).ok();
-            col += 1;
-
-            let detail: HashMap<String, i64> = serde_json::from_str(&r.score_detail)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!(
-                    "학생 id={} score_detail JSON 파싱 실패: {}", r.student_id, e
+            let sc = detail.get(&area.id.to_string()).copied()
+                .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!(
+                    "학생 id={} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
+                    r.student_id, area.id
                 )))?;
-            for area in &areas {
-                let sc = detail.get(&area.id.to_string()).copied()
-                    .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!(
-                        "학생 id={} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
-                        r.student_id, area.id
-                    )))?;
-                ws.write_number(row, col, sc as f64 / 100_000.0).ok();
-                col += 1;
-            }
-
-            ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).ok(); col += 1;
-            ws.write_string(row, col, if r.recommended { "추천" } else { "" }).ok(); col += 1;
-            ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).ok();
+            ws.write_number(row, col, sc as f64 / 100_000.0).ok();
+            col += 1;
         }
+
+        ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).ok(); col += 1;
+        ws.write_string(row, col, if r.recommended { "추천" } else { "" }).ok(); col += 1;
+        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).ok();
     }
 
     let buf = wb
@@ -636,7 +611,8 @@ pub async fn teacher_get_results(
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name
+                u.univ_name, ut.track_name,
+                COALESCE(a.department_name, '') AS department_name
          FROM results r
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id

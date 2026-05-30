@@ -107,13 +107,14 @@
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번/학생코드</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium">포기처리</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="app in group" :key="app.student_id" class="border-t">
-                  <td class="px-3 py-2 text-gray-500">
+                  <td class="px-3 py-2 text-gray-600">
                     <span v-if="app.is_enrolled">{{ app.grade }}학년 {{ app.class_no }}반 {{ app.seq_no }}번</span>
                     <span v-else>{{ app.student_code }}</span>
                   </td>
@@ -123,6 +124,7 @@
                       {{ app.is_enrolled ? '재학' : '졸업' }}
                     </span>
                   </td>
+                  <td class="px-3 py-2 text-gray-600">{{ app.department_name }}</td>
                   <td class="px-3 py-2 text-center">
                     <span v-if="app.abandoned" class="text-xs text-red-500">포기됨</span>
                     <button
@@ -130,6 +132,7 @@
                       class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
                       @click="handleAbandon(app)"
                     >포기하기</button>
+                    <span v-else class="text-xs text-gray-600 font-semibold">-</span>
                   </td>
                   <td class="px-3 py-2 text-right font-semibold text-gray-700">
                     {{ appTotalScore(app) }}
@@ -186,7 +189,8 @@
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-12">순위</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번/학생코드</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
                   <th
                     v-for="area in areas"
                     :key="area.id"
@@ -214,6 +218,7 @@
                       {{ r.is_enrolled ? '재학생' : '졸업생' }}
                     </span>
                   </td>
+                  <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
                   <td v-for="area in areas" :key="area.id" class="px-3 py-2 text-right text-gray-600">
                     {{ getAreaScore(r, area.id) }}
                   </td>
@@ -235,6 +240,7 @@
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
                       @click="handleRecommend(r)"
                     >추천 확정</button>
+                    <span v-else class="text-xs text-gray-600 font-semibold">-</span>
                   </td>
                 </tr>
               </tbody>

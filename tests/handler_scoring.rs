@@ -1304,6 +1304,7 @@ fn result_row_corrupt_score_detail_serialization_fails() {
         is_enrolled: true,
         univ_name: "한국대".to_string(),
         track_name: "컴공".to_string(),
+        department_name: "컴퓨터공학과".to_string(),
     };
     assert!(
         serde_json::to_string(&row).is_err(),
@@ -1331,6 +1332,7 @@ fn result_row_valid_score_detail_serializes_correctly() {
         is_enrolled: true,
         univ_name: "한국대".to_string(),
         track_name: "컴공".to_string(),
+        department_name: "컴퓨터공학과".to_string(),
     };
     let json = serde_json::to_string(&row).expect("정상 score_detail은 직렬화 성공 기대");
     // score_detail은 Score 타입으로 역변환되어 표시값(÷100000)으로 직렬화됨
