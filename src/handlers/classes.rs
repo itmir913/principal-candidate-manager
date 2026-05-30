@@ -28,12 +28,24 @@ pub struct UpsertClassBody {
 pub async fn list_classes(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ClassRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, ClassRow>(
+    let mut rows = sqlx::query_as::<_, ClassRow>(
         "SELECT grade, class_no, teacher_name FROM classes ORDER BY grade, class_no",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 졸업생이 한 명이라도 있으면 "졸업생" 항목을 sentinel(grade=0, class_no=0)로 추가
+    let has_graduates: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM students WHERE is_enrolled = 0)",
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if has_graduates {
+        rows.push(ClassRow { grade: 0, class_no: 0, teacher_name: Some("졸업생".into()) });
+    }
 
     Ok(Json(rows))
 }
@@ -233,6 +245,10 @@ pub async fn upsert_class(
     Path((grade, class_no)): Path<(i64, i64)>,
     Json(body): Json<UpsertClassBody>,
 ) -> Result<StatusCode, ApiError> {
+    if grade == 0 && class_no == 0 {
+        return Err((StatusCode::BAD_REQUEST, "학년=0, 반=0은 졸업생 전용 예약값으로 사용할 수 없습니다".into()));
+    }
+
     // 비밀번호 최소 길이 검증
     if let Some(ref pw) = body.password {
         if pw.len() < 4 {

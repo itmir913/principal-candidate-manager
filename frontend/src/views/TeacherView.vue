@@ -4,10 +4,14 @@
     <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
       <div>
         <span class="text-lg font-bold text-gray-800">학교장 추천자 선발 관리 시스템</span>
-        <span class="ml-3 text-sm text-gray-500">{{ auth.grade }}학년 {{ auth.classNo }}반 담임<template v-if="auth.teacherName"> · {{ auth.teacherName }}</template></span>
+        <span class="ml-3 text-sm text-gray-500">
+          <template v-if="auth.grade === 0">졸업생 담당 선생님</template>
+          <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 담임<template v-if="auth.teacherName"> · {{ auth.teacherName }} 선생님</template></template>
+        </span>
       </div>
       <div class="flex items-center gap-2">
         <button
+          v-if="auth.grade !== 0"
           class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
           @click="showPwModal = true"
         >비밀번호 변경</button>

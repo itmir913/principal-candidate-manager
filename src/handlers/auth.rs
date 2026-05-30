@@ -97,6 +97,36 @@ pub async fn teacher_login(
     State(state): State<AppState>,
     Json(body): Json<TeacherLoginBody>,
 ) -> Result<Json<TeacherTokenResponse>, ApiError> {
+    // 졸업생 로그인: grade=0, class_no=0 → 관리자 비밀번호로 인증
+    if body.grade == 0 && body.class_no == 0 {
+        let hash: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM app_configs WHERE key = 'admin_password_hash'",
+        )
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let hash = hash.unwrap_or_default();
+        if hash.is_empty() {
+            return Err((StatusCode::UNAUTHORIZED, "관리자 비밀번호가 설정되지 않았습니다".into()));
+        }
+
+        let ok = bcrypt::verify(&body.password, &hash)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if !ok {
+            return Err((StatusCode::UNAUTHORIZED, "비밀번호가 틀렸습니다".into()));
+        }
+
+        let token = auth::encode_teacher_token(0, 0, &state.jwt_secret)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        return Ok(Json(TeacherTokenResponse {
+            token,
+            grade: 0,
+            class_no: 0,
+            teacher_name: Some("졸업생".into()),
+        }));
+    }
+
     let row: Option<(String, Option<String>)> = sqlx::query_as(
         "SELECT COALESCE(password_hash, ''), teacher_name FROM classes WHERE grade = ? AND class_no = ?",
     )

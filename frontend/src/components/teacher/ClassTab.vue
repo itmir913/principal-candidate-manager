@@ -3,7 +3,8 @@
   <div class="bg-white border rounded-lg overflow-hidden">
     <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
       <h2 class="text-sm font-semibold text-gray-700">
-        {{ auth.grade }}학년 {{ auth.classNo }}반 학급 현황
+        <template v-if="auth.grade === 0">졸업생 현황</template>
+        <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 학급 현황</template>
       </h2>
       <span class="text-xs text-gray-400">{{ students.length }}명</span>
     </div>
@@ -15,9 +16,9 @@
     <table v-else class="w-full text-sm">
       <thead>
         <tr class="border-b bg-gray-50">
-          <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-12">번호</th>
-          <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">이름</th>
+          <th v-if="auth.grade !== 0" class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-12">번호</th>
           <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">학생코드</th>
+          <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">이름</th>
           <th class="text-left px-4 py-2 text-xs text-gray-500 font-medium">지원 대학</th>
         </tr>
       </thead>
@@ -27,9 +28,9 @@
           :key="s.id"
           class="border-b last:border-b-0 hover:bg-gray-50"
         >
-          <td class="px-4 py-3 text-gray-400">{{ s.seq_no }}</td>
-          <td class="px-4 py-3 font-medium text-gray-800">{{ s.name }}</td>
+          <td v-if="auth.grade !== 0" class="px-4 py-3 text-gray-400">{{ s.seq_no }}</td>
           <td class="px-4 py-3 text-gray-500 text-xs">{{ s.student_code }}</td>
+          <td class="px-4 py-3 font-medium text-gray-800">{{ s.name }}</td>
           <td class="px-4 py-3">
             <div v-if="getStudentApps(s.id).length === 0" class="text-gray-300 text-xs">-</div>
             <div

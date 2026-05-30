@@ -22,7 +22,7 @@
 
       <!-- Teacher form -->
       <form v-if="mode === 'teacher'" @submit.prevent="handleTeacherLogin" class="space-y-4">
-        <div class="grid grid-cols-2 gap-3">
+        <div :class="isGraduated ? '' : 'grid grid-cols-2 gap-3'">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">학년</label>
             <select
@@ -33,10 +33,10 @@
               @change="onGradeChange"
             >
               <option :value="''">{{ classesLoading ? '로딩 중…' : '선택' }}</option>
-              <option v-for="g in availableGrades" :key="g" :value="g">{{ g }}학년</option>
+              <option v-for="g in availableGrades" :key="g" :value="g">{{ g === 0 ? '졸업생' : g + '학년' }}</option>
             </select>
           </div>
-          <div>
+          <div v-if="!isGraduated">
             <label class="block text-sm font-medium text-gray-700 mb-1">반</label>
             <select
               v-model.number="teacherClassNo"
@@ -50,7 +50,7 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호<template v-if="isGraduated"> <span class="text-xs text-gray-400">(관리자 비밀번호)</span></template></label>
           <input
             v-model="teacherPassword"
             type="password"
@@ -61,7 +61,7 @@
         </div>
         <button
           type="submit"
-          :disabled="loading || !teacherGrade || !teacherClassNo"
+          :disabled="loading || teacherGrade === '' || (!isGraduated && !teacherClassNo)"
           class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
         >{{ loading ? '로그인 중…' : '로그인' }}</button>
       </form>
@@ -118,8 +118,10 @@ const availableGrades = computed(() =>
   [...new Set(classes.value.map(c => c.grade))].sort((a, b) => a - b)
 )
 
+const isGraduated = computed(() => teacherGrade.value === 0)
+
 const availableClassNos = computed(() => {
-  if (!teacherGrade.value) return []
+  if (!teacherGrade.value || isGraduated.value) return []
   return classes.value
     .filter(c => c.grade === teacherGrade.value)
     .map(c => c.class_no)
@@ -127,7 +129,9 @@ const availableClassNos = computed(() => {
 })
 
 function onGradeChange() {
-  if (!availableClassNos.value.includes(teacherClassNo.value)) {
+  if (isGraduated.value) {
+    teacherClassNo.value = 0
+  } else if (!availableClassNos.value.includes(teacherClassNo.value)) {
     teacherClassNo.value = ''
   }
 }
@@ -138,10 +142,10 @@ async function fetchClasses() {
     const res = await axios.get('/api/classes')
     classes.value = res.data
     // 저장된 학년·반이 실제 목록에 없으면 초기화
-    if (teacherGrade.value && !availableGrades.value.includes(Number(teacherGrade.value))) {
+    if (teacherGrade.value !== '' && !availableGrades.value.includes(Number(teacherGrade.value))) {
       teacherGrade.value = ''
       teacherClassNo.value = ''
-    } else if (teacherClassNo.value && !availableClassNos.value.includes(Number(teacherClassNo.value))) {
+    } else if (teacherClassNo.value !== '' && !availableClassNos.value.includes(Number(teacherClassNo.value))) {
       teacherClassNo.value = ''
     }
   } catch {
@@ -173,9 +177,10 @@ async function handleTeacherLogin() {
   error.value = null
   loading.value = true
   try {
-    await auth.loginTeacher(Number(teacherGrade.value), Number(teacherClassNo.value), teacherPassword.value)
+    const classNoVal = isGraduated.value ? 0 : Number(teacherClassNo.value)
+    await auth.loginTeacher(Number(teacherGrade.value), classNoVal, teacherPassword.value)
     localStorage.setItem(LS_GRADE, teacherGrade.value)
-    localStorage.setItem(LS_CLASS, teacherClassNo.value)
+    localStorage.setItem(LS_CLASS, classNoVal)
     router.push('/teacher')
   } catch (e) {
     error.value = e.response?.data || '로그인에 실패했습니다.'

@@ -27,6 +27,10 @@ pub async fn teacher_change_password(
     Extension(claims): Extension<TeacherClaims>,
     Json(body): Json<ChangePasswordBody>,
 ) -> Result<StatusCode, ApiError> {
+    if is_grad_teacher(&claims) {
+        return Err((StatusCode::FORBIDDEN, "졸업생 담당은 비밀번호 변경을 지원하지 않습니다".into()));
+    }
+
     if body.new_password.len() < 4 {
         return Err((StatusCode::BAD_REQUEST, "비밀번호는 4자 이상이어야 합니다".into()));
     }
@@ -199,14 +203,23 @@ pub async fn teacher_abandon_application(
         return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
     }
 
-    let in_class: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM students WHERE id = ? AND grade = ? AND class_no = ?",
-    )
-    .bind(sid)
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_optional(&state.db)
-    .await
+    let in_class: Option<i64> = if is_grad_teacher(&claims) {
+        sqlx::query_scalar(
+            "SELECT id FROM students WHERE id = ? AND is_enrolled = 0",
+        )
+        .bind(sid)
+        .fetch_optional(&state.db)
+        .await
+    } else {
+        sqlx::query_scalar(
+            "SELECT id FROM students WHERE id = ? AND grade = ? AND class_no = ?",
+        )
+        .bind(sid)
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_optional(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if in_class.is_none() {
@@ -229,19 +242,33 @@ pub async fn teacher_abandon_application(
 
 // ── Teacher ────────────────────────────────────────────────────────
 
+fn is_grad_teacher(claims: &TeacherClaims) -> bool {
+    claims.grade == 0 && claims.class_no == 0
+}
+
 pub async fn teacher_list_students(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
 ) -> Result<Json<Vec<StudentRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, StudentRow>(
-        "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled
-         FROM students WHERE grade = ? AND class_no = ?
-         ORDER BY seq_no",
-    )
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_all(&state.db)
-    .await
+    let rows = if is_grad_teacher(&claims) {
+        sqlx::query_as::<_, StudentRow>(
+            "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled
+             FROM students WHERE is_enrolled = 0
+             ORDER BY student_code",
+        )
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, StudentRow>(
+            "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled
+             FROM students WHERE grade = ? AND class_no = ?
+             ORDER BY seq_no",
+        )
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_all(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
 }
@@ -251,26 +278,47 @@ pub async fn teacher_list_applications(
     Extension(claims): Extension<TeacherClaims>,
     Query(q): Query<TeacherAppListQuery>,
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, ApplicationRow>(
-        "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
-                s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
-         FROM applications a
-         JOIN students s ON a.student_id = s.id
-         JOIN univ_tracks ut ON a.track_id = ut.id
-         JOIN universities u ON ut.univ_id = u.id
-         JOIN rounds rnd ON rnd.id = a.round_id
-         LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
-         WHERE s.grade = ? AND s.class_no = ?
-           AND (? IS NULL OR a.round_id = ?)
-         ORDER BY s.seq_no, u.univ_name",
-    )
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .bind(q.round_id)
-    .bind(q.round_id)
-    .fetch_all(&state.db)
-    .await
+    let rows = if is_grad_teacher(&claims) {
+        sqlx::query_as::<_, ApplicationRow>(
+            "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
+                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                    u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN univ_tracks ut ON a.track_id = ut.id
+             JOIN universities u ON ut.univ_id = u.id
+             JOIN rounds rnd ON rnd.id = a.round_id
+             LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
+             WHERE s.is_enrolled = 0
+               AND (? IS NULL OR a.round_id = ?)
+             ORDER BY s.student_code, u.univ_name",
+        )
+        .bind(q.round_id)
+        .bind(q.round_id)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, ApplicationRow>(
+            "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
+                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                    u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
+             FROM applications a
+             JOIN students s ON a.student_id = s.id
+             JOIN univ_tracks ut ON a.track_id = ut.id
+             JOIN universities u ON ut.univ_id = u.id
+             JOIN rounds rnd ON rnd.id = a.round_id
+             LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
+             WHERE s.grade = ? AND s.class_no = ?
+               AND (? IS NULL OR a.round_id = ?)
+             ORDER BY s.seq_no, u.univ_name",
+        )
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .bind(q.round_id)
+        .bind(q.round_id)
+        .fetch_all(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
 }
@@ -300,14 +348,23 @@ pub async fn teacher_create_application(
     }
 
     // 2. 학생 소속 검증
-    let ok: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
-    )
-    .bind(body.student_id)
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_one(&state.db)
-    .await
+    let ok: bool = if is_grad_teacher(&claims) {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND is_enrolled = 0)",
+        )
+        .bind(body.student_id)
+        .fetch_one(&state.db)
+        .await
+    } else {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
+        )
+        .bind(body.student_id)
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_one(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if !ok {

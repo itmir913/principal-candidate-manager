@@ -70,14 +70,24 @@ pub async fn teacher_area_context(
     Extension(claims): Extension<TeacherClaims>,
     Query(q): Query<AreaContextQuery>,
 ) -> Result<Json<Vec<AreaContextItem>>, ApiError> {
-    let belongs: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
-    )
-    .bind(q.student_id)
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_one(&state.db)
-    .await
+    let is_grad = claims.grade == 0 && claims.class_no == 0;
+    let belongs: bool = if is_grad {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND is_enrolled = 0)",
+        )
+        .bind(q.student_id)
+        .fetch_one(&state.db)
+        .await
+    } else {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
+        )
+        .bind(q.student_id)
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_one(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if !belongs {

@@ -15,7 +15,10 @@
             : 'border-l-2 border-l-transparent'"
           @click="selectStudent(s)"
         >
-          <span class="font-medium text-gray-800">{{ s.seq_no }}번 {{ s.name }}</span>
+          <span class="font-medium text-gray-800">
+            <template v-if="auth.grade === 0">{{ s.student_code }} {{ s.name }}</template>
+            <template v-else>{{ s.seq_no }}번 {{ s.name }}</template>
+          </span>
           <span
             v-if="getStudentAppCount(s.id) > 0"
             class="text-xs text-blue-600 font-semibold"
