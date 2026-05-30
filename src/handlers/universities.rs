@@ -38,6 +38,7 @@ pub struct TrackWithUnivRow {
     pub id: i64,
     pub univ_id: i64,
     pub univ_name: String,
+    pub total_quota: Option<i64>,
     pub track_name: String,
     pub unit_quota: Option<i64>,
     pub prioritize_enrolled: i64,
@@ -184,7 +185,7 @@ pub async fn list_all_tracks(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TrackWithUnivRow>>, ApiError> {
     let rows = sqlx::query_as::<_, TrackWithUnivRow>(
-        "SELECT ut.id, ut.univ_id, u.univ_name, ut.track_name, ut.unit_quota, ut.prioritize_enrolled
+        "SELECT ut.id, ut.univ_id, u.univ_name, u.total_quota, ut.track_name, ut.unit_quota, ut.prioritize_enrolled
          FROM univ_tracks ut
          JOIN universities u ON ut.univ_id = u.id
          ORDER BY u.univ_name, ut.track_name",

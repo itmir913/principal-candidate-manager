@@ -197,6 +197,13 @@
                 <template v-else>
                   모집단위 정원 무제한
                 </template>
+                <span class="mx-1 text-gray-300">|</span>
+                <template v-if="group.totalQuota != null">
+                  대학 정원 {{ group.totalQuota }}명 / 잔여 {{ group.univRemaining }}석
+                </template>
+                <template v-else>
+                  대학 정원 무제한
+                </template>
               </span>
             </div>
             <div class="overflow-x-auto">
@@ -361,8 +368,16 @@ const resultsByUniv = computed(() => {
     if (!map[key]) {
       const t = tracks.value.find(t => t.id === r.track_id)
       const unitQuota = t?.unit_quota ?? null
+      const totalQuota = t?.total_quota ?? null
       const recommended = results.value.filter(x => x.track_id === r.track_id && x.recommended).length
-      map[key] = { unitQuota, remaining: unitQuota != null ? unitQuota - recommended : null, results: [] }
+      const univRecommended = results.value.filter(x => x.univ_name === r.univ_name && x.recommended).length
+      map[key] = {
+        unitQuota,
+        totalQuota,
+        remaining: unitQuota != null ? unitQuota - recommended : null,
+        univRemaining: totalQuota != null ? totalQuota - univRecommended : null,
+        results: [],
+      }
     }
     map[key].results.push(r)
   }
