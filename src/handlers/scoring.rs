@@ -32,6 +32,7 @@ fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error
 #[derive(FromRow)]
 pub struct AreaRow {
     pub id: i64,
+    pub name: String,
     pub calc_type: CalcType,
     pub max_score: i64,
     pub match_mode: Option<MatchMode>,
@@ -43,6 +44,17 @@ pub struct AreaRow {
 struct AppRef {
     student_id: i64,
     track_id: i64,
+    student_code: String,
+    name: String,
+    univ_name: String,
+    track_name: String,
+}
+
+pub struct StudentTrackCtx {
+    pub student_code: String,
+    pub student_name: String,
+    pub univ_name: String,
+    pub track_name: String,
 }
 
 #[derive(Serialize, FromRow)]
@@ -112,6 +124,7 @@ pub async fn calc_area_score(
     student_id: i64,
     area: &AreaRow,
     track_id: i64,
+    ctx: &StudentTrackCtx,
 ) -> Result<i64, String> {
     // COMPOSITE 전형요소는 모집단위별 데이터 사용, SIMPLE은 전역 데이터
     let lookup_track: Option<i64> = if area.lookup_scope == LookupScope::Composite {
@@ -131,13 +144,15 @@ pub async fn calc_area_score(
             .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
             let vs = value_str.ok_or_else(|| {
-                format!("전형요소 id={}: 학생 id={}의 NUMERIC base_data가 없습니다", area.id, student_id)
+                format!("전형요소 '{}': {} {} 지원자 {} ({})의 NUMERIC base_data가 없습니다",
+                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code)
             })?;
             let value: i64 = vs.trim().parse::<i64>().map_err(|_| {
-                format!("전형요소 id={}: base_data 값 '{}' 을 정수로 파싱할 수 없습니다", area.id, vs.trim())
+                format!("전형요소 '{}': {} {} 지원자 {} ({})의 base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
+                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, vs.trim())
             })?;
             let mode = area.match_mode
-                .ok_or_else(|| format!("전형요소 id={}: NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.id))?;
+                .ok_or_else(|| format!("전형요소 '{}': NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.name))?;
 
             let mut rows: Vec<(i64, i64)> = sqlx::query(
                 "SELECT threshold, score FROM numeric_table
@@ -164,7 +179,9 @@ pub async fn calc_area_score(
                 .collect();
             }
 
-            lookup_range_score(value, &rows, mode)?
+            lookup_range_score(value, &rows, mode)
+                .map_err(|e| format!("전형요소 '{}': {} {} 지원자 {} ({}) - {}",
+                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, e))?
         }
 
         CalcType::Category => {
@@ -199,25 +216,24 @@ pub async fn calc_area_score(
                 match sc {
                     Some(s) => scores.push(s),
                     None => return Err(format!(
-                        "전형요소 id={}: 범주 '{}' 에 해당하는 category_map 항목이 없습니다",
-                        area.id, cat
+                        "전형요소 '{}': {} {} 지원자 {} ({})에 대해 범주 '{}' 에 해당하는 category_map 항목이 없습니다",
+                        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, cat
                     )),
                 }
             }
 
             if scores.is_empty() {
                 return Err(format!(
-                    "전형요소 id={}: 학생 id={}의 CATEGORY base_data가 없습니다",
-                    area.id, student_id
+                    "전형요소 '{}': {} {} 지원자 {} ({})의 CATEGORY base_data가 없습니다",
+                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
                 ));
             }
             match area.category_agg {
                 Some(CategoryAgg::Sum) => scores.iter().sum::<i64>(),
                 Some(CategoryAgg::Max) => *scores.iter().max()
-                    .ok_or_else(|| format!("전형요소 id={}: MAX 집계이지만 점수 목록이 비어 있습니다", area.id))?,
+                    .ok_or_else(|| format!("전형요소 '{}': MAX 집계이지만 점수 목록이 비어 있습니다", area.name))?,
                 None => return Err(format!(
-                    "전형요소 id={}: CATEGORY 타입에 category_agg가 설정되지 않았습니다",
-                    area.id
+                    "전형요소 '{}': CATEGORY 타입에 category_agg가 설정되지 않았습니다", area.name
                 )),
             }
         }
@@ -233,11 +249,12 @@ pub async fn calc_area_score(
 
             match v {
                 None => return Err(format!(
-                    "전형요소 id={}: 학생 id={}의 MANUAL base_data가 없습니다",
-                    area.id, student_id
+                    "전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data가 없습니다",
+                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
                 )),
                 Some(s) => s.trim().parse::<i64>().map_err(|_| {
-                    format!("전형요소 id={}: MANUAL base_data 값 '{}' 을 정수로 파싱할 수 없습니다", area.id, s.trim())
+                    format!("전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
+                        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, s.trim())
                 })?,
             }
         }
@@ -265,14 +282,19 @@ pub async fn calculate_scores(
     }
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
-        "SELECT id, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
+        "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let applications: Vec<AppRef> = sqlx::query_as::<_, AppRef>(
-        "SELECT student_id, track_id FROM applications WHERE round_id = ? AND confirmed = 1",
+        "SELECT a.student_id, a.track_id, s.student_code, s.name, u.univ_name, ut.track_name
+         FROM applications a
+         JOIN students s ON s.id = a.student_id
+         JOIN univ_tracks ut ON ut.id = a.track_id
+         JOIN universities u ON u.id = ut.univ_id
+         WHERE a.round_id = ? AND a.confirmed = 1",
     )
     .bind(round_id)
     .fetch_all(&state.db)
@@ -285,10 +307,16 @@ pub async fn calculate_scores(
     // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행
     let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, track_id, detail_json, total)
     for app in &applications {
+        let ctx = StudentTrackCtx {
+            student_code: app.student_code.clone(),
+            student_name: app.name.clone(),
+            univ_name: app.univ_name.clone(),
+            track_name: app.track_name.clone(),
+        };
         let mut detail: HashMap<String, i64> = HashMap::new();
         let mut total: i64 = 0;
         for area in &areas {
-            let sc = calc_area_score(&state.db, app.student_id, area, app.track_id)
+            let sc = calc_area_score(&state.db, app.student_id, area, app.track_id, &ctx)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
             detail.insert(area.id.to_string(), sc);
@@ -628,22 +656,11 @@ pub struct ScorePreviewResponse {
     pub detail: Vec<AreaPreview>,
 }
 
-#[derive(FromRow)]
-struct AreaWithName {
-    id: i64,
-    name: String,
-    calc_type: CalcType,
-    max_score: i64,
-    match_mode: Option<MatchMode>,
-    category_agg: Option<CategoryAgg>,
-    lookup_scope: LookupScope,
-}
-
 pub async fn score_preview(
     State(state): State<AppState>,
     Query(q): Query<ScorePreviewQuery>,
 ) -> Result<Json<ScorePreviewResponse>, ApiError> {
-    let area_rows: Vec<AreaWithName> = sqlx::query_as::<_, AreaWithName>(
+    let area_rows: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope
          FROM areas ORDER BY id",
     )
@@ -651,19 +668,36 @@ pub async fn score_preview(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    #[derive(FromRow)]
+    struct StudentTrackInfo {
+        student_code: String,
+        name: String,
+        univ_name: String,
+        track_name: String,
+    }
+    let info: StudentTrackInfo = sqlx::query_as::<_, StudentTrackInfo>(
+        "SELECT s.student_code, s.name, u.univ_name, ut.track_name
+         FROM students s, univ_tracks ut, universities u
+         WHERE s.id = ? AND ut.id = ? AND u.id = ut.univ_id",
+    )
+    .bind(q.student_id)
+    .bind(q.track_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let ctx = StudentTrackCtx {
+        student_code: info.student_code,
+        student_name: info.name,
+        univ_name: info.univ_name,
+        track_name: info.track_name,
+    };
+
     let mut detail: Vec<AreaPreview> = Vec::new();
     let mut total_raw: i64 = 0;
 
     for aw in &area_rows {
-        let area = AreaRow {
-            id: aw.id,
-            calc_type: aw.calc_type,
-            max_score: aw.max_score,
-            match_mode: aw.match_mode,
-            category_agg: aw.category_agg,
-            lookup_scope: aw.lookup_scope,
-        };
-        let score_raw = calc_area_score(&state.db, q.student_id, &area, q.track_id)
+        let score_raw = calc_area_score(&state.db, q.student_id, aw, q.track_id, &ctx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
         total_raw += score_raw;
@@ -707,4 +741,3 @@ pub async fn recommend_result(
 
     Ok(StatusCode::NO_CONTENT)
 }
-

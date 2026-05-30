@@ -7,7 +7,7 @@ use axum::{
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use principal_candidate_manager::handlers::scoring::{
     calc_area_score, calculate_scores, export_results, lookup_range_score, recommend_result,
-    AreaRow, ResultRow,
+    AreaRow, ResultRow, StudentTrackCtx,
 };
 use principal_candidate_manager::score::Score;
 
@@ -234,6 +234,15 @@ async fn insert_area(
     .last_insert_rowid()
 }
 
+fn dummy_ctx() -> StudentTrackCtx {
+    StudentTrackCtx {
+        student_code: "S001".to_string(),
+        student_name: "홍길동".to_string(),
+        univ_name: "한국대".to_string(),
+        track_name: "컴퓨터공학".to_string(),
+    }
+}
+
 async fn insert_university(pool: &sqlx::SqlitePool) -> i64 {
     let univ_id: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
@@ -278,13 +287,14 @@ async fn calc_range_simple_upper() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Upper),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -315,13 +325,14 @@ async fn calc_range_simple_lower() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Lower),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -351,13 +362,14 @@ async fn calc_range_composite() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Upper),
         category_agg: None,
         lookup_scope: LookupScope::Composite,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, uid).await.unwrap(), 80_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, uid, &dummy_ctx()).await.unwrap(), 80_000);
 }
 
 #[tokio::test]
@@ -389,13 +401,14 @@ async fn calc_category_sum() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -427,13 +440,14 @@ async fn calc_category_max() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: Some(CategoryAgg::Max),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -453,13 +467,14 @@ async fn calc_manual() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Manual,
         max_score: 100_000,
         match_mode: None,
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 75_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 75_000);
 }
 
 #[tokio::test]
@@ -479,13 +494,14 @@ async fn calc_no_base_data_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Upper),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -509,13 +525,14 @@ async fn calc_category_sum_capped_at_max_score() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -539,13 +556,14 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Lower),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -562,13 +580,14 @@ async fn calc_manual_capped_at_max_score() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Manual,
         max_score: 100_000,
         match_mode: None,
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -589,13 +608,14 @@ async fn calc_range_upper_capped_at_max_score() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Upper),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -616,13 +636,14 @@ async fn calc_category_max_capped_at_max_score() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: Some(CategoryAgg::Max),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 // ── 감점 전형요소 (음수 점수) ─────────────────────────────────────
@@ -645,10 +666,10 @@ async fn calc_category_deduction_returns_negative_score() {
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Category, max_score: 1_000_000,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    let score = calc_area_score(&pool, sid, &area, 0).await.unwrap();
+    let score = calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap();
     assert_eq!(score, -300_000, "감점 범주: -3.0점 → -300000");
 }
 
@@ -666,10 +687,10 @@ async fn calc_category_no_base_data_returns_error() {
     // base_data 없음
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Category, max_score: 1_000_000,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -685,10 +706,10 @@ async fn calc_manual_deduction_returns_negative_score() {
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Manual, max_score: 1_000_000,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Manual, max_score: 1_000_000,
         match_mode: None, category_agg: None, lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -500_000, "-5.0점 → -500000");
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000, "-5.0점 → -500000");
 }
 
 #[tokio::test]
@@ -715,11 +736,11 @@ async fn calc_pure_deduction_area_max_score_zero() {
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Category, max_score: 0,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 0,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
     // min(-500000, 0) = -500000 → 감점 보존
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -500_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000);
 }
 
 #[tokio::test]
@@ -741,10 +762,10 @@ async fn calc_pure_deduction_area_no_base_data_returns_error() {
     // base_data 없음 → Err
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Category, max_score: 0,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 0,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -765,10 +786,10 @@ async fn calc_deduction_does_not_cap_at_max_score() {
     .bind(sid).bind(aid).execute(&pool).await.unwrap();
 
     let area = AreaRow {
-        id: aid, calc_type: CalcType::Category, max_score: 1_000_000,
+        id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), -300_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -300_000);
 }
 
 #[tokio::test]
@@ -791,13 +812,14 @@ async fn calc_range_exact_match_hit() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Exact),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -821,13 +843,14 @@ async fn calc_range_exact_match_miss_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Exact),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 // ── calc_area_score: 새 Err 케이스 ────────────────────────────────
@@ -850,13 +873,14 @@ async fn calc_numeric_parse_error_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Upper),
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -878,13 +902,14 @@ async fn calc_category_unknown_category_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -906,13 +931,14 @@ async fn calc_category_missing_agg_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Category,
         max_score: 100_000,
         match_mode: None,
         category_agg: None, // 집계 방식 미설정
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -929,13 +955,14 @@ async fn calc_manual_parse_error_returns_error() {
 
     let area = AreaRow {
         id: aid,
+        name: "TestArea".to_string(),
         calc_type: CalcType::Manual,
         max_score: 100_000,
         match_mode: None,
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 // ── calculate_scores 통합 ─────────────────────────────────────────
