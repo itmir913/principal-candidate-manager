@@ -37,7 +37,10 @@
               :key="app.track_id"
               class="flex items-center gap-2 mb-1"
             >
-              <span class="text-gray-700">{{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}</span>
+          <span class="text-gray-700"
+              :class="{ 'line-through text-gray-400': app.abandoned || (!app.recommended && app.round_status === 'FINALIZED') }"
+          >
+            {{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}</span>
               <span v-if="app.abandoned" class="text-xs text-red-400 font-semibold">(포기됨)</span>
               <span v-else-if="app.recommended && app.round_status === 'FINALIZED'" class="text-xs text-green-600 font-semibold">추천 확정</span>
               <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-xs text-red-400 font-semibold">추천 제외</span>
