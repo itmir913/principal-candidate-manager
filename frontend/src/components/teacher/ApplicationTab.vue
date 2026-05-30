@@ -117,10 +117,11 @@
           <div v-else-if="areaContext.length > 0">
             <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">전형요소</div>
 
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <div
               v-for="area in areaContext"
               :key="area.area_id"
-              class="border rounded-lg p-3 mb-3"
+              class="border rounded-lg p-3"
               :class="area.teacher_editable ? 'border-gray-200' : 'border-gray-100 bg-gray-50'"
             >
               <!-- 전형요소 헤더 -->
@@ -224,7 +225,7 @@
                   class="w-36 flex-shrink-0 border rounded overflow-hidden text-xs max-h-48 overflow-y-auto"
                 >
                   <table class="w-full">
-                    <thead>
+                    <thead class="sticky top-0">
                       <tr class="bg-gray-50 border-b">
                         <th class="px-2 py-1 text-left text-gray-500 font-medium">
                           {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
@@ -248,6 +249,7 @@
                   </table>
                 </div>
               </div>
+            </div>
             </div>
           </div>
 
