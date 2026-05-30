@@ -37,7 +37,7 @@ async fn open_round_after_close_creates_new_round() {
     let (_, axum::Json(body)) =
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let id = body["id"].as_i64().unwrap();
-    close_round(State(common::make_state(pool.clone())), Path(id))
+    let _ = close_round(State(common::make_state(pool.clone())), Path(id))
         .await
         .unwrap();
     let res = open_round(State(common::make_state(pool.clone()))).await;
@@ -57,7 +57,7 @@ async fn close_round_changes_status_to_closed() {
     let (_, axum::Json(body)) =
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let id = body["id"].as_i64().unwrap();
-    close_round(State(common::make_state(pool.clone())), Path(id))
+    let _ = close_round(State(common::make_state(pool.clone())), Path(id))
         .await
         .unwrap();
     let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
@@ -74,7 +74,7 @@ async fn close_round_sets_closed_at_timestamp() {
     let (_, axum::Json(body)) =
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let id = body["id"].as_i64().unwrap();
-    close_round(State(common::make_state(pool.clone())), Path(id))
+    let _ = close_round(State(common::make_state(pool.clone())), Path(id))
         .await
         .unwrap();
     let closed_at: Option<String> =
@@ -99,7 +99,7 @@ async fn close_already_closed_round_returns_not_found() {
     let (_, axum::Json(body)) =
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let id = body["id"].as_i64().unwrap();
-    close_round(State(common::make_state(pool.clone())), Path(id))
+    let _ = close_round(State(common::make_state(pool.clone())), Path(id))
         .await
         .unwrap();
     let res = close_round(State(common::make_state(pool)), Path(id)).await;

@@ -7,6 +7,7 @@ use serde::Serialize;
 use sqlx::FromRow;
 
 use crate::enums::RoundStatus;
+use crate::handlers::scoring::run_calculate_scores;
 use crate::state::AppState;
 
 type ApiError = (StatusCode, String);
@@ -73,7 +74,7 @@ pub async fn open_round(
 pub async fn close_round(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     let now = chrono::Utc::now().to_rfc3339();
     let affected = sqlx::query(
         "UPDATE rounds SET status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'",
@@ -89,7 +90,11 @@ pub async fn close_round(
         return Err((StatusCode::NOT_FOUND, format!("라운드 id={} 없거나 이미 CLOSED", id)));
     }
 
-    Ok(StatusCode::NO_CONTENT)
+    let count = run_calculate_scores(&state.db, id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    Ok(Json(serde_json::json!({ "calculated": count })))
 }
 
 pub async fn reopen_round(

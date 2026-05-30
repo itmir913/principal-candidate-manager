@@ -294,7 +294,7 @@ async fn calc_range_simple_upper() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -332,7 +332,7 @@ async fn calc_range_simple_lower() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -369,7 +369,7 @@ async fn calc_range_composite() {
         category_agg: None,
         lookup_scope: LookupScope::Composite,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, uid, &dummy_ctx()).await.unwrap(), 80_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, uid, &dummy_ctx()).await.unwrap(), 80_000);
 }
 
 #[tokio::test]
@@ -408,7 +408,7 @@ async fn calc_category_sum() {
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -447,7 +447,7 @@ async fn calc_category_max() {
         category_agg: Some(CategoryAgg::Max),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -474,7 +474,7 @@ async fn calc_manual() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 75_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 75_000);
 }
 
 #[tokio::test]
@@ -501,7 +501,7 @@ async fn calc_no_base_data_returns_error() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -532,7 +532,7 @@ async fn calc_category_sum_capped_at_max_score() {
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -563,7 +563,7 @@ async fn calc_range_lower_above_max_threshold_uses_last_score() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 50_000);
 }
 
 #[tokio::test]
@@ -587,7 +587,7 @@ async fn calc_manual_capped_at_max_score() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -615,7 +615,7 @@ async fn calc_range_upper_capped_at_max_score() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 #[tokio::test]
@@ -643,7 +643,7 @@ async fn calc_category_max_capped_at_max_score() {
         category_agg: Some(CategoryAgg::Max),
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 100_000);
 }
 
 // ── 감점 전형요소 (음수 점수) ─────────────────────────────────────
@@ -669,7 +669,7 @@ async fn calc_category_deduction_returns_negative_score() {
         id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    let score = calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap();
+    let score = calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap();
     assert_eq!(score, -300_000, "감점 범주: -3.0점 → -300000");
 }
 
@@ -690,7 +690,7 @@ async fn calc_category_no_base_data_returns_error() {
         id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -709,7 +709,7 @@ async fn calc_manual_deduction_returns_negative_score() {
         id: aid, name: "TestArea".to_string(), calc_type: CalcType::Manual, max_score: 1_000_000,
         match_mode: None, category_agg: None, lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000, "-5.0점 → -500000");
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000, "-5.0점 → -500000");
 }
 
 #[tokio::test]
@@ -740,7 +740,7 @@ async fn calc_pure_deduction_area_max_score_zero() {
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
     // min(-500000, 0) = -500000 → 감점 보존
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), -500_000);
 }
 
 #[tokio::test]
@@ -765,7 +765,7 @@ async fn calc_pure_deduction_area_no_base_data_returns_error() {
         id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 0,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -789,7 +789,7 @@ async fn calc_deduction_does_not_cap_at_max_score() {
         id: aid, name: "TestArea".to_string(), calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), -300_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), -300_000);
 }
 
 #[tokio::test]
@@ -819,7 +819,7 @@ async fn calc_range_exact_match_hit() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
+    assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
 #[tokio::test]
@@ -850,7 +850,7 @@ async fn calc_range_exact_match_miss_returns_error() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 // ── calc_area_score: 새 Err 케이스 ────────────────────────────────
@@ -880,7 +880,7 @@ async fn calc_numeric_parse_error_returns_error() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -909,7 +909,7 @@ async fn calc_category_unknown_category_returns_error() {
         category_agg: Some(CategoryAgg::Sum),
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -938,7 +938,7 @@ async fn calc_category_missing_agg_returns_error() {
         category_agg: None, // 집계 방식 미설정
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 #[tokio::test]
@@ -962,7 +962,7 @@ async fn calc_manual_parse_error_returns_error() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert!(calc_area_score(&pool, sid, &area, 0, &dummy_ctx()).await.is_err());
+    assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
 // ── calculate_scores 통합 ─────────────────────────────────────────

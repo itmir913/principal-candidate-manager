@@ -264,30 +264,15 @@ pub async fn calc_area_score(
 
 // ── Handlers ──────────────────────────────────────────────────────
 
-pub async fn calculate_scores(
-    State(state): State<AppState>,
-    Path(round_id): Path<i64>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let round_status: Option<RoundStatus> = sqlx::query_scalar(
-        "SELECT status FROM rounds WHERE id = ?",
-    )
-    .bind(round_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    match round_status {
-        Some(RoundStatus::Closed) => {}
-        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 점수 계산이 가능합니다".into())),
-        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
-    }
-
+/// CLOSED 상태 라운드의 전체 점수를 계산·저장하고 계산된 지원자 수를 반환한다.
+/// 상태 검증 없이 동작하므로 호출 전 반드시 CLOSED 여부를 확인해야 한다.
+pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Result<usize, String> {
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| e.to_string())?;
 
     let applications: Vec<AppRef> = sqlx::query_as::<_, AppRef>(
         "SELECT a.student_id, a.track_id, s.student_code, s.name, u.univ_name, ut.track_name
@@ -298,41 +283,40 @@ pub async fn calculate_scores(
          WHERE a.round_id = ? AND a.confirmed = 1",
     )
     .bind(round_id)
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().to_rfc3339();
     let mut count = 0usize;
 
-    // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행
-    let mut conn = state.db.acquire().await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let mut score_rows: Vec<(i64, i64, String, i64)> = Vec::new(); // (student_id, track_id, detail_json, total)
-    for app in &applications {
-        let ctx = StudentTrackCtx {
-            student_code: app.student_code.clone(),
-            student_name: app.name.clone(),
-            univ_name: app.univ_name.clone(),
-            track_name: app.track_name.clone(),
-        };
-        let mut detail: HashMap<String, i64> = HashMap::new();
-        let mut total: i64 = 0;
-        for area in &areas {
-            let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-            detail.insert(area.id.to_string(), sc);
-            total += sc;
+    // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행, conn은 tx 시작 전에 drop
+    let score_rows: Vec<(i64, i64, String, i64)> = {
+        let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
+        let mut rows: Vec<(i64, i64, String, i64)> = Vec::new();
+        for app in &applications {
+            let ctx = StudentTrackCtx {
+                student_code: app.student_code.clone(),
+                student_name: app.name.clone(),
+                univ_name: app.univ_name.clone(),
+                track_name: app.track_name.clone(),
+            };
+            let mut detail: HashMap<String, i64> = HashMap::new();
+            let mut total: i64 = 0;
+            for area in &areas {
+                let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
+                    .await?;
+                detail.insert(area.id.to_string(), sc);
+                total += sc;
+            }
+            let detail_json = serde_json::to_string(&detail).map_err(|e| e.to_string())?;
+            rows.push((app.student_id, app.track_id, detail_json, total));
         }
-        let detail_json = serde_json::to_string(&detail)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        score_rows.push((app.student_id, app.track_id, detail_json, total));
-    }
+        rows
+    }; // conn dropped here
 
     // results 쓰기 + 순위 계산 전체를 하나의 트랜잭션으로
-    let mut tx = state.db.begin().await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
 
     for (student_id, track_id, detail_json, total) in &score_rows {
         sqlx::query(
@@ -349,7 +333,7 @@ pub async fn calculate_scores(
         .bind(detail_json).bind(total).bind(&now)
         .execute(&mut *tx)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| e.to_string())?;
         count += 1;
     }
 
@@ -367,7 +351,7 @@ pub async fn calculate_scores(
         .bind(tid)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| e.to_string())?;
 
         let rows = sqlx::query(
             "SELECT r.student_id, r.total_score, s.is_enrolled
@@ -378,7 +362,7 @@ pub async fn calculate_scores(
         .bind(round_id).bind(tid)
         .fetch_all(&mut *tx)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| e.to_string())?;
 
         let mut ranked: Vec<(i64, Score, bool)> = rows
             .into_iter()
@@ -402,12 +386,36 @@ pub async fn calculate_scores(
             .bind((rank + 1) as i64).bind(sid).bind(tid).bind(round_id)
             .execute(&mut *tx)
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e| e.to_string())?;
         }
     }
 
-    tx.commit().await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    Ok(count)
+}
+
+pub async fn calculate_scores(
+    State(state): State<AppState>,
+    Path(round_id): Path<i64>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let round_status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(round_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match round_status {
+        Some(RoundStatus::Closed) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 점수 계산이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
+    }
+
+    let count = run_calculate_scores(&state.db, round_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(Json(serde_json::json!({ "calculated": count })))
 }
