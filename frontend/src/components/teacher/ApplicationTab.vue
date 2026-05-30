@@ -369,9 +369,21 @@ const areaGridClass = computed(() => {
   return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
 })
 
-const canSave = computed(() =>
-  !!selectedStudent.value && !!form.trackId && !!currentRound.value && !!form.departmentName.trim()
-)
+const canSave = computed(() => {
+  if (!selectedStudent.value || !form.trackId || !currentRound.value || !form.departmentName.trim()) return false
+  if (areaContext.value.length === 0) return false
+  return areaContext.value.every(area => {
+    if (area.teacher_editable) {
+      if (area.multi_value) {
+        return (areaMultiValues.value[area.area_id] || []).length > 0
+      }
+      const v = areaValues.value[area.area_id]
+      return v !== undefined && v !== ''
+    }
+    // 관리자 입력 고정: 서버에서 받은 current_values가 있어야 함
+    return area.current_values.some(v => v !== '')
+  })
+})
 
 // ── 초기 로드 ─────────────────────────────────────────────────────
 async function loadAll() {
