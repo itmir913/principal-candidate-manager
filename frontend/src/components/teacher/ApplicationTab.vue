@@ -98,7 +98,7 @@
               </select>
             </div>
             <div>
-              <label class="block text-xs text-gray-500 mb-1">학과명</label>
+              <label class="block text-xs text-gray-500 mb-1">학과명 <span class="text-red-500">*</span></label>
               <input
                 v-model="form.departmentName"
                 type="text"
@@ -332,7 +332,7 @@ function getStudentAppCount(sid) {
 }
 
 const canSave = computed(() =>
-  !!selectedStudent.value && !!form.trackId && !!currentRound.value
+  !!selectedStudent.value && !!form.trackId && !!currentRound.value && !!form.departmentName.trim()
 )
 
 // ── 초기 로드 ─────────────────────────────────────────────────────

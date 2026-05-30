@@ -219,6 +219,10 @@ pub async fn teacher_create_application(
     Extension(claims): Extension<TeacherClaims>,
     Json(body): Json<CreateApplicationBody>,
 ) -> Result<StatusCode, ApiError> {
+    if body.department_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "학과명은 필수입니다".into()));
+    }
+
     // 1. 라운드 OPEN 검증
     let round_status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
