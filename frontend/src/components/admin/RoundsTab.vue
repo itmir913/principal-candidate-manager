@@ -210,76 +210,83 @@
             <table class="w-full min-w-max text-sm border rounded overflow-hidden">
               <thead class="bg-gray-50">
                 <tr>
+                  <th class="w-6"></th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-12">순위</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번/학생코드</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
-                  <th
-                    v-for="area in areas"
-                    :key="area.id"
-                    class="text-right px-3 py-2 text-xs text-gray-500 font-medium"
-                  >{{ area.name }}</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">추천</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">포기처리</th>
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="r in group.results"
-                  :key="r.student_id"
-                  class="border-t"
-                  :class="{
-                    'bg-red-50': selected.status === 'FINALIZED' && (r.abandoned || !r.recommended),
-                    'bg-green-50': selected.status === 'FINALIZED' && r.recommended && !r.abandoned
-                  }"
-                >
-                  <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
-                  <td class="px-3 py-2 text-gray-500">
-                    <span v-if="r.is_enrolled">{{ r.grade }}학년 {{ r.class_no }}반 {{ r.seq_no }}번</span>
-                    <span v-else>{{ r.student_code }}</span>
-                  </td>
-                  <td class="px-3 py-2 font-medium">{{ r.name }}</td>
-                  <td class="px-3 py-2">
-                    <span :class="r.is_enrolled ? 'text-green-600' : 'text-gray-400'">
-                      {{ r.is_enrolled ? '재학생' : '졸업생' }}
-                    </span>
-                  </td>
-                  <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
-                  <td v-for="area in areas" :key="area.id" class="px-3 py-2 text-right text-gray-600">
-                    {{ getAreaScore(r, area.id) }}
-                  </td>
-                  <td class="px-3 py-2 text-right font-semibold">
-                    {{ r.total_score.toFixed(2) }}
-                  </td>
-                  <td class="px-3 py-2 text-center">
-                    <span v-if="r.abandoned" class="text-xs text-red-400 font-semibold">포기됨</span>
-                    <template v-else-if="r.recommended">
-                      <span class="text-xs text-green-600 font-semibold">추천 확정</span>
+                <template v-for="r in group.results" :key="r.student_id">
+                  <tr
+                    class="border-t cursor-pointer hover:bg-gray-50"
+                    :class="{
+                      'bg-red-50 hover:bg-red-100': selected.status === 'FINALIZED' && (r.abandoned || !r.recommended),
+                      'bg-green-50 hover:bg-green-100': selected.status === 'FINALIZED' && r.recommended && !r.abandoned
+                    }"
+                    @click="toggleRow(`${r.student_id}-${r.track_id}`)"
+                  >
+                    <td class="px-2 py-2 text-center text-gray-400 text-xs select-none">
+                      {{ expandedRows[`${r.student_id}-${r.track_id}`] ? '▼' : '▶' }}
+                    </td>
+                    <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
+                    <td class="px-3 py-2 text-gray-500">
+                      <span v-if="r.is_enrolled">{{ r.grade }}학년 {{ r.class_no }}반 {{ r.seq_no }}번</span>
+                      <span v-else>{{ r.student_code }}</span>
+                    </td>
+                    <td class="px-3 py-2 font-medium">{{ r.name }}</td>
+                    <td class="px-3 py-2">
+                      <span :class="r.is_enrolled ? 'text-green-600' : 'text-gray-400'">
+                        {{ r.is_enrolled ? '재학생' : '졸업생' }}
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
+                    <td class="px-3 py-2 text-right font-semibold">
+                      {{ r.total_score.toFixed(2) }}
+                    </td>
+                    <td class="px-3 py-2 text-center" @click.stop>
+                      <span v-if="r.abandoned" class="text-xs text-red-400 font-semibold">포기됨</span>
+                      <template v-else-if="r.recommended">
+                        <span class="text-xs text-green-600 font-semibold">추천 확정</span>
+                        <button
+                          v-if="selected.status === 'CLOSED'"
+                          class="text-xs ml-1 px-1.5 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
+                          @click="handleUnrecommend(r)"
+                        >취소</button>
+                      </template>
                       <button
-                        v-if="selected.status === 'CLOSED'"
-                        class="text-xs ml-1 px-1.5 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
-                        @click="handleUnrecommend(r)"
-                      >취소</button>
-                    </template>
-                    <button
-                      v-else-if="selected.status === 'CLOSED'"
-                      class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
-                      @click="handleRecommend(r)"
-                    >추천 확정</button>
-                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-red-500 font-semibold">추천 제외</span>
-                    <span v-else class="text-xs text-gray-600 font-semibold">-</span>
-                  </td>
-                  <td class="px-3 py-2 text-center">
-                    <button
-                      v-if="r.recommended && !r.abandoned && selected.status === 'FINALIZED'"
-                      class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50 whitespace-nowrap"
-                      @click="handleAbandon(r)"
-                    >포기하기</button>
-                    <span v-else class="text-xs text-gray-300">-</span>
-                  </td>
-                </tr>
+                        v-else-if="selected.status === 'CLOSED'"
+                        class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
+                        @click="handleRecommend(r)"
+                      >추천 확정</button>
+                      <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-red-500 font-semibold">추천 제외</span>
+                      <span v-else class="text-xs text-gray-600 font-semibold">-</span>
+                    </td>
+                    <td class="px-3 py-2 text-center" @click.stop>
+                      <button
+                        v-if="r.recommended && !r.abandoned && selected.status === 'FINALIZED'"
+                        class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50 whitespace-nowrap"
+                        @click="handleAbandon(r)"
+                      >포기하기</button>
+                      <span v-else class="text-xs text-gray-300">-</span>
+                    </td>
+                  </tr>
+                  <tr v-if="expandedRows[`${r.student_id}-${r.track_id}`]" class="border-t bg-gray-50">
+                    <td colspan="9" class="px-6 py-3">
+                      <div class="flex flex-wrap gap-x-6 gap-y-1">
+                        <div v-for="area in areas" :key="area.id" class="flex items-center gap-1.5 text-xs">
+                          <span class="text-gray-500">{{ area.name }}</span>
+                          <span class="font-semibold text-gray-700">{{ getAreaScore(r, area.id) }}</span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
             </div>
@@ -318,10 +325,11 @@ const results = ref([])
 const areas   = ref([])
 const tracks  = ref([])   // 전체 모집단위 (unit_quota 포함)
 
-const calcLoading       = ref(false)
-const calcMsg           = ref(null)
-const downloading       = ref(false)
+const calcLoading        = ref(false)
+const calcMsg            = ref(null)
+const downloading        = ref(false)
 const downloadingSummary = ref(false)
+const expandedRows       = ref({})
 
 const selectedTrackId = ref('')
 
@@ -414,6 +422,14 @@ async function loadApps() {
 async function loadResults() {
   if (!selected.value) return
   results.value = await getResults(selected.value.id, selectedTrackId.value || null)
+  expandedRows.value = {}
+}
+
+function toggleRow(key) {
+  const next = { ...expandedRows.value }
+  if (next[key]) delete next[key]
+  else next[key] = true
+  expandedRows.value = next
 }
 
 async function loadAreas() {
