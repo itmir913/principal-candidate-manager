@@ -136,8 +136,20 @@
                     class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0"
                   >관리자 입력 고정</span>
                 </div>
-                <div class="mt-0.5">
+                <div class="flex items-center justify-between mt-0.5">
                   <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
+                  <template v-if="scorePreview[area.area_id]">
+                    <span v-if="scorePreview[area.area_id].error" class="text-xs text-red-500">
+                      {{ scorePreview[area.area_id].error }}
+                    </span>
+                    <span
+                      v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined"
+                      class="text-xs text-blue-600 font-medium"
+                    >
+                      예상 {{ scorePreview[area.area_id].score }}점
+                      <span v-if="scorePreview[area.area_id].warning" class="text-amber-600"> ⚠</span>
+                    </span>
+                  </template>
                 </div>
               </div>
 
@@ -238,20 +250,6 @@
                   />
                 </template>
 
-                <!-- 점수 미리보기 -->
-                <div v-if="area.teacher_editable && scorePreview[area.area_id]" class="mt-1.5 text-xs">
-                  <template v-if="scorePreview[area.area_id].error">
-                    <span class="text-red-500">{{ scorePreview[area.area_id].error }}</span>
-                  </template>
-                  <template v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined">
-                    <span class="text-blue-600 font-medium">
-                      예상 점수: {{ scorePreview[area.area_id].score }}점
-                    </span>
-                    <span v-if="scorePreview[area.area_id].warning" class="ml-2 text-amber-600">
-                      ⚠ {{ scorePreview[area.area_id].warning }}
-                    </span>
-                  </template>
-                </div>
               </div>
             </div>
             </div>
@@ -435,9 +433,10 @@ function initAreaValues(context) {
 
 async function triggerInitialPreviews(context) {
   for (const area of context) {
-    if (!area.teacher_editable) continue
-    const vals = getAreaInputValues(area)
-    if (vals.length > 0 && vals[0] !== '') {
+    const vals = area.teacher_editable
+      ? getAreaInputValues(area)
+      : area.current_values.filter(v => v !== '')
+    if (vals.length > 0) {
       await fetchScorePreview(area, vals)
     }
   }
