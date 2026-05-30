@@ -84,15 +84,14 @@
         <div v-if="view === 'apps'">
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm text-gray-600">총 {{ apps.length }}건</span>
-            <button
-              v-if="selected.status === 'CLOSED'"
-              class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40"
-              :disabled="calcLoading || apps.length === 0"
-              @click="handleCalculate"
-            >{{ calcLoading ? '계산 중…' : '점수 전체 재계산' }}</button>
-          </div>
-          <div v-if="calcMsg" class="mb-3 text-sm" :class="calcMsg.ok ? 'text-green-600' : 'text-red-500'">
-            {{ calcMsg.text }}
+            <div v-if="selected.status === 'CLOSED'" class="flex items-center gap-3">
+              <span v-if="calcMsg" class="text-sm" :class="calcMsg.ok ? 'text-green-600' : 'text-red-500'">{{ calcMsg.text }}</span>
+              <button
+                class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40"
+                :disabled="calcLoading || apps.length === 0"
+                @click="handleCalculate"
+              >{{ calcLoading ? '계산 중…' : '점수 전체 재계산' }}</button>
+            </div>
           </div>
 
           <div v-if="apps.length === 0" class="text-sm text-gray-400 py-6 text-center">
