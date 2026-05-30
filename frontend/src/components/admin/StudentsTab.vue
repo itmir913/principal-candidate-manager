@@ -3,37 +3,40 @@
     <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 명단 관리</h2>
 
     <!-- 가져오기/내보내기 패널 -->
-    <div class="mb-4 flex flex-wrap gap-2 items-center">
-      <label class="flex items-center gap-1 text-sm cursor-pointer">
-        <input type="radio" v-model="studentType" value="enrolled" />
-        재학생
-      </label>
-      <label class="flex items-center gap-1 text-sm cursor-pointer">
-        <input type="radio" v-model="studentType" value="graduated" />
-        졸업생
-      </label>
+    <div class="mb-4 space-y-1">
+      <div class="flex flex-wrap gap-2 items-center">
+        <label class="flex items-center gap-1 text-sm cursor-pointer">
+          <input type="radio" v-model="studentType" value="enrolled" />
+          재학생
+        </label>
+        <label class="flex items-center gap-1 text-sm cursor-pointer">
+          <input type="radio" v-model="studentType" value="graduated" />
+          졸업생
+        </label>
 
-      <button
-        class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
-        :disabled="downloading"
-        @click="dlTemplate"
-      >양식 다운로드</button>
+        <button
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          :disabled="downloading"
+          @click="dlTemplate"
+        >양식 다운로드</button>
 
-      <label
-        class="px-2.5 py-1 text-white text-xs rounded cursor-pointer"
-        :class="uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'"
-      >
-        불러오기
-        <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onImport" />
-      </label>
+        <label
+          class="px-2.5 py-1 text-white text-xs rounded cursor-pointer"
+          :class="uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'"
+        >
+          불러오기
+          <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onImport" />
+        </label>
 
-      <span class="text-gray-300 select-none">|</span>
+        <span class="text-gray-300 select-none">|</span>
 
-      <button
-        class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
-        :disabled="downloading"
-        @click="dlAll"
-      >전체 목록 다운로드</button>
+        <button
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          :disabled="downloading"
+          @click="dlAll"
+        >전체 목록 다운로드</button>
+      </div>
+      <p class="text-xs text-amber-600">※ 불러오기 시 선택한 유형(재학생/졸업생)의 기존 명단이 모두 교체됩니다.</p>
     </div>
 
     <!-- 업로드 결과 -->

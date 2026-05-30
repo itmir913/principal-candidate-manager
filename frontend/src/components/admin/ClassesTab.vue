@@ -3,29 +3,29 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
       <h2 class="text-lg font-semibold text-gray-700">학급 목록</h2>
       <div class="flex flex-wrap gap-2">
-        <button
-          class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="uploading || downloading"
-          @click="dlTemplate"
-        >양식 다운로드</button>
-        <label
-          class="px-3 py-1.5 text-sm rounded cursor-pointer"
-          :class="uploading ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'"
-        >
-          {{ uploading ? '가져오는 중…' : '가져오기' }}
-          <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onFileChange" />
-        </label>
-        <button
-          class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-40"
-          :disabled="showAddForm"
-          @click="showAddForm = true"
-        >+ 추가</button>
-        <span class="text-gray-300 select-none">|</span>
-        <button
+          <button
+            class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
+            :disabled="uploading || downloading"
+            @click="dlTemplate"
+          >양식 다운로드</button>
+          <label
+            class="px-3 py-1.5 text-sm rounded cursor-pointer"
+            :class="uploading ? 'bg-gray-400 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'"
+          >
+            {{ uploading ? '가져오는 중…' : '가져오기' }}
+            <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onFileChange" />
+          </label>
+          <button
+            class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-40"
+            :disabled="showAddForm"
+            @click="showAddForm = true"
+          >+ 추가</button>
+          <span class="text-gray-300 select-none">|</span>
+          <button
             class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
             :disabled="uploading || downloading"
             @click="dlExport"
-        >전체 목록 다운로드</button>
+          >전체 목록 다운로드</button>
       </div>
     </div>
 
@@ -156,7 +156,7 @@ const newPassword = ref('')
 
 async function load() {
   try {
-    classes.value = await getClasses()
+    classes.value = (await getClasses()).filter(r => !(r.grade === 0 && r.class_no === 0))
   } catch (e) {
     error.value = e.response?.data ?? e.message
   }

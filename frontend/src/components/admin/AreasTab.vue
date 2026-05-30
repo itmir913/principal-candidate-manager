@@ -730,7 +730,7 @@ const ExcelPanel = defineComponent({
 
     const btnBase = 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40'
 
-    return () => h('div', { class: 'space-y-2' }, [
+    return () => h('div', { class: 'space-y-1' }, [
       h('div', { class: 'flex flex-wrap gap-2 items-center' }, [
 
         // ── 기초 데이터: 재학생/졸업생 라디오 + 양식 다운로드 + 불러오기
@@ -770,6 +770,10 @@ const ExcelPanel = defineComponent({
         h('span', { class: 'text-gray-300 select-none' }, '|'),
         h('button', { class: btnBase, disabled: downloading.value, onClick: dlExport }, '전체 목록 다운로드'),
       ]),
+      h('p', { class: 'text-xs text-amber-600' },
+        props.panel === 'base'
+          ? '※ 불러오기 시 선택한 유형(재학생/졸업생)의 기존 기초데이터가 모두 교체됩니다.'
+          : '※ 불러오기 시 기존 점수 기준이 모두 교체됩니다.'),
       err.value ? h('p', { class: 'text-red-500 text-sm' }, err.value) : null,
     ])
   },

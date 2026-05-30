@@ -735,9 +735,13 @@ pub async fn base_data_import(
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query("DELETE FROM base_data WHERE area_id = ?")
-        .bind(id).execute(&mut *tx).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // 재학생/졸업생 데이터를 각각 독립적으로 교체 — 반대 student_type 데이터는 보존
+    let is_enrolled_val = if enrolled { 1i64 } else { 0i64 };
+    sqlx::query(
+        "DELETE FROM base_data WHERE area_id = ? AND student_id IN (SELECT id FROM students WHERE is_enrolled = ?)"
+    )
+    .bind(id).bind(is_enrolled_val).execute(&mut *tx).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();

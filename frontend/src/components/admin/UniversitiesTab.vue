@@ -144,7 +144,7 @@
               class="px-2.5 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-40"
               :disabled="downloading"
               @click="doExportQuotaStats"
-            >내보내기</button>
+            >전체 목록 다운로드</button>
             <button
               class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-40"
               :disabled="saving"
