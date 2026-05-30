@@ -34,7 +34,7 @@
       <template v-else>
         <!-- 현재 라운드 지원 현황 -->
         <div class="bg-white border rounded-lg p-4 mb-4">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700">
               {{ selectedStudent.name }} 학생의 {{ currentRound.id }}차 라운드 지원 현황
             </h2>
@@ -45,7 +45,7 @@
             >+ 새 지원 추가</button>
           </div>
 
-          <div v-if="studentApps.length === 0 && !showForm" class="text-sm text-gray-400">
+          <div v-if="studentApps.length === 0 && !showForm" class="text-sm text-gray-400 mt-3">
             등록된 지원이 없습니다.
           </div>
 

@@ -107,7 +107,8 @@
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-40">학번/학생코드</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-24">학생 이름</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-24">재학생 여부</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-32">모집단위</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-40">지원 학과</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-28">추천</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-28">포기처리</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium w-24">총점</th>
@@ -125,6 +126,7 @@
                       {{ app.is_enrolled ? '재학생' : '졸업생' }}
                     </span>
                   </td>
+                  <td class="px-3 py-2 text-gray-700">{{ app.track_name }}</td>
                   <td class="px-3 py-2 text-gray-600">{{ app.department_name }}</td>
                   <td class="px-3 py-2 text-center">
                     <span v-if="app.abandoned" class="text-xs text-gray-300">-</span>
@@ -313,9 +315,16 @@ const hasOpenRound = computed(() => rounds.value.some(r => r.status === 'OPEN' |
 const appsByUniv = computed(() => {
   const map = {}
   for (const app of apps.value) {
-    const key = `${app.univ_name} ${app.track_name}`
+    const key = app.univ_name
     if (!map[key]) map[key] = []
     map[key].push(app)
+  }
+  for (const key of Object.keys(map)) {
+    map[key].sort((a, b) => {
+      const t = a.track_name.localeCompare(b.track_name, 'ko')
+      if (t !== 0) return t
+      return (a.student_code ?? '').localeCompare(b.student_code ?? '')
+    })
   }
   return map
 })
