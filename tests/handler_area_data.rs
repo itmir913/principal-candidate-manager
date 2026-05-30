@@ -7,7 +7,7 @@ use axum::{
 };
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
-    base_data_import, category_map_import, numeric_table_import,
+    base_data_import, base_data_list, category_map_import, numeric_table_import,
 };
 
 async fn build_multipart(csv: &str) -> Multipart {
@@ -363,4 +363,74 @@ async fn numeric_table_import_zero_threshold_and_score_succeeds() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.rows, 2);
+}
+
+// ── base_data_list: Numeric/Manual 파싱 Fail-Fast ────────────────
+
+#[tokio::test]
+async fn base_data_list_numeric_corrupt_value_returns_500() {
+    // Numeric 전형요소의 base_data 값이 정수로 파싱 불가 → 500 반환 (silent fallback 금지)
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, 'not_a_number')",
+    )
+    .bind(sid)
+    .bind(aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let err = base_data_list(State(common::make_state(pool)), Path(aid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(err.1.contains("파싱"), "오류 메시지에 '파싱' 포함 기대: {}", err.1);
+}
+
+#[tokio::test]
+async fn base_data_list_manual_corrupt_value_returns_500() {
+    // Manual 전형요소의 base_data 값이 정수로 파싱 불가 → 500 반환
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '3.14abc')",
+    )
+    .bind(sid)
+    .bind(aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let err = base_data_list(State(common::make_state(pool)), Path(aid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn base_data_list_category_non_numeric_value_is_ok() {
+    // Category 전형요소는 문자열 값 그대로 반환 — 파싱 불필요
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '회장', 1)",
+    )
+    .bind(sid)
+    .bind(aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(rows) = base_data_list(State(common::make_state(pool)), Path(aid))
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].value, "회장");
 }

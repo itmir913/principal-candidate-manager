@@ -6,8 +6,10 @@ use axum::{
 };
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use principal_candidate_manager::handlers::scoring::{
-    calc_area_score, calculate_scores, lookup_range_score, recommend_result, AreaRow,
+    calc_area_score, calculate_scores, export_results, lookup_range_score, recommend_result,
+    AreaRow, ResultRow,
 };
+use principal_candidate_manager::score::Score;
 
 // ── lookup_range_score 순수 함수 ──────────────────────────────────
 
@@ -1179,4 +1181,123 @@ async fn recommend_on_closed_round_sets_flag() {
     .await
     .unwrap();
     assert_eq!(recommended, 1);
+}
+
+// ── export_results: score_detail Fail-Fast ────────────────────────
+
+/// results 행 직접 삽입 헬퍼 (calculate_scores 우회)
+async fn insert_result_raw(pool: &sqlx::SqlitePool, sid: i64, tid: i64, rid: i64, score_detail: &str) {
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, total_score, score_detail, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, 0, ?, 1, 0, '2025-01-01T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).bind(score_detail)
+    .execute(pool).await.unwrap();
+}
+
+#[tokio::test]
+async fn export_results_corrupt_score_detail_returns_500() {
+    // score_detail이 유효하지 않은 JSON인 경우 → 500 반환 (silent fallback 금지)
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    insert_result_raw(&pool, sid, tid, rid, "{invalid json").await;
+
+    let err = export_results(State(common::make_state(pool)), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(err.1.contains("score_detail"), "오류 메시지에 score_detail 포함 기대: {}", err.1);
+}
+
+#[tokio::test]
+async fn export_results_area_missing_from_score_detail_returns_500() {
+    // area가 DB에 있지만 score_detail에 해당 area_id가 없는 경우 → 500 반환
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    // area를 하나 추가
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('테스트전형요소', 100000, 'MANUAL', 'SIMPLE') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    // score_detail에는 존재하지 않는 area_id(99999)의 점수만 있음
+    insert_result_raw(&pool, sid, tid, rid, r#"{"99999": 100000}"#).await;
+
+    let err = export_results(State(common::make_state(pool)), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+    let msg = err.1;
+    assert!(
+        msg.contains("점수가 없습니다") || msg.contains(&aid.to_string()),
+        "오류 메시지에 area 정보 포함 기대: {}", msg
+    );
+}
+
+// ── score_detail_as_map: 직렬화 Fail-Fast ────────────────────────
+
+#[test]
+fn result_row_corrupt_score_detail_serialization_fails() {
+    // score_detail이 유효하지 않은 JSON이면 serde 직렬화 자체가 실패해야 함
+    let row = ResultRow {
+        student_id: 1,
+        track_id: 1,
+        round_id: 1,
+        total_score: Score::from_raw(0),
+        score_detail: "{not valid json".to_string(),
+        ranking: None,
+        recommended: false,
+        abandoned: false,
+        student_code: "S001".to_string(),
+        name: "홍길동".to_string(),
+        grade: Some(1),
+        class_no: Some(1),
+        seq_no: Some(1),
+        is_enrolled: true,
+        univ_name: "한국대".to_string(),
+        track_name: "컴공".to_string(),
+    };
+    assert!(
+        serde_json::to_string(&row).is_err(),
+        "유효하지 않은 score_detail은 직렬화 실패를 반환해야 함"
+    );
+}
+
+#[test]
+fn result_row_valid_score_detail_serializes_correctly() {
+    // 정상 score_detail은 올바르게 직렬화됨
+    let row = ResultRow {
+        student_id: 1,
+        track_id: 1,
+        round_id: 1,
+        total_score: Score::from_raw(500_000),
+        score_detail: r#"{"1": 300000, "2": 200000}"#.to_string(),
+        ranking: Some(1),
+        recommended: false,
+        abandoned: false,
+        student_code: "S001".to_string(),
+        name: "홍길동".to_string(),
+        grade: Some(1),
+        class_no: Some(1),
+        seq_no: Some(1),
+        is_enrolled: true,
+        univ_name: "한국대".to_string(),
+        track_name: "컴공".to_string(),
+    };
+    let json = serde_json::to_string(&row).expect("정상 score_detail은 직렬화 성공 기대");
+    // score_detail은 Score 타입으로 역변환되어 표시값(÷100000)으로 직렬화됨
+    assert!(json.contains("\"1\":3.0") || json.contains("\"1\": 3.0"));
 }

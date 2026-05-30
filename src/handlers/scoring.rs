@@ -19,8 +19,9 @@ type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
 
 fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error> {
-    use serde::ser::SerializeMap;
-    let raw: HashMap<String, i64> = serde_json::from_str(val).unwrap_or_default();
+    use serde::ser::{Error, SerializeMap};
+    let raw: HashMap<String, i64> = serde_json::from_str(val)
+        .map_err(|e| S::Error::custom(format!("score_detail JSON 파싱 실패: {}", e)))?;
     let mut m = s.serialize_map(Some(raw.len()))?;
     for (k, v) in &raw {
         m.serialize_entry(k, &Score::from_raw(*v))?;
@@ -523,10 +524,16 @@ pub async fn export_results(
             ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).ok();
             col += 1;
 
-            let detail: HashMap<String, i64> =
-                serde_json::from_str(&r.score_detail).unwrap_or_default();
+            let detail: HashMap<String, i64> = serde_json::from_str(&r.score_detail)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!(
+                    "학생 id={} score_detail JSON 파싱 실패: {}", r.student_id, e
+                )))?;
             for area in &areas {
-                let sc = detail.get(&area.id.to_string()).copied().unwrap_or(0);
+                let sc = detail.get(&area.id.to_string()).copied()
+                    .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!(
+                        "학생 id={} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
+                        r.student_id, area.id
+                    )))?;
                 ws.write_number(row, col, sc as f64 / 100_000.0).ok();
                 col += 1;
             }

@@ -702,7 +702,7 @@ pub struct CategoryMapListRow {
     pub track_name: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct BaseDataListRow {
     pub student_code: String,
     pub name: String,
@@ -805,26 +805,29 @@ pub async fn base_data_list(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let result = rows
+    let result: Vec<BaseDataListRow> = rows
         .iter()
         .map(|row| {
             let raw: String = row.get("value");
             let value = match area.calc_type {
-                CalcType::Numeric | CalcType::Manual => raw
-                    .parse::<i64>()
-                    .map(|v| format!("{}", v as f64 / 100_000.0))
-                    .unwrap_or(raw),
+                CalcType::Numeric | CalcType::Manual => {
+                    let v = raw.parse::<i64>().map_err(|_| (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("base_data 값 '{}' 을 정수로 파싱할 수 없습니다 (area_id={})", raw, id),
+                    ))?;
+                    format!("{}", v as f64 / 100_000.0)
+                }
                 CalcType::Category => raw,
             };
-            BaseDataListRow {
+            Ok(BaseDataListRow {
                 student_code: row.get("student_code"),
                 name: row.get("name"),
                 value,
                 univ_name: if composite { Some(row.get("univ_name")) } else { None },
                 track_name: if composite { Some(row.get("track_name")) } else { None },
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, ApiError>>()?;
     Ok(Json(result))
 }
 
