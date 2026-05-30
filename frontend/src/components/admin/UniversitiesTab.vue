@@ -316,7 +316,7 @@ function univToForm(u) {
     univ_name: u.univ_name,
     unlimited: u.total_quota == null,
     total_quota: u.total_quota ?? 1,
-    prioritize_enrolled: u.prioritize_enrolled === 1,
+    prioritize_enrolled: !!u.prioritize_enrolled,
   }
 }
 
@@ -325,7 +325,7 @@ function trackToForm(t) {
     track_name: t.track_name,
     unlimited: t.unit_quota == null,
     unit_quota: t.unit_quota ?? 1,
-    prioritize_enrolled: t.prioritize_enrolled === 1,
+    prioritize_enrolled: !!t.prioritize_enrolled,
   }
 }
 

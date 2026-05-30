@@ -120,7 +120,8 @@ pub async fn calc_area_score(
 
             let Some(vs) = value_str else { return Ok(0); };
             let value: i64 = vs.trim().parse().unwrap_or(0);
-            let mode = area.match_mode.as_deref().unwrap_or("UPPER");
+            let mode = area.match_mode.as_deref()
+                .ok_or_else(|| format!("전형요소 id={}: NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.id))?;
 
             let mut rows: Vec<(i64, i64)> = sqlx::query(
                 "SELECT threshold, score FROM numeric_table
@@ -201,7 +202,7 @@ pub async fn calc_area_score(
             v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
         }
 
-        _ => return Ok(0),
+        _ => return Err(format!("알 수 없는 calc_type: {}", area.calc_type)),
     };
 
     Ok(raw.min(area.max_score))
