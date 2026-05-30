@@ -77,6 +77,7 @@ pub struct ApplicationRow {
     pub univ_name: String,
     pub track_name: String,
     pub recommended: Option<bool>,
+    pub round_status: String,
 }
 
 #[derive(Serialize, FromRow)]
@@ -129,11 +130,12 @@ pub async fn admin_list_applications(
     let rows = sqlx::query_as::<_, ApplicationRow>(
         "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name, r.recommended
+                u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
          FROM applications a
          JOIN students s ON a.student_id = s.id
          JOIN univ_tracks ut ON a.track_id = ut.id
          JOIN universities u ON ut.univ_id = u.id
+         JOIN rounds rnd ON rnd.id = a.round_id
          LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE (? IS NULL OR a.round_id = ?)
            AND (? IS NULL OR a.track_id = ?)
@@ -252,11 +254,12 @@ pub async fn teacher_list_applications(
     let rows = sqlx::query_as::<_, ApplicationRow>(
         "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name, r.recommended
+                u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
          FROM applications a
          JOIN students s ON a.student_id = s.id
          JOIN univ_tracks ut ON a.track_id = ut.id
          JOIN universities u ON ut.univ_id = u.id
+         JOIN rounds rnd ON rnd.id = a.round_id
          LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE s.grade = ? AND s.class_no = ?
            AND (? IS NULL OR a.round_id = ?)

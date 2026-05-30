@@ -567,16 +567,33 @@ pub async fn export_results(
 
 // ── Teacher results ───────────────────────────────────────────────
 
-#[derive(Deserialize)]
-pub struct TeacherResultQuery {
-    pub round_id: Option<i64>,
+#[derive(Serialize, FromRow)]
+pub struct RoundInfo {
+    pub id: i64,
+    pub status: String,
+    pub opened_at: String,
+    pub closed_at: Option<String>,
+    pub finalized_at: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct TeacherResultsResponse {
+    pub rounds: Vec<RoundInfo>,
+    pub results: Vec<ResultRow>,
 }
 
 pub async fn teacher_get_results(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
-) -> Result<Json<Vec<ResultRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, ResultRow>(
+) -> Result<Json<TeacherResultsResponse>, ApiError> {
+    let rounds = sqlx::query_as::<_, RoundInfo>(
+        "SELECT id, status, opened_at, closed_at, finalized_at FROM rounds ORDER BY id",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let results = sqlx::query_as::<_, ResultRow>(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
@@ -602,7 +619,7 @@ pub async fn teacher_get_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(rows))
+    Ok(Json(TeacherResultsResponse { rounds, results }))
 }
 
 // ── Score preview ─────────────────────────────────────────────────

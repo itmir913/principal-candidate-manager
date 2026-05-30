@@ -39,8 +39,8 @@
             >
               <span class="text-gray-700">{{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}</span>
               <span v-if="app.abandoned" class="text-xs text-red-400 font-semibold">(포기됨)</span>
-              <span v-else-if="app.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
-              <span v-else-if="app.recommended === false" class="text-xs text-red-400 font-semibold">추천 제외</span>
+              <span v-else-if="app.recommended && app.round_status === 'FINALIZED'" class="text-xs text-green-600 font-semibold">추천 확정</span>
+              <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-xs text-red-400 font-semibold">추천 제외</span>
               <button
                 v-if="currentRound && app.round_id === currentRound.id && !app.abandoned"
                 class="text-xs px-1.5 py-0.5 border border-gray-300 text-gray-400 rounded hover:border-red-300 hover:text-red-400"
