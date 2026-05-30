@@ -207,17 +207,17 @@
               </span>
             </div>
             <div class="overflow-x-auto">
-            <table class="w-full min-w-max text-sm border rounded overflow-hidden">
+            <table class="w-full min-w-max text-sm border rounded overflow-hidden table-fixed">
               <thead class="bg-gray-50">
                 <tr>
                   <th class="w-6"></th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-12">순위</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학번/학생코드</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
-                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
-                  <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
-                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">추천</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-36">학번/학생코드</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-24">학생 이름</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-20">재학생 여부</th>
+                  <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-36">지원 학과</th>
+                  <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium w-20">총점</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-28">추천</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">포기처리</th>
                 </tr>
               </thead>
@@ -235,17 +235,17 @@
                       {{ expandedRows[`${r.student_id}-${r.track_id}`] ? '▼' : '▶' }}
                     </td>
                     <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
-                    <td class="px-3 py-2 text-gray-500">
+                    <td class="px-3 py-2 text-gray-500 truncate">
                       <span v-if="r.is_enrolled">{{ r.grade }}학년 {{ r.class_no }}반 {{ r.seq_no }}번</span>
                       <span v-else>{{ r.student_code }}</span>
                     </td>
-                    <td class="px-3 py-2 font-medium">{{ r.name }}</td>
+                    <td class="px-3 py-2 font-medium truncate">{{ r.name }}</td>
                     <td class="px-3 py-2">
                       <span :class="r.is_enrolled ? 'text-green-600' : 'text-gray-400'">
                         {{ r.is_enrolled ? '재학생' : '졸업생' }}
                       </span>
                     </td>
-                    <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
+                    <td class="px-3 py-2 text-gray-600 truncate">{{ r.department_name }}</td>
                     <td class="px-3 py-2 text-right font-semibold">
                       {{ r.total_score.toFixed(2) }}
                     </td>
