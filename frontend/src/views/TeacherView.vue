@@ -90,7 +90,7 @@
         <div class="bg-white border rounded-lg overflow-hidden">
           <div class="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700">
-              {{ auth.grade }}학년 {{ auth.classNo }}반 지원 현황
+              {{ auth.grade }}학년 {{ auth.classNo }}반 학급 현황
             </h2>
             <span class="text-xs text-gray-400">{{ students.length }}명</span>
           </div>
@@ -242,7 +242,8 @@ const router = useRouter()
 const auth   = useAuthStore()
 
 const tabs = [
-  { key: 'apps',    label: '지원 관리' },
+  { key: 'apps',    label: '학급 관리' },
+  { key: 'data',    label: '성적 입력' },
   { key: 'results', label: '결과 조회' },
 ]
 const activeTab = ref('apps')
