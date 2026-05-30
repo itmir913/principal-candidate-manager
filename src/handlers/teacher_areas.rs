@@ -58,7 +58,6 @@ struct AreaRow {
     lookup_scope: LookupScope,
     match_mode: Option<MatchMode>,
     category_agg: Option<CategoryAgg>,
-    multi_value: bool,
 }
 
 /// GET /api/teacher/area-context?student_id=X&track_id=Y
@@ -96,7 +95,7 @@ pub async fn teacher_area_context(
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, max_score, calc_type, teacher_editable, lookup_scope,
-                match_mode, category_agg, multi_value
+                match_mode, category_agg
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -142,7 +141,7 @@ pub async fn teacher_area_context(
             teacher_editable: area.teacher_editable,
             match_mode: area.match_mode,
             category_agg: area.category_agg,
-            multi_value: area.multi_value,
+            multi_value: area.category_agg == Some(CategoryAgg::Sum),
             current_values,
             table,
         });

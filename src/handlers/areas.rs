@@ -70,9 +70,7 @@ pub async fn create_area(
     if body.calc_type == CalcType::Category && body.category_agg.is_none() {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소는 category_agg(SUM/MAX)가 필수입니다".into()));
     }
-    if body.calc_type != CalcType::Category && body.multi_value {
-        return Err((StatusCode::BAD_REQUEST, "multi_value=1은 CATEGORY 전형요소에만 허용됩니다".into()));
-    }
+    let multi_value = body.category_agg == Some(CategoryAgg::Sum);
 
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope,
@@ -87,7 +85,7 @@ pub async fn create_area(
     .bind(body.lookup_scope)
     .bind(body.match_mode)
     .bind(body.category_agg)
-    .bind(body.multi_value)
+    .bind(multi_value)
     .fetch_one(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
