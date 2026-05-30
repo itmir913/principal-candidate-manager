@@ -74,22 +74,30 @@ pub struct ResultQuery {
 
 pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode) -> Result<i64, String> {
     match direction {
-        MatchMode::Upper => Ok(rows
+        MatchMode::Upper => rows
             .iter()
             .filter(|(th, _)| value >= *th)
             .max_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
-            .unwrap_or(0)),
-        // threshold가 허용 상한선 역할: value <= threshold인 행 중 최소 threshold 선택.
-        // value가 최대 threshold를 초과하면("5일 이상: 5점") 최대 threshold 행의 점수 사용.
-        MatchMode::Lower => Ok(rows
-            .iter()
-            .filter(|(th, _)| value <= *th)
-            .min_by_key(|(th, _)| *th)
-            .map(|(_, sc)| *sc)
-            .unwrap_or_else(|| {
-                rows.iter().max_by_key(|(th, _)| *th).map(|(_, sc)| *sc).unwrap_or(0)
-            })),
+            .ok_or_else(|| {
+                format!("UPPER 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다 (모든 하한치보다 낮습니다)", value)
+            }),
+        MatchMode::Lower => {
+            if rows.is_empty() {
+                return Err(format!("LOWER 매칭 실패: 구간 테이블이 비어 있습니다"));
+            }
+            // threshold가 허용 상한선 역할: value <= threshold인 행 중 최소 threshold 선택.
+            // value가 최대 threshold를 초과하면("5일 이상: 5점") 최대 threshold 행의 점수 사용.
+            Ok(rows
+                .iter()
+                .filter(|(th, _)| value <= *th)
+                .min_by_key(|(th, _)| *th)
+                .map(|(_, sc)| *sc)
+                .unwrap_or_else(|| {
+                    // rows is non-empty here, so max_by_key always returns Some
+                    rows.iter().max_by_key(|(th, _)| *th).map(|(_, sc)| *sc).unwrap()
+                }))
+        }
         MatchMode::Exact => rows
             .iter()
             .find(|(th, _)| *th == value)
@@ -121,8 +129,12 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
-            let Some(vs) = value_str else { return Ok(0); };
-            let value: i64 = vs.trim().parse().unwrap_or(0);
+            let vs = value_str.ok_or_else(|| {
+                format!("전형요소 id={}: 학생 id={}의 NUMERIC base_data가 없습니다", area.id, student_id)
+            })?;
+            let value: i64 = vs.trim().parse::<i64>().map_err(|_| {
+                format!("전형요소 id={}: base_data 값 '{}' 을 정수로 파싱할 수 없습니다", area.id, vs.trim())
+            })?;
             let mode = area.match_mode
                 .ok_or_else(|| format!("전형요소 id={}: NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.id))?;
 
@@ -183,13 +195,29 @@ pub async fn calc_area_score(
                     .fetch_optional(db).await.map_err(|e| e.to_string())?;
                 }
 
-                if let Some(s) = sc { scores.push(s); }
+                match sc {
+                    Some(s) => scores.push(s),
+                    None => return Err(format!(
+                        "전형요소 id={}: 범주 '{}' 에 해당하는 category_map 항목이 없습니다",
+                        area.id, cat
+                    )),
+                }
             }
 
-            if scores.is_empty() { return Ok(0); }
+            if scores.is_empty() {
+                return Err(format!(
+                    "전형요소 id={}: 학생 id={}의 CATEGORY base_data가 없습니다",
+                    area.id, student_id
+                ));
+            }
             match area.category_agg {
-                Some(CategoryAgg::Sum) | None => scores.iter().sum::<i64>(),
-                Some(CategoryAgg::Max) => *scores.iter().max().unwrap_or(&0),
+                Some(CategoryAgg::Sum) => scores.iter().sum::<i64>(),
+                Some(CategoryAgg::Max) => *scores.iter().max()
+                    .ok_or_else(|| format!("전형요소 id={}: MAX 집계이지만 점수 목록이 비어 있습니다", area.id))?,
+                None => return Err(format!(
+                    "전형요소 id={}: CATEGORY 타입에 category_agg가 설정되지 않았습니다",
+                    area.id
+                )),
             }
         }
 
@@ -202,7 +230,15 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(db).await.map_err(|e| e.to_string())?;
 
-            v.and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0)
+            match v {
+                None => return Err(format!(
+                    "전형요소 id={}: 학생 id={}의 MANUAL base_data가 없습니다",
+                    area.id, student_id
+                )),
+                Some(s) => s.trim().parse::<i64>().map_err(|_| {
+                    format!("전형요소 id={}: MANUAL base_data 값 '{}' 을 정수로 파싱할 수 없습니다", area.id, s.trim())
+                })?,
+            }
         }
     };
 

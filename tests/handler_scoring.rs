@@ -31,8 +31,9 @@ fn upper_above_all_thresholds() {
 }
 
 #[test]
-fn upper_below_all_thresholds() {
-    assert_eq!(lookup_range_score(50_000, &sample_rows(), MatchMode::Upper).unwrap(), 0);
+fn upper_below_all_thresholds_returns_error() {
+    // value가 모든 threshold보다 낮아 매칭 행 없음 → Err
+    assert!(lookup_range_score(50_000, &sample_rows(), MatchMode::Upper).is_err());
 }
 
 #[test]
@@ -57,9 +58,13 @@ fn lower_below_all_thresholds() {
 }
 
 #[test]
-fn empty_rows_return_zero() {
-    assert_eq!(lookup_range_score(100_000, &[], MatchMode::Upper).unwrap(), 0);
-    assert_eq!(lookup_range_score(100_000, &[], MatchMode::Lower).unwrap(), 0);
+fn empty_rows_upper_returns_error() {
+    assert!(lookup_range_score(100_000, &[], MatchMode::Upper).is_err());
+}
+
+#[test]
+fn empty_rows_lower_returns_error() {
+    assert!(lookup_range_score(100_000, &[], MatchMode::Lower).is_err());
 }
 
 // ── lookup_range_score: EXACT 시나리오 ───────────────────────────────
@@ -90,9 +95,9 @@ fn upper_volunteering_rows() -> Vec<(i64, i64)> {
 }
 
 #[test]
-fn upper_volunteering_negative_value_returns_zero() {
-    // 음수 봉사시간(불가 입력) → 어떤 threshold도 통과 못 함 → unwrap_or(0) → 0점
-    assert_eq!(lookup_range_score(-1, &upper_volunteering_rows(), MatchMode::Upper).unwrap(), 0);
+fn upper_volunteering_negative_value_returns_error() {
+    // 음수 봉사시간(불가 입력) → 어떤 threshold도 통과 못 함 → Err
+    assert!(lookup_range_score(-1, &upper_volunteering_rows(), MatchMode::Upper).is_err());
 }
 
 #[test]
@@ -456,7 +461,8 @@ async fn calc_manual() {
 }
 
 #[tokio::test]
-async fn calc_no_base_data_returns_zero() {
+async fn calc_no_base_data_returns_error() {
+    // base_data가 없는 학생 → 관리자가 반드시 데이터를 입력해야 함 → Err
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
     let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, LookupScope::Simple).await;
@@ -477,7 +483,7 @@ async fn calc_no_base_data_returns_zero() {
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
 }
 
 #[tokio::test]
@@ -645,8 +651,8 @@ async fn calc_category_deduction_returns_negative_score() {
 }
 
 #[tokio::test]
-async fn calc_category_deduction_student_without_violation_gets_zero() {
-    // 위반 없는 학생은 base_data 없음 → 0점 (감점 없음)
+async fn calc_category_no_base_data_returns_error() {
+    // base_data 없음 → 위반 여부 불명, 관리자가 명시적으로 0을 입력해야 함 → Err
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
     let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), LookupScope::Simple).await;
@@ -655,13 +661,13 @@ async fn calc_category_deduction_student_without_violation_gets_zero() {
         "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '규정위반', -300000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
-    // base_data에 아무 것도 없음
+    // base_data 없음
 
     let area = AreaRow {
         id: aid, calc_type: CalcType::Category, max_score: 1_000_000,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
 }
 
 #[tokio::test]
@@ -715,8 +721,8 @@ async fn calc_pure_deduction_area_max_score_zero() {
 }
 
 #[tokio::test]
-async fn calc_pure_deduction_area_no_violation_gets_zero() {
-    // 순수 감점 전형요소에서 위반 없는 학생 → 0점
+async fn calc_pure_deduction_area_no_base_data_returns_error() {
+    // 순수 감점 전형요소라도 base_data 없으면 위반 여부 불명 → Err
     let pool = common::create_test_pool().await;
     let sid = insert_student(&pool).await;
 
@@ -730,13 +736,13 @@ async fn calc_pure_deduction_area_no_violation_gets_zero() {
         "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '위반', -500000)",
     )
     .bind(aid).execute(&pool).await.unwrap();
-    // base_data 없음 → scores.is_empty() → Ok(0)
+    // base_data 없음 → Err
 
     let area = AreaRow {
         id: aid, calc_type: CalcType::Category, max_score: 0,
         match_mode: None, category_agg: Some(CategoryAgg::Sum), lookup_scope: LookupScope::Simple,
     };
-    assert_eq!(calc_area_score(&pool, sid, &area, 0).await.unwrap(), 0);
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
 }
 
 #[tokio::test]
@@ -816,6 +822,114 @@ async fn calc_range_exact_match_miss_returns_error() {
         calc_type: CalcType::Numeric,
         max_score: 100_000,
         match_mode: Some(MatchMode::Exact),
+        category_agg: None,
+        lookup_scope: LookupScope::Simple,
+    };
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+}
+
+// ── calc_area_score: 새 Err 케이스 ────────────────────────────────
+
+#[tokio::test]
+async fn calc_numeric_parse_error_returns_error() {
+    // NUMERIC: base_data 값이 정수로 파싱 불가 → Err
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, LookupScope::Simple).await;
+
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 100000, 50000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, 'abc')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: CalcType::Numeric,
+        max_score: 100_000,
+        match_mode: Some(MatchMode::Upper),
+        category_agg: None,
+        lookup_scope: LookupScope::Simple,
+    };
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+}
+
+#[tokio::test]
+async fn calc_category_unknown_category_returns_error() {
+    // CATEGORY: base_data에 category_map에 없는 범주 → Err
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), LookupScope::Simple).await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '회장', 30000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    // base_data에 category_map에 없는 '부회장' 입력
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '부회장', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: CalcType::Category,
+        max_score: 100_000,
+        match_mode: None,
+        category_agg: Some(CategoryAgg::Sum),
+        lookup_scope: LookupScope::Simple,
+    };
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+}
+
+#[tokio::test]
+async fn calc_category_missing_agg_returns_error() {
+    // CATEGORY: category_agg = None이면 집계 방식 불명 → Err
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    // DB에는 Sum으로 저장, AreaRow만 None으로 테스트
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), LookupScope::Simple).await;
+
+    sqlx::query(
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '회장', 30000)",
+    )
+    .bind(aid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '회장', 1)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: CalcType::Category,
+        max_score: 100_000,
+        match_mode: None,
+        category_agg: None, // 집계 방식 미설정
+        lookup_scope: LookupScope::Simple,
+    };
+    assert!(calc_area_score(&pool, sid, &area, 0).await.is_err());
+}
+
+#[tokio::test]
+async fn calc_manual_parse_error_returns_error() {
+    // MANUAL: base_data 값이 정수로 파싱 불가 → Err
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, LookupScope::Simple).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '3.14')",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let area = AreaRow {
+        id: aid,
+        calc_type: CalcType::Manual,
+        max_score: 100_000,
+        match_mode: None,
         category_agg: None,
         lookup_scope: LookupScope::Simple,
     };
