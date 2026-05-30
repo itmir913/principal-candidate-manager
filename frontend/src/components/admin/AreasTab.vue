@@ -195,20 +195,20 @@
           @result="onScoreResult" />
         <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
 
-        <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
+        <div class="mt-4 max-h-80 overflow-y-auto overflow-x-auto border border-gray-200 rounded">
           <p v-if="scorePage.rows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
             등록된 점수 기준 없음
           </p>
-          <table v-else class="w-full text-sm border-collapse">
+          <table v-else class="w-full min-w-max text-sm border-collapse">
             <thead class="sticky top-0 bg-gray-50">
               <tr>
-                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-32">
                   {{ selected.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
                 </th>
-                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">점수</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-24">점수</th>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">모집단위명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-40">대학명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-40">모집단위명</th>
                 </template>
               </tr>
             </thead>
@@ -296,19 +296,19 @@
 
         <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
 
-        <div class="mt-4 max-h-72 overflow-y-auto border border-gray-200 rounded">
+        <div class="mt-4 max-h-80 overflow-y-auto overflow-x-auto border border-gray-200 rounded">
           <p v-if="basePage.rows.length === 0" class="text-gray-400 text-sm px-3 py-4 text-center">
             등록된 기초 데이터 없음
           </p>
-          <table v-else class="w-full text-sm border-collapse">
+          <table v-else class="w-full min-w-max text-sm border-collapse">
             <thead class="sticky top-0 bg-gray-50">
               <tr>
-                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">학생코드</th>
-                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">이름</th>
-                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">값</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-36">학생코드</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-24">이름</th>
+                <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-24">값</th>
                 <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">대학명</th>
-                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium">모집단위명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-40">대학명</th>
+                  <th class="border-b border-gray-200 px-3 py-2 text-left text-gray-600 font-medium w-40">모집단위명</th>
                 </template>
               </tr>
             </thead>

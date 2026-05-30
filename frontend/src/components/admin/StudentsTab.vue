@@ -79,17 +79,17 @@
 
     <!-- 학생 목록 -->
     <div class="overflow-x-auto border border-gray-200 rounded">
-      <table class="w-full text-sm border-collapse">
+      <table class="w-full min-w-max text-sm border-collapse">
         <thead>
           <tr class="bg-gray-100 text-gray-600 text-left">
-            <th class="px-3 py-2 border-b">학생코드</th>
-            <th class="px-3 py-2 border-b">이름</th>
-            <th class="px-3 py-2 border-b">구분</th>
-            <th class="px-3 py-2 border-b">학년</th>
-            <th class="px-3 py-2 border-b">반</th>
-            <th class="px-3 py-2 border-b">번호</th>
-            <th class="px-3 py-2 border-b">졸업연도</th>
-            <th class="px-3 py-2 border-b w-14"></th>
+            <th class="px-3 py-2 border-b w-36">학생코드</th>
+            <th class="px-3 py-2 border-b w-26">이름</th>
+            <th class="px-3 py-2 border-b w-16">구분</th>
+            <th class="px-3 py-2 border-b w-12">학년</th>
+            <th class="px-3 py-2 border-b w-12">반</th>
+            <th class="px-3 py-2 border-b w-12">번호</th>
+            <th class="px-3 py-2 border-b w-24">졸업연도</th>
+            <th class="px-3 py-2 border-b w-16">학생 삭제</th>
           </tr>
         </thead>
         <tbody>

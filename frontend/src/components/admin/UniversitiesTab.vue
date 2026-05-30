@@ -149,13 +149,14 @@
           >+ 모집단위 추가</button>
         </div>
 
-        <table class="w-full text-sm border-collapse">
+        <div class="overflow-x-auto border border-gray-200 rounded">
+        <table class="w-full min-w-max text-sm border-collapse">
           <thead>
             <tr class="bg-gray-100 text-gray-600 text-left">
               <th class="px-3 py-2 border-b">모집단위명</th>
-              <th class="px-3 py-2 border-b">제한 인원</th>
-              <th class="px-3 py-2 border-b text-center">재학생 우선</th>
-              <th class="px-3 py-2 border-b w-28"></th>
+              <th class="px-3 py-2 border-b w-32">제한 인원</th>
+              <th class="px-3 py-2 border-b w-32 text-center">재학생 우선</th>
+              <th class="px-3 py-2 border-b w-32"></th>
             </tr>
           </thead>
           <tbody>
@@ -242,6 +243,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
       </template>
     </div>
   </div>

@@ -78,12 +78,13 @@
 
     <p v-if="error" class="text-red-500 text-sm mb-2">{{ error }}</p>
 
-    <table class="w-full text-sm border-collapse">
+    <div class="overflow-x-auto border border-gray-200 rounded">
+    <table class="w-full min-w-max text-sm border-collapse">
       <thead>
         <tr class="bg-gray-100 text-gray-600 text-left">
-          <th class="px-3 py-2 border-b">학년</th>
-          <th class="px-3 py-2 border-b">반</th>
-          <th class="px-3 py-2 border-b">담임명</th>
+          <th class="px-3 py-2 border-b w-16">학년</th>
+          <th class="px-3 py-2 border-b w-12">반</th>
+          <th class="px-3 py-2 border-b w-32">담임명</th>
           <th class="px-3 py-2 border-b w-48">편집</th>
         </tr>
       </thead>
@@ -129,6 +130,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 </template>
 

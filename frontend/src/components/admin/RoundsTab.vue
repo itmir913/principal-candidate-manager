@@ -101,7 +101,8 @@
 
           <div v-for="(group, key) in appsByUniv" :key="key" class="mb-4">
             <h4 class="text-sm font-semibold text-gray-700 mb-1">{{ key }}</h4>
-            <table class="w-full text-sm border rounded overflow-hidden">
+            <div class="overflow-x-auto">
+            <table class="w-full min-w-max text-sm border rounded overflow-hidden">
               <thead class="bg-gray-50">
                 <tr>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-40">학번/학생코드</th>
@@ -149,6 +150,7 @@
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -193,7 +195,8 @@
                 </template>
               </span>
             </div>
-            <table class="w-full text-sm border rounded overflow-hidden">
+            <div class="overflow-x-auto">
+            <table class="w-full min-w-max text-sm border rounded overflow-hidden">
               <thead class="bg-gray-50">
                 <tr>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-12">순위</th>
@@ -265,6 +268,7 @@
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </template>
