@@ -2,25 +2,38 @@
   <div>
     <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 명단 관리</h2>
 
-    <!-- 분류별 가져오기/내보내기 -->
-    <div class="mb-4 border border-gray-200 rounded divide-y divide-gray-200">
-      <div v-for="cat in categories" :key="cat.key" class="flex items-center gap-2 px-3 py-2">
-        <span class="w-14 text-sm font-medium text-gray-600 flex-shrink-0">{{ cat.label }}</span>
-        <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="downloading"
-          @click="cat.dlTemplate"
-        >양식 다운로드</button>
-        <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="downloading"
-          @click="cat.dlExport"
-        >목록 내보내기</button>
-        <label class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 cursor-pointer">
-          가져오기
-          <input type="file" accept=".xlsx,.csv" class="hidden" @change="e => cat.onImport(e)" />
-        </label>
-      </div>
+    <!-- 가져오기/내보내기 패널 -->
+    <div class="mb-4 flex flex-wrap gap-2 items-center">
+      <label class="flex items-center gap-1 text-sm cursor-pointer">
+        <input type="radio" v-model="studentType" value="enrolled" />
+        재학생
+      </label>
+      <label class="flex items-center gap-1 text-sm cursor-pointer">
+        <input type="radio" v-model="studentType" value="graduated" />
+        졸업생
+      </label>
+
+      <button
+        class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+        :disabled="downloading"
+        @click="dlTemplate"
+      >양식 다운로드</button>
+
+      <label
+        class="px-2.5 py-1 text-white text-xs rounded cursor-pointer"
+        :class="uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'"
+      >
+        불러오기
+        <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onImport" />
+      </label>
+
+      <span class="text-gray-300 select-none">|</span>
+
+      <button
+        class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+        :disabled="downloading"
+        @click="dlAll"
+      >전체 목록 다운로드</button>
     </div>
 
     <!-- 업로드 결과 -->
@@ -115,14 +128,10 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   getStudents,
   getStudentGradeOptions,
-  downloadStudentTemplate,
   exportStudents,
-  importStudents,
   downloadEnrolledTemplate,
-  exportEnrolled,
   importEnrolled,
   downloadGraduatedTemplate,
-  exportGraduated,
   importGraduated,
   deleteStudent,
 } from '../../api/admin.js'
@@ -135,6 +144,8 @@ const filterGrade = ref(null)
 const filterClass = ref(null)
 const gradeOptions = ref({ grades: [], by_grade: {} })
 const downloading = ref(false)
+const uploading = ref(false)
+const studentType = ref('enrolled')
 
 // 선택 학년에 따라 드롭다운에 표시할 반 목록
 const availableClasses = computed(() => {
@@ -188,6 +199,7 @@ async function runImport(apiFn, label, evt) {
   if (!file) return
   error.value = ''
   result.value = null
+  uploading.value = true
   try {
     const data = await apiFn(file)
     result.value = { label, ...data }
@@ -199,8 +211,10 @@ async function runImport(apiFn, label, evt) {
     } else {
       error.value = typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
     }
+  } finally {
+    uploading.value = false
+    evt.target.value = ''
   }
-  evt.target.value = ''
 }
 
 async function remove(s) {
@@ -215,59 +229,30 @@ async function remove(s) {
   }
 }
 
-const categories = [
-  {
-    key: 'enrolled',
-    label: '재학생',
-    dlTemplate: async () => {
-      downloading.value = true
-      try { saveBlob(await downloadEnrolledTemplate(), 'students_enrolled_template.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    dlExport: async () => {
-      downloading.value = true
-      try { saveBlob(await exportEnrolled(), 'students_enrolled.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    onImport: (e) => runImport(importEnrolled, '재학생', e),
-  },
-  {
-    key: 'graduated',
-    label: '졸업생',
-    dlTemplate: async () => {
-      downloading.value = true
-      try { saveBlob(await downloadGraduatedTemplate(), 'students_graduated_template.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    dlExport: async () => {
-      downloading.value = true
-      try { saveBlob(await exportGraduated(), 'students_graduated.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    onImport: (e) => runImport(importGraduated, '졸업생', e),
-  },
-  {
-    key: 'all',
-    label: '전체',
-    dlTemplate: async () => {
-      downloading.value = true
-      try { saveBlob(await downloadStudentTemplate(), 'students_all_template.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    dlExport: async () => {
-      downloading.value = true
-      try { saveBlob(await exportStudents(), 'students_all.xlsx') }
-      catch (e) { error.value = e.response?.data ?? e.message }
-      finally { downloading.value = false }
-    },
-    onImport: (e) => runImport(importStudents, '전체', e),
-  },
-]
+async function dlTemplate() {
+  downloading.value = true
+  try {
+    if (studentType.value === 'enrolled') {
+      saveBlob(await downloadEnrolledTemplate(), 'students_enrolled_template.xlsx')
+    } else {
+      saveBlob(await downloadGraduatedTemplate(), 'students_graduated_template.xlsx')
+    }
+  } catch (e) { error.value = e.response?.data ?? e.message }
+  finally { downloading.value = false }
+}
+
+function onImport(evt) {
+  const label = studentType.value === 'enrolled' ? '재학생' : '졸업생'
+  const apiFn = studentType.value === 'enrolled' ? importEnrolled : importGraduated
+  runImport(apiFn, label, evt)
+}
+
+async function dlAll() {
+  downloading.value = true
+  try { saveBlob(await exportStudents(), 'students_all.xlsx') }
+  catch (e) { error.value = e.response?.data ?? e.message }
+  finally { downloading.value = false }
+}
 
 onMounted(() => {
   loadGradeOptions()
