@@ -7,11 +7,13 @@
       <div v-for="cat in categories" :key="cat.key" class="flex items-center gap-2 px-3 py-2">
         <span class="w-14 text-sm font-medium text-gray-600 flex-shrink-0">{{ cat.label }}</span>
         <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50"
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          :disabled="downloading"
           @click="cat.dlTemplate"
         >양식 다운로드</button>
         <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50"
+          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          :disabled="downloading"
           @click="cat.dlExport"
         >목록 내보내기</button>
         <label class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 cursor-pointer">
@@ -132,6 +134,7 @@ const filterEnrolled = ref(null)   // null=전체, 1=재학생, 0=졸업생
 const filterGrade = ref(null)
 const filterClass = ref(null)
 const gradeOptions = ref({ grades: [], by_grade: {} })
+const downloading = ref(false)
 
 // 선택 학년에 따라 드롭다운에 표시할 반 목록
 const availableClasses = computed(() => {
@@ -217,12 +220,16 @@ const categories = [
     key: 'enrolled',
     label: '재학생',
     dlTemplate: async () => {
+      downloading.value = true
       try { saveBlob(await downloadEnrolledTemplate(), 'students_enrolled_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     dlExport: async () => {
+      downloading.value = true
       try { saveBlob(await exportEnrolled(), 'students_enrolled.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     onImport: (e) => runImport(importEnrolled, '재학생', e),
   },
@@ -230,12 +237,16 @@ const categories = [
     key: 'graduated',
     label: '졸업생',
     dlTemplate: async () => {
+      downloading.value = true
       try { saveBlob(await downloadGraduatedTemplate(), 'students_graduated_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     dlExport: async () => {
+      downloading.value = true
       try { saveBlob(await exportGraduated(), 'students_graduated.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     onImport: (e) => runImport(importGraduated, '졸업생', e),
   },
@@ -243,12 +254,16 @@ const categories = [
     key: 'all',
     label: '전체',
     dlTemplate: async () => {
+      downloading.value = true
       try { saveBlob(await downloadStudentTemplate(), 'students_all_template.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     dlExport: async () => {
+      downloading.value = true
       try { saveBlob(await exportStudents(), 'students_all.xlsx') }
       catch (e) { error.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     },
     onImport: (e) => runImport(importStudents, '전체', e),
   },

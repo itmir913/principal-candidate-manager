@@ -5,12 +5,12 @@
       <div class="flex flex-wrap gap-2">
         <button
           class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="uploading"
+          :disabled="uploading || downloading"
           @click="dlTemplate"
         >양식 다운로드</button>
         <button
           class="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
-          :disabled="uploading"
+          :disabled="uploading || downloading"
           @click="dlExport"
         >목록 내보내기</button>
         <label
@@ -142,6 +142,7 @@ const editTeacherName = ref('')
 const editPassword = ref('')
 const saving = ref(false)
 const uploading = ref(false)
+const downloading = ref(false)
 const importResult = ref(null)
 
 const showAddForm = ref(false)
@@ -233,20 +234,26 @@ function saveBlob(response, filename) {
 }
 
 async function dlTemplate() {
+  downloading.value = true
   try {
     const res = await downloadClassTemplate()
     saveBlob(res, 'classes_template.xlsx')
   } catch (e) {
     error.value = e.response?.data ?? e.message
+  } finally {
+    downloading.value = false
   }
 }
 
 async function dlExport() {
+  downloading.value = true
   try {
     const res = await exportClasses()
     saveBlob(res, 'classes.xlsx')
   } catch (e) {
     error.value = e.response?.data ?? e.message
+  } finally {
+    downloading.value = false
   }
 }
 

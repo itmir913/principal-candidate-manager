@@ -170,7 +170,7 @@
             >새로고침</button>
             <button
               class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
-              :disabled="results.length === 0"
+              :disabled="results.length === 0 || downloading"
               @click="downloadExcel"
             >목록 내보내기</button>
           </div>
@@ -282,6 +282,7 @@ const tracks  = ref([])   // 전체 모집단위 (unit_quota 포함)
 
 const calcLoading = ref(false)
 const calcMsg     = ref(null)
+const downloading = ref(false)
 
 const selectedTrackId = ref('')
 
@@ -440,6 +441,7 @@ async function handleAbandon(app) {
 
 async function downloadExcel() {
   if (!selected.value) return
+  downloading.value = true
   try {
     const res = await exportResultsExcel(selected.value.id)
     const url = URL.createObjectURL(res.data)
@@ -450,6 +452,8 @@ async function downloadExcel() {
     URL.revokeObjectURL(url)
   } catch (e) {
     alert(e.response?.data || e.message)
+  } finally {
+    downloading.value = false
   }
 }
 

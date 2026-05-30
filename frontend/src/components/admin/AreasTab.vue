@@ -639,9 +639,11 @@ const ExcelPanel = defineComponent({
   setup(props, { emit }) {
     const err = ref('')
     const uploading = ref(false)
+    const downloading = ref(false)
 
     async function dlTemplate() {
       err.value = ''
+      downloading.value = true
       try {
         if (props.panel === 'score') {
           const res = props.calcType === 'CATEGORY'
@@ -655,10 +657,12 @@ const ExcelPanel = defineComponent({
           saveBlob(res, `${props.areaName}_base_data_${props.studentType}_template.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     }
 
     async function dlExport() {
       err.value = ''
+      downloading.value = true
       try {
         if (props.panel === 'score') {
           const res = props.calcType === 'CATEGORY'
@@ -672,6 +676,7 @@ const ExcelPanel = defineComponent({
           saveBlob(res, `${props.areaName}_base_data.xlsx`)
         }
       } catch (e) { err.value = e.response?.data ?? e.message }
+      finally { downloading.value = false }
     }
 
     async function onFile(evt) {
@@ -700,7 +705,7 @@ const ExcelPanel = defineComponent({
       finally { uploading.value = false; evt.target.value = '' }
     }
 
-    const btnBase = 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50'
+    const btnBase = 'px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40'
 
     return () => h('div', { class: 'space-y-2' }, [
       h('div', { class: 'flex flex-wrap gap-2 items-center' }, [
@@ -728,7 +733,7 @@ const ExcelPanel = defineComponent({
         ] : []),
 
         // ── 양식 다운로드 (score 패널은 기존 그대로)
-        h('button', { class: btnBase, onClick: dlTemplate }, '양식 다운로드'),
+        h('button', { class: btnBase, disabled: downloading.value, onClick: dlTemplate }, '양식 다운로드'),
 
         // ── 불러오기
         h('label', {
@@ -740,7 +745,7 @@ const ExcelPanel = defineComponent({
 
         // ── 구분선 + 전체 목록 다운로드
         h('span', { class: 'text-gray-300 select-none' }, '|'),
-        h('button', { class: btnBase, onClick: dlExport }, '전체 목록 다운로드'),
+        h('button', { class: btnBase, disabled: downloading.value, onClick: dlExport }, '전체 목록 다운로드'),
       ]),
       err.value ? h('p', { class: 'text-red-500 text-sm' }, err.value) : null,
     ])
