@@ -1,20 +1,4 @@
 <template>
-  <!-- 라운드 상태 배너 -->
-  <div
-    class="mb-4 px-4 py-3 rounded-lg border text-sm"
-    :class="currentRound
-      ? 'bg-green-50 border-green-200 text-green-800'
-      : 'bg-gray-50 border-gray-200 text-gray-500'"
-  >
-    <template v-if="currentRound">
-      <span class="font-semibold">{{ currentRound.id }}차 라운드 진행 중</span>
-      <span class="ml-2 text-green-600">— 지원 접수 기간입니다</span>
-    </template>
-    <template v-else>
-      현재 지원 접수 기간이 아닙니다. 관리자에게 문의하세요.
-    </template>
-  </div>
-
   <div v-if="!currentRound" class="text-center text-gray-400 py-12 text-sm">
     열린 라운드가 없어 지원 등록을 할 수 없습니다.
   </div>

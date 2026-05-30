@@ -18,6 +18,19 @@
       </div>
     </header>
 
+    <!-- 라운드 상태 바 -->
+    <div class="bg-white border-b px-6 py-2 text-sm"
+         :class="currentRound ? 'text-green-700' : 'text-gray-400'">
+      <template v-if="currentRound">
+        <span class="font-semibold">{{ currentRound.id }}차 라운드 진행 중</span>
+        <span class="ml-2">— 지원 접수 기간입니다</span>
+        <span class="ml-2 text-xs text-green-500">(개시일: {{ fmtLocalDate(currentRound.opened_at) }})</span>
+      </template>
+      <template v-else>
+        현재 지원 접수 기간이 아닙니다. 관리자에게 문의하세요.
+      </template>
+    </div>
+
     <!-- 탭 -->
     <nav class="bg-white border-b px-6 flex gap-0">
       <button
@@ -92,10 +105,10 @@
 </template>
 
 <script setup>
-import { ref, computed, defineAsyncComponent } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
-import { teacherChangePassword } from '../api/teacher.js'
+import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -115,6 +128,19 @@ const currentTab = computed(() => {
   if (active.value === 'class')       return ClassTab
   if (active.value === 'application') return ApplicationTab
   return ResultsTab
+})
+
+const currentRound = ref(null)
+
+function fmtLocalDate(s) {
+  if (!s) return ''
+  const d = new Date(s)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+}
+
+onMounted(async () => {
+  currentRound.value = await getCurrentRound()
 })
 
 const showPwModal = ref(false)
