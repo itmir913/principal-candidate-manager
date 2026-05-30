@@ -178,7 +178,7 @@
             >전체 지원자 목록 다운로드</button>
             <button
               class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
-              :disabled="selected.status === 'OPEN' || downloadingSummary"
+              :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
               @click="downloadSummary"
             >라운드 결과 다운로드</button>
           </div>
