@@ -112,12 +112,12 @@
                       </span>
                     </td>
                     <td class="px-3 py-2 text-center">
-                      <span v-if="app.abandoned" class="text-xs text-red-500">포기</span>
+                      <span v-if="app.abandoned" class="text-xs text-red-500">포기됨</span>
                       <button
                         v-else-if="selected.status === 'CLOSED'"
                         class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
                         @click="handleAbandon(app)"
-                      >포기</button>
+                      >포기하기</button>
                     </td>
                     <td class="px-3 py-2 text-center">
                       <button
@@ -135,11 +135,11 @@
                           <div v-for="item in previews[previewKey(app)].data.detail" :key="item.area_id"
                                class="flex items-center gap-1.5">
                             <span class="text-gray-500">{{ item.area_name }}</span>
-                            <span class="font-semibold text-gray-800">{{ (item.score / 10000).toFixed(2) }}</span>
+                            <span class="font-semibold text-gray-800">{{ item.score.toFixed(2) }}</span>
                           </div>
                         </div>
                         <div class="mt-1.5 text-xs font-bold text-indigo-700">
-                          예상 총점: {{ (previews[previewKey(app)].data.total / 10000).toFixed(2) }}
+                          예상 총점: {{ previews[previewKey(app)].data.total.toFixed(2) }}
                         </div>
                       </div>
                       <div v-else class="text-xs text-red-400">불러오기 실패</div>
@@ -224,14 +224,14 @@
                   </td>
                   <td class="px-3 py-2">
                     <span :class="r.is_enrolled ? 'text-green-600' : 'text-gray-400'">
-                      {{ r.is_enrolled ? '재' : '졸' }}
+                      {{ r.is_enrolled ? '재학생' : '졸업생' }}
                     </span>
                   </td>
                   <td v-for="area in areas" :key="area.id" class="px-3 py-2 text-right text-gray-600">
                     {{ getAreaScore(r, area.id) }}
                   </td>
                   <td class="px-3 py-2 text-right font-semibold">
-                    {{ (r.total_score / 10000).toFixed(2) }}
+                    {{ r.total_score.toFixed(2) }}
                   </td>
                   <td class="px-3 py-2 text-center">
                     <span v-if="r.abandoned" class="text-xs text-red-400">포기</span>
@@ -354,7 +354,7 @@ function getAreaScore(r, areaId) {
       ? JSON.parse(r.score_detail)
       : r.score_detail
     const v = detail[String(areaId)]
-    return v !== undefined ? (v / 10000).toFixed(2) : '-'
+    return v !== undefined ? (v as number).toFixed(2) : '-'
   } catch {
     return '-'
   }
@@ -429,7 +429,7 @@ async function handleCalculate() {
 }
 
 async function handleAbandon(app) {
-  if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까?`)) return
+  if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까? 한 번 포기하면 절대 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 다시 지원해야 합니다.`)) return
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
     await loadApps()

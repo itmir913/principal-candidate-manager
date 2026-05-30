@@ -409,15 +409,6 @@ function defaultNewArea() {
            match_mode: '', category_agg: '' }
 }
 
-function parseDisplayScore(raw) {
-  const s = String(raw).trim()
-  if (!s) return null
-  const f = parseFloat(s)
-  if (isNaN(f) || f < 0) return null
-  const dot = s.indexOf('.')
-  if (dot !== -1 && s.slice(dot + 1).replace(/0+$/, '').length > 5) return null
-  return Math.round(f * 100000)
-}
 
 const CALC_TYPE_LABELS    = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
 const LOOKUP_SCOPE_LABELS = { SIMPLE: '기본 조회', COMPOSITE: '대학별 환산점수 조회' }
@@ -428,8 +419,7 @@ function lookupScopeLabel(v) { return LOOKUP_SCOPE_LABELS[v] ?? v }
 function matchModeLabel(v)   { return v ? (MATCH_MODE_LABELS[v]   ?? v) : '—' }
 function categoryAggLabel(v) { return v ? (CATEGORY_AGG_LABELS[v] ?? v) : '—' }
 function displayScore(v) {
-  const f = v / 100000
-  return f % 1 === 0 ? String(f) : f.toFixed(5).replace(/\.?0+$/, '')
+  return v % 1 === 0 ? String(v) : v.toFixed(5).replace(/\.?0+$/, '')
 }
 
 const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
@@ -474,9 +464,9 @@ function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows() }
 function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows()  }
 
 async function addArea() {
-  const maxScore = parseDisplayScore(newArea.value.max_score_display)
-  if (maxScore === null) {
-    error.value = '만점: 양수이고 소수점 최대 5자리까지 입력하세요'
+  const maxScore = parseFloat(String(newArea.value.max_score_display).trim())
+  if (isNaN(maxScore) || maxScore < 0) {
+    error.value = '만점: 0 이상의 숫자를 입력하세요'
     return
   }
   const body = {

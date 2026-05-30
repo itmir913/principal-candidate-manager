@@ -5,7 +5,7 @@ use principal_candidate_manager::handlers::areas::{
     create_area, put_category_map, put_numeric_table, CategoryRow, CreateAreaBody, RangeRow,
 };
 
-fn manual_area_body(name: &str, max_score: i64) -> CreateAreaBody {
+fn manual_area_body(name: &str, max_score: f64) -> CreateAreaBody {
     CreateAreaBody {
         name: name.into(),
         max_score,
@@ -46,7 +46,7 @@ async fn create_area_zero_max_score_succeeds() {
     let pool = common::create_test_pool().await;
     let (status, _) = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("순수감점", 0)),
+        Json(manual_area_body("순수감점", 0.0)),
     )
     .await
     .unwrap();
@@ -58,7 +58,7 @@ async fn create_area_negative_max_score_rejected() {
     let pool = common::create_test_pool().await;
     let res = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("test", -100_000)),
+        Json(manual_area_body("test", -1.0)),
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -69,7 +69,7 @@ async fn create_area_valid_max_score_succeeds() {
     let pool = common::create_test_pool().await;
     let res = create_area(
         State(common::make_state(pool)),
-        Json(manual_area_body("수기입력", 1_000_000)), // 만점 10점 (×100000)
+        Json(manual_area_body("수기입력", 10.0)),
     )
     .await;
     let (status, _) = res.unwrap();
@@ -82,7 +82,7 @@ async fn create_numeric_area_without_match_mode_rejected() {
     let pool = common::create_test_pool().await;
     let body = CreateAreaBody {
         name: "내신".into(),
-        max_score: 1_000_000,
+        max_score: 10.0,
         calc_type: "NUMERIC".into(),
         teacher_editable: 0,
         lookup_scope: "SIMPLE".into(),
@@ -100,7 +100,7 @@ async fn create_category_area_without_category_agg_rejected() {
     let pool = common::create_test_pool().await;
     let body = CreateAreaBody {
         name: "활동".into(),
-        max_score: 1_000_000,
+        max_score: 10.0,
         calc_type: "CATEGORY".into(),
         teacher_editable: 0,
         lookup_scope: "SIMPLE".into(),

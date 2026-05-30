@@ -179,7 +179,7 @@
                     <td class="px-6 py-2 text-gray-700">{{ r.univ_name }} — {{ r.track_name }}</td>
                     <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
                     <td class="px-4 py-2 text-right font-semibold text-gray-800">
-                      {{ (r.total_score / 10000).toFixed(2) }}
+                      {{ r.total_score.toFixed(2) }}
                     </td>
                     <td class="px-3 py-2 text-center">
                       <span v-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>

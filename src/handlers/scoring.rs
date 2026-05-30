@@ -5,7 +5,7 @@ use axum::{
     Extension, Json,
 };
 use rust_xlsxwriter::Workbook;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 
@@ -13,6 +13,20 @@ use crate::{auth::TeacherClaims, excel, state::AppState};
 
 type ApiError = (StatusCode, String);
 type Db = sqlx::SqlitePool;
+
+fn score_as_f64<S: Serializer>(val: &i64, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_f64(*val as f64 / 100_000.0)
+}
+
+fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let raw: HashMap<String, i64> = serde_json::from_str(val).unwrap_or_default();
+    let mut m = s.serialize_map(Some(raw.len()))?;
+    for (k, v) in &raw {
+        m.serialize_entry(k, &(*v as f64 / 100_000.0))?;
+    }
+    m.end()
+}
 
 #[derive(FromRow)]
 pub struct AreaRow {
@@ -35,7 +49,9 @@ pub struct ResultRow {
     pub student_id: i64,
     pub track_id: i64,
     pub round_id: i64,
+    #[serde(serialize_with = "score_as_f64")]
     pub total_score: i64,
+    #[serde(serialize_with = "score_detail_as_map")]
     pub score_detail: String,
     pub ranking: Option<i64>,
     pub recommended: i64,
@@ -478,11 +494,11 @@ pub async fn export_results(
                 serde_json::from_str(&r.score_detail).unwrap_or_default();
             for area in &areas {
                 let sc = detail.get(&area.id.to_string()).copied().unwrap_or(0);
-                ws.write_number(row, col, sc as f64 / 100000.0).ok();
+                ws.write_number(row, col, sc as f64 / 100_000.0).ok();
                 col += 1;
             }
 
-            ws.write_number(row, col, r.total_score as f64 / 100000.0).ok(); col += 1;
+            ws.write_number(row, col, r.total_score as f64 / 100_000.0).ok(); col += 1;
             ws.write_string(row, col, if r.recommended == 1 { "추천" } else { "" }).ok(); col += 1;
             ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).ok();
         }
@@ -563,12 +579,12 @@ pub struct ScorePreviewQuery {
 pub struct AreaPreview {
     pub area_id: i64,
     pub area_name: String,
-    pub score: i64,
+    pub score: f64,
 }
 
 #[derive(Serialize)]
 pub struct ScorePreviewResponse {
-    pub total: i64,
+    pub total: f64,
     pub detail: Vec<AreaPreview>,
 }
 
@@ -596,7 +612,7 @@ pub async fn score_preview(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut detail: Vec<AreaPreview> = Vec::new();
-    let mut total: i64 = 0;
+    let mut total_raw: i64 = 0;
 
     for aw in &area_rows {
         let area = AreaRow {
@@ -607,14 +623,18 @@ pub async fn score_preview(
             category_agg: aw.category_agg.clone(),
             lookup_scope: aw.lookup_scope.clone(),
         };
-        let score = calc_area_score(&state.db, q.student_id, &area, q.track_id)
+        let score_raw = calc_area_score(&state.db, q.student_id, &area, q.track_id)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-        total += score;
-        detail.push(AreaPreview { area_id: aw.id, area_name: aw.name.clone(), score });
+        total_raw += score_raw;
+        detail.push(AreaPreview {
+            area_id: aw.id,
+            area_name: aw.name.clone(),
+            score: score_raw as f64 / 100_000.0,
+        });
     }
 
-    Ok(Json(ScorePreviewResponse { total, detail }))
+    Ok(Json(ScorePreviewResponse { total: total_raw as f64 / 100_000.0, detail }))
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ pub(crate) struct AreaInfo {
 // ── 공통 헬퍼 ────────────────────────────────────────────────────
 
 fn db_to_display(v: i64) -> f64 {
-    v as f64 / 100000.0
+    v as f64 / 100_000.0
 }
 
 /// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
@@ -56,7 +56,7 @@ pub(crate) fn parse_display_value(s: &str) -> Result<i64, String> {
             return Err(format!("'{}' 소수점 5자리 초과 (최대 5자리)", trimmed));
         }
     }
-    Ok((f * 100000.0).round() as i64)
+    Ok((f * 100_000.0).round() as i64)
 }
 
 fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
