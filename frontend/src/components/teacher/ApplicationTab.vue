@@ -117,7 +117,7 @@
           <div v-else-if="areaContext.length > 0">
             <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">전형요소</div>
 
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <div
               v-for="area in areaContext"
               :key="area.area_id"
@@ -135,118 +135,116 @@
                 >관리자 입력 고정</span>
               </div>
 
-              <div class="flex gap-4">
-                <!-- 입력 영역 -->
-                <div class="flex-1 min-w-0">
-                  <!-- NUMERIC -->
-                  <template v-if="area.calc_type === 'NUMERIC'">
-                    <input
-                      :value="areaValues[area.area_id] ?? ''"
-                      type="number"
-                      step="any"
-                      class="w-full border rounded px-2 py-1.5 text-sm"
-                      :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                      :disabled="!area.teacher_editable"
-                      :placeholder="area.teacher_editable ? '측정값 입력' : (area.current_values[0] ?? '데이터 없음')"
-                      @input="onNumericInput(area, $event.target.value)"
-                    />
-                  </template>
-
-                  <!-- CATEGORY 단일값 -->
-                  <template v-else-if="area.calc_type === 'CATEGORY' && !area.multi_value">
-                    <select
-                      :value="areaValues[area.area_id] ?? ''"
-                      class="w-full border rounded px-2 py-1.5 text-sm"
-                      :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                      :disabled="!area.teacher_editable"
-                      @change="onCategoryChange(area, $event.target.value)"
+              <!-- 점수표 (위) -->
+              <div
+                v-if="area.table && area.table.length > 0"
+                class="border rounded overflow-hidden text-xs max-h-40 overflow-y-auto mb-2"
+              >
+                <table class="w-full">
+                  <thead class="sticky top-0">
+                    <tr class="bg-gray-50 border-b">
+                      <th class="px-2 py-1 text-left text-gray-500 font-medium">
+                        {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
+                      </th>
+                      <th class="px-2 py-1 text-right text-gray-500 font-medium">점수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in area.table"
+                      :key="row.key"
+                      class="border-b last:border-b-0 transition-colors"
+                      :class="isHighlighted(area, row.key)
+                        ? 'bg-yellow-100 font-semibold text-yellow-900'
+                        : 'text-gray-600'"
                     >
-                      <option value="">선택하세요</option>
-                      <option v-for="row in area.table" :key="row.key" :value="row.key">{{ row.key }}</option>
-                    </select>
-                  </template>
+                      <td class="px-2 py-1">{{ row.key }}</td>
+                      <td class="px-2 py-1 text-right">{{ row.score }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-                  <!-- CATEGORY 복수값 -->
-                  <template v-else-if="area.calc_type === 'CATEGORY' && area.multi_value">
-                    <div class="space-y-1">
-                      <label
-                        v-for="row in area.table"
-                        :key="row.key"
-                        class="flex items-center gap-2 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          :value="row.key"
-                          :checked="(areaMultiValues[area.area_id] || []).includes(row.key)"
-                          :disabled="!area.teacher_editable"
-                          class="rounded"
-                          @change="onMultiValueChange(area, row.key, $event.target.checked)"
-                        />
-                        <span :class="area.teacher_editable ? 'text-gray-700' : 'text-gray-400'">
-                          {{ row.key }}
-                        </span>
-                      </label>
-                    </div>
-                  </template>
+              <!-- 입력 영역 (아래) -->
+              <div>
+                <!-- NUMERIC -->
+                <template v-if="area.calc_type === 'NUMERIC'">
+                  <input
+                    :value="areaValues[area.area_id] ?? ''"
+                    type="number"
+                    step="any"
+                    class="w-full border rounded px-2 py-1.5 text-sm"
+                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
+                    :disabled="!area.teacher_editable"
+                    :placeholder="area.teacher_editable ? '측정값 입력' : (area.current_values[0] ?? '데이터 없음')"
+                    @input="onNumericInput(area, $event.target.value)"
+                  />
+                </template>
 
-                  <!-- MANUAL -->
-                  <template v-else>
-                    <input
-                      :value="areaValues[area.area_id] ?? ''"
-                      type="number"
-                      step="any"
-                      class="w-full border rounded px-2 py-1.5 text-sm"
-                      :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                      :disabled="!area.teacher_editable"
-                      :placeholder="area.teacher_editable ? '점수 직접 입력' : (area.current_values[0] ?? '데이터 없음')"
-                      @input="onNumericInput(area, $event.target.value)"
-                    />
-                  </template>
+                <!-- CATEGORY 단일값 -->
+                <template v-else-if="area.calc_type === 'CATEGORY' && !area.multi_value">
+                  <select
+                    :value="areaValues[area.area_id] ?? ''"
+                    class="w-full border rounded px-2 py-1.5 text-sm"
+                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
+                    :disabled="!area.teacher_editable"
+                    @change="onCategoryChange(area, $event.target.value)"
+                  >
+                    <option value="">선택하세요</option>
+                    <option v-for="row in area.table" :key="row.key" :value="row.key">{{ row.key }}</option>
+                  </select>
+                </template>
 
-                  <!-- 점수 미리보기 -->
-                  <div v-if="area.teacher_editable && scorePreview[area.area_id]" class="mt-1.5 text-xs">
-                    <template v-if="scorePreview[area.area_id].error">
-                      <span class="text-red-500">{{ scorePreview[area.area_id].error }}</span>
-                    </template>
-                    <template v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined">
-                      <span class="text-blue-600 font-medium">
-                        예상 점수: {{ scorePreview[area.area_id].score }}점
+                <!-- CATEGORY 복수값 -->
+                <template v-else-if="area.calc_type === 'CATEGORY' && area.multi_value">
+                  <div class="space-y-1">
+                    <label
+                      v-for="row in area.table"
+                      :key="row.key"
+                      class="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        :value="row.key"
+                        :checked="(areaMultiValues[area.area_id] || []).includes(row.key)"
+                        :disabled="!area.teacher_editable"
+                        class="rounded"
+                        @change="onMultiValueChange(area, row.key, $event.target.checked)"
+                      />
+                      <span :class="area.teacher_editable ? 'text-gray-700' : 'text-gray-400'">
+                        {{ row.key }}
                       </span>
-                      <span v-if="scorePreview[area.area_id].warning" class="ml-2 text-amber-600">
-                        ⚠ {{ scorePreview[area.area_id].warning }}
-                      </span>
-                    </template>
+                    </label>
                   </div>
-                </div>
+                </template>
 
-                <!-- 점수표 (NUMERIC / CATEGORY) -->
-                <div
-                  v-if="area.table && area.table.length > 0"
-                  class="w-36 flex-shrink-0 border rounded overflow-hidden text-xs max-h-48 overflow-y-auto"
-                >
-                  <table class="w-full">
-                    <thead class="sticky top-0">
-                      <tr class="bg-gray-50 border-b">
-                        <th class="px-2 py-1 text-left text-gray-500 font-medium">
-                          {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
-                        </th>
-                        <th class="px-2 py-1 text-right text-gray-500 font-medium">점수</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="row in area.table"
-                        :key="row.key"
-                        class="border-b last:border-b-0 transition-colors"
-                        :class="isHighlighted(area, row.key)
-                          ? 'bg-yellow-100 font-semibold text-yellow-900'
-                          : 'text-gray-600'"
-                      >
-                        <td class="px-2 py-1">{{ row.key }}</td>
-                        <td class="px-2 py-1 text-right">{{ row.score }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <!-- MANUAL -->
+                <template v-else>
+                  <input
+                    :value="areaValues[area.area_id] ?? ''"
+                    type="number"
+                    step="any"
+                    class="w-full border rounded px-2 py-1.5 text-sm"
+                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
+                    :disabled="!area.teacher_editable"
+                    :placeholder="area.teacher_editable ? '점수 직접 입력' : (area.current_values[0] ?? '데이터 없음')"
+                    @input="onNumericInput(area, $event.target.value)"
+                  />
+                </template>
+
+                <!-- 점수 미리보기 -->
+                <div v-if="area.teacher_editable && scorePreview[area.area_id]" class="mt-1.5 text-xs">
+                  <template v-if="scorePreview[area.area_id].error">
+                    <span class="text-red-500">{{ scorePreview[area.area_id].error }}</span>
+                  </template>
+                  <template v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined">
+                    <span class="text-blue-600 font-medium">
+                      예상 점수: {{ scorePreview[area.area_id].score }}점
+                    </span>
+                    <span v-if="scorePreview[area.area_id].warning" class="ml-2 text-amber-600">
+                      ⚠ {{ scorePreview[area.area_id].warning }}
+                    </span>
+                  </template>
                 </div>
               </div>
             </div>
