@@ -156,6 +156,7 @@
               <!-- 점수표 (위) -->
               <div
                 v-if="area.table && area.table.length > 0"
+                :ref="el => setTableRef(el, area.area_id)"
                 class="border rounded overflow-hidden text-xs max-h-40 overflow-y-auto mb-2"
               >
                 <table class="w-full">
@@ -171,7 +172,8 @@
                     <tr
                       v-for="row in area.table"
                       :key="row.key"
-                      class="border-b last:border-b-0 transition-colors"
+                      :data-highlighted="isHighlighted(area, row.key) || null"
+                      class="border-b last:border-b-0 transition-colors duration-300"
                       :class="isHighlighted(area, row.key)
                         ? 'bg-yellow-100 font-semibold text-yellow-900'
                         : 'text-gray-600'"
@@ -275,7 +277,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import {
   getCurrentRound,
@@ -323,6 +325,26 @@ const areaContext     = ref([])
 
 // 입력 디바운스 타이머
 const previewTimers = {}
+
+// 점수표 컨테이너 ref (area_id → DOM element)
+const tableRefs = {}
+function setTableRef(el, areaId) {
+  if (el) tableRefs[areaId] = el
+  else delete tableRefs[areaId]
+}
+
+watch(scorePreview, () => {
+  nextTick(() => {
+    for (const areaId of Object.keys(tableRefs)) {
+      const container = tableRefs[areaId]
+      if (!container) continue
+      const highlighted = container.querySelector('[data-highlighted]')
+      if (highlighted) {
+        highlighted.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  })
+}, { deep: true })
 
 // ── Computed ──────────────────────────────────────────────────────
 const studentApps = computed(() =>
