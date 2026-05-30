@@ -163,6 +163,8 @@ fn build_router(state: AppState) -> Router {
         .route("/areas/:id/base-data/external/univ/import",    post(handlers::external_import::univ_import))
         .route("/universities", get(handlers::universities::list_universities))
         .route("/universities", post(handlers::universities::create_university))
+        .route("/universities/quota-stats", get(handlers::universities::get_quota_stats))
+        .route("/universities/quota-stats/export", get(handlers::universities::export_quota_stats))
         .route("/universities/:id", put(handlers::universities::update_university))
         .route("/universities/:id", delete(handlers::universities::delete_university))
         .route("/universities/:id/tracks", get(handlers::universities::list_tracks))
@@ -170,6 +172,7 @@ fn build_router(state: AppState) -> Router {
         .route("/univ-tracks", get(handlers::universities::list_all_tracks))
         .route("/univ-tracks/:id", put(handlers::universities::update_track))
         .route("/univ-tracks/:id", delete(handlers::universities::delete_track))
+        .route("/univ-tracks/:id/recommended-list", get(handlers::universities::get_track_recommended_list))
         // 5단계: 라운드 관리
         .route("/rounds", get(handlers::rounds::list_rounds))
         .route("/rounds/open", post(handlers::rounds::open_round))

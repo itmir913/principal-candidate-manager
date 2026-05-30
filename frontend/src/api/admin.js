@@ -186,3 +186,16 @@ export const changeAdminPassword = (currentPassword, newPassword) =>
 // ── 점수 미리보기 ──────────────────────────────────────────────
 export const scorePreview = (studentId, trackId) =>
   axios.get('/api/score-preview', { params: { student_id: studentId, track_id: trackId } }).then(r => r.data)
+
+// ── 잔여석 통계 ────────────────────────────────────────────────
+export const getQuotaStats = () =>
+  axios.get('/api/universities/quota-stats').then(r => r.data)
+
+export const exportQuotaStats = (univId) =>
+  axios.get('/api/universities/quota-stats/export', {
+    responseType: 'blob',
+    params: univId != null ? { univ_id: univId } : {},
+  })
+
+export const getTrackRecommendedList = (trackId) =>
+  axios.get(`/api/univ-tracks/${trackId}/recommended-list`).then(r => r.data)

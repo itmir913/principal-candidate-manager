@@ -206,9 +206,7 @@ async function loadGradeOptions() {
 }
 
 function saveBlob(response, fallback) {
-  const disposition = response.headers?.['content-disposition'] ?? ''
-  const match = disposition.match(/filename="?([^";]+)"?/i)
-  const filename = match ? match[1] : fallback
+  const filename = fallback
   const url = URL.createObjectURL(new Blob([response.data]))
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()

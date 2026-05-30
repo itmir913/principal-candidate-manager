@@ -345,7 +345,7 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
 
     for tid in track_ids {
         let prioritize: bool = sqlx::query_scalar(
-            "SELECT u.prioritize_enrolled
+            "SELECT (u.prioritize_enrolled = 1 OR ut.prioritize_enrolled = 1)
              FROM univ_tracks ut JOIN universities u ON ut.univ_id = u.id
              WHERE ut.id = ?",
         )
@@ -708,11 +708,15 @@ pub async fn recommend_result(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 1. Round status check (transaction 내에서)
     let status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(rid)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -720,13 +724,87 @@ pub async fn recommend_result(
         return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 확정이 가능합니다".into()));
     }
 
-    sqlx::query(
+    // 2. 모집단위 정원 정보 조회
+    #[derive(sqlx::FromRow)]
+    struct TrackInfo { unit_quota: Option<i64>, univ_id: i64 }
+    let track_info: TrackInfo = sqlx::query_as(
+        "SELECT unit_quota, univ_id FROM univ_tracks WHERE id = ?",
+    )
+    .bind(tid)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 3. 해당 모집단위의 전체 라운드 추천 확정 수 (포기 제외)
+    let track_used: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM results r
+         JOIN applications a ON a.student_id = r.student_id
+                             AND a.track_id  = r.track_id
+                             AND a.round_id  = r.round_id
+         WHERE r.track_id = ? AND r.recommended = 1 AND a.abandoned = 0",
+    )
+    .bind(tid)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some(uq) = track_info.unit_quota {
+        if track_used >= uq {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("모집단위 정원({}명)이 이미 찼습니다 (현재 추천 확정 {}명)", uq, track_used),
+            ));
+        }
+    }
+
+    // 4. 대학 전체 정원 조회
+    let total_quota: Option<i64> = sqlx::query_scalar(
+        "SELECT total_quota FROM universities WHERE id = ?",
+    )
+    .bind(track_info.univ_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some(tq) = total_quota {
+        // 5. 해당 대학 전체 모집단위의 전체 라운드 추천 확정 수 (포기 제외)
+        let univ_used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM results r
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
+             JOIN univ_tracks ut ON ut.id = r.track_id
+             WHERE ut.univ_id = ? AND r.recommended = 1 AND a.abandoned = 0",
+        )
+        .bind(track_info.univ_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if univ_used >= tq {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("대학 전체 정원({}명)이 이미 찼습니다 (현재 추천 확정 {}명)", tq, univ_used),
+            ));
+        }
+    }
+
+    // 6. 추천 확정
+    let affected = sqlx::query(
         "UPDATE results SET recommended = 1 WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid).bind(tid).bind(rid)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
+    if affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "결과 행을 찾을 수 없습니다 (점수 계산 후 시도하세요)".into()));
+    }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

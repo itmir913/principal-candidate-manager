@@ -1338,3 +1338,117 @@ fn result_row_valid_score_detail_serializes_correctly() {
     // score_detail은 Score 타입으로 역변환되어 표시값(÷100000)으로 직렬화됨
     assert!(json.contains("\"1\":3.0") || json.contains("\"1\": 3.0"));
 }
+
+// ── recommend_result: 정원 체크 ───────────────────────────────────
+
+/// setup_full과 동일하지만 unit_quota/total_quota를 파라미터로 받는 헬퍼
+async fn setup_with_quota(
+    pool: &sqlx::SqlitePool,
+    unit_quota: Option<i64>,
+    total_quota: Option<i64>,
+) -> (i64, i64, i64) {
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('SQ01', '테스트', 1, 1, 1, 1) RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('quota대', ?) RETURNING id",
+    ).bind(total_quota).fetch_one(pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '테스트학과', ?) RETURNING id",
+    ).bind(univ_id).bind(unit_quota).fetch_one(pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES ('CLOSED', '2025-01-01T00:00:00Z') RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 1, 0)",
+    ).bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 0, 1, 0, '2025-01-01T00:00:00Z')",
+    ).bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+    (sid, tid, rid)
+}
+
+/// 이미 추천 확정된 더미 학생을 n명 추가 삽입하는 헬퍼
+async fn insert_n_recommended(
+    pool: &sqlx::SqlitePool,
+    tid: i64,
+    rid: i64,
+    n: usize,
+) {
+    for i in 0..n {
+        let code = format!("DUMMY{:04}", i);
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES (?, '더미', 0, 2020) RETURNING id",
+        ).bind(&code).fetch_one(pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 1, 0)",
+        ).bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 0, NULL, 1, '2025-01-01T00:00:00Z')",
+        ).bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn recommend_returns_conflict_when_unit_quota_full() {
+    // 모집단위 정원(unit_quota=1)이 이미 찼을 때 → 409 CONFLICT
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_with_quota(&pool, Some(1), None).await;
+    insert_n_recommended(&pool, tid, rid, 1).await;
+
+    let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn recommend_returns_conflict_when_total_quota_full() {
+    // 대학 전체 정원(total_quota=1)이 이미 찼을 때 → 409 CONFLICT
+    let pool = common::create_test_pool().await;
+    // unit_quota=None(무제한), total_quota=1
+    let (sid, tid, rid) = setup_with_quota(&pool, None, Some(1)).await;
+    insert_n_recommended(&pool, tid, rid, 1).await;
+
+    let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn recommend_succeeds_when_within_quota() {
+    // unit_quota=2, total_quota=3, 현재 1명 추천 확정 → 추가 추천 가능
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_with_quota(&pool, Some(2), Some(3)).await;
+    insert_n_recommended(&pool, tid, rid, 1).await;
+
+    let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn recommend_abandoned_student_does_not_count_toward_quota() {
+    // 포기(abandoned=1)한 추천 확정 학생은 잔여석에서 제외(자리 반환)
+    // unit_quota=1, 포기 1명이 있으면 잔여석=1 → 새 추천 가능
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_with_quota(&pool, Some(1), None).await;
+
+    // 포기 학생(recommended=1, abandoned=1) 추가
+    let abnd_sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES ('ABND0001', '포기자', 0, 2020) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 1, 1)",
+    ).bind(abnd_sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 0, NULL, 1, '2025-01-01T00:00:00Z')",
+    ).bind(abnd_sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    // 포기자가 있어도 unit_quota=1 자리 남아 있음 → 추천 성공 기대
+    let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap(), StatusCode::NO_CONTENT);
+}

@@ -1,12 +1,15 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Response,
     Json,
 };
+use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
+use std::collections::HashMap;
 
-use crate::state::AppState;
+use crate::{excel, state::AppState};
 
 type ApiError = (StatusCode, String);
 
@@ -247,4 +250,262 @@ pub async fn delete_track(
         .bind(id).execute(&state.db).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ── 잔여석 통계 ──────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct RoundCount {
+    pub round_id: i64,
+    pub count: i64,
+}
+
+#[derive(Serialize)]
+pub struct TrackStat {
+    pub track_id: i64,
+    pub track_name: String,
+    pub unit_quota: Option<i64>,
+    pub unit_used: i64,
+    pub by_round: Vec<RoundCount>,
+}
+
+#[derive(Serialize)]
+pub struct UnivStat {
+    pub univ_id: i64,
+    pub univ_name: String,
+    pub total_quota: Option<i64>,
+    pub total_used: i64,
+    pub tracks: Vec<TrackStat>,
+}
+
+#[derive(Serialize)]
+pub struct QuotaStatsResponse {
+    pub all_round_ids: Vec<i64>,
+    pub univs: Vec<UnivStat>,
+}
+
+async fn fetch_quota_stats(db: &sqlx::SqlitePool) -> Result<QuotaStatsResponse, String> {
+    #[derive(sqlx::FromRow)]
+    struct UnivBasic { id: i64, univ_name: String, total_quota: Option<i64> }
+    let univs_basic: Vec<UnivBasic> = sqlx::query_as(
+        "SELECT id, univ_name, total_quota FROM universities ORDER BY univ_name",
+    )
+    .fetch_all(db).await.map_err(|e| e.to_string())?;
+
+    #[derive(sqlx::FromRow)]
+    struct TrackStatRow { id: i64, univ_id: i64, track_name: String, unit_quota: Option<i64>, unit_used: i64 }
+    let track_rows: Vec<TrackStatRow> = sqlx::query_as(
+        "SELECT ut.id, ut.univ_id, ut.track_name, ut.unit_quota,
+                (SELECT COUNT(*) FROM results r
+                 JOIN applications a ON a.student_id = r.student_id
+                                    AND a.track_id  = r.track_id
+                                    AND a.round_id  = r.round_id
+                 WHERE r.track_id = ut.id AND r.recommended = 1 AND a.abandoned = 0
+                ) AS unit_used
+         FROM univ_tracks ut
+         ORDER BY ut.univ_id, ut.track_name",
+    )
+    .fetch_all(db).await.map_err(|e| e.to_string())?;
+
+    #[derive(sqlx::FromRow)]
+    struct RoundRow { track_id: i64, round_id: i64, count: i64 }
+    let round_rows: Vec<RoundRow> = sqlx::query_as(
+        "SELECT r.track_id, r.round_id, COUNT(*) AS count
+         FROM results r
+         JOIN applications a ON a.student_id = r.student_id
+                             AND a.track_id  = r.track_id
+                             AND a.round_id  = r.round_id
+         WHERE r.recommended = 1 AND a.abandoned = 0
+         GROUP BY r.track_id, r.round_id
+         ORDER BY r.track_id, r.round_id",
+    )
+    .fetch_all(db).await.map_err(|e| e.to_string())?;
+
+    let mut all_round_ids: Vec<i64> = round_rows.iter().map(|r| r.round_id).collect();
+    all_round_ids.sort_unstable();
+    all_round_ids.dedup();
+
+    // track_id → Vec<RoundCount>
+    let mut by_round_map: HashMap<i64, Vec<RoundCount>> = HashMap::new();
+    for row in round_rows {
+        by_round_map.entry(row.track_id).or_default().push(RoundCount {
+            round_id: row.round_id,
+            count: row.count,
+        });
+    }
+
+    // univ_id → Vec<TrackStat>
+    let mut univ_track_map: HashMap<i64, Vec<TrackStat>> = HashMap::new();
+    for row in track_rows {
+        let by_round = by_round_map.remove(&row.id).unwrap_or_default();
+        univ_track_map.entry(row.univ_id).or_default().push(TrackStat {
+            track_id: row.id,
+            track_name: row.track_name,
+            unit_quota: row.unit_quota,
+            unit_used: row.unit_used,
+            by_round,
+        });
+    }
+
+    let mut univs: Vec<UnivStat> = Vec::new();
+    for u in univs_basic {
+        let tracks = univ_track_map.remove(&u.id).unwrap_or_default();
+        let total_used: i64 = tracks.iter().map(|t| t.unit_used).sum();
+        univs.push(UnivStat {
+            univ_id: u.id,
+            univ_name: u.univ_name,
+            total_quota: u.total_quota,
+            total_used,
+            tracks,
+        });
+    }
+
+    Ok(QuotaStatsResponse { all_round_ids, univs })
+}
+
+/// GET /api/universities/quota-stats
+pub async fn get_quota_stats(
+    State(state): State<AppState>,
+) -> Result<Json<QuotaStatsResponse>, ApiError> {
+    let stats = fetch_quota_stats(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(stats))
+}
+
+/// GET /api/universities/quota-stats/export?univ_id=X
+/// univ_id 지정 시 해당 대학만, 미지정 시 전체 내보내기
+#[derive(Deserialize)]
+pub struct ExportQuotaQuery {
+    pub univ_id: Option<i64>,
+}
+
+pub async fn export_quota_stats(
+    State(state): State<AppState>,
+    Query(q): Query<ExportQuotaQuery>,
+) -> Result<Response, ApiError> {
+    let stats = fetch_quota_stats(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let filtered: Vec<&UnivStat> = if let Some(uid) = q.univ_id {
+        stats.univs.iter().filter(|u| u.univ_id == uid).collect()
+    } else {
+        stats.univs.iter().collect()
+    };
+
+    let filename = if let Some(_uid) = q.univ_id {
+        let univ_name = filtered.first()
+            .map(|u| {
+                u.univ_name.chars()
+                    .map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c })
+                    .collect::<String>()
+            })
+            .unwrap_or_else(|| "대학".to_string());
+        format!("{}_추천현황_{}.xlsx", univ_name, excel::now_tag())
+    } else {
+        format!("전체_추천현황_{}.xlsx", excel::now_tag())
+    };
+
+    let round_labels: Vec<String> = stats.all_round_ids.iter().enumerate()
+        .map(|(i, _)| format!("{}차 추천", i + 1))
+        .collect();
+
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet()
+        .set_name("추천현황")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let fixed = ["대학명", "모집단위", "모집단위 정원", "추천인원", "잔여인원",
+                 "대학 전체 정원", "대학 추천인원", "대학 잔여인원"];
+    let mut col = 0u16;
+    for h in &fixed { ws.write_string(0, col, *h).ok(); col += 1; }
+    for label in &round_labels { ws.write_string(0, col, label).ok(); col += 1; }
+
+    let mut row = 1u32;
+    for u in &filtered {
+        for t in &u.tracks {
+            let mut col = 0u16;
+            ws.write_string(row, col, &u.univ_name).ok(); col += 1;
+            ws.write_string(row, col, &t.track_name).ok(); col += 1;
+
+            match t.unit_quota {
+                Some(q) => { ws.write_number(row, col, q as f64).ok(); }
+                None    => { ws.write_string(row, col, "무제한").ok(); }
+            }
+            col += 1;
+            ws.write_number(row, col, t.unit_used as f64).ok(); col += 1;
+            match t.unit_quota {
+                Some(q) => { ws.write_number(row, col, (q - t.unit_used).max(0) as f64).ok(); }
+                None    => { ws.write_string(row, col, "무제한").ok(); }
+            }
+            col += 1;
+
+            match u.total_quota {
+                Some(q) => { ws.write_number(row, col, q as f64).ok(); }
+                None    => { ws.write_string(row, col, "무제한").ok(); }
+            }
+            col += 1;
+            ws.write_number(row, col, u.total_used as f64).ok(); col += 1;
+            match u.total_quota {
+                Some(q) => { ws.write_number(row, col, (q - u.total_used).max(0) as f64).ok(); }
+                None    => { ws.write_string(row, col, "무제한").ok(); }
+            }
+            col += 1;
+
+            let by_round_lookup: HashMap<i64, i64> = t.by_round.iter()
+                .map(|r| (r.round_id, r.count)).collect();
+            for rid in &stats.all_round_ids {
+                let cnt = by_round_lookup.get(rid).copied().unwrap_or(0);
+                ws.write_number(row, col, cnt as f64).ok();
+                col += 1;
+            }
+
+            row += 1;
+        }
+    }
+
+    let buf = wb.save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, &filename))
+}
+
+// ── 모집단위 추천 확정 학생 목록 ─────────────────────────────────
+
+#[derive(Serialize, FromRow)]
+pub struct RecommendedEntry {
+    pub round_id: i64,
+    pub student_id: i64,
+    pub student_code: String,
+    pub name: String,
+    pub grade: Option<i64>,
+    pub class_no: Option<i64>,
+    pub seq_no: Option<i64>,
+    pub is_enrolled: bool,
+    pub abandoned: bool,
+    pub ranking: Option<i64>,
+}
+
+/// GET /api/univ-tracks/:id/recommended-list
+pub async fn get_track_recommended_list(
+    State(state): State<AppState>,
+    Path(track_id): Path<i64>,
+) -> Result<Json<Vec<RecommendedEntry>>, ApiError> {
+    let rows = sqlx::query_as::<_, RecommendedEntry>(
+        "SELECT r.round_id, r.student_id, s.student_code, s.name,
+                s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                a.abandoned, r.ranking
+         FROM results r
+         JOIN students s ON s.id = r.student_id
+         JOIN applications a ON a.student_id = r.student_id
+                             AND a.track_id  = r.track_id
+                             AND a.round_id  = r.round_id
+         WHERE r.track_id = ? AND r.recommended = 1
+         ORDER BY r.round_id, r.ranking NULLS LAST, s.name",
+    )
+    .bind(track_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(rows))
 }

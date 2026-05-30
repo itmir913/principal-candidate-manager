@@ -211,7 +211,7 @@
                   >{{ area.name }}</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">추천</th>
-                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">포기</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">포기처리</th>
                 </tr>
               </thead>
               <tbody>
