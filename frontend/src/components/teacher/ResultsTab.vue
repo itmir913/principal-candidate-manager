@@ -24,8 +24,12 @@
       </div>
 
       <!-- 진행중/집계중 라운드 -->
-      <div v-if="round.status !== 'FINALIZED'" class="px-4 py-8 text-center text-sm text-gray-400">
+      <div v-if="round.status === 'OPEN'" class="px-4 py-8 text-center text-sm text-gray-400">
         현재 진행중인 라운드입니다.
+      </div>
+
+      <div v-else-if="round.status === 'CLOSED'" class="px-4 py-8 text-center text-sm text-gray-400">
+        현재 집계중인 라운드입니다.
       </div>
 
       <!-- FINALIZED 라운드 결과 -->

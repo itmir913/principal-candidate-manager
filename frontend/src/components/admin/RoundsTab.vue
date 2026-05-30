@@ -108,7 +108,8 @@
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">학생 이름</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">재학생 여부</th>
                   <th class="text-left px-3 py-2 text-xs text-gray-500 font-medium">지원 학과</th>
-                  <th class="px-3 py-2 text-xs text-gray-500 font-medium">포기처리</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-24">추천</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-24">포기처리</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
                 </tr>
               </thead>
@@ -126,13 +127,19 @@
                   </td>
                   <td class="px-3 py-2 text-gray-600">{{ app.department_name }}</td>
                   <td class="px-3 py-2 text-center">
+                    <span v-if="app.abandoned" class="text-xs text-gray-300">-</span>
+                    <span v-else-if="selected.status === 'FINALIZED' && app.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
+                    <span v-else-if="selected.status === 'FINALIZED' && !app.recommended" class="text-xs text-red-400 font-semibold">추천 제외</span>
+                    <span v-else class="text-xs text-gray-300">-</span>
+                  </td>
+                  <td class="px-3 py-2 text-center">
                     <span v-if="app.abandoned" class="text-xs text-red-500 font-semibold">포기됨</span>
                     <button
-                      v-else-if="selected.status === 'FINALIZED'"
-                      class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
+                      v-else-if="selected.status === 'FINALIZED' && app.recommended"
+                      class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50 whitespace-nowrap"
                       @click="handleAbandon(app)"
                     >포기하기</button>
-                    <span v-else class="text-xs text-gray-600 font-semibold">-</span>
+                    <span v-else class="text-xs text-gray-300">-</span>
                   </td>
                   <td class="px-3 py-2 text-right font-semibold text-gray-700">
                     {{ appTotalScore(app) }}
@@ -199,6 +206,7 @@
                   >{{ area.name }}</th>
                   <th class="text-right px-3 py-2 text-xs text-gray-500 font-medium">총점</th>
                   <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">추천</th>
+                  <th class="px-3 py-2 text-xs text-gray-500 font-medium w-20">포기</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,8 +249,16 @@
                       class="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
                       @click="handleRecommend(r)"
                     >추천 확정</button>
-                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-gray-400 font-semibold">추천 제외</span>
+                    <span v-else-if="selected.status === 'FINALIZED'" class="text-xs text-red-500 font-semibold">추천 제외</span>
                     <span v-else class="text-xs text-gray-600 font-semibold">-</span>
+                  </td>
+                  <td class="px-3 py-2 text-center">
+                    <button
+                      v-if="r.recommended && !r.abandoned && selected.status === 'FINALIZED'"
+                      class="text-xs px-2 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50 whitespace-nowrap"
+                      @click="handleAbandon(r)"
+                    >포기하기</button>
+                    <span v-else class="text-xs text-gray-300">-</span>
                   </td>
                 </tr>
               </tbody>
@@ -442,7 +458,7 @@ async function handleAbandon(app) {
   if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까? 한 번 포기하면 다시 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 재지원해야 합니다.`)) return
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
-    await loadApps()
+    await Promise.all([loadApps(), loadResults()])
   } catch (e) {
     alert(e.response?.data || e.message)
   }
