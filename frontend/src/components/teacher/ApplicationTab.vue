@@ -1,9 +1,5 @@
 <template>
-  <div v-if="!currentRound" class="text-center text-gray-400 py-12 text-sm">
-    열린 라운드가 없어 지원 등록을 할 수 없습니다.
-  </div>
-
-  <div v-else class="flex gap-4" style="height: calc(100vh - 210px)">
+  <div class="flex gap-4" style="height: calc(100vh - 210px)">
     <!-- ── 좌측: 학생 목록 ── -->
     <div class="w-52 flex-shrink-0 bg-white border rounded-lg flex flex-col overflow-hidden">
       <div class="px-3 py-2 border-b bg-gray-50 text-xs font-semibold text-gray-600">
