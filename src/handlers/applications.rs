@@ -384,26 +384,13 @@ pub async fn teacher_create_application(
         });
     }
 
-    // 5. 트랜잭션: 지원 upsert + 기초데이터 저장 + 점수 계산 + results 저장
+    // 5. 트랜잭션: 기초데이터 저장 → 지원 upsert → 점수 계산 → results 저장
+    //    base_data를 먼저 저장해야 calc_area_score가 새로 입력한 값을 읽을 수 있다.
     let mut tx = state
         .db
         .begin()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name)
-         VALUES (?, ?, ?, 1, 0, ?)
-         ON CONFLICT(student_id, track_id, round_id)
-         DO UPDATE SET department_name = excluded.department_name",
-    )
-    .bind(body.student_id)
-    .bind(body.track_id)
-    .bind(body.round_id)
-    .bind(&body.department_name)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for entry in &encoded {
         if entry.multi_value {
@@ -450,6 +437,20 @@ pub async fn teacher_create_application(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
     }
+
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name)
+         VALUES (?, ?, ?, 1, 0, ?)
+         ON CONFLICT(student_id, track_id, round_id)
+         DO UPDATE SET department_name = excluded.department_name",
+    )
+    .bind(body.student_id)
+    .bind(body.track_id)
+    .bind(body.round_id)
+    .bind(&body.department_name)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // 점수 계산을 위해 DB 데이터 로드 (트랜잭션 내에서)
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
