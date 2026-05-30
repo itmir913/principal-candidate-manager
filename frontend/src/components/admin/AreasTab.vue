@@ -783,21 +783,15 @@ const ImportResultBox = defineComponent({
       const r = props.result
       const hasErrors = r.errors?.length > 0
       const hasWarnings = r.warnings?.length > 0
-      const borderCls = hasErrors
-        ? 'border-yellow-400 bg-yellow-50'
-        : hasWarnings ? 'border-amber-300 bg-amber-50' : 'border-green-400 bg-green-50'
+      const borderCls = hasErrors ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'
       const countStr = r.rows != null ? `${r.rows}건` : r.inserted != null ? `신규 ${r.inserted}명, 수정 ${r.updated}명` : ''
       return h('div', {
         class: `p-3 rounded border text-sm ${borderCls}`,
       }, [
         h('p', { class: 'font-medium mb-1' },
-          hasErrors
-            ? '오류 발생 — 가져오기 실패'
-            : hasWarnings
-              ? `완료 — ${countStr} 처리됨 (주의사항 있음)`
-              : `완료 — ${countStr} 처리됨`),
+          hasErrors ? '오류 발생 — 가져오기 실패' : `완료 — ${countStr} 처리됨`),
         hasWarnings
-          ? h('ul', { class: 'list-disc list-inside text-amber-700 text-xs mb-1' },
+          ? h('ul', { class: 'list-disc list-inside text-green-700 text-xs mb-1' },
               r.warnings.map((w, i) => h('li', { key: i }, w)))
           : null,
         hasErrors
