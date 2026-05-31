@@ -55,8 +55,7 @@
 
       <!-- ── 우측: 라운드 상세 ──────────────────────────────────── -->
       <div class="flex-1 min-w-0">
-        <div v-if="!selected" class="flex items-center justify-center rounded-xl"
-          style="height: 240px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        <div v-if="!selected" class="flex items-center justify-center" style="height: 240px;">
           <p class="text-base" style="color: #94a3b8;">라운드를 선택하거나 새 라운드를 열어주세요</p>
         </div>
 
