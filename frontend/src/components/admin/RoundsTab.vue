@@ -18,7 +18,7 @@
             style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
             :disabled="hasOpenRound || loading"
             @click="handleOpenRound"
-          >+ 열기</button>
+          >+ 라운드 열기</button>
         </div>
 
         <div class="flex flex-col gap-2">
@@ -35,7 +35,8 @@
             <!-- 클릭 영역 -->
             <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectRound(r)">
               <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ r.id }}차 라운드</p>
-              <div class="mt-1.5">
+
+              <div class="mt-1.5 flex items-center justify-start gap-2">
                 <span
                   class="text-base font-medium"
                   style="padding: 2px 10px; border-radius: 999px; white-space: nowrap;"
@@ -43,7 +44,16 @@
                     background: r.status === 'OPEN' ? '#dcfce7' : r.status === 'CLOSED' ? '#dbeafe' : '#f3e8ff',
                     color:      r.status === 'OPEN' ? '#15803d' : r.status === 'CLOSED' ? '#1d4ed8' : '#7c3aed',
                   }"
-                >{{ { OPEN: '진행 중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}</span>
+                >
+                  {{ { OPEN: '진행 중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}
+                </span>
+
+                <span class="text-base" style="color: #94a3b8;">
+                  <template v-if="r.status === 'OPEN'">{{ fmtDt(r.opened_at) }}</template>
+                  <template v-else-if="r.status === 'CLOSED'">{{ fmtDt(r.closed_at) }}</template>
+                  <template v-else-if="r.status === 'FINALIZED'">{{ fmtDt(r.finalized_at) }}</template>
+                </span>
+
               </div>
             </div>
           </div>
