@@ -188,6 +188,9 @@ CREATE INDEX IF NOT EXISTS idx_base_data_student
 -- ================================================================
 -- APPLICATIONS
 -- confirmed + abandoned: 독립 생명주기, 동시 1 허용
+-- confirmed: 원래는 "담임이 자기 반 학생 전원 입력을 완료했음을 확정"하는 용도로 설계됐으나,
+--            현재 시스템은 제출 행위 자체가 곧 확정이므로 항상 1로 삽입됨.
+--            임시저장→확정 제출 흐름이 추가될 경우 이 필드를 활성화할 것.
 -- ================================================================
 CREATE TABLE IF NOT EXISTS applications (
     student_id      INTEGER NOT NULL REFERENCES students(id),
