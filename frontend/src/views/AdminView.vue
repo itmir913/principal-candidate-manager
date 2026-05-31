@@ -1,86 +1,222 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <!-- 헤더 -->
-    <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
-      <h1 class="text-xl font-bold text-gray-800">학교장 추천자 선발 관리 시스템</h1>
-      <div class="flex items-center gap-2">
-        <button
-          class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
-          @click="showPwModal = true"
-        >비밀번호 변경</button>
-        <button
-          class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
-          @click="logout"
-        >로그아웃</button>
-      </div>
-    </header>
+  <div class="flex h-screen overflow-hidden" style="background: #eeecea;">
 
-    <!-- 탭 -->
-    <nav class="bg-white border-b px-6 flex gap-0">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="px-5 py-3 text-sm font-medium border-b-2 transition-colors"
-        :class="active === tab.key
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-gray-500 hover:text-gray-700'"
-        @click="active = tab.key"
+    <!-- 사이드바 -->
+    <aside
+      class="flex flex-col flex-shrink-0 bg-white overflow-hidden"
+      :style="{
+        width: collapsed ? '64px' : '240px',
+        borderRight: '1px solid #d4d0cc',
+        transition: 'width 0.2s ease',
+      }"
+    >
+      <!-- 로고 + 접기 버튼 -->
+      <div
+        class="flex items-center flex-shrink-0"
+        :style="{
+          height: '60px',
+          borderBottom: '1px solid #f1f5f9',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          padding: collapsed ? '0' : '0 14px 0 16px',
+        }"
       >
-        {{ tab.label }}
-      </button>
-    </nav>
+        <span v-if="!collapsed" class="text-base font-bold whitespace-nowrap" style="color: #1e293b;">
+          학교장추천 선발 시스템
+        </span>
+        <button
+          @click="collapsed = !collapsed"
+          class="flex items-center justify-center p-1.5 rounded-md"
+          style="background: none; border: none; cursor: pointer; color: #94a3b8;"
+        >
+          <ChevronRight v-if="collapsed" :size="18" />
+          <Menu v-else :size="18" />
+        </button>
+      </div>
 
-    <!-- 탭 컨텐츠 -->
-    <main class="p-6">
-      <Suspense>
+      <!-- 메뉴 내비게이션 -->
+      <nav class="flex-1 overflow-y-auto" style="padding: 10px 8px; display: flex; flex-direction: column; gap: 2px;">
+        <!-- 주 메뉴 -->
+        <button
+          v-for="item in mainMenus"
+          :key="item.key"
+          @click="active = item.key"
+          :title="item.label"
+          class="w-full rounded-lg text-base transition-all duration-150"
+          :style="{
+            display: 'flex',
+            alignItems: 'center',
+            gap: collapsed ? '0' : '12px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '10px 0' : '10px 14px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: active === item.key ? '600' : '400',
+            color: active === item.key ? '#1d4ed8' : '#64748b',
+            background: active === item.key ? '#eff6ff' : 'transparent',
+          }"
+        >
+          <span class="relative flex-shrink-0 flex">
+            <component :is="item.icon" :size="20" />
+          </span>
+          <span v-if="!collapsed" class="whitespace-nowrap">{{ item.label }}</span>
+        </button>
+
+        <div style="margin: 8px 0; border-top: 1px solid #f1f5f9;" />
+
+        <!-- 하단 서브 메뉴 -->
+        <button
+          v-for="item in subMenus"
+          :key="item.key"
+          @click="active = item.key"
+          :title="item.label"
+          class="w-full rounded-lg text-base transition-all duration-150"
+          :style="{
+            display: 'flex',
+            alignItems: 'center',
+            gap: collapsed ? '0' : '12px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '10px 0' : '10px 14px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: active === item.key ? '600' : '400',
+            color: active === item.key ? '#1d4ed8' : '#64748b',
+            background: active === item.key ? '#eff6ff' : 'transparent',
+          }"
+        >
+          <span class="relative flex-shrink-0 flex">
+            <component :is="item.icon" :size="20" />
+            <span
+              v-if="item.badge"
+              class="absolute rounded-full"
+              style="top: -3px; right: -3px; width: 7px; height: 7px; background: #ef4444; border: 1.5px solid white;"
+            />
+          </span>
+          <template v-if="!collapsed">
+            <span class="whitespace-nowrap">{{ item.label }}</span>
+            <span
+              v-if="item.badge"
+              class="ml-auto text-base font-bold"
+              style="color: #dc2626; background: #fee2e2; padding: 2px 8px; border-radius: 999px; font-size: 11px;"
+            >NEW</span>
+          </template>
+        </button>
+      </nav>
+
+      <!-- 하단 사용자 카드 -->
+      <div :style="{ padding: collapsed ? '10px 8px' : '10px', flexShrink: 0, borderTop: '1px solid #e8e5e2' }">
+        <!-- 접힘: 아바타 -->
+        <div v-if="collapsed" class="flex justify-center items-center" style="padding: 6px 0;">
+          <div
+            class="flex items-center justify-center rounded-full font-bold"
+            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 14px;"
+          >관</div>
+        </div>
+        <!-- 펼침: 정보 카드 -->
+        <div
+          v-else
+          style="background: #f5f3f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;"
+        >
+          <!-- 라운드 상태 -->
+          <div class="flex items-center gap-2 pb-2" style="border-bottom: 1px solid #e8e5e2;">
+            <div
+              class="rounded-full flex-shrink-0"
+              :style="{ width: '8px', height: '8px', background: currentRound ? '#22c55e' : '#94a3b8' }"
+            />
+            <span
+              class="text-base font-medium whitespace-nowrap"
+              :style="{ color: currentRound ? '#15803d' : '#64748b' }"
+            >
+              {{ currentRound ? `${currentRound.id}차 라운드 진행 중` : '진행 중인 라운드 없음' }}
+            </span>
+          </div>
+          <!-- 사용자 정보 -->
+          <div>
+            <p class="text-base font-semibold whitespace-nowrap" style="margin: 0; color: #1e293b;">관리자</p>
+            <p class="text-base whitespace-nowrap" style="margin: 2px 0 0; color: #94a3b8;">시스템 관리자</p>
+          </div>
+          <!-- 액션 버튼 -->
+          <div class="flex gap-3">
+            <button
+              @click="showPwModal = true"
+              class="flex items-center gap-1 text-base"
+              style="background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0;"
+            >
+              <KeyRound :size="14" /> 비번변경
+            </button>
+            <button
+              @click="logout"
+              class="flex items-center gap-1 text-base"
+              style="background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0;"
+            >
+              <LogOut :size="14" /> 로그아웃
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 메인 콘텐츠 -->
+    <main
+        class="flex-1 overflow-y-auto"
+        style="scrollbar-gutter: stable;"
+    >
+      <Suspense v-if="currentTab">
         <component :is="currentTab" />
       </Suspense>
+      <div v-else class="flex items-center justify-center" style="height: 320px;">
+        <p class="text-base" style="color: #94a3b8;">{{ currentMenuItem?.label ?? '' }} 탭 준비 중</p>
+      </div>
     </main>
 
     <!-- 비밀번호 변경 모달 -->
-    <div v-if="showPwModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl p-6 w-80">
-        <h2 class="text-base font-semibold text-gray-800 mb-4">관리자 비밀번호 변경</h2>
-        <div class="space-y-3 mb-4">
+    <div v-if="showPwModal" class="fixed inset-0 flex items-center justify-center z-50" style="background: rgba(0,0,0,0.35);">
+      <div class="bg-white" style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); padding: 1.75rem; width: 340px;">
+        <h2 class="text-lg font-semibold mb-5" style="color: #1e293b;">관리자 비밀번호 변경</h2>
+        <div class="space-y-4 mb-5">
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">현재 비밀번호</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">현재 비밀번호</label>
             <input
               v-model="currentPw"
               type="password"
               autocomplete="current-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
             />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">새 비밀번호</label>
             <input
               v-model="newPw"
               type="password"
               autocomplete="new-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
             />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호 재입력</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">새 비밀번호 재입력</label>
             <input
               v-model="confirmPw"
               type="password"
               autocomplete="new-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
               @keyup.enter="changePw"
             />
           </div>
         </div>
-        <p v-if="pwError" class="text-xs text-red-500 mb-3">{{ pwError }}</p>
+        <p v-if="pwError" class="text-base text-red-500 mb-3">{{ pwError }}</p>
         <div class="flex gap-2 justify-end">
           <button
-            class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
             @click="closePwModal"
+            class="text-base"
+            style="padding: 10px 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; cursor: pointer; color: #64748b;"
           >취소</button>
           <button
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
             :disabled="!currentPw || !newPw || !confirmPw || pwLoading"
             @click="changePw"
+            class="text-base font-semibold disabled:opacity-40"
+            style="padding: 10px 20px; border-radius: 8px; border: none; background: #2563eb; cursor: pointer; color: white;"
           >{{ pwLoading ? '변경 중...' : '변경' }}</button>
         </div>
       </div>
@@ -89,37 +225,70 @@
 </template>
 
 <script setup>
-import { ref, computed, defineAsyncComponent } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
-import { changeAdminPassword } from '../api/admin.js'
+import { changeAdminPassword, getCurrentRound } from '../api/admin.js'
+import {
+  Home, Trophy, LayoutGrid, Users, SlidersHorizontal,
+  Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu,
+} from 'lucide-vue-next'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const tabs = [
-  { key: 'rounds',   label: '라운드 관리' },
-  { key: 'classes',  label: '학급 관리' },
-  { key: 'students', label: '학생 관리' },
-  { key: 'areas',    label: '전형요소 설정' },
-  { key: 'univs',    label: '대학 설정' },
-]
-const active = ref('rounds')
-
+// ── 탭 컴포넌트 ──────────────────────────────────────────────
 const RoundsTab   = defineAsyncComponent(() => import('../components/admin/RoundsTab.vue'))
 const ClassesTab  = defineAsyncComponent(() => import('../components/admin/ClassesTab.vue'))
 const StudentsTab = defineAsyncComponent(() => import('../components/admin/StudentsTab.vue'))
 const AreasTab    = defineAsyncComponent(() => import('../components/admin/AreasTab.vue'))
 const UnivTab     = defineAsyncComponent(() => import('../components/admin/UniversitiesTab.vue'))
 
+// ── 메뉴 정의 ────────────────────────────────────────────────
+const mainMenus = [
+  { key: 'home',     label: '개요',          icon: Home },
+  { key: 'rounds',   label: '라운드 관리',   icon: Trophy },
+  { key: 'classes',  label: '학급 관리',     icon: LayoutGrid },
+  { key: 'students', label: '학생 관리',     icon: Users },
+  { key: 'areas',    label: '전형요소 설정', icon: SlidersHorizontal },
+  { key: 'univs',    label: '대학 설정',     icon: Building2 },
+]
+
+const subMenus = [
+  { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false },
+  { key: 'update',  label: '업데이트', icon: RefreshCw, badge: true  },
+]
+
+const allMenus = [...mainMenus, ...subMenus]
+
+// ── 활성 탭 ──────────────────────────────────────────────────
+const active = ref('rounds')
+
 const currentTab = computed(() => {
   if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'classes')  return ClassesTab
   if (active.value === 'students') return StudentsTab
   if (active.value === 'areas')    return AreasTab
-  return UnivTab
+  if (active.value === 'univs')    return UnivTab
+  return null
 })
 
+const currentMenuItem = computed(() => allMenus.find(m => m.key === active.value))
+
+// ── 사이드바 접기 ─────────────────────────────────────────────
+const collapsed = ref(false)
+
+// ── 현재 라운드 ───────────────────────────────────────────────
+const currentRound = ref(null)
+onMounted(async () => {
+  try {
+    currentRound.value = await getCurrentRound()
+  } catch {
+    currentRound.value = null
+  }
+})
+
+// ── 비밀번호 변경 ─────────────────────────────────────────────
 const showPwModal = ref(false)
 const currentPw = ref('')
 const newPw = ref('')

@@ -1,148 +1,175 @@
 <template>
-  <div>
-    <h2 class="text-lg font-semibold text-gray-700 mb-4">학생 명단 관리</h2>
+  <div style="padding: 2rem 2.5rem;">
 
-    <!-- 가져오기/내보내기 패널 -->
-    <div class="mb-4 space-y-1">
-      <div class="flex flex-wrap gap-2 items-center">
-        <label class="flex items-center gap-1 text-sm cursor-pointer">
-          <input type="radio" v-model="studentType" value="enrolled" />
+    <!-- 페이지 헤더 -->
+    <div class="flex items-end justify-between flex-wrap gap-3 mb-5">
+      <div>
+        <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
+        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">학생 명단 관리</h1>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- 재학생/졸업생 라디오 -->
+        <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+          <input type="radio" v-model="studentType" value="enrolled" class="accent-blue-600" />
           재학생
         </label>
-        <label class="flex items-center gap-1 text-sm cursor-pointer">
-          <input type="radio" v-model="studentType" value="graduated" />
+        <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+          <input type="radio" v-model="studentType" value="graduated" class="accent-blue-600" />
           졸업생
         </label>
-
+        <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
+          style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
           :disabled="downloading"
           @click="dlTemplate"
         >양식 다운로드</button>
-
         <label
-          class="px-2.5 py-1 text-white text-xs rounded cursor-pointer"
-          :class="uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'"
+          class="flex items-center gap-1.5 text-base font-medium rounded-lg cursor-pointer"
+          :class="uploading ? 'opacity-60' : ''"
+          style="padding: 9px 16px; background: #2563eb; color: white;"
         >
-          불러오기
+          {{ uploading ? '가져오는 중…' : '가져오기' }}
           <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onImport" />
         </label>
-
-        <span class="text-gray-300 select-none">|</span>
-
+        <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
-          class="px-2.5 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-40"
+          class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
+          style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
           :disabled="downloading"
           @click="dlAll"
         >전체 목록 다운로드</button>
       </div>
-      <p class="text-xs text-amber-600">※ 불러오기 시 선택한 유형(재학생/졸업생)의 기존 명단이 모두 교체됩니다.</p>
+    </div>
+
+    <!-- 가져오기 교체 안내 -->
+    <div class="mb-4 rounded-lg flex items-start gap-2 text-base"
+      style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+      ⚠ 가져오기 시 선택한 유형(재학생/졸업생)의 기존 명단이 모두 교체됩니다.
     </div>
 
     <!-- 업로드 결과 -->
-    <div v-if="result" class="mb-4 p-3 rounded border text-sm"
-      :class="result.errors.length ? 'border-yellow-400 bg-yellow-50' : 'border-green-400 bg-green-50'">
-      <p class="font-medium mb-1">
-        [{{ result.label }}] {{ result.errors.length ? '오류 발생 — 가져오기 실패' : `완료 — 신규 ${result.inserted}명, 수정 ${result.updated}명` }}
+    <div v-if="result" class="mb-5 rounded-xl text-base"
+      :style="{
+        padding: '14px 18px',
+        border: result.errors.length ? '1px solid #fca5a5' : '1px solid #86efac',
+        background: result.errors.length ? '#fef2f2' : '#f0fdf4',
+        color: result.errors.length ? '#991b1b' : '#15803d',
+      }">
+      <p class="font-semibold mb-1">
+        [{{ result.label }}]
+        {{ result.errors.length
+          ? '오류 발생 — 가져오기 실패'
+          : `완료 — 신규 ${result.inserted}명, 수정 ${result.updated}명` }}
       </p>
-      <ul v-if="result.errors.length" class="list-disc list-inside text-yellow-700 space-y-0.5">
+      <ul v-if="result.errors.length" class="list-disc list-inside space-y-0.5">
         <li v-for="(e, i) in result.errors" :key="i">{{ e }}</li>
       </ul>
     </div>
 
-    <p v-if="error" class="text-red-500 text-sm mb-3">{{ error }}</p>
+    <p v-if="error" class="text-base mb-3" style="color: #ef4444;">{{ error }}</p>
 
     <!-- 필터 -->
-    <div class="flex gap-2 mb-3 items-center flex-wrap">
-      <select v-model="filterEnrolled" class="border rounded px-2 py-1 text-sm">
-        <option :value="null">전체</option>
+    <div class="rounded-xl mb-4 flex flex-wrap gap-3 items-center p-[14px_18px] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07),0_0_0_1px_rgba(0,0,0,0.04)]">
+
+      <select v-model="filterEnrolled"
+              class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 border border-slate-200 py-2 pl-3 pr-8 text-slate-800 bg-white">
+        <option :value="null">전체 유형</option>
         <option :value="1">재학생</option>
         <option :value="0">졸업생</option>
       </select>
-      <select
-        v-model.number="filterGrade"
-        class="border rounded px-2 py-1 text-sm"
-        :disabled="filterEnrolled === 0"
-        @change="filterClass = null"
-      >
+
+      <select v-model.number="filterGrade"
+              class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 border border-slate-200 py-2 pl-3 pr-8 text-slate-800 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="filterEnrolled === 0"
+              @change="filterClass = null">
         <option :value="null">전체 학년</option>
         <option v-for="g in gradeOptions.grades" :key="g" :value="g">{{ g }}학년</option>
       </select>
-      <select
-        v-model.number="filterClass"
-        class="border rounded px-2 py-1 text-sm"
-        :disabled="filterEnrolled === 0"
-      >
+
+      <select v-model.number="filterClass"
+              class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 border border-slate-200 py-2 pl-3 pr-8 text-slate-800 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="filterEnrolled === 0">
         <option :value="null">전체 반</option>
         <option v-for="c in availableClasses" :key="c" :value="c">{{ c }}반</option>
       </select>
-      <button class="text-sm text-blue-600 underline" @click="loadStudents()">조회</button>
-      <span class="ml-auto text-sm text-gray-500">총 {{ studentPage.total }}명</span>
-    </div>
 
-    <!-- 학생 목록 -->
-    <div class="overflow-x-auto border border-gray-200 rounded">
-      <table class="w-full min-w-max text-sm border-collapse">
-        <thead>
-          <tr class="bg-gray-100 text-gray-600 text-left">
-            <th class="px-3 py-2 border-b w-36">학생코드</th>
-            <th class="px-3 py-2 border-b w-26">이름</th>
-            <th class="px-3 py-2 border-b w-16">구분</th>
-            <th class="px-3 py-2 border-b w-12">학년</th>
-            <th class="px-3 py-2 border-b w-12">반</th>
-            <th class="px-3 py-2 border-b w-12">번호</th>
-            <th class="px-3 py-2 border-b w-24">졸업연도</th>
-            <th class="px-3 py-2 border-b w-16">학생 삭제</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in studentPage.rows" :key="s.id" class="hover:bg-gray-50">
-            <td class="px-3 py-1.5 border-b font-mono text-xs">{{ s.student_code }}</td>
-            <td class="px-3 py-1.5 border-b">{{ s.name }}</td>
-            <td class="px-3 py-1.5 border-b">
-              <span :class="s.is_enrolled ? 'text-blue-600' : 'text-gray-400'">
-                {{ s.is_enrolled ? '재학' : '졸업' }}
-              </span>
-            </td>
-            <td class="px-3 py-1.5 border-b">{{ s.grade ?? '-' }}</td>
-            <td class="px-3 py-1.5 border-b">{{ s.class_no ?? '-' }}</td>
-            <td class="px-3 py-1.5 border-b">{{ s.seq_no ?? '-' }}</td>
-            <td class="px-3 py-1.5 border-b">{{ s.grad_year ?? '-' }}</td>
-            <td class="px-3 py-1.5 border-b">
-              <button
-                class="px-2 py-0.5 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50"
-                @click="remove(s)"
-              >삭제</button>
-            </td>
-          </tr>
-          <tr v-if="studentPage.rows.length === 0">
-            <td colspan="8" class="px-3 py-4 text-center text-gray-400">
-              학생 데이터가 없습니다. 양식을 다운로드하여 작성 후 가져오기 하세요.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 페이지 네비게이션 -->
-    <div v-if="studentPage.total > 0"
-         class="mt-2 flex items-center justify-center gap-3 text-sm text-gray-600">
       <button
-        class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          class="text-base font-medium rounded-lg px-[18px] py-2 bg-[#2563eb] text-white hover:bg-blue-700 transition-colors"
+          @click="loadStudents()">조회</button>
+
+      <span class="ml-auto text-base font-medium text-slate-500">총 {{ studentPage.total }}명</span>
+    </div>
+
+    <!-- 학생 목록 테이블 -->
+    <div class="rounded-xl overflow-hidden"
+      style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-max" style="border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">학생코드</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 100px;">이름</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">구분</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 70px;">학년</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 60px;">반</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 60px;">번호</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 100px;">졸업연도</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">삭제</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in studentPage.rows" :key="s.id"
+              class="hover:bg-slate-50"
+              style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
+              <td class="text-base font-mono" style="padding: 13px 20px; color: #475569;">{{ s.student_code }}</td>
+              <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.name }}</td>
+              <td style="padding: 13px 20px;">
+                <span class="text-base font-medium"
+                  :style="{ color: s.is_enrolled ? '#2563eb' : '#94a3b8' }">
+                  {{ s.is_enrolled ? '재학' : '졸업' }}
+                </span>
+              </td>
+              <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.grade ?? '-' }}</td>
+              <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.class_no ?? '-' }}</td>
+              <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.seq_no ?? '-' }}</td>
+              <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.grad_year ?? '-' }}</td>
+              <td style="padding: 13px 20px;">
+                <button
+                  class="text-base font-medium rounded-lg"
+                  style="padding: 5px 12px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
+                  @click="remove(s)"
+                >삭제</button>
+              </td>
+            </tr>
+            <tr v-if="studentPage.rows.length === 0">
+              <td colspan="8" class="text-base text-center" style="padding: 48px 20px; color: #94a3b8;">
+                학생 데이터가 없습니다. 양식을 다운로드하여 작성 후 가져오기 하세요.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 페이지 내비게이션 -->
+    <div v-if="studentPage.total > 0" class="mt-4 flex items-center justify-center gap-4">
+      <button
+        class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+        style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
         :disabled="studentPage.page <= 1"
-        @click="loadStudents(studentPage.page - 1)">
-        &lt; 이전
-      </button>
-      <span>
+        @click="loadStudents(studentPage.page - 1)"
+      >&lt; 이전</button>
+      <span class="text-base" style="color: #64748b;">
         {{ studentPage.page }} / {{ Math.ceil(studentPage.total / studentPage.per_page) }} 페이지
         (총 {{ studentPage.total }}명)
       </span>
       <button
-        class="px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+        style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
         :disabled="studentPage.page >= Math.ceil(studentPage.total / studentPage.per_page)"
-        @click="loadStudents(studentPage.page + 1)">
-        다음 &gt;
-      </button>
+        @click="loadStudents(studentPage.page + 1)"
+      >다음 &gt;</button>
     </div>
   </div>
 </template>

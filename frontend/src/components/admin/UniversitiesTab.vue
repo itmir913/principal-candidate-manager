@@ -1,330 +1,381 @@
 <template>
-  <div class="flex gap-6" style="min-height: 480px">
+  <div style="padding: 2rem 2.5rem;">
 
-    <!-- ── 좌측: 대학 목록 ───────────────────────────────────── -->
-    <div class="w-72 flex-shrink-0 flex flex-col">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-sm font-semibold text-gray-700">대학 목록</h2>
-        <button
-          class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-40"
-          :disabled="saving"
-          @click="startAddUniv"
-        >+ 대학 추가</button>
-      </div>
-
-      <p v-if="error" class="text-red-500 text-xs mb-2">{{ error }}</p>
-
-      <!-- 추가 폼 -->
-      <div v-if="addingUniv" class="mb-2 border border-blue-200 rounded-lg p-3 bg-blue-50">
-        <div class="space-y-2">
-          <div>
-            <label class="text-xs text-gray-500 block mb-0.5">대학명</label>
-            <input v-model="univForm.univ_name" type="text"
-              class="w-full border rounded px-2 py-1 text-sm" placeholder="예) 한국대학교" />
-          </div>
-          <div>
-            <label class="text-xs text-gray-500 block mb-0.5">전체 정원</label>
-            <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
-          </div>
-          <div class="flex items-center gap-2">
-            <input v-model="univForm.prioritize_enrolled" type="checkbox" id="add-univ-pe" />
-            <label for="add-univ-pe" class="text-xs text-gray-600">재학생 우선</label>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-3">
-          <button
-            class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-40"
-            :disabled="saving || !univForm.univ_name.trim()"
-            @click="saveAddUniv"
-          >{{ saving ? '저장 중…' : '저장' }}</button>
-          <button
-            class="px-2.5 py-1 bg-gray-200 text-xs rounded"
-            :disabled="saving"
-            @click="addingUniv = false"
-          >취소</button>
-        </div>
-      </div>
-
-      <!-- 대학 카드 목록 -->
-      <div class="overflow-y-auto flex-1 space-y-2 pr-1">
-        <div
-          v-for="u in univs"
-          :key="u.id"
-          class="border rounded-lg transition-colors"
-          :class="selectedUnivId === u.id
-            ? 'border-blue-400 bg-blue-50'
-            : 'bg-white border-gray-200 hover:border-gray-300'"
-        >
-          <template v-if="editingUnivId !== u.id">
-            <div class="px-3 py-2.5 cursor-pointer" @click="selectUniv(u.id)">
-              <div class="text-sm font-medium text-gray-800">{{ u.univ_name }}</div>
-              <div class="text-xs text-gray-500 mt-0.5">
-                전체 정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
-                &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
-              </div>
-            </div>
-            <div class="px-3 pb-2 flex gap-3">
-              <button class="text-blue-500 text-xs hover:underline disabled:opacity-40"
-                :disabled="saving" @click.stop="startEditUniv(u)">편집</button>
-              <button class="text-red-400 text-xs hover:underline disabled:opacity-40"
-                :disabled="saving" @click.stop="removeUniv(u.id)">삭제</button>
-            </div>
-          </template>
-
-          <template v-else>
-            <div class="px-3 py-2.5 bg-yellow-50 rounded-lg">
-              <div class="space-y-2">
-                <div>
-                  <label class="text-xs text-gray-500 block mb-0.5">대학명</label>
-                  <input v-model="univForm.univ_name" type="text"
-                    class="w-full border rounded px-2 py-1 text-sm" />
-                </div>
-                <div>
-                  <label class="text-xs text-gray-500 block mb-0.5">전체 정원</label>
-                  <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
-                </div>
-                <div class="flex items-center gap-2">
-                  <input v-model="univForm.prioritize_enrolled" type="checkbox" :id="`edit-univ-pe-${u.id}`" />
-                  <label :for="`edit-univ-pe-${u.id}`" class="text-xs text-gray-600">재학생 우선</label>
-                </div>
-              </div>
-              <div class="flex gap-2 mt-3">
-                <button
-                  class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-40"
-                  :disabled="saving || !univForm.univ_name.trim()"
-                  @click="saveEditUniv(u.id)"
-                >{{ saving ? '저장 중…' : '저장' }}</button>
-                <button class="px-2.5 py-1 bg-gray-200 text-xs rounded"
-                  :disabled="saving" @click="editingUnivId = null">취소</button>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <div v-if="univs.length === 0 && !addingUniv"
-          class="text-center text-gray-400 text-sm py-8">
-          등록된 대학이 없습니다.
-        </div>
-      </div>
+    <!-- 페이지 헤더 -->
+    <div class="mb-5">
+      <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
+      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
     </div>
 
-    <!-- ── 우측: 모집단위 목록 ───────────────────────────────── -->
-    <div class="flex-1 min-w-0">
-      <div v-if="!selectedUniv"
-        class="flex items-center justify-center h-full text-gray-400 text-sm">
-        왼쪽에서 대학을 선택하면 모집단위를 관리할 수 있습니다.
+    <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
+
+    <div class="flex gap-6" style="min-height: 480px; align-items: flex-start;">
+
+      <!-- ── 좌측: 대학 목록 ─────────────────────────────────── -->
+      <div class="flex flex-col flex-shrink-0" style="width: 300px;">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold" style="color: #1e293b;">대학 목록</h2>
+          <button
+            class="text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="saving"
+            @click="startAddUniv"
+          >+ 대학 추가</button>
+        </div>
+
+        <!-- 대학 추가 폼 -->
+        <div v-if="addingUniv" class="rounded-xl mb-3"
+          style="padding: 16px 18px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+          <h3 class="text-base font-semibold mb-3" style="color: #1e293b;">새 대학 추가</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
+              <input v-model="univForm.univ_name" type="text"
+                class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
+                placeholder="예) 한국대학교" />
+            </div>
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전체 정원</label>
+              <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
+            </div>
+            <div class="flex items-center gap-2">
+              <input v-model="univForm.prioritize_enrolled" type="checkbox" id="add-univ-pe" class="accent-blue-600 w-4 h-4" />
+              <label for="add-univ-pe" class="text-base" style="color: #475569;">재학생 우선</label>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-4">
+            <button
+              class="text-base font-semibold rounded-lg disabled:opacity-40"
+              style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+              :disabled="saving || !univForm.univ_name.trim()"
+              @click="saveAddUniv"
+            >{{ saving ? '저장 중…' : '저장' }}</button>
+            <button
+              class="text-base rounded-lg"
+              style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+              :disabled="saving"
+              @click="addingUniv = false"
+            >취소</button>
+          </div>
+        </div>
+
+        <!-- 대학 카드 목록 -->
+        <div class="overflow-y-auto flex-1 space-y-2">
+          <div
+            v-for="u in univs"
+            :key="u.id"
+            class="rounded-xl transition-all"
+            :style="{
+              background: selectedUnivId === u.id ? '#eff6ff' : 'white',
+              border: selectedUnivId === u.id ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+            }"
+          >
+            <template v-if="editingUnivId !== u.id">
+              <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectUniv(u.id)">
+                <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
+                <p class="text-base mt-1" style="margin: 0; color: #64748b;">
+                  정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
+                  &nbsp;·&nbsp;재학우선: {{ u.prioritize_enrolled ? '○' : '-' }}
+                </p>
+              </div>
+              <div class="flex gap-3" style="padding: 0 16px 12px;">
+                <button class="text-base font-medium disabled:opacity-40"
+                  style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                  :disabled="saving" @click.stop="startEditUniv(u)">편집</button>
+                <button class="text-base font-medium disabled:opacity-40"
+                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                  :disabled="saving" @click.stop="removeUniv(u.id)">삭제</button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div style="padding: 14px 16px; background: #fefce8; border-radius: 10px;">
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
+                    <input v-model="univForm.univ_name" type="text"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+                  </div>
+                  <div>
+                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전체 정원</label>
+                    <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input v-model="univForm.prioritize_enrolled" type="checkbox"
+                      :id="`edit-univ-pe-${u.id}`" class="accent-blue-600 w-4 h-4" />
+                    <label :for="`edit-univ-pe-${u.id}`" class="text-base" style="color: #475569;">재학생 우선</label>
+                  </div>
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <button
+                    class="text-base font-semibold rounded-lg disabled:opacity-40"
+                    style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                    :disabled="saving || !univForm.univ_name.trim()"
+                    @click="saveEditUniv(u.id)"
+                  >{{ saving ? '저장 중…' : '저장' }}</button>
+                  <button class="text-base rounded-lg"
+                    style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                    :disabled="saving" @click="editingUnivId = null">취소</button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div v-if="univs.length === 0 && !addingUniv"
+            class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
+            등록된 대학이 없습니다.
+          </div>
+        </div>
       </div>
 
-      <template v-else>
-        <!-- 헤더: 대학명 + 버튼 묶음 -->
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <h2 class="text-sm font-semibold text-gray-700">
-              {{ selectedUniv.univ_name }} — 모집단위
-            </h2>
-            <p class="text-xs text-gray-400 mt-0.5">
-              전체 정원:
-              <span class="font-medium text-gray-600">
-                {{ selectedUniv.total_quota != null ? selectedUniv.total_quota + '명' : '무제한' }}
-              </span>
-              <template v-if="selectedUnivStats">
-                &nbsp;·&nbsp;추천인원:
-                <span class="font-medium text-gray-600">{{ selectedUnivStats.total_used }}명</span>
-                &nbsp;·&nbsp;잔여:
-                <span class="font-medium"
-                  :class="selectedUniv.total_quota != null && selectedUnivStats.total_used >= selectedUniv.total_quota
-                    ? 'text-red-500' : 'text-gray-600'">
-                  {{ remainingLabel(selectedUnivStats.total_used, selectedUniv.total_quota) }}
+      <!-- ── 우측: 모집단위 ───────────────────────────────────── -->
+      <div class="flex-1 min-w-0">
+        <div v-if="!selectedUniv" class="flex items-center justify-center rounded-xl"
+          style="height: 300px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+          <p class="text-base" style="color: #94a3b8;">왼쪽에서 대학을 선택하면 모집단위를 관리할 수 있습니다.</p>
+        </div>
+
+        <template v-else>
+          <!-- 헤더 -->
+          <div class="flex items-start justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h2 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">
+                {{ selectedUniv.univ_name }} — 모집단위
+              </h2>
+              <p class="text-base mt-1" style="color: #64748b; margin: 0;">
+                전체 정원:
+                <span class="font-medium" style="color: #1e293b;">
+                  {{ selectedUniv.total_quota != null ? selectedUniv.total_quota + '명' : '무제한' }}
                 </span>
-              </template>
-            </p>
+                <template v-if="selectedUnivStats">
+                  &nbsp;·&nbsp;추천인원:
+                  <span class="font-medium" style="color: #1e293b;">{{ selectedUnivStats.total_used }}명</span>
+                  &nbsp;·&nbsp;잔여:
+                  <span class="font-medium"
+                    :style="{ color: selectedUniv.total_quota != null && selectedUnivStats.total_used >= selectedUniv.total_quota ? '#ef4444' : '#1e293b' }">
+                    {{ remainingLabel(selectedUnivStats.total_used, selectedUniv.total_quota) }}
+                  </span>
+                </template>
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                class="text-base font-medium rounded-lg disabled:opacity-40"
+                style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
+                :disabled="downloading"
+                @click="doExportQuotaStats"
+              >전체 목록 다운로드</button>
+              <button
+                class="text-base font-medium rounded-lg disabled:opacity-40"
+                style="padding: 8px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                :disabled="saving"
+                @click="startAddTrack"
+              >+ 모집단위 추가</button>
+            </div>
           </div>
-          <div class="flex gap-2">
-            <button
-              class="px-2.5 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-40"
-              :disabled="downloading"
-              @click="doExportQuotaStats"
-            >전체 목록 다운로드</button>
-            <button
-              class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-40"
-              :disabled="saving"
-              @click="startAddTrack"
-            >+ 모집단위 추가</button>
+
+          <!-- 모집단위 테이블 -->
+          <div class="rounded-xl overflow-hidden"
+            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-max" style="border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">모집단위명</th>
+                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">제한 인원</th>
+                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">추천인원</th>
+                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">잔여인원</th>
+                    <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569; width: 130px;">재학생 우선</th>
+                    <th style="padding: 14px 20px; width: 130px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- 추가 행 -->
+                  <tr v-if="addingTrack" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+                    <td style="padding: 10px 16px;">
+                      <input v-model="trackForm.track_name" type="text"
+                        class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;"
+                        placeholder="예) 자연계" />
+                    </td>
+                    <td style="padding: 10px 16px;">
+                      <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
+                    </td>
+                    <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                    <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                    <td class="text-center" style="padding: 10px 16px;">
+                      <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" />
+                    </td>
+                    <td style="padding: 10px 16px;">
+                      <div class="flex gap-2">
+                        <button
+                          class="text-base font-semibold rounded-lg disabled:opacity-40"
+                          style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                          :disabled="saving || !trackForm.track_name.trim()"
+                          @click="saveAddTrack"
+                        >{{ saving ? '저장 중…' : '저장' }}</button>
+                        <button class="text-base rounded-lg"
+                          style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                          :disabled="saving" @click="addingTrack = false">취소</button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <template v-for="t in tracksWithStats" :key="t.id">
+                    <!-- 보기 행 -->
+                    <tr v-if="editingTrackId !== t.id"
+                      class="hover:bg-slate-50"
+                      style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
+                      <td class="text-base" style="padding: 14px 20px; color: #1e293b;">{{ t.track_name }}</td>
+                      <td class="text-base text-right" style="padding: 14px 20px; color: #1e293b;">
+                        {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
+                      </td>
+                      <td class="text-right" style="padding: 14px 20px;">
+                        <button
+                          class="text-base font-medium underline"
+                          style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                          @click="openRecommendedModal(t)"
+                        >{{ t.unit_used }}명</button>
+                      </td>
+                      <td class="text-base text-right font-medium" style="padding: 14px 20px;"
+                        :style="{ color: t.unit_quota != null && t.unit_used >= t.unit_quota ? '#ef4444' : '#1e293b' }">
+                        {{ remainingLabel(t.unit_used, t.unit_quota) }}
+                      </td>
+                      <td class="text-base text-center" style="padding: 14px 20px; color: #1e293b;">
+                        {{ t.prioritize_enrolled ? '○' : '-' }}
+                      </td>
+                      <td style="padding: 14px 20px;">
+                        <div class="flex gap-3">
+                          <button class="text-base font-medium disabled:opacity-40"
+                            style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                            :disabled="saving" @click="startEditTrack(t)">편집</button>
+                          <button class="text-base font-medium disabled:opacity-40"
+                            style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                            :disabled="saving" @click="removeTrack(t.id)">삭제</button>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- 편집 행 -->
+                    <tr v-else style="background: #fefce8; border-bottom: 1px solid #fde68a;">
+                      <td style="padding: 10px 16px;">
+                        <input v-model="trackForm.track_name" type="text"
+                          class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          style="width: 100%; border: 1px solid #fbbf24; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;" />
+                      </td>
+                      <td style="padding: 10px 16px;">
+                        <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
+                      </td>
+                      <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                      <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                      <td class="text-center" style="padding: 10px 16px;">
+                        <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" />
+                      </td>
+                      <td style="padding: 10px 16px;">
+                        <div class="flex gap-2">
+                          <button
+                            class="text-base font-semibold rounded-lg disabled:opacity-40"
+                            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                            :disabled="saving || !trackForm.track_name.trim()"
+                            @click="saveEditTrack(t.id)"
+                          >{{ saving ? '저장 중…' : '저장' }}</button>
+                          <button class="text-base rounded-lg"
+                            style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                            :disabled="saving" @click="editingTrackId = null">취소</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+
+                  <tr v-if="tracks.length === 0 && !addingTrack">
+                    <td colspan="6" class="text-base text-center" style="padding: 48px 20px; color: #94a3b8;">
+                      등록된 모집단위가 없습니다.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-
-        <!-- 모집단위 테이블 (추천인원·잔여인원 열 포함) -->
-        <div class="overflow-x-auto border border-gray-200 rounded">
-          <table class="w-full min-w-max text-sm border-collapse">
-            <thead>
-              <tr class="bg-gray-100 text-gray-600 text-left">
-                <th class="px-3 py-2 border-b">모집단위명</th>
-                <th class="px-3 py-2 border-b w-28">제한 인원</th>
-                <th class="px-3 py-2 border-b w-24 text-right">추천인원</th>
-                <th class="px-3 py-2 border-b w-24 text-right">잔여인원</th>
-                <th class="px-3 py-2 border-b w-28 text-center">재학생 우선</th>
-                <th class="px-3 py-2 border-b w-28"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- 추가 행 -->
-              <tr v-if="addingTrack" class="bg-blue-50">
-                <td class="px-2 py-1.5 border-b">
-                  <input v-model="trackForm.track_name" type="text"
-                    class="w-full border rounded px-2 py-0.5 text-sm" placeholder="예) 자연계" />
-                </td>
-                <td class="px-2 py-1.5 border-b">
-                  <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
-                </td>
-                <td class="px-2 py-1.5 border-b text-right text-gray-400">—</td>
-                <td class="px-2 py-1.5 border-b text-right text-gray-400">—</td>
-                <td class="px-2 py-1.5 border-b text-center">
-                  <input v-model="trackForm.prioritize_enrolled" type="checkbox" />
-                </td>
-                <td class="px-2 py-1.5 border-b">
-                  <button
-                    class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40"
-                    :disabled="saving || !trackForm.track_name.trim()"
-                    @click="saveAddTrack"
-                  >{{ saving ? '저장 중…' : '저장' }}</button>
-                  <button class="px-2 py-0.5 bg-gray-200 text-xs rounded"
-                    :disabled="saving" @click="addingTrack = false">취소</button>
-                </td>
-              </tr>
-
-              <template v-for="t in tracksWithStats" :key="t.id">
-                <!-- 보기 행 -->
-                <tr v-if="editingTrackId !== t.id" class="hover:bg-gray-50">
-                  <td class="px-3 py-2 border-b">{{ t.track_name }}</td>
-                  <td class="px-3 py-2 border-b">
-                    {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
-                  </td>
-                  <td class="px-3 py-2 border-b text-right">
-                    <button
-                      class="text-blue-600 hover:underline font-medium"
-                      @click="openRecommendedModal(t)"
-                    >{{ t.unit_used }}명</button>
-                  </td>
-                  <td class="px-3 py-2 border-b text-right font-medium"
-                    :class="t.unit_quota != null && t.unit_used >= t.unit_quota
-                      ? 'text-red-500' : 'text-gray-700'">
-                    {{ remainingLabel(t.unit_used, t.unit_quota) }}
-                  </td>
-                  <td class="px-3 py-2 border-b text-center">
-                    {{ t.prioritize_enrolled ? '○' : '-' }}
-                  </td>
-                  <td class="px-3 py-2 border-b">
-                    <button class="text-blue-500 text-xs mr-2 hover:underline disabled:opacity-40"
-                      :disabled="saving" @click="startEditTrack(t)">편집</button>
-                    <button class="text-red-400 text-xs hover:underline disabled:opacity-40"
-                      :disabled="saving" @click="removeTrack(t.id)">삭제</button>
-                  </td>
-                </tr>
-                <!-- 편집 행 -->
-                <tr v-else class="bg-yellow-50">
-                  <td class="px-2 py-1.5 border-b">
-                    <input v-model="trackForm.track_name" type="text"
-                      class="w-full border rounded px-2 py-0.5 text-sm" />
-                  </td>
-                  <td class="px-2 py-1.5 border-b">
-                    <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
-                  </td>
-                  <td class="px-2 py-1.5 border-b text-right text-gray-400">—</td>
-                  <td class="px-2 py-1.5 border-b text-right text-gray-400">—</td>
-                  <td class="px-2 py-1.5 border-b text-center">
-                    <input v-model="trackForm.prioritize_enrolled" type="checkbox" />
-                  </td>
-                  <td class="px-2 py-1.5 border-b">
-                    <button
-                      class="px-2 py-0.5 bg-blue-600 text-white text-xs rounded mr-1 disabled:opacity-40"
-                      :disabled="saving || !trackForm.track_name.trim()"
-                      @click="saveEditTrack(t.id)"
-                    >{{ saving ? '저장 중…' : '저장' }}</button>
-                    <button class="px-2 py-0.5 bg-gray-200 text-xs rounded"
-                      :disabled="saving" @click="editingTrackId = null">취소</button>
-                  </td>
-                </tr>
-              </template>
-
-              <tr v-if="tracks.length === 0 && !addingTrack">
-                <td colspan="6" class="px-3 py-6 text-center text-gray-400">
-                  등록된 모집단위가 없습니다.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
+        </template>
+      </div>
     </div>
   </div>
 
   <!-- ── 추천 확정 목록 모달 ──────────────────────────────────── -->
   <div v-if="modal.open"
-    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+    class="fixed inset-0 flex items-center justify-center z-50"
+    style="background: rgba(0,0,0,0.35);"
     @click.self="modal.open = false"
     @keydown.escape.window="modal.open = false"
   >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
+    <div class="bg-white flex flex-col" style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 100%; max-width: 560px; margin: 0 16px; max-height: 80vh;">
       <!-- 모달 헤더 -->
-      <div class="flex items-center justify-between px-5 py-3 border-b">
+      <div class="flex items-center justify-between flex-shrink-0" style="padding: 18px 22px; border-bottom: 1px solid #f1f5f9;">
         <div>
-          <h3 class="text-sm font-semibold text-gray-800">{{ modal.trackName }} 추천 확정 목록</h3>
-          <p class="text-xs text-gray-500 mt-0.5">총 {{ modal.entries.length }}명</p>
+          <h3 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ modal.trackName }} 추천 확정 목록</h3>
+          <p class="text-base mt-0.5" style="color: #94a3b8; margin: 0;">총 {{ modal.entries.length }}명</p>
         </div>
-        <button class="text-gray-400 hover:text-gray-600 text-lg leading-none" @click="modal.open = false">✕</button>
+        <button
+          class="text-xl leading-none"
+          style="background: none; border: none; cursor: pointer; color: #94a3b8;"
+          @click="modal.open = false">✕</button>
       </div>
 
-      <!-- 모달 내용 -->
-      <div class="overflow-y-auto flex-1 px-5 py-3">
-        <div v-if="modal.loading" class="text-center text-gray-400 py-8 text-sm">로딩 중…</div>
-        <div v-else-if="modal.entries.length === 0" class="text-center text-gray-400 py-8 text-sm">
+      <!-- 모달 본문 -->
+      <div class="overflow-y-auto flex-1" style="padding: 18px 22px;">
+        <div v-if="modal.loading" class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">로딩 중…</div>
+        <div v-else-if="modal.entries.length === 0" class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
           추천 확정된 학생이 없습니다.
         </div>
         <template v-else>
-          <!-- 라운드별 그룹 -->
-          <div
-            v-for="group in groupedByRound"
-            :key="group.round_id"
-            class="mb-4"
-          >
-            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+          <div v-for="group in groupedByRound" :key="group.round_id" class="mb-6">
+            <h4 class="text-base font-semibold mb-3" style="color: #64748b; letter-spacing: 0.04em; text-transform: uppercase;">
               {{ group.round_id }}차 ({{ group.entries.length }}명)
             </h4>
-            <table class="w-full text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-50 text-gray-500">
-                  <th class="px-2 py-1 border text-left w-8">순위</th>
-                  <th class="px-2 py-1 border text-left">이름</th>
-                  <th class="px-2 py-1 border text-left">학번</th>
-                  <th class="px-2 py-1 border text-center w-14">구분</th>
-                  <th class="px-2 py-1 border text-center w-14">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="e in group.entries"
-                  :key="e.student_id"
-                  :class="e.abandoned
-                    ? 'bg-red-50 line-through'
-                    : 'bg-green-50'"
-                >
-                  <td class="px-2 py-1 border text-center">{{ e.ranking ?? '—' }}</td>
-                  <td class="px-2 py-1 border">{{ e.name }}</td>
-                  <td class="px-2 py-1 border font-mono">{{ e.student_code }}</td>
-                  <td class="px-2 py-1 border text-center">{{ e.is_enrolled ? '재학' : '졸업' }}</td>
-                  <td class="px-2 py-1 border text-center">
-                    <span v-if="e.abandoned" class="text-red-500 font-medium no-underline">포기</span>
-                    <span v-else class="text-green-600 font-medium">확정</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="rounded-xl overflow-hidden"
+              style="border: 1px solid #e2e8f0;">
+              <table class="w-full" style="border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569; width: 50px;">순위</th>
+                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">이름</th>
+                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">학번</th>
+                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569; width: 70px;">구분</th>
+                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569; width: 70px;">상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="e in group.entries"
+                    :key="e.student_id"
+                    :style="{
+                      background: e.abandoned ? '#fef2f2' : '#f0fdf4',
+                      borderBottom: '1px solid #f1f5f9',
+                      textDecoration: e.abandoned ? 'line-through' : 'none',
+                    }"
+                  >
+                    <td class="text-base text-center" style="padding: 11px 14px; color: #475569;">{{ e.ranking ?? '—' }}</td>
+                    <td class="text-base" style="padding: 11px 14px; color: #1e293b;">{{ e.name }}</td>
+                    <td class="text-base font-mono" style="padding: 11px 14px; color: #475569;">{{ e.student_code }}</td>
+                    <td class="text-base text-center" style="padding: 11px 14px; color: #475569;">{{ e.is_enrolled ? '재학' : '졸업' }}</td>
+                    <td class="text-base text-center font-medium" style="padding: 11px 14px;">
+                      <span v-if="e.abandoned" style="color: #ef4444; text-decoration: none;">포기</span>
+                      <span v-else style="color: #16a34a;">확정</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </template>
       </div>
 
-      <div class="px-5 py-3 border-t flex justify-end">
-        <button class="px-3 py-1.5 bg-gray-100 text-xs rounded hover:bg-gray-200"
+      <div class="flex justify-end flex-shrink-0" style="padding: 14px 22px; border-top: 1px solid #f1f5f9;">
+        <button
+          class="text-base rounded-lg"
+          style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
           @click="modal.open = false">닫기</button>
       </div>
     </div>
@@ -351,19 +402,20 @@ const QuotaInput = defineComponent({
       h('input', {
         type: 'checkbox',
         checked: props.unlimited,
+        class: 'accent-blue-600 w-4 h-4',
         onChange: (e) => emit('update:unlimited', e.target.checked),
       }),
-      h('span', { class: 'text-xs text-gray-600 select-none' }, '무제한'),
+      h('span', { style: 'font-size: 16px; color: #475569; user-select: none;' }, '무제한'),
       !props.unlimited
         ? h('div', { class: 'flex items-center gap-1' }, [
             h('input', {
               type: 'number',
               value: props.quota,
               min: 1,
-              class: 'w-16 border rounded px-2 py-0.5 text-sm',
+              style: 'width: 72px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; font-size: 16px;',
               onInput: (e) => emit('update:quota', parseInt(e.target.value) || 1),
             }),
-            h('span', { class: 'text-xs text-gray-500' }, '명'),
+            h('span', { style: 'font-size: 16px; color: #64748b;' }, '명'),
           ])
         : null,
     ])
