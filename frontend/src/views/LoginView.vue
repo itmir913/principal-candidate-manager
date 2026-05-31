@@ -1,35 +1,58 @@
 <template>
-  <div class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-md w-full max-w-sm p-8">
-      <h1 class="text-2xl font-bold text-center text-gray-800 mb-1">학교장추천전형</h1>
-      <p class="text-sm text-center text-gray-400 mb-6">선발 관리 시스템</p>
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: #eeecea;">
+    <div
+      class="w-full bg-white"
+      style="max-width: 420px; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05); padding: 2.5rem;"
+    >
+      <!-- 헤더 -->
+      <div class="text-center mb-8">
+        <div
+          class="inline-flex items-center justify-center rounded-2xl mb-4"
+          style="width: 56px; height: 56px; background: #eff6ff;"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">학교장추천전형</h1>
+        <p class="text-base" style="color: #94a3b8; margin: 0;">선발 관리 시스템</p>
+      </div>
 
-      <!-- Role toggle -->
-      <div class="flex rounded-lg overflow-hidden border border-gray-200 mb-6">
+      <!-- 역할 토글 -->
+      <div
+        class="flex rounded-xl overflow-hidden mb-6"
+        style="border: 1px solid #e2e8f0;"
+      >
         <button
           type="button"
           @click="switchMode('teacher')"
-          class="flex-1 py-2 text-sm font-medium transition-colors"
-          :class="mode === 'teacher' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+          class="flex-1 text-base font-semibold py-2.5 transition-colors"
+          :style="mode === 'teacher'
+            ? { background: '#2563eb', color: 'white', border: 'none', cursor: 'pointer' }
+            : { background: 'white', color: '#64748b', border: 'none', cursor: 'pointer' }"
         >담임</button>
         <button
           type="button"
           @click="switchMode('admin')"
-          class="flex-1 py-2 text-sm font-medium transition-colors"
-          :class="mode === 'admin' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+          class="flex-1 text-base font-semibold py-2.5 transition-colors"
+          :style="mode === 'admin'
+            ? { background: '#2563eb', color: 'white', border: 'none', cursor: 'pointer' }
+            : { background: 'white', color: '#64748b', border: 'none', cursor: 'pointer' }"
         >관리자</button>
       </div>
 
-      <!-- Teacher form -->
-      <form v-if="mode === 'teacher'" @submit.prevent="handleTeacherLogin" class="space-y-4">
+      <!-- 담임 로그인 폼 -->
+      <form v-if="mode === 'teacher'" @submit.prevent="handleTeacherLogin" class="flex flex-col gap-4">
         <div :class="isGraduated ? '' : 'grid grid-cols-2 gap-3'">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">학년</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">학년</label>
             <select
               v-model.number="teacherGrade"
               required
               :disabled="classesLoading"
-              class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box; background: white;"
               @change="onGradeChange"
             >
               <option :value="''">{{ classesLoading ? '로딩 중…' : '선택' }}</option>
@@ -37,55 +60,67 @@
             </select>
           </div>
           <div v-if="!isGraduated">
-            <label class="block text-sm font-medium text-gray-700 mb-1">반</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">반</label>
             <select
               v-model.number="teacherClassNo"
               required
               :disabled="classesLoading || !teacherGrade"
-              class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box; background: white;"
             >
               <option :value="''">선택</option>
               <option v-for="c in availableClassNos" :key="c" :value="c">{{ c }}반</option>
             </select>
           </div>
         </div>
+
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호<template v-if="isGraduated"> <span class="text-xs text-gray-400">(관리자 비밀번호)</span></template></label>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
+            비밀번호
+            <span v-if="isGraduated" class="text-base font-normal" style="color: #94a3b8;">(관리자 비밀번호)</span>
+          </label>
           <input
             v-model="teacherPassword"
             type="password"
             autocomplete="current-password"
             required
-            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
           />
         </div>
+
         <button
           type="submit"
           :disabled="loading || teacherGrade === '' || (!isGraduated && !teacherClassNo)"
-          class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          class="w-full text-base font-semibold disabled:opacity-40 transition-colors"
+          style="padding: 12px; border: none; border-radius: 10px; background: #2563eb; color: white; cursor: pointer; margin-top: 4px;"
         >{{ loading ? '로그인 중…' : '로그인' }}</button>
       </form>
 
-      <!-- Admin form -->
-      <form v-if="mode === 'admin'" @submit.prevent="handleAdminLogin" class="space-y-4">
+      <!-- 관리자 로그인 폼 -->
+      <form v-if="mode === 'admin'" @submit.prevent="handleAdminLogin" class="flex flex-col gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">비밀번호</label>
           <input
             v-model="adminPassword"
             type="password"
             autocomplete="current-password"
             required
-            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
           />
         </div>
+
         <button
           type="submit"
           :disabled="loading"
-          class="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          class="w-full text-base font-semibold disabled:opacity-40 transition-colors"
+          style="padding: 12px; border: none; border-radius: 10px; background: #2563eb; color: white; cursor: pointer; margin-top: 4px;"
         >{{ loading ? '로그인 중…' : '로그인' }}</button>
       </form>
 
-      <p v-if="error" class="mt-3 text-sm text-red-600 text-center">{{ error }}</p>
+      <!-- 에러 메시지 -->
+      <p v-if="error" class="text-base text-center mt-4" style="color: #ef4444;">{{ error }}</p>
     </div>
   </div>
 </template>
