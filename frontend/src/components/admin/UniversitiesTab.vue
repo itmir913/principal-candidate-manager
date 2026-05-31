@@ -133,8 +133,7 @@
 
       <!-- ── 우측: 모집단위 ───────────────────────────────────── -->
       <div class="flex-1 min-w-0">
-        <div v-if="!selectedUniv" class="flex items-center justify-center rounded-xl"
-          style="height: 300px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        <div v-if="!selectedUniv" class="flex items-center justify-center" style="height: 300px;">
           <p class="text-base" style="color: #94a3b8;">왼쪽에서 대학을 선택하면 모집단위를 관리할 수 있습니다.</p>
         </div>
 
