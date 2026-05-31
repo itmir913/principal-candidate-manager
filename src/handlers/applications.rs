@@ -430,6 +430,22 @@ pub async fn teacher_create_application(
         }
     }
 
+    // teacher_editable=true인 전형요소는 모두 값이 있어야 함
+    let submitted_area_ids: std::collections::HashSet<i64> = body
+        .base_data_entries
+        .iter()
+        .filter(|e| !e.values.is_empty())
+        .map(|e| e.area_id)
+        .collect();
+    for area in &all_areas {
+        if area.teacher_editable && !submitted_area_ids.contains(&area.id) {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("전형요소 id={}의 값이 누락되었습니다. 모든 담임 입력 전형요소에 값을 입력해야 합니다", area.id),
+            ));
+        }
+    }
+
     // 4. 값 인코딩 (×100000 변환) — 트랜잭션 진입 전
     struct EncodedEntry {
         area_id: i64,
@@ -574,6 +590,7 @@ pub async fn teacher_create_application(
         }
     }
 
+    // confirmed=1 고정: 제출 행위 자체가 확정. 임시저장→확정 흐름 추가 시 수정 필요.
     sqlx::query(
         "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name)
          VALUES (?, ?, ?, 1, 0, ?)
