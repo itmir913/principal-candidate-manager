@@ -1,29 +1,37 @@
 <template>
-  <div class="min-h-screen bg-indigo-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-lg w-full max-w-md p-10">
-
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: #eeecea;">
+    <div
+      class="w-full bg-white"
+      style="max-width: 420px; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05); padding: 2.5rem;"
+    >
       <!-- 헤더 -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
-          <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 3.741-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
+        <div
+          class="inline-flex items-center justify-center rounded-2xl mb-4"
+          style="width: 56px; height: 56px; background: #eff6ff;"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
         </div>
-        <h1 class="text-2xl font-bold text-gray-900">학교장추천전형</h1>
-        <p class="text-sm text-gray-500 mt-1">선발 관리 시스템</p>
+        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">학교장추천전형</h1>
+        <p class="text-base" style="color: #94a3b8; margin: 0;">선발 관리 시스템</p>
       </div>
 
       <!-- 안내 -->
-      <div class="bg-indigo-50 rounded-xl p-4 mb-6 text-sm text-indigo-800 leading-relaxed">
+      <div
+        class="rounded-xl text-base leading-relaxed mb-6"
+        style="padding: 14px 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;"
+      >
         처음 실행되었습니다.<br>
         관리자 비밀번호를 설정하면 시스템이 시작됩니다.
       </div>
 
       <!-- 설정 폼 -->
-      <form @submit.prevent="handleSetup" class="space-y-4">
+      <form @submit.prevent="handleSetup" class="flex flex-col gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">새 비밀번호</label>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">새 비밀번호</label>
           <input
             v-model="password"
             type="password"
@@ -31,21 +39,26 @@
             required
             minlength="8"
             placeholder="8자 이상"
-            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">비밀번호 확인</label>
           <input
             v-model="confirm"
             type="password"
             autocomplete="new-password"
             required
             placeholder="동일한 비밀번호 입력"
-            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            :class="{ 'border-red-400 focus:ring-red-400': confirm && password !== confirm }"
+            class="w-full text-base focus:outline-none focus:ring-2"
+            :class="confirm && password !== confirm ? 'focus:ring-red-400' : 'focus:ring-blue-400'"
+            :style="{
+              border: confirm && password !== confirm ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+              borderRadius: '8px', padding: '10px 14px', boxSizing: 'border-box',
+            }"
           />
-          <p v-if="confirm && password !== confirm" class="mt-1 text-xs text-red-500">
+          <p v-if="confirm && password !== confirm" class="text-base mt-1.5" style="color: #ef4444;">
             비밀번호가 일치하지 않습니다.
           </p>
         </div>
@@ -53,13 +66,12 @@
         <button
           type="submit"
           :disabled="loading || !canSubmit"
-          class="w-full bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-2"
-        >
-          {{ loading ? '설정 중…' : '시작하기' }}
-        </button>
+          class="w-full text-base font-semibold disabled:opacity-40 transition-colors"
+          style="padding: 12px; border: none; border-radius: 10px; background: #2563eb; color: white; cursor: pointer; margin-top: 4px;"
+        >{{ loading ? '설정 중…' : '시작하기' }}</button>
       </form>
 
-      <p v-if="error" class="mt-3 text-sm text-red-600 text-center">{{ error }}</p>
+      <p v-if="error" class="text-base text-center mt-4" style="color: #ef4444;">{{ error }}</p>
     </div>
   </div>
 </template>
