@@ -1,92 +1,129 @@
 <template>
-  <div class="space-y-4">
-    <div v-if="loading" class="bg-white border rounded-lg px-4 py-8 text-center text-sm text-gray-400">
-      불러오는 중...
+  <div style="padding: 2rem 2.5rem;">
+
+    <!-- 페이지 헤더 -->
+    <div class="flex items-start justify-between flex-wrap gap-3 mb-5">
+      <div>
+        <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
+        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">라운드 결과</h1>
+      </div>
     </div>
 
-    <div v-else-if="rounds.length === 0" class="bg-white border rounded-lg px-4 py-8 text-center text-sm text-gray-400">
-      아직 개설된 라운드가 없습니다.
-    </div>
-
+    <!-- 로딩 -->
     <div
-      v-for="round in rounds"
-      :key="round.id"
-      class="bg-white border rounded-lg overflow-hidden"
+      v-if="loading"
+      class="rounded-xl flex items-center justify-center"
+      style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
     >
-      <div class="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
-        <h2 class="text-sm font-semibold text-gray-700">
-          <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
-          <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
-        </h2>
-        <span
-          class="text-xs px-1.5 py-0.5 rounded-full"
-          :class="round.status === 'FINALIZED' ? 'bg-purple-100 text-purple-700' : round.status === 'CLOSED' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'"
-        >{{ round.status === 'FINALIZED' ? '마감완료' : round.status === 'CLOSED' ? '집계중' : '진행중' }}</span>
-      </div>
+      <p class="text-base" style="color: #94a3b8;">불러오는 중...</p>
+    </div>
 
-      <!-- 진행중/집계중 라운드 -->
-      <div v-if="round.status === 'OPEN'" class="px-4 py-8 text-center text-sm text-gray-400">
-        현재 진행중인 라운드입니다.
-      </div>
+    <!-- 빈 상태 -->
+    <div
+      v-else-if="rounds.length === 0"
+      class="rounded-xl flex items-center justify-center"
+      style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
+    >
+      <p class="text-base" style="color: #94a3b8;">아직 개설된 라운드가 없습니다.</p>
+    </div>
 
-      <div v-else-if="round.status === 'CLOSED'" class="px-4 py-8 text-center text-sm text-gray-400">
-        현재 집계중인 라운드입니다.
-      </div>
-
-      <!-- FINALIZED 라운드 결과 -->
-      <template v-else>
-        <div v-for="student in studentsByRound[round.id] ?? []" :key="student.student_id" class="border-b last:border-b-0">
-          <div class="px-4 py-2 bg-gray-50 flex items-center gap-2">
-            <span class="text-xs text-gray-400 w-6">{{ student.seq_no }}</span>
-            <span class="text-sm font-semibold text-gray-800">{{ student.name }}</span>
-            <span class="text-xs text-gray-400">{{ student.student_code }}</span>
-          </div>
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b">
-                <th class="text-left px-6 py-1.5 text-xs text-gray-400 font-medium">대학명</th>
-                <th class="text-left px-3 py-1.5 text-xs text-gray-400 font-medium">모집단위</th>
-                <th class="text-left px-3 py-1.5 text-xs text-gray-400 font-medium">지원 학과</th>
-                <th class="text-center px-3 py-1.5 text-xs text-gray-400 font-medium w-16">순위</th>
-                <th class="text-right px-4 py-1.5 text-xs text-gray-400 font-medium w-20">총점</th>
-                <th class="text-center px-3 py-1.5 text-xs text-gray-400 font-medium w-24">상태</th>
-                <th class="text-center px-3 py-1.5 text-xs text-gray-400 font-medium w-24">비고</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="r in student.results"
-                :key="r.track_id"
-                class="border-b last:border-b-0"
-                :class="{
-                  'bg-green-50': r.recommended && !r.abandoned,
-                  'bg-red-50': !r.recommended || r.abandoned
-                }"
-              >
-                <td class="px-6 py-2 text-gray-700">{{ r.univ_name }}</td>
-                <td class="px-3 py-2 text-gray-700">{{ r.track_name }}</td>
-                <td class="px-3 py-2 text-gray-600">{{ r.department_name }}</td>
-                <td class="px-3 py-2 text-center text-gray-500">{{ r.ranking ?? '-' }}</td>
-                <td class="px-4 py-2 text-right font-semibold text-gray-800">
-                  {{ r.total_score.toFixed(2) }}
-                </td>
-                <td class="px-3 py-2 text-center">
-                  <span v-if="r.abandoned" class="text-xs text-red-400 font-semibold">포기됨</span>
-                  <span v-else-if="r.recommended" class="text-xs text-green-600 font-semibold">추천 확정</span>
-                  <span v-else class="text-xs text-red-400 font-semibold">추천 제외</span>
-                </td>
-                <td class="px-3 py-2 text-center">
-                  <button
-                    v-if="r.recommended && !r.abandoned"
-                    class="text-xs px-1.5 py-0.5 border border-red-300 text-red-500 rounded hover:bg-red-50"
-                    @click="handleAbandon(r)"
-                  >추천 포기</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+    <!-- 라운드별 결과 카드 -->
+    <div v-else class="flex flex-col gap-6">
+      <div
+        v-for="round in rounds"
+        :key="round.id"
+        class="rounded-xl overflow-hidden"
+        style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+      >
+        <!-- 카드 헤더 -->
+        <div class="flex items-center gap-3 px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
+          <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">
+            <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
+            <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
+          </h2>
+          <span
+            class="text-base font-semibold"
+            style="padding: 3px 12px; border-radius: 999px;"
+            :style="round.status === 'FINALIZED'
+              ? { background: '#f3e8ff', color: '#7c3aed' }
+              : round.status === 'CLOSED'
+                ? { background: '#dbeafe', color: '#1d4ed8' }
+                : { background: '#dcfce7', color: '#15803d' }"
+          >{{ round.status === 'FINALIZED' ? '마감완료' : round.status === 'CLOSED' ? '집계중' : '진행중' }}</span>
         </div>
-      </template>
+
+        <!-- 진행중/집계중 -->
+        <div v-if="round.status === 'OPEN'" class="flex items-center justify-center" style="height: 120px;">
+          <p class="text-base" style="color: #94a3b8;">현재 진행중인 라운드입니다.</p>
+        </div>
+        <div v-else-if="round.status === 'CLOSED'" class="flex items-center justify-center" style="height: 120px;">
+          <p class="text-base" style="color: #94a3b8;">현재 집계중인 라운드입니다.</p>
+        </div>
+
+        <!-- FINALIZED 결과 -->
+        <template v-else>
+          <div
+            v-for="student in studentsByRound[round.id] ?? []"
+            :key="student.student_id"
+            style="border-bottom: 1px solid #f1f5f9;"
+          >
+            <!-- 학생 행 헤더 -->
+            <div class="flex items-center gap-3 px-6 py-3" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <span class="text-base font-semibold" style="color: #1e293b;">{{ student.name }}</span>
+              <span class="text-base" style="color: #64748b;">{{ student.student_code }}</span>
+              <span v-if="auth.grade !== 0" class="text-base" style="color: #94a3b8;">{{ student.seq_no }}번</span>
+            </div>
+
+            <!-- 결과 테이블 -->
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-max" style="border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">대학명</th>
+                    <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">모집단위</th>
+                    <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">지원 학과</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 80px;">순위</th>
+                    <th class="text-base font-semibold text-right" style="padding: 12px 20px; color: #475569; width: 100px;">총점</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">상태</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="r in student.results"
+                    :key="r.track_id"
+                    :style="{
+                      borderBottom: '1px solid #f1f5f9',
+                      background: r.recommended && !r.abandoned ? '#f0fdf4' : '#fff1f2',
+                    }"
+                  >
+                    <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
+                    <td class="text-base" style="padding: 12px 16px; color: #1e293b;">{{ r.track_name }}</td>
+                    <td class="text-base" style="padding: 12px 16px; color: #475569;">{{ r.department_name }}</td>
+                    <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ r.ranking ?? '-' }}</td>
+                    <td class="text-base text-right font-semibold" style="padding: 12px 20px; color: #1e293b;">
+                      {{ r.total_score.toFixed(2) }}
+                    </td>
+                    <td class="text-center" style="padding: 12px 16px;">
+                      <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
+                      <span v-else-if="r.recommended" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
+                      <span v-else class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
+                    </td>
+                    <td class="text-center" style="padding: 12px 16px;">
+                      <button
+                        v-if="r.recommended && !r.abandoned"
+                        class="text-base"
+                        style="padding: 6px 14px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
+                        @click="handleAbandon(r)"
+                      >추천 포기</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -98,7 +135,7 @@ import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.
 
 const auth = useAuthStore()
 
-const rounds = ref([])
+const rounds  = ref([])
 const results = ref([])
 const loading = ref(false)
 
@@ -110,11 +147,11 @@ const studentsByRound = computed(() => {
     const studentMap = map[r.round_id]
     if (!studentMap.has(r.student_id)) {
       studentMap.set(r.student_id, {
-        student_id: r.student_id,
-        name: r.name,
+        student_id:   r.student_id,
+        name:         r.name,
         student_code: r.student_code,
-        seq_no: r.seq_no,
-        results: [],
+        seq_no:       r.seq_no,
+        results:      [],
       })
     }
     studentMap.get(r.student_id).results.push(r)
@@ -135,10 +172,10 @@ async function load() {
   loading.value = true
   try {
     const data = await teacherGetResults()
-    rounds.value = data.rounds
+    rounds.value  = data.rounds
     results.value = data.results
   } catch {
-    rounds.value = []
+    rounds.value  = []
     results.value = []
   } finally {
     loading.value = false

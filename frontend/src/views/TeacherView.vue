@@ -1,106 +1,181 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <!-- 헤더 -->
-    <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
-      <div>
-        <span class="text-lg font-bold text-gray-800">학교장 추천자 선발 관리 시스템</span>
-        <span class="ml-3 text-sm text-gray-500">
-          <template v-if="auth.grade === 0">졸업생 담당 선생님</template>
-          <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 담임<template v-if="auth.teacherName"> · {{ auth.teacherName }} 선생님</template></template>
-        </span>
-      </div>
-      <div class="flex items-center gap-2">
-        <button
-          v-if="auth.grade !== 0"
-          class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
-          @click="showPwModal = true"
-        >비밀번호 변경</button>
-        <button
-          class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
-          @click="logout"
-        >로그아웃</button>
-      </div>
-    </header>
+  <div class="flex h-screen overflow-hidden" style="background: #eeecea;">
 
-    <!-- 라운드 상태 바 -->
-    <div class="bg-white border-b px-6 py-2 text-sm"
-         :class="currentRound ? 'text-green-700' : 'text-gray-400'">
-      <template v-if="currentRound">
-        <span class="font-semibold">{{ currentRound.id }}차 라운드 진행 중</span>
-        <span class="ml-2">— 지원 접수 기간입니다</span>
-        <span class="ml-2 text-xs text-green-500">(개시일: {{ fmtLocalDate(currentRound.opened_at) }} ~ 진행중)</span>
-      </template>
-      <template v-else>
-        현재 지원 접수 기간이 아닙니다. 관리자에게 문의하세요.
-      </template>
-    </div>
-
-    <!-- 탭 -->
-    <nav class="bg-white border-b px-6 flex gap-0">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="px-5 py-3 text-sm font-medium border-b-2 transition-colors"
-        :class="active === tab.key
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-gray-500 hover:text-gray-700'"
-        @click="active = tab.key"
+    <!-- 사이드바 -->
+    <aside
+      class="flex flex-col flex-shrink-0 bg-white overflow-hidden"
+      :style="{
+        width: collapsed ? '64px' : '240px',
+        borderRight: '1px solid #d4d0cc',
+        transition: 'width 0.2s ease',
+      }"
+    >
+      <!-- 로고 + 접기 버튼 -->
+      <div
+        class="flex items-center flex-shrink-0"
+        :style="{
+          height: '60px',
+          borderBottom: '1px solid #f1f5f9',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          padding: collapsed ? '0' : '0 14px 0 16px',
+        }"
       >
-        {{ tab.label }}
-      </button>
-    </nav>
+        <span v-if="!collapsed" class="text-base font-bold whitespace-nowrap" style="color: #1e293b;">
+          학교장추천 선발 시스템
+        </span>
+        <button
+          @click="collapsed = !collapsed"
+          class="flex items-center justify-center p-1.5 rounded-md"
+          style="background: none; border: none; cursor: pointer; color: #94a3b8;"
+        >
+          <ChevronRight v-if="collapsed" :size="18" />
+          <Menu v-else :size="18" />
+        </button>
+      </div>
 
-    <!-- 탭 컨텐츠 -->
-    <main class="p-6">
-      <Suspense>
+      <!-- 메뉴 내비게이션 -->
+      <nav class="flex-1 overflow-y-auto" style="padding: 10px 8px; display: flex; flex-direction: column; gap: 2px;">
+        <button
+          v-for="item in sidebarMenus"
+          :key="item.key"
+          @click="active = item.key"
+          :title="item.label"
+          class="w-full rounded-lg text-base transition-all duration-150"
+          :style="{
+            display: 'flex',
+            alignItems: 'center',
+            gap: collapsed ? '0' : '12px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '10px 0' : '10px 14px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: active === item.key ? '600' : '400',
+            color: active === item.key ? '#1d4ed8' : '#64748b',
+            background: active === item.key ? '#eff6ff' : 'transparent',
+          }"
+        >
+          <span class="relative flex-shrink-0 flex">
+            <component :is="item.icon" :size="20" />
+          </span>
+          <span v-if="!collapsed" class="whitespace-nowrap">{{ item.label }}</span>
+        </button>
+      </nav>
+
+      <!-- 하단 사용자 카드 -->
+      <div :style="{ padding: collapsed ? '10px 8px' : '10px', flexShrink: 0, borderTop: '1px solid #e8e5e2' }">
+        <!-- 접힘: 아바타 -->
+        <div v-if="collapsed" class="flex justify-center items-center" style="padding: 6px 0;">
+          <div
+            class="flex items-center justify-center rounded-full font-bold"
+            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 14px;"
+          >{{ auth.grade === 0 ? '졸' : '담' }}</div>
+        </div>
+        <!-- 펼침: 정보 카드 -->
+        <div
+          v-else
+          style="background: #f5f3f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;"
+        >
+          <!-- 라운드 상태 -->
+          <div class="flex items-center gap-2 pb-2" style="border-bottom: 1px solid #e8e5e2;">
+            <div
+              class="rounded-full flex-shrink-0"
+              :style="{ width: '8px', height: '8px', background: currentRound ? '#22c55e' : '#94a3b8' }"
+            />
+            <span
+              class="text-base font-medium whitespace-nowrap"
+              :style="{ color: currentRound ? '#15803d' : '#64748b' }"
+            >
+              {{ currentRound ? `${currentRound.id}차 라운드 진행 중` : '진행 중인 라운드 없음' }}
+            </span>
+          </div>
+          <!-- 사용자 정보 -->
+          <div>
+            <p class="text-base font-semibold whitespace-nowrap" style="margin: 0; color: #1e293b;">
+              {{ auth.teacherName ? `${auth.teacherName} 선생님` : '선생님' }}
+            </p>
+            <p class="text-base whitespace-nowrap" style="margin: 2px 0 0; color: #94a3b8;">{{ roleLabel }}</p>
+          </div>
+          <!-- 액션 버튼 -->
+          <div class="flex gap-3">
+            <button
+              v-if="auth.grade !== 0"
+              @click="showPwModal = true"
+              class="flex items-center gap-1 text-base"
+              style="background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0;"
+            >
+              <KeyRound :size="14" /> 비번변경
+            </button>
+            <button
+              @click="logout"
+              class="flex items-center gap-1 text-base"
+              style="background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0;"
+            >
+              <LogOut :size="14" /> 로그아웃
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 메인 콘텐츠 -->
+    <main class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable;">
+      <Suspense v-if="currentTab">
         <component :is="currentTab" />
       </Suspense>
+      <div v-else class="flex items-center justify-center" style="height: 320px;">
+        <p class="text-base" style="color: #94a3b8;">{{ currentMenuItem?.label ?? '' }} 탭 준비 중</p>
+      </div>
     </main>
 
     <!-- 비밀번호 변경 모달 -->
-    <div v-if="showPwModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl p-6 w-80">
-        <h2 class="text-base font-semibold text-gray-800 mb-4">비밀번호 변경</h2>
-        <div class="space-y-3 mb-4">
+    <div v-if="showPwModal" class="fixed inset-0 flex items-center justify-center z-50" style="background: rgba(0,0,0,0.35);">
+      <div class="bg-white" style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); padding: 1.75rem; width: 340px;">
+        <h2 class="text-lg font-semibold mb-5" style="color: #1e293b;">비밀번호 변경</h2>
+        <div class="space-y-4 mb-5">
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">현재 비밀번호</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">현재 비밀번호</label>
             <input
               v-model="currentPw"
               type="password"
               autocomplete="current-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
             />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">새 비밀번호</label>
             <input
               v-model="newPw"
               type="password"
               autocomplete="new-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
             />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">새 비밀번호 재입력</label>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">새 비밀번호 재입력</label>
             <input
               v-model="confirmPw"
               type="password"
               autocomplete="new-password"
-              class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
               @keyup.enter="changePw"
             />
           </div>
         </div>
-        <p v-if="pwError" class="text-xs text-red-500 mb-3">{{ pwError }}</p>
+        <p v-if="pwError" class="text-base text-red-500 mb-3">{{ pwError }}</p>
         <div class="flex gap-2 justify-end">
           <button
-            class="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-100"
             @click="closePwModal"
+            class="text-base"
+            style="padding: 10px 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; cursor: pointer; color: #64748b;"
           >취소</button>
           <button
-            class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
             :disabled="!currentPw || !newPw || !confirmPw || pwLoading"
             @click="changePw"
+            class="text-base font-semibold disabled:opacity-40"
+            style="padding: 10px 20px; border-radius: 8px; border: none; background: #2563eb; cursor: pointer; color: white;"
           >{{ pwLoading ? '변경 중...' : '변경' }}</button>
         </div>
       </div>
@@ -113,20 +188,25 @@ import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
+import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu } from 'lucide-vue-next'
 
 const router = useRouter()
 const auth   = useAuthStore()
 
-const tabs = [
-  { key: 'class',       label: '학급 관리' },
-  { key: 'application', label: '지원자 등록' },
-  { key: 'results',     label: '라운드 결과' },
-]
-const active = ref('class')
-
+// ── 탭 컴포넌트 ──────────────────────────────────────────────
 const ClassTab       = defineAsyncComponent(() => import('../components/teacher/ClassTab.vue'))
 const ApplicationTab = defineAsyncComponent(() => import('../components/teacher/ApplicationTab.vue'))
 const ResultsTab     = defineAsyncComponent(() => import('../components/teacher/ResultsTab.vue'))
+
+// ── 메뉴 정의 ────────────────────────────────────────────────
+const sidebarMenus = [
+  { key: 'class',       label: '학급 관리',   icon: LayoutGrid },
+  { key: 'application', label: '지원자 등록', icon: UserPlus },
+  { key: 'results',     label: '라운드 결과', icon: Trophy },
+]
+
+// ── 활성 탭 ──────────────────────────────────────────────────
+const active = ref('class')
 
 const currentTab = computed(() => {
   if (active.value === 'class')       return ClassTab
@@ -134,32 +214,37 @@ const currentTab = computed(() => {
   return ResultsTab
 })
 
+const currentMenuItem = computed(() => sidebarMenus.find(m => m.key === active.value))
+
+// ── 사이드바 접기 ─────────────────────────────────────────────
+const collapsed = ref(false)
+
+// ── 역할 레이블 ───────────────────────────────────────────────
+const roleLabel = computed(() => {
+  if (auth.grade === 0) return '졸업생 담당'
+  return `${auth.grade}학년 ${auth.classNo}반 담임`
+})
+
+// ── 현재 라운드 ───────────────────────────────────────────────
 const currentRound = ref(null)
-
-function fmtLocalDate(s) {
-  if (!s) return ''
-  const d = new Date(s)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
 onMounted(async () => {
   currentRound.value = await getCurrentRound()
 })
 
+// ── 비밀번호 변경 ─────────────────────────────────────────────
 const showPwModal = ref(false)
-const currentPw = ref('')
-const newPw = ref('')
-const confirmPw = ref('')
-const pwError = ref('')
-const pwLoading = ref(false)
+const currentPw   = ref('')
+const newPw       = ref('')
+const confirmPw   = ref('')
+const pwError     = ref('')
+const pwLoading   = ref(false)
 
 function closePwModal() {
   showPwModal.value = false
-  currentPw.value = ''
-  newPw.value = ''
-  confirmPw.value = ''
-  pwError.value = ''
+  currentPw.value   = ''
+  newPw.value       = ''
+  confirmPw.value   = ''
+  pwError.value     = ''
 }
 
 async function changePw() {
@@ -173,7 +258,7 @@ async function changePw() {
     return
   }
   pwLoading.value = true
-  pwError.value = ''
+  pwError.value   = ''
   try {
     await teacherChangePassword(currentPw.value, newPw.value)
     closePwModal()

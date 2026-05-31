@@ -1,280 +1,359 @@
 <template>
-  <div class="flex gap-4" style="height: calc(100vh - 210px)">
-    <!-- ── 좌측: 학생 목록 ── -->
-    <div class="w-52 flex-shrink-0 bg-white border rounded-lg flex flex-col overflow-hidden">
-      <div class="px-3 py-2 border-b bg-gray-50 text-xs font-semibold text-gray-600">
-        학생 목록 ({{ students.length }}명)
-      </div>
-      <div class="overflow-y-auto flex-1">
-        <div
-          v-for="s in students"
-          :key="s.id"
-          class="px-3 py-2.5 text-sm cursor-pointer border-b border-gray-100 hover:bg-blue-50 flex items-center justify-between"
-          :class="selectedStudent?.id === s.id
-            ? 'bg-blue-50 border-l-2 border-l-blue-500'
-            : 'border-l-2 border-l-transparent'"
-          @click="selectStudent(s)"
-        >
-          <span class="font-medium text-gray-800">
-            <template v-if="auth.grade === 0">{{ s.student_code }} {{ s.name }}</template>
-            <template v-else>{{ s.seq_no }}번 {{ s.name }}</template>
-          </span>
-          <span
-            v-if="getStudentAppCount(s.id) > 0"
-            class="text-xs text-blue-600 font-semibold"
-          >{{ getStudentAppCount(s.id) }}</span>
-        </div>
-      </div>
+  <!-- 전체 레이아웃: 세로 flex, 뷰포트 전체 높이 -->
+  <div style="display: flex; flex-direction: column; height: 100%;">
+
+    <!-- 페이지 헤더 -->
+    <div style="padding: 2rem 2.5rem 1.25rem; flex-shrink: 0;">
+      <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
+      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
     </div>
 
-    <!-- ── 우측: 지원 등록 영역 ── -->
-    <div class="flex-1 min-h-0 overflow-y-auto">
-      <!-- 학생 미선택 -->
-      <div v-if="!selectedStudent" class="bg-white border rounded-lg p-10 text-center text-gray-400 text-sm">
-        좌측에서 학생을 선택하세요.
+    <!-- 두 열 레이아웃 (남은 높이 전체 차지) -->
+    <div style="display: flex; gap: 1.5rem; flex: 1; min-height: 0; padding: 0 2.5rem 2rem; overflow: hidden;">
+
+      <!-- ── 좌측: 학생 목록 ── -->
+      <div
+        class="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
+        style="width: 220px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+      >
+        <div class="flex-shrink-0 text-base font-semibold" style="padding: 14px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">
+          학생 목록 ({{ students.length }}명)
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <div
+            v-for="s in students"
+            :key="s.id"
+            class="flex items-center justify-between cursor-pointer text-base"
+            style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; border-left: 3px solid transparent; transition: background 0.1s;"
+            :style="{
+              background: selectedStudent?.id === s.id ? '#eff6ff' : 'transparent',
+              borderLeftColor: selectedStudent?.id === s.id ? '#2563eb' : 'transparent',
+            }"
+            @click="selectStudent(s)"
+          >
+            <span class="font-medium" style="color: #1e293b;">
+              <template v-if="auth.grade === 0">{{ s.student_code }} {{ s.name }}</template>
+              <template v-else>{{ s.seq_no }}번 {{ s.name }}</template>
+            </span>
+            <span
+              v-if="getStudentAppCount(s.id) > 0"
+              class="text-base font-semibold"
+              style="color: #2563eb;"
+            >{{ getStudentAppCount(s.id) }}</span>
+          </div>
+        </div>
       </div>
 
-      <template v-else>
-        <!-- 현재 라운드 지원 현황 -->
-        <div class="bg-white border rounded-lg p-4 mb-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-700">
-              {{ selectedStudent.name }} 학생의 {{ currentRound.id }}차 라운드 지원 현황
-            </h2>
-            <button
-              class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-              :class="showForm ? 'invisible' : ''"
-              @click="openNewForm"
-            >+ 새 지원 추가</button>
-          </div>
+      <!-- ── 우측: 지원 등록 영역 ── -->
+      <div class="flex-1 overflow-y-auto" style="min-width: 0;">
 
-          <div v-if="studentApps.length === 0 && !showForm" class="text-sm text-gray-400 mt-3">
-            등록된 지원이 없습니다.
-          </div>
-
-          <div v-for="app in studentApps" :key="`${app.track_id}`" class="flex items-center gap-2 mb-1.5">
-            <span class="text-sm text-gray-700">
-              {{ app.univ_name }} — {{ app.track_name }}
-              <span v-if="app.department_name" class="text-gray-500"> ({{ app.department_name }})</span>
-            </span>
-            <button
-              class="text-xs px-1.5 py-0.5 border border-gray-300 text-gray-400 rounded hover:border-red-300 hover:text-red-400"
-              :disabled="deletingApp === app.track_id"
-              @click="deleteApp(app)"
-            >취소</button>
-          </div>
+        <!-- 학생 미선택 -->
+        <div
+          v-if="!selectedStudent"
+          class="rounded-xl flex items-center justify-center"
+          style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
+        >
+          <p class="text-base" style="color: #94a3b8;">좌측에서 학생을 선택하세요.</p>
         </div>
 
-        <!-- 새 지원 등록 폼 -->
-        <div v-if="showForm" class="bg-white border rounded-lg p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-gray-700">새 지원 등록</h3>
-            <button
-              class="text-xs text-gray-400 hover:text-gray-600"
-              @click="closeForm"
-            >닫기</button>
-          </div>
+        <template v-else>
+          <!-- 현재 라운드 지원 현황 -->
+          <div
+            class="rounded-xl mb-4"
+            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); padding: 1.25rem 1.5rem;"
+          >
+            <div class="flex items-center justify-between">
+              <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">
+                {{ selectedStudent.name }} 학생의 {{ currentRound.id }}차 라운드 지원 현황
+              </h2>
+              <button
+                class="text-base font-semibold"
+                style="padding: 8px 18px; border: none; background: #2563eb; color: white; border-radius: 8px; cursor: pointer;"
+                :style="{ visibility: showForm ? 'hidden' : 'visible' }"
+                @click="openNewForm"
+              >+ 새 지원 추가</button>
+            </div>
 
-          <!-- 대학/모집단위/학과명 -->
-          <div class="grid grid-cols-3 gap-3 mb-5">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">대학 <span class="text-red-500">*</span></label>
-              <select
-                v-model="form.univId"
-                class="w-full border rounded px-2 py-1.5 text-sm"
-                @change="onUnivChange"
-              >
-                <option value="">대학 선택</option>
-                <option v-for="u in universities" :key="u.id" :value="u.id">{{ u.univ_name }}</option>
-              </select>
+            <div v-if="studentApps.length === 0 && !showForm" class="text-base" style="color: #94a3b8; margin-top: 4px;">
+              등록된 지원이 없습니다.
             </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">모집단위 <span class="text-red-500">*</span></label>
-              <select
-                v-model="form.trackId"
-                class="w-full border rounded px-2 py-1.5 text-sm"
-                :disabled="!form.univId || tracksLoading"
-                @change="onTrackChange"
-              >
-                <option value="">모집단위 선택</option>
-                <option v-for="t in form.tracks" :key="t.id" :value="t.id">{{ t.track_name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">학과명 <span class="text-red-500">*</span></label>
-              <input
-                v-model="form.departmentName"
-                type="text"
-                placeholder="예: 컴퓨터공학과"
-                class="w-full border rounded px-2 py-1.5 text-sm"
-                :disabled="!form.trackId"
-              />
+
+            <div v-for="app in studentApps" :key="`${app.track_id}`" class="flex items-center gap-2 mb-2">
+              <span class="text-base" style="color: #1e293b;">
+                {{ app.univ_name }} — {{ app.track_name }}
+                <span v-if="app.department_name" style="color: #64748b;"> ({{ app.department_name }})</span>
+              </span>
+              <button
+                class="text-base"
+                style="padding: 4px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
+                :disabled="deletingApp === app.track_id"
+                @click="deleteApp(app)"
+              >취소</button>
             </div>
           </div>
 
-          <!-- 전형요소 섹션 -->
-          <div v-if="contextLoading" class="text-sm text-gray-400 py-4 text-center">
-            전형요소 로딩 중...
-          </div>
+          <!-- 새 지원 등록 폼 -->
+          <div
+            v-if="showForm"
+            class="rounded-xl"
+            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); padding: 1.5rem;"
+          >
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="text-base font-semibold" style="color: #1e293b; margin: 0;">새 지원 등록</h3>
+              <button
+                class="text-base"
+                style="background: none; border: none; cursor: pointer; color: #94a3b8;"
+                @click="closeForm"
+              >닫기</button>
+            </div>
 
-          <div v-else-if="areaContext.length > 0">
-            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">전형요소</div>
-
-            <div class="grid gap-3" :class="areaGridClass">
-            <div
-              v-for="area in areaContext"
-              :key="area.area_id"
-              class="border rounded-lg p-3"
-              :class="area.teacher_editable ? 'border-gray-200' : 'border-gray-100 bg-gray-50'"
-            >
-              <!-- 전형요소 헤더 -->
-              <div class="mb-2">
-                <div class="flex items-center justify-between gap-2">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-sm font-medium text-gray-800 truncate">{{ area.area_name }}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{{ area.calc_type }}</span>
-                  </div>
-                  <span
-                    v-if="!area.teacher_editable"
-                    class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0"
-                  >관리자 입력 고정</span>
-                </div>
-                <div class="flex items-center justify-between mt-0.5">
-                  <span class="text-xs text-gray-400">만점 {{ area.max_score }}</span>
-                  <template v-if="scorePreview[area.area_id]">
-                    <span v-if="scorePreview[area.area_id].error" class="text-xs text-red-500">
-                      {{ scorePreview[area.area_id].error }}
-                    </span>
-                    <span
-                      v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined"
-                      class="text-xs text-blue-600 font-medium"
-                    >
-                      예상 {{ scorePreview[area.area_id].score }}점
-                      <span v-if="scorePreview[area.area_id].warning" class="text-amber-600"> ⚠</span>
-                    </span>
-                  </template>
-                </div>
-              </div>
-
-              <!-- 점수표 (위) -->
-              <div
-                v-if="area.table && area.table.length > 0"
-                :ref="el => setTableRef(el, area.area_id)"
-                class="border rounded overflow-hidden text-xs max-h-40 overflow-y-auto mb-2"
-              >
-                <table class="w-full">
-                  <thead class="sticky top-0">
-                    <tr class="bg-gray-50 border-b">
-                      <th class="px-2 py-1 text-left text-gray-500 font-medium">
-                        {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
-                      </th>
-                      <th class="px-2 py-1 text-right text-gray-500 font-medium">점수</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="row in area.table"
-                      :key="row.key"
-                      :data-highlighted="isHighlighted(area, row.key) || null"
-                      class="border-b last:border-b-0 transition-colors duration-300"
-                      :class="isHighlighted(area, row.key)
-                        ? 'bg-yellow-100 font-semibold text-yellow-900'
-                        : 'text-gray-600'"
-                    >
-                      <td class="px-2 py-1">{{ row.key }}</td>
-                      <td class="px-2 py-1 text-right">{{ row.score }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- 입력 영역 (아래) -->
+            <!-- 대학 / 모집단위 / 학과명 -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
               <div>
-                <!-- NUMERIC -->
-                <template v-if="area.calc_type === 'NUMERIC'">
-                  <input
-                    :value="areaValues[area.area_id] ?? ''"
-                    type="number"
-                    step="any"
-                    class="w-full border rounded px-2 py-1.5 text-sm"
-                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                    :disabled="!area.teacher_editable"
-                    :placeholder="area.teacher_editable ? '데이터 입력' : (area.current_values[0] ?? '데이터 없음')"
-                    @input="onNumericInput(area, $event.target.value)"
-                  />
-                </template>
-
-                <!-- CATEGORY 단일값 -->
-                <template v-else-if="area.calc_type === 'CATEGORY' && !area.multi_value">
-                  <select
-                    :value="areaValues[area.area_id] ?? ''"
-                    class="w-full border rounded px-2 py-1.5 text-sm"
-                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                    :disabled="!area.teacher_editable"
-                    @change="onCategoryChange(area, $event.target.value)"
-                  >
-                    <option value="">선택하세요</option>
-                    <option v-for="row in area.table" :key="row.key" :value="row.key">{{ row.key }}</option>
-                  </select>
-                </template>
-
-                <!-- CATEGORY 복수값 -->
-                <template v-else-if="area.calc_type === 'CATEGORY' && area.multi_value">
-                  <div class="space-y-1">
-                    <label
-                      v-for="row in area.table"
-                      :key="row.key"
-                      class="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        :value="row.key"
-                        :checked="(areaMultiValues[area.area_id] || []).includes(row.key)"
-                        :disabled="!area.teacher_editable"
-                        class="rounded"
-                        @change="onMultiValueChange(area, row.key, $event.target.checked)"
-                      />
-                      <span :class="area.teacher_editable ? 'text-gray-700' : 'text-gray-400'">
-                        {{ row.key }}
-                      </span>
-                    </label>
-                  </div>
-                </template>
-
-                <!-- MANUAL -->
-                <template v-else>
-                  <input
-                    :value="areaValues[area.area_id] ?? ''"
-                    type="number"
-                    step="any"
-                    class="w-full border rounded px-2 py-1.5 text-sm"
-                    :class="area.teacher_editable ? '' : 'bg-gray-100 text-gray-500'"
-                    :disabled="!area.teacher_editable"
-                    :placeholder="area.teacher_editable ? '점수 직접 입력' : (area.current_values[0] ?? '데이터 없음')"
-                    @input="onNumericInput(area, $event.target.value)"
-                  />
-                </template>
-
+                <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
+                  대학 <span style="color: #ef4444;">*</span>
+                </label>
+                <select
+                  v-model="form.univId"
+                  class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; box-sizing: border-box;"
+                  @change="onUnivChange"
+                >
+                  <option value="">대학 선택</option>
+                  <option v-for="u in universities" :key="u.id" :value="u.id">{{ u.univ_name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
+                  모집단위 <span style="color: #ef4444;">*</span>
+                </label>
+                <select
+                  v-model="form.trackId"
+                  class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; box-sizing: border-box;"
+                  :disabled="!form.univId || tracksLoading"
+                  @change="onTrackChange"
+                >
+                  <option value="">모집단위 선택</option>
+                  <option v-for="t in form.tracks" :key="t.id" :value="t.id">{{ t.track_name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
+                  학과명 <span style="color: #ef4444;">*</span>
+                </label>
+                <input
+                  v-model="form.departmentName"
+                  type="text"
+                  placeholder="예: 컴퓨터공학과"
+                  class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; box-sizing: border-box;"
+                  :disabled="!form.trackId"
+                />
               </div>
             </div>
+
+            <!-- 전형요소 섹션 -->
+            <div v-if="contextLoading" class="text-base text-center" style="color: #94a3b8; padding: 2rem 0;">
+              전형요소 로딩 중...
+            </div>
+
+            <div v-else-if="areaContext.length > 0">
+              <p class="text-base font-semibold mb-4" style="color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">
+                전형요소
+              </p>
+
+              <div class="grid gap-4" :class="areaGridClass">
+                <div
+                  v-for="area in areaContext"
+                  :key="area.area_id"
+                  class="rounded-xl"
+                  style="padding: 1rem 1.125rem;"
+                  :style="{
+                    border: area.teacher_editable ? '1px solid #e2e8f0' : '1px solid #f1f5f9',
+                    background: area.teacher_editable ? 'white' : '#f8fafc',
+                  }"
+                >
+                  <!-- 전형요소 헤더 -->
+                  <div class="mb-3">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-base font-semibold truncate" style="color: #1e293b;">{{ area.area_name }}</span>
+                        <span
+                          class="text-base flex-shrink-0"
+                          style="padding: 2px 8px; border-radius: 6px; background: #f1f5f9; color: #64748b;"
+                        >{{ area.calc_type }}</span>
+                      </div>
+                      <span
+                        v-if="!area.teacher_editable"
+                        class="text-base flex-shrink-0"
+                        style="padding: 2px 8px; border-radius: 6px; background: #fffbeb; color: #92400e;"
+                      >관리자 입력 고정</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                      <span class="text-base" style="color: #94a3b8;">만점 {{ area.max_score }}</span>
+                      <template v-if="scorePreview[area.area_id]">
+                        <span v-if="scorePreview[area.area_id].error" class="text-base" style="color: #ef4444;">
+                          {{ scorePreview[area.area_id].error }}
+                        </span>
+                        <span
+                          v-else-if="scorePreview[area.area_id].score !== null && scorePreview[area.area_id].score !== undefined"
+                          class="text-base font-medium"
+                          style="color: #2563eb;"
+                        >
+                          예상 {{ scorePreview[area.area_id].score }}점
+                          <span v-if="scorePreview[area.area_id].warning" style="color: #d97706;"> ⚠</span>
+                        </span>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- 점수표 -->
+                  <div
+                    v-if="area.table && area.table.length > 0"
+                    :ref="el => setTableRef(el, area.area_id)"
+                    class="rounded-lg overflow-hidden overflow-y-auto mb-3"
+                    style="border: 1px solid #e2e8f0; max-height: 240px;"
+                  >
+                    <table class="w-full" style="border-collapse: collapse;">
+                      <thead class="sticky top-0">
+                      <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                        <th class="text-base font-semibold text-left" style="padding: 8px 12px; color: #475569;">
+                          {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
+                        </th>
+
+                        <th class="text-base font-semibold text-right whitespace-nowrap w-12" style="padding: 8px 12px; color: #475569;">
+                          점수
+                        </th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                            v-for="row in area.table"
+                            :key="row.key"
+                            :data-highlighted="isHighlighted(area, row.key) || null"
+                            style="border-bottom: 1px solid #f1f5f9; transition: background 0.3s;"
+                            :style="{
+                              background: isHighlighted(area, row.key) ? '#fefce8' : 'transparent'
+                            }"
+                        >
+                          <td
+                              class="text-base text-left break-keep break-words min-w-0"
+                              style="padding: 8px 12px;"
+                              :style="{
+                                color: isHighlighted(area, row.key) ? '#5c320a' : '#475569',
+                                fontWeight: isHighlighted(area, row.key) ? '600' : '400'
+                              }"
+                          >
+                            {{ row.key }}
+                          </td>
+
+                          <td
+                              class="text-base text-right whitespace-nowrap w-12"
+                              style="padding: 8px 12px;"
+                              :style="{
+                                color: isHighlighted(area, row.key) ? '#5c320a' : '#64748b',
+                                fontWeight: isHighlighted(area, row.key) ? '600' : '400'
+                              }"
+                          >
+                            {{ row.score }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- 입력 영역 -->
+                  <div>
+                    <!-- NUMERIC -->
+                    <template v-if="area.calc_type === 'NUMERIC'">
+                      <input
+                        :value="areaValues[area.area_id] ?? ''"
+                        type="number"
+                        step="any"
+                        class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
+                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.teacher_editable"
+                        :placeholder="area.teacher_editable ? '데이터 입력' : (area.current_values[0] ?? '데이터 없음')"
+                        @input="onNumericInput(area, $event.target.value)"
+                      />
+                    </template>
+
+                    <!-- CATEGORY 단일값 -->
+                    <template v-else-if="area.calc_type === 'CATEGORY' && !area.multi_value">
+                      <select
+                        :value="areaValues[area.area_id] ?? ''"
+                        class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
+                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.teacher_editable"
+                        @change="onCategoryChange(area, $event.target.value)"
+                      >
+                        <option value="">선택하세요</option>
+                        <option v-for="row in area.table" :key="row.key" :value="row.key">{{ row.key }}</option>
+                      </select>
+                    </template>
+
+                    <!-- CATEGORY 복수값 -->
+                    <template v-else-if="area.calc_type === 'CATEGORY' && area.multi_value">
+                      <div class="flex flex-col gap-2">
+                        <label
+                          v-for="row in area.table"
+                          :key="row.key"
+                          class="flex items-center gap-2 text-base cursor-pointer"
+                          :style="{ color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
+                        >
+                          <input
+                            type="checkbox"
+                            :value="row.key"
+                            :checked="(areaMultiValues[area.area_id] || []).includes(row.key)"
+                            :disabled="!area.teacher_editable"
+                            class="accent-blue-600"
+                            @change="onMultiValueChange(area, row.key, $event.target.checked)"
+                          />
+                          {{ row.key }}
+                        </label>
+                      </div>
+                    </template>
+
+                    <!-- MANUAL -->
+                    <template v-else>
+                      <input
+                        :value="areaValues[area.area_id] ?? ''"
+                        type="number"
+                        step="any"
+                        class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
+                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.teacher_editable"
+                        :placeholder="area.teacher_editable ? '점수 직접 입력' : (area.current_values[0] ?? '데이터 없음')"
+                        @input="onNumericInput(area, $event.target.value)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 저장 버튼 -->
+            <div class="flex items-center gap-3 mt-6 pt-5" style="border-top: 1px solid #f1f5f9;">
+              <button
+                class="text-base font-semibold disabled:opacity-40"
+                style="padding: 10px 24px; border: none; background: #2563eb; color: white; border-radius: 8px; cursor: pointer;"
+                :disabled="!canSave || saving"
+                @click="saveApplication"
+              >{{ saving ? '등록 중...' : '저장' }}</button>
+              <button
+                class="text-base"
+                style="padding: 10px 20px; border: 1px solid #e2e8f0; background: white; color: #475569; border-radius: 8px; cursor: pointer;"
+                @click="closeForm"
+              >취소</button>
+              <span v-if="saveError" class="text-base" style="color: #ef4444;">{{ saveError }}</span>
             </div>
           </div>
-
-          <!-- 저장 버튼 -->
-          <div class="flex items-center gap-3 mt-4 pt-4 border-t">
-            <button
-              class="px-5 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
-              :disabled="!canSave || saving"
-              @click="saveApplication"
-            >{{ saving ? '등록 중...' : '저장' }}</button>
-            <button
-              class="px-4 py-2 text-sm border rounded text-gray-600 hover:bg-gray-50"
-              @click="closeForm"
-            >취소</button>
-            <span v-if="saveError" class="text-xs text-red-500">{{ saveError }}</span>
-          </div>
-        </div>
-      </template>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -315,7 +394,7 @@ const form = reactive({
   trackId:        '',
   departmentName: '',
 })
-const tracksLoading = ref(false)
+const tracksLoading  = ref(false)
 const contextLoading = ref(false)
 
 // areaValues: { [area_id]: string }  (NUMERIC, MANUAL, CATEGORY 단일)
@@ -368,8 +447,8 @@ function getStudentAppCount(sid) {
 
 const areaGridClass = computed(() => {
   const n = areaContext.value.length
-  if (n >= 5 && n <= 6) return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
-  return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+  if (n >= 5) return 'grid-cols-1 md:grid-cols-3'
+  return 'grid-cols-1 md:grid-cols-2'
 })
 
 const canSave = computed(() => {
@@ -396,7 +475,7 @@ async function loadAll() {
     teacherGetUniversities(),
   ])
   currentRound.value = round
-  students.value = sts
+  students.value     = sts
   universities.value = univs
 
   if (round) {
@@ -413,30 +492,30 @@ function selectStudent(s) {
 // ── 폼 열기/닫기 ─────────────────────────────────────────────────
 function openNewForm() {
   showForm.value = true
-  form.univId = ''
-  form.tracks = []
-  form.trackId = ''
+  form.univId         = ''
+  form.tracks         = []
+  form.trackId        = ''
   form.departmentName = ''
-  areaContext.value = []
-  areaValues.value = {}
+  areaContext.value   = []
+  areaValues.value    = {}
   areaMultiValues.value = {}
-  scorePreview.value = {}
-  saveError.value = ''
+  scorePreview.value  = {}
+  saveError.value     = ''
 }
 
 function closeForm() {
-  showForm.value = false
+  showForm.value  = false
   saveError.value = ''
 }
 
 // ── 대학 선택 → 모집단위 로드 ─────────────────────────────────────
 async function onUnivChange() {
-  form.trackId = ''
-  form.tracks = []
-  areaContext.value = []
-  areaValues.value = {}
+  form.trackId        = ''
+  form.tracks         = []
+  areaContext.value   = []
+  areaValues.value    = {}
   areaMultiValues.value = {}
-  scorePreview.value = {}
+  scorePreview.value  = {}
 
   if (!form.univId) return
   tracksLoading.value = true
@@ -449,16 +528,16 @@ async function onUnivChange() {
 
 // ── 모집단위 선택 → area-context 로드 ────────────────────────────
 async function onTrackChange() {
-  areaContext.value = []
-  areaValues.value = {}
+  areaContext.value   = []
+  areaValues.value    = {}
   areaMultiValues.value = {}
-  scorePreview.value = {}
+  scorePreview.value  = {}
 
   if (!form.trackId || !selectedStudent.value) return
   contextLoading.value = true
   try {
     const ctx = await teacherGetAreaContext(selectedStudent.value.id, form.trackId)
-    areaContext.value = ctx
+    areaContext.value    = ctx
     initAreaValues(ctx)
     contextLoading.value = false
     // 기저장 값이 있는 항목에 대해 즉시 점수 계산 (테이블 렌더링 후 실행)
@@ -469,7 +548,7 @@ async function onTrackChange() {
 }
 
 function initAreaValues(context) {
-  const vals = {}
+  const vals      = {}
   const multiVals = {}
   for (const area of context) {
     if (!area.teacher_editable) continue
@@ -479,7 +558,7 @@ function initAreaValues(context) {
       vals[area.area_id] = area.current_values[0] ?? ''
     }
   }
-  areaValues.value = vals
+  areaValues.value      = vals
   areaMultiValues.value = multiVals
 }
 
@@ -566,7 +645,7 @@ function isHighlighted(area, rowKey) {
 // ── 저장 ──────────────────────────────────────────────────────────
 async function saveApplication() {
   if (!canSave.value) return
-  saving.value = true
+  saving.value    = true
   saveError.value = ''
 
   const baseDataEntries = areaContext.value
@@ -581,11 +660,11 @@ async function saveApplication() {
 
   try {
     await teacherCreateApplication({
-      student_id:          selectedStudent.value.id,
-      track_id:            Number(form.trackId),
-      round_id:            currentRound.value.id,
-      department_name:     form.departmentName,
-      base_data_entries:   baseDataEntries,
+      student_id:        selectedStudent.value.id,
+      track_id:          Number(form.trackId),
+      round_id:          currentRound.value.id,
+      department_name:   form.departmentName,
+      base_data_entries: baseDataEntries,
     })
     applications.value = await teacherGetApplications(currentRound.value.id)
     closeForm()
