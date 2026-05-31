@@ -1115,7 +1115,7 @@ async fn calculate_scores_ranks_higher_score_first() {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '8000000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '800000')",
     )
     .bind(sid1)
     .bind(aid)
@@ -1123,7 +1123,7 @@ async fn calculate_scores_ranks_higher_score_first() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '6000000')",
+        "INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '600000')",
     )
     .bind(sid2)
     .bind(aid)
