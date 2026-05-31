@@ -8,7 +8,7 @@ use sqlx::FromRow;
 
 use crate::{
     auth::TeacherClaims,
-    enums::{CalcType, LookupScope, RoundStatus},
+    enums::{CalcType, CategoryAgg, LookupScope, RoundStatus},
     handlers::area_data::parse_display_value,
     handlers::scoring::{calc_area_score, AreaRow, StudentTrackCtx},
     state::AppState,
@@ -392,11 +392,11 @@ pub async fn teacher_create_application(
             calc_type: CalcType,
             teacher_editable: bool,
             lookup_scope: LookupScope,
-            multi_value: bool,
+            category_agg: Option<CategoryAgg>,
             max_score: i64,
         }
         sqlx::query_as::<_, Row>(
-            "SELECT id, calc_type, teacher_editable, lookup_scope, multi_value, max_score FROM areas",
+            "SELECT id, calc_type, teacher_editable, lookup_scope, category_agg, max_score FROM areas",
         )
         .fetch_all(&state.db)
         .await
@@ -407,7 +407,7 @@ pub async fn teacher_create_application(
             calc_type: r.calc_type,
             teacher_editable: r.teacher_editable,
             lookup_scope: r.lookup_scope,
-            multi_value: r.multi_value,
+            multi_value: r.category_agg == Some(CategoryAgg::Sum),
             max_score: r.max_score,
         })
         .collect()
