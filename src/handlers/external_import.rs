@@ -199,16 +199,18 @@ async fn do_import(
         ));
     }
 
-    let (track_id, created) = find_or_create_track(db, &univ_name, &track_name).await?;
     let mut warnings: Vec<String> = Vec::new();
-    if created {
-        warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", univ_name, track_name));
-    }
 
     let mut tx = db
         .begin()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // find_or_create_track을 tx 안에서 실행 — import 실패 시 생성된 대학/트랙도 롤백됨
+    let (track_id, created) = find_or_create_track(&mut *tx, &univ_name, &track_name).await?;
+    if created {
+        warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", univ_name, track_name));
+    }
 
     // 해당 모집단위 기초 데이터만 교체 (다른 모집단위 데이터 보존)
     sqlx::query("DELETE FROM base_data WHERE area_id = ? AND track_id = ?")

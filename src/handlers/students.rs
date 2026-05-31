@@ -563,17 +563,24 @@ pub async fn delete_student(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    // COUNT와 DELETE를 같은 tx 안에서 실행 — TOCTOU 방지
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let base_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE student_id = ?")
             .bind(id)
-            .fetch_one(&state.db)
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let app_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM applications WHERE student_id = ?")
             .bind(id)
-            .fetch_one(&state.db)
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -589,7 +596,11 @@ pub async fn delete_student(
 
     sqlx::query("DELETE FROM students WHERE id = ?")
         .bind(id)
-        .execute(&state.db)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

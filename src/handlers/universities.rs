@@ -156,6 +156,25 @@ pub async fn delete_university(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    // applications.track_id FK → univ_tracks 에 CASCADE 없음.
+    // 지원 기록이 있으면 FK 위반으로 500이 나므로 친화적 409로 먼저 차단.
+    let app_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM applications a
+         JOIN univ_tracks ut ON ut.id = a.track_id
+         WHERE ut.univ_id = ?",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if app_count > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("지원 기록 {}건이 있어 대학을 삭제할 수 없습니다.", app_count),
+        ));
+    }
+
     sqlx::query("DELETE FROM universities WHERE id = ?")
         .bind(id).execute(&state.db).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -247,6 +266,23 @@ pub async fn delete_track(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    // applications.track_id FK → univ_tracks 에 CASCADE 없음.
+    // 지원 기록이 있으면 FK 위반으로 500이 나므로 친화적 409로 먼저 차단.
+    let app_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM applications WHERE track_id = ?",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if app_count > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("지원 기록 {}건이 있어 모집단위를 삭제할 수 없습니다.", app_count),
+        ));
+    }
+
     sqlx::query("DELETE FROM univ_tracks WHERE id = ?")
         .bind(id).execute(&state.db).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

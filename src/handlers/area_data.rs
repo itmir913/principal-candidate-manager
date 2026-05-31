@@ -107,9 +107,10 @@ pub(crate) async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", id)))
 }
 
-/// 대학+모집단위가 없으면 자동 생성 후 (track_id, 생성여부) 반환
+/// 대학+모집단위가 없으면 자동 생성 후 (track_id, 생성여부) 반환.
+/// 호출자의 트랜잭션 연결을 받아 같은 tx 안에서 실행한다.
 pub(crate) async fn find_or_create_track(
-    db: &Db,
+    conn: &mut sqlx::SqliteConnection,
     univ_name: &str,
     track_name: &str,
 ) -> Result<(i64, bool), ApiError> {
@@ -118,7 +119,7 @@ pub(crate) async fn find_or_create_track(
         "SELECT id FROM universities WHERE univ_name = ?",
     )
     .bind(univ_name)
-    .fetch_optional(db)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     {
@@ -128,7 +129,7 @@ pub(crate) async fn find_or_create_track(
             "INSERT INTO universities (univ_name) VALUES (?) RETURNING id",
         )
         .bind(univ_name)
-        .fetch_one(db)
+        .fetch_one(&mut *conn)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     };
@@ -139,7 +140,7 @@ pub(crate) async fn find_or_create_track(
     )
     .bind(univ_id)
     .bind(track_name)
-    .fetch_optional(db)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     {
@@ -151,7 +152,7 @@ pub(crate) async fn find_or_create_track(
     )
     .bind(univ_id)
     .bind(track_name)
-    .fetch_one(db)
+    .fetch_one(&mut *conn)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -182,9 +183,10 @@ fn score_headers(area: &AreaInfo, key_col: &'static str) -> Vec<&'static str> {
     }
 }
 
-/// COMPOSITE 전형요소: track_id 조회/생성 (열 이름 기반)
+/// COMPOSITE 전형요소: track_id 조회/생성 (열 이름 기반).
+/// 호출자 tx 커넥션을 받아 같은 tx 안에서 실행 — import 실패 시 대학/트랙 생성도 롤백됨.
 async fn resolve_track(
-    db: &Db,
+    conn: &mut sqlx::SqliteConnection,
     area: &AreaInfo,
     cols: &[String],
     col: &std::collections::HashMap<String, usize>,
@@ -203,7 +205,7 @@ async fn resolve_track(
             }
             (false, false) => {}
         }
-        match find_or_create_track(db, un, tn).await {
+        match find_or_create_track(conn, un, tn).await {
             Ok((track_id, created)) => {
                 if created {
                     warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", un, tn));
@@ -343,7 +345,7 @@ pub async fn numeric_table_import(
             continue;
         }
 
-        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
@@ -497,7 +499,7 @@ pub async fn category_map_import(
             continue;
         }
 
-        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };
@@ -844,7 +846,7 @@ pub async fn base_data_import(
         };
 
         // COMPOSITE: 모집단위 조회/생성
-        let track_id = match resolve_track(&state.db, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
             Some(v) => v,
             None => continue,
         };

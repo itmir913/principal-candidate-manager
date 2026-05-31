@@ -10,6 +10,7 @@ use principal_candidate_manager::handlers::area_data::{
     base_data_import, base_data_list, category_map_import, numeric_table_import,
     BaseDataPageQuery, StudentTypeQuery,
 };
+use principal_candidate_manager::enums::LookupScope;
 
 async fn build_multipart(csv: &str) -> Multipart {
     let boundary = "boundary42";
@@ -420,6 +421,71 @@ async fn base_data_list_manual_corrupt_value_returns_500() {
         .await
         .unwrap_err();
     assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+// ── resolve_track tx 롤백 — import 실패 시 자동 생성 대학/트랙 제거 ──
+
+async fn insert_area_composite(pool: &sqlx::SqlitePool) -> i64 {
+    sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, lookup_scope, multi_value) \
+         VALUES ('외부점수', 10000000, 'NUMERIC', 'UPPER', 'COMPOSITE', 0) RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn numeric_table_import_failure_rolls_back_auto_created_track() {
+    // COMPOSITE 전형요소에 신규 대학/트랙을 자동 생성하면서 import.
+    // 오류가 포함된 파일이면 tx 전체가 롤백되어 자동 생성된 대학/트랙도 사라져야 한다.
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area_composite(&pool).await;
+    let state = common::make_state(pool.clone());
+
+    // "점수" 컬럼에 잘못된 값("abc")을 포함해 오류를 유발
+    let csv = "기준값,점수,대학명,모집단위명\n100,abc,신규대학,신규학과";
+    let mp = build_multipart(csv).await;
+    let res = numeric_table_import(State(state), Path(aid), mp).await.unwrap();
+    assert_eq!(res.0, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // import가 실패했으므로 자동 생성된 대학/트랙 행이 남아 있으면 안 됨
+    let univ_cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM universities WHERE univ_name = '신규대학'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let track_cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM univ_tracks WHERE track_name = '신규학과'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(univ_cnt, 0, "import 실패 시 자동 생성된 대학이 롤백되어야 함");
+    assert_eq!(track_cnt, 0, "import 실패 시 자동 생성된 트랙이 롤백되어야 함");
+}
+
+#[tokio::test]
+async fn category_map_import_failure_rolls_back_auto_created_track() {
+    let pool = common::create_test_pool_shared().await;
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, category_agg, lookup_scope, multi_value) \
+         VALUES ('봉사', 10000000, 'CATEGORY', 'SUM', 'COMPOSITE', 0) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let state = common::make_state(pool.clone());
+
+    // 점수가 만점 초과 → 오류 발생
+    let max_exceeded = 99999999999i64;
+    let csv = format!("범주,점수,대학명,모집단위명\n회장,{max_exceeded},신규대학,신규학과");
+    let mp = build_multipart(&csv).await;
+    let res = category_map_import(State(state), Path(aid), mp).await.unwrap();
+    assert_eq!(res.0, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let univ_cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM universities WHERE univ_name = '신규대학'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(univ_cnt, 0, "import 실패 시 자동 생성된 대학이 롤백되어야 함");
 }
 
 #[tokio::test]

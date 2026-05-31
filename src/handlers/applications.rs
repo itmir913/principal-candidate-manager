@@ -500,6 +500,19 @@ pub async fn teacher_create_application(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // tx 안에서 라운드 상태 재확인 — tx 밖 확인 후 CLOSED로 전환되는 TOCTOU 방지
+    let round_status_in_tx: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(body.round_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if round_status_in_tx != Some(RoundStatus::Open) {
+        return Err((StatusCode::BAD_REQUEST, "라운드가 OPEN 상태가 아닙니다".into()));
+    }
+
     for entry in &encoded {
         if entry.multi_value {
             // 복수값: 기존 행 전체 삭제 후 새 값 삽입
