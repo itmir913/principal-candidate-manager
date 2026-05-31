@@ -92,7 +92,7 @@ pub async fn close_round(
          JOIN univ_tracks ut ON ut.id = ap.track_id
          JOIN universities u ON u.id = ut.univ_id
          CROSS JOIN areas a
-         WHERE ap.round_id = ? AND ap.confirmed = 1
+         WHERE ap.round_id = ?
            AND NOT EXISTS (
              SELECT 1 FROM base_data bd
              WHERE bd.student_id = ap.student_id AND bd.area_id = a.id

@@ -445,7 +445,7 @@ async fn close_round_with_missing_base_data_returns_unprocessable_and_keeps_open
     let rid = body["id"].as_i64().unwrap();
     sqlx::query(
         "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+         VALUES (?, ?, ?, 0, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -516,7 +516,7 @@ async fn close_round_with_complete_base_data_succeeds_atomically() {
     let rid = body["id"].as_i64().unwrap();
     sqlx::query(
         "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+         VALUES (?, ?, ?, 0, 0)",
     )
     .bind(sid)
     .bind(tid)
