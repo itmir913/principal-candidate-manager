@@ -48,25 +48,26 @@ pub async fn get_current_round(
 pub async fn open_round(
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
-    let existing: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM rounds WHERE status IN ('OPEN', 'CLOSED') LIMIT 1",
+    let now = chrono::Utc::now().to_rfc3339();
+    // SELECT 후 INSERT 분리 시 TOCTOU race condition 발생 가능 —
+    // INSERT ... SELECT ... WHERE NOT EXISTS 로 검사+삽입을 원자적으로 처리한다.
+    let id: Option<i64> = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at)
+         SELECT 'OPEN', ?
+         WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE status IN ('OPEN', 'CLOSED'))
+         RETURNING id",
     )
+    .bind(&now)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if existing.is_some() {
-        return Err((StatusCode::CONFLICT, "진행 중인 라운드가 있습니다. 모든 라운드가 마감된 후에만 새 라운드를 열 수 있습니다".into()));
-    }
-
-    let now = chrono::Utc::now().to_rfc3339();
-    let id: i64 = sqlx::query_scalar(
-        "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', ?) RETURNING id",
-    )
-    .bind(&now)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let id = id.ok_or_else(|| {
+        (
+            StatusCode::CONFLICT,
+            "진행 중인 라운드가 있습니다. 모든 라운드가 마감된 후에만 새 라운드를 열 수 있습니다".to_string(),
+        )
+    })?;
 
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
@@ -75,7 +76,15 @@ pub async fn close_round(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    // 기초데이터 누락 사전 검증 — status 변경 전에 확인하여 CLOSED 상태로 진입 후 계산 실패를 방지
+    // 기초데이터 누락 검증과 status 변경을 같은 트랜잭션으로 묶는다.
+    // 별도 쿼리로 분리하면 검증 통과 후 base_data가 삭제될 수 있고,
+    // CLOSED 진입 후 점수 계산에서 실패하는 비원자성 버그가 발생한다.
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let missing: Vec<(String, String, String, String, String)> = sqlx::query_as(
         "SELECT a.name, s.name, s.student_code, u.univ_name, ut.track_name
          FROM applications ap
@@ -94,7 +103,7 @@ pub async fn close_round(
          LIMIT 5",
     )
     .bind(id)
-    .fetch_all(&state.db)
+    .fetch_all(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -117,7 +126,7 @@ pub async fn close_round(
     )
     .bind(&now)
     .bind(id)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .rows_affected();
@@ -125,6 +134,10 @@ pub async fn close_round(
     if affected == 0 {
         return Err((StatusCode::NOT_FOUND, format!("라운드 id={} 없거나 이미 CLOSED", id)));
     }
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let count = run_calculate_scores(&state.db, id)
         .await

@@ -361,3 +361,189 @@ async fn finalize_already_finalized_round_returns_not_found() {
     let res = finalize_round(State(common::make_state(pool)), Path(rid)).await;
     assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
 }
+
+// ── open_round TOCTOU fix ─────────────────────────────────────────
+
+/// 두 요청이 동시에 open_round를 호출할 때 정확히 하나만 성공해야 한다.
+/// INSERT ... WHERE NOT EXISTS 원자적 쿼리로 race condition을 방지한다.
+#[tokio::test]
+async fn open_round_concurrent_creates_exactly_one() {
+    let pool = common::create_test_pool_shared().await;
+    let (r1, r2) = tokio::join!(
+        open_round(State(common::make_state(pool.clone()))),
+        open_round(State(common::make_state(pool.clone()))),
+    );
+    let statuses: Vec<StatusCode> = [r1, r2]
+        .into_iter()
+        .map(|r| r.map(|(s, _)| s).unwrap_or_else(|(s, _)| s))
+        .collect();
+    assert!(
+        statuses.contains(&StatusCode::CREATED),
+        "동시 요청 중 하나는 CREATED여야 함: {statuses:?}"
+    );
+    assert!(
+        statuses.contains(&StatusCode::CONFLICT),
+        "동시 요청 중 하나는 CONFLICT여야 함: {statuses:?}"
+    );
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rounds WHERE status = 'OPEN'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "OPEN 라운드는 정확히 1개여야 함");
+}
+
+// ── close_round 트랜잭션 fix ──────────────────────────────────────
+
+/// 기초데이터가 누락된 상태에서 close_round를 호출하면 422를 반환하고
+/// 라운드 상태가 OPEN으로 유지되어야 한다.
+#[tokio::test]
+async fn close_round_with_missing_base_data_returns_unprocessable_and_keeps_open() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+
+    // area 하나 생성 (NUMERIC, UPPER, SIMPLE)
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, calc_type, max_score, match_mode, lookup_scope) \
+         VALUES ('내신', 'NUMERIC', 10000000, 'UPPER', 'SIMPLE') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // numeric_table 기준 삽입
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 0, 0)",
+    )
+    .bind(area_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // 학생·대학·트랙·라운드·지원 설정 (base_data는 의도적으로 누락)
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let (_, axum::Json(body)) =
+        open_round(State(common::make_state(pool.clone()))).await.unwrap();
+    let rid = body["id"].as_i64().unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
+         VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // base_data 없이 close 시도 → 422
+    let res = close_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // 라운드 상태가 OPEN으로 유지되어야 함
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "OPEN", "기초데이터 누락 검증 실패 후 상태는 OPEN이어야 함");
+}
+
+/// 기초데이터가 완전히 입력된 경우 close_round가 성공하고
+/// 검증과 상태 변경이 원자적으로 처리되어야 한다.
+#[tokio::test]
+async fn close_round_with_complete_base_data_succeeds_atomically() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+
+    // area 하나 (NUMERIC, UPPER, SIMPLE)
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, calc_type, max_score, match_mode, lookup_scope) \
+         VALUES ('내신', 'NUMERIC', 10000000, 'UPPER', 'SIMPLE') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    // threshold=0, score=0 — 모든 값(≥0)이 이 구간에 매칭됨
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 0, 0)",
+    )
+    .bind(area_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let (_, axum::Json(body)) =
+        open_round(State(common::make_state(pool.clone()))).await.unwrap();
+    let rid = body["id"].as_i64().unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
+         VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // base_data 삽입 (×100000 스케일 저장값 '0')
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) \
+         VALUES (?, ?, NULL, '0', 0)",
+    )
+    .bind(sid)
+    .bind(area_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // close 성공
+    let res = close_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert!(res.is_ok(), "기초데이터 완비 시 close_round는 성공해야 함");
+
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "CLOSED");
+}

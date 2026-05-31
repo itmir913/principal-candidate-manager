@@ -1635,3 +1635,50 @@ async fn teacher_get_results_regular_teacher_does_not_see_graduated_students() {
     assert_eq!(res.0.rounds.len(), 1);
     assert_eq!(res.0.results.len(), 0);
 }
+
+// ── Score 산술 연산 ───────────────────────────────────────────────
+
+#[test]
+fn score_add_normal() {
+    let a = Score::from_raw(100_000);
+    let b = Score::from_raw(200_000);
+    assert_eq!((a + b).raw(), 300_000);
+}
+
+#[test]
+fn score_add_zero() {
+    let a = Score::from_raw(500_000);
+    assert_eq!((a + Score::from_raw(0)).raw(), 500_000);
+}
+
+#[test]
+fn score_sum_empty() {
+    let total: Score = std::iter::empty::<Score>().sum();
+    assert_eq!(total.raw(), 0);
+}
+
+#[test]
+fn score_sum_multiple() {
+    let scores = vec![
+        Score::from_raw(100_000),
+        Score::from_raw(200_000),
+        Score::from_raw(300_000),
+    ];
+    let total: Score = scores.into_iter().sum();
+    assert_eq!(total.raw(), 600_000);
+}
+
+#[test]
+#[should_panic(expected = "Score overflow in Add")]
+fn score_add_overflow_panics() {
+    let a = Score::from_raw(i64::MAX);
+    let b = Score::from_raw(1);
+    let _ = a + b;
+}
+
+#[test]
+#[should_panic(expected = "Score overflow in Sum")]
+fn score_sum_overflow_panics() {
+    let scores = vec![Score::from_raw(i64::MAX), Score::from_raw(1)];
+    let _: Score = scores.into_iter().sum();
+}

@@ -52,12 +52,14 @@ impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for Score {
 impl std::ops::Add for Score {
     type Output = Score;
     fn add(self, rhs: Score) -> Score {
-        Score(self.0 + rhs.0)
+        Score(self.0.checked_add(rhs.0).expect("Score overflow in Add"))
     }
 }
 
 impl std::iter::Sum for Score {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        Score(iter.map(|s| s.0).sum())
+        iter.fold(Score(0), |acc, s| {
+            Score(acc.0.checked_add(s.0).expect("Score overflow in Sum"))
+        })
     }
 }
