@@ -547,3 +547,134 @@ async fn close_round_with_complete_base_data_succeeds_atomically() {
         .unwrap();
     assert_eq!(status, "CLOSED");
 }
+
+// ── finalize_round 정원 초과 검증 ────────────────────────────────
+
+/// 정원 없음(NULL) → finalize 성공 (기존 동작 유지)
+#[tokio::test]
+async fn finalize_round_no_quota_succeeds() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    let res = finalize_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert!(res.is_ok(), "정원 미설정 시 finalize는 항상 성공해야 함");
+}
+
+/// 모집단위 정원 이내 → finalize 성공
+#[tokio::test]
+async fn finalize_round_within_track_quota_succeeds() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    // unit_quota=2, recommended=1
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 2) RETURNING id",
+    )
+    .bind(univ_id).fetch_one(&pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 0, 1, 1, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let res = finalize_round(State(common::make_state(pool)), Path(rid)).await;
+    assert!(res.is_ok(), "모집단위 정원 이내이면 finalize 성공해야 함");
+}
+
+/// 모집단위 정원 초과 → 422, 상태 CLOSED 유지
+#[tokio::test]
+async fn finalize_round_exceeds_track_quota_returns_unprocessable() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    // unit_quota=1 이지만 recommended=2
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 1) RETURNING id",
+    )
+    .bind(univ_id).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    for (code, name) in [("S001", "홍길동"), ("S002", "김철수")] {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, 1, 1, 1) RETURNING id",
+        )
+        .bind(code).bind(name).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 0, 1, '2025-01-02T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+
+    let res = finalize_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::UNPROCESSABLE_ENTITY, "모집단위 정원 초과 시 422여야 함");
+
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "CLOSED", "정원 초과 검증 실패 후 상태는 CLOSED 유지");
+}
+
+/// 대학 전체 정원 초과 → 422, 상태 CLOSED 유지
+#[tokio::test]
+async fn finalize_round_exceeds_univ_quota_returns_unprocessable() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    // total_quota=1, 트랙 2개에 각 1명씩 recommended → 합계 2
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    for (track_name, code, name) in [("컴공", "S001", "홍길동"), ("기계", "S002", "김철수")] {
+        let tid: i64 = sqlx::query_scalar(
+            "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, ?) RETURNING id",
+        )
+        .bind(univ_id).bind(track_name).fetch_one(&pool).await.unwrap();
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, 1, 1, 1) RETURNING id",
+        )
+        .bind(code).bind(name).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 0, 1, '2025-01-02T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+
+    let res = finalize_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::UNPROCESSABLE_ENTITY, "대학 전체 정원 초과 시 422여야 함");
+
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "CLOSED", "대학 정원 초과 검증 실패 후 상태는 CLOSED 유지");
+}
