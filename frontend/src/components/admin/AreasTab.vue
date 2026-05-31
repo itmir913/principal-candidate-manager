@@ -419,7 +419,7 @@
         </div>
       </div>
 
-      <div v-else class="flex items-center justify-center" style="height: 240px;">
+      <div v-else class="flex-1 flex items-center justify-center" style="height: 240px;">
         <p class="text-base" style="color: #94a3b8;">왼쪽에서 전형요소를 선택하세요.</p>
       </div>
     </div>
