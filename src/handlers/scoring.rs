@@ -384,11 +384,24 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
             }
         });
 
-        for (rank, (sid, _, _)) in ranked.iter().enumerate() {
+        // Standard competition ranking: ties share the same rank (1,2,2,4,...)
+        let mut actual_rank: i64 = 0;
+        for (i, (sid, score, enrolled)) in ranked.iter().enumerate() {
+            let is_tie = i > 0 && {
+                let prev = &ranked[i - 1];
+                if prioritize {
+                    prev.1 == *score && prev.2 == *enrolled
+                } else {
+                    prev.1 == *score
+                }
+            };
+            if !is_tie {
+                actual_rank = (i + 1) as i64;
+            }
             sqlx::query(
                 "UPDATE results SET ranking = ? WHERE student_id = ? AND track_id = ? AND round_id = ?",
             )
-            .bind((rank + 1) as i64).bind(sid).bind(tid).bind(round_id)
+            .bind(actual_rank).bind(sid).bind(tid).bind(round_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
