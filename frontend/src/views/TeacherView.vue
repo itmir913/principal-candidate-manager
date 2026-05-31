@@ -20,9 +20,13 @@
           padding: collapsed ? '0' : '0 14px 0 16px',
         }"
       >
-        <span v-if="!collapsed" class="text-base font-bold whitespace-nowrap" style="color: #1e293b;">
-          학교장추천 선발 시스템
-        </span>
+        <div v-if="!collapsed" class="flex items-center gap-2 whitespace-nowrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
+          <span class="text-base font-bold" style="color: #1e293b;">학교장추천 선발 시스템</span>
+        </div>
         <button
           @click="collapsed = !collapsed"
           class="flex items-center justify-center p-1.5 rounded-md"
