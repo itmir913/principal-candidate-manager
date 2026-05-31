@@ -15,7 +15,8 @@
     >
       <div class="px-4 py-3 border-b bg-gray-50 flex items-center gap-2">
         <h2 class="text-sm font-semibold text-gray-700">
-          {{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과
+          <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
+          <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
         </h2>
         <span
           class="text-xs px-1.5 py-0.5 rounded-full"
@@ -121,7 +122,11 @@ const studentsByRound = computed(() => {
   // Map → 정렬된 배열로 변환
   const out = {}
   for (const [roundId, studentMap] of Object.entries(map)) {
-    out[roundId] = [...studentMap.values()].sort((a, b) => (a.seq_no ?? 999) - (b.seq_no ?? 999))
+    out[roundId] = [...studentMap.values()].sort((a, b) =>
+      auth.grade === 0
+        ? a.student_code.localeCompare(b.student_code)
+        : (a.seq_no ?? 999) - (b.seq_no ?? 999)
+    )
   }
   return out
 })

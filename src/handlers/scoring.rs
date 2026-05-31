@@ -723,30 +723,54 @@ pub async fn teacher_get_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let results = sqlx::query_as::<_, ResultRow>(
-        "SELECT r.student_id, r.track_id, r.round_id,
-                r.total_score, r.score_detail, r.ranking, r.recommended,
-                COALESCE(a.abandoned, 0) AS abandoned,
-                s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name,
-                COALESCE(a.department_name, '') AS department_name
-         FROM results r
-         JOIN students s ON r.student_id = s.id
-         JOIN univ_tracks ut ON r.track_id = ut.id
-         JOIN universities u ON ut.univ_id = u.id
-         JOIN rounds rnd ON rnd.id = r.round_id
-         LEFT JOIN applications a ON a.student_id = r.student_id
-                                  AND a.track_id  = r.track_id
-                                  AND a.round_id  = r.round_id
-         WHERE rnd.status = 'FINALIZED'
-           AND s.grade = ?
-           AND s.class_no = ?
-         ORDER BY r.round_id, s.seq_no, r.track_id",
-    )
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_all(&state.db)
-    .await
+    let results = if claims.grade == 0 && claims.class_no == 0 {
+        sqlx::query_as::<_, ResultRow>(
+            "SELECT r.student_id, r.track_id, r.round_id,
+                    r.total_score, r.score_detail, r.ranking, r.recommended,
+                    COALESCE(a.abandoned, 0) AS abandoned,
+                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                    u.univ_name, ut.track_name,
+                    COALESCE(a.department_name, '') AS department_name
+             FROM results r
+             JOIN students s ON r.student_id = s.id
+             JOIN univ_tracks ut ON r.track_id = ut.id
+             JOIN universities u ON ut.univ_id = u.id
+             JOIN rounds rnd ON rnd.id = r.round_id
+             LEFT JOIN applications a ON a.student_id = r.student_id
+                                      AND a.track_id  = r.track_id
+                                      AND a.round_id  = r.round_id
+             WHERE rnd.status = 'FINALIZED'
+               AND s.is_enrolled = 0
+             ORDER BY r.round_id, s.student_code, r.track_id",
+        )
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, ResultRow>(
+            "SELECT r.student_id, r.track_id, r.round_id,
+                    r.total_score, r.score_detail, r.ranking, r.recommended,
+                    COALESCE(a.abandoned, 0) AS abandoned,
+                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                    u.univ_name, ut.track_name,
+                    COALESCE(a.department_name, '') AS department_name
+             FROM results r
+             JOIN students s ON r.student_id = s.id
+             JOIN univ_tracks ut ON r.track_id = ut.id
+             JOIN universities u ON ut.univ_id = u.id
+             JOIN rounds rnd ON rnd.id = r.round_id
+             LEFT JOIN applications a ON a.student_id = r.student_id
+                                      AND a.track_id  = r.track_id
+                                      AND a.round_id  = r.round_id
+             WHERE rnd.status = 'FINALIZED'
+               AND s.grade = ?
+               AND s.class_no = ?
+             ORDER BY r.round_id, s.seq_no, r.track_id",
+        )
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_all(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(TeacherResultsResponse { rounds, results }))

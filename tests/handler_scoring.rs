@@ -7,7 +7,7 @@ use axum::{
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use principal_candidate_manager::handlers::scoring::{
     calc_area_score, calculate_scores, export_results, lookup_range_score, recommend_result,
-    unrecommend_result,
+    teacher_get_results, unrecommend_result,
     AreaRow, ResultRow, StudentTrackCtx,
 };
 use principal_candidate_manager::score::Score;
@@ -1534,4 +1534,104 @@ async fn unrecommend_on_finalized_round_returns_bad_request() {
         .unwrap();
     let res = unrecommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+// ── teacher_get_results: 졸업생 담당 케이스 ───────────────────────
+
+/// FINALIZED 라운드에 졸업생 결과를 삽입하고 반환값을 검증하는 헬퍼
+async fn setup_grad_result(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
+    let grad_sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES ('G001', '졸업생', 0, 2024) RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('졸업생대') RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '국문', 3) RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, finalized_at) \
+         VALUES ('FINALIZED', '2025-01-01T00:00:00Z', '2025-01-10T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
+         VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(grad_sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO results \
+         (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 0, 1, 1, '2025-01-09T00:00:00Z')",
+    )
+    .bind(grad_sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    (grad_sid, tid, rid)
+}
+
+use axum::Extension;
+
+#[tokio::test]
+async fn teacher_get_results_grad_teacher_sees_graduated_students() {
+    // 졸업생 담당(grade=0, class_no=0)은 is_enrolled=0 학생의 결과를 조회할 수 있어야 함
+    let pool = common::create_test_pool().await;
+    let (grad_sid, _, rid) = setup_grad_result(&pool).await;
+
+    let res = teacher_get_results(
+        State(common::make_state(pool.clone())),
+        Extension(common::teacher_claims(0, 0)),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(res.0.rounds.len(), 1);
+    assert_eq!(res.0.results.len(), 1);
+    assert_eq!(res.0.results[0].student_id, grad_sid);
+    assert_eq!(res.0.results[0].round_id, rid);
+}
+
+#[tokio::test]
+async fn teacher_get_results_regular_teacher_does_not_see_graduated_students() {
+    // 일반 담임(grade=1, class_no=1)은 졸업생 결과를 볼 수 없어야 함
+    let pool = common::create_test_pool().await;
+    setup_grad_result(&pool).await;
+
+    let res = teacher_get_results(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+    )
+    .await
+    .unwrap();
+
+    // 라운드는 존재하지만 결과 행은 0개여야 함
+    assert_eq!(res.0.rounds.len(), 1);
+    assert_eq!(res.0.results.len(), 0);
 }

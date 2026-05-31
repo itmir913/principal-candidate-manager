@@ -158,6 +158,59 @@ async fn create_application_student_not_in_class_returns_forbidden() {
     assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);
 }
 
+// ── teacher_create_application: 졸업생 담당 케이스 ───────────────
+
+#[tokio::test]
+async fn grad_teacher_can_create_graduated_student_application() {
+    // 졸업생 담당(grade=0, class_no=0)은 is_enrolled=0 학생의 지원을 등록할 수 있어야 함
+    let pool = common::create_test_pool().await;
+    let (_, tid, rid) = setup(&pool).await;
+
+    let grad_sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES ('G001', '졸업생', 0, 2024) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let res = teacher_create_application(
+        State(common::make_state(pool.clone())),
+        Extension(common::teacher_claims(0, 0)), // 졸업생 담당
+        Json(CreateApplicationBody {
+            student_id: grad_sid, track_id: tid, round_id: rid,
+            department_name: "국어국문학과".into(),
+            ..Default::default()
+        }),
+    )
+    .await;
+    assert_eq!(res.unwrap(), StatusCode::CREATED);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM applications")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn grad_teacher_cannot_create_enrolled_student_application() {
+    // 졸업생 담당은 재학생(is_enrolled=1)의 지원을 등록할 수 없어야 함
+    let pool = common::create_test_pool().await;
+    let (enrolled_sid, tid, rid) = setup(&pool).await; // setup()의 학생은 is_enrolled=1
+
+    let res = teacher_create_application(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(0, 0)), // 졸업생 담당
+        Json(CreateApplicationBody {
+            student_id: enrolled_sid, track_id: tid, round_id: rid,
+            department_name: "컴퓨터공학과".into(),
+            ..Default::default()
+        }),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);
+}
+
 // ── teacher_delete_application ────────────────────────────────────
 
 #[tokio::test]
