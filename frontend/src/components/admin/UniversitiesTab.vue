@@ -7,8 +7,6 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
     </div>
 
-    <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
-
     <div class="flex gap-6" style="min-height: 480px; align-items: flex-start;">
 
       <!-- ── 좌측: 대학 목록 ─────────────────────────────────── -->
@@ -22,6 +20,8 @@
             @click="startAddUniv"
           >+ 대학 추가</button>
         </div>
+
+        <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
 
         <!-- 대학 추가 폼 -->
         <div v-if="addingUniv" class="rounded-xl mb-3"
