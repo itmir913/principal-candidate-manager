@@ -112,8 +112,8 @@
                     <td class="text-center" style="padding: 12px 16px;">
                       <button
                         v-if="r.recommended && !r.abandoned"
-                        class="text-base"
-                        style="padding: 6px 14px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
+                        class="text-base whitespace-nowrap"
+                        style="padding: 6px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
                         @click="handleAbandon(r)"
                       >추천 포기</button>
                     </td>
