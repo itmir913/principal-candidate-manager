@@ -2,17 +2,9 @@
   <div style="padding: 2rem 2.5rem;">
 
     <!-- 페이지 헤더 -->
-    <div class="flex items-end justify-between flex-wrap gap-3 mb-5">
-      <div>
-        <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
-        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">라운드 관리</h1>
-      </div>
-      <button
-        class="text-base font-medium rounded-lg disabled:opacity-40"
-        style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
-        :disabled="hasOpenRound || loading"
-        @click="handleOpenRound"
-      >라운드 열기</button>
+    <div class="mb-5">
+      <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
+      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">라운드 관리</h1>
     </div>
 
     <div class="flex gap-6" style="align-items: flex-start;">
@@ -21,6 +13,12 @@
       <div class="flex-shrink-0 flex flex-col" style="width: 300px;">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold" style="color: #1e293b;">라운드 목록</h2>
+          <button
+            class="text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="hasOpenRound || loading"
+            @click="handleOpenRound"
+          >+ 열기</button>
         </div>
 
         <div class="flex flex-col gap-2">
@@ -47,22 +45,6 @@
                   }"
                 >{{ { OPEN: '진행 중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}</span>
               </div>
-            </div>
-            <!-- 상태 액션 버튼 -->
-            <div v-if="r.status !== 'FINALIZED'" class="flex gap-3" style="padding: 0 16px 12px;">
-              <template v-if="r.status === 'OPEN'">
-                <button class="text-base font-medium"
-                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                  @click.stop="handleCloseRound(r.id)">종료하기</button>
-              </template>
-              <template v-else-if="r.status === 'CLOSED'">
-                <button class="text-base font-medium"
-                  style="color: #64748b; background: none; border: none; cursor: pointer; padding: 0;"
-                  @click.stop="handleReopenRound(r.id)">다시 열기</button>
-                <button class="text-base font-medium"
-                  style="color: #7c3aed; background: none; border: none; cursor: pointer; padding: 0;"
-                  @click.stop="handleFinalizeRound(r.id)">마감하기</button>
-              </template>
             </div>
           </div>
 
