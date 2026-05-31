@@ -583,6 +583,23 @@ struct RoundSummaryRow {
     univ_this_count: i64,
 }
 
+#[derive(FromRow)]
+struct ApplicantResultRow {
+    student_code: String,
+    is_enrolled: i64,
+    grade: Option<i64>,
+    class_no: Option<i64>,
+    seq_no: Option<i64>,
+    name: String,
+    univ_name: String,
+    track_name: String,
+    department_name: String,
+    total_score: Option<i64>,
+    ranking: Option<i64>,
+    recommended: Option<i64>,
+    abandoned: i64,
+}
+
 pub async fn export_round_summary(
     State(state): State<AppState>,
     Path(round_id): Path<i64>,
@@ -686,6 +703,74 @@ pub async fn export_round_summary(
                 ws.write_string(r, 8, "무제한").ok();
             }
         }
+    }
+
+    // ── 지원자결과 시트 ──────────────────────────────────────────────
+    let applicants: Vec<ApplicantResultRow> = sqlx::query_as::<_, ApplicantResultRow>(
+        "SELECT s.student_code, s.is_enrolled, s.grade, s.class_no, s.seq_no, s.name,
+                u.univ_name, ut.track_name, a.department_name,
+                r.total_score, r.ranking, r.recommended, a.abandoned
+         FROM applications a
+         JOIN students s    ON s.id    = a.student_id
+         JOIN univ_tracks ut ON ut.id  = a.track_id
+         JOIN universities u  ON u.id  = ut.univ_id
+         LEFT JOIN results r  ON r.student_id = a.student_id
+                             AND r.track_id   = a.track_id
+                             AND r.round_id   = a.round_id
+         WHERE a.round_id = ?
+         ORDER BY s.is_enrolled DESC, s.student_code, u.univ_name, ut.track_name",
+    )
+    .bind(round_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let ws2 = wb
+        .add_worksheet()
+        .set_name("지원자결과")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let headers2 = [
+        "학생코드", "재학생여부", "학년", "반", "번호", "이름",
+        "지원대학", "모집단위", "지원학과명", "총점", "순위", "추천대상", "포기여부",
+    ];
+    for (col, h) in headers2.iter().enumerate() {
+        ws2.write_string(0, col as u16, *h).ok();
+    }
+
+    for (i, row) in applicants.iter().enumerate() {
+        let r = (i + 1) as u32;
+        ws2.write_string(r, 0, &row.student_code).ok();
+        ws2.write_string(r, 1, if row.is_enrolled == 1 { "재학생" } else { "졸업생" }).ok();
+        match row.grade {
+            Some(v) => { ws2.write_number(r, 2, v as f64).ok(); }
+            None    => { ws2.write_string(r, 2, "").ok(); }
+        }
+        match row.class_no {
+            Some(v) => { ws2.write_number(r, 3, v as f64).ok(); }
+            None    => { ws2.write_string(r, 3, "").ok(); }
+        }
+        match row.seq_no {
+            Some(v) => { ws2.write_number(r, 4, v as f64).ok(); }
+            None    => { ws2.write_string(r, 4, "").ok(); }
+        }
+        ws2.write_string(r, 5, &row.name).ok();
+        ws2.write_string(r, 6, &row.univ_name).ok();
+        ws2.write_string(r, 7, &row.track_name).ok();
+        ws2.write_string(r, 8, &row.department_name).ok();
+        match row.total_score {
+            Some(s) => { ws2.write_number(r, 9, s as f64 / 100_000.0).ok(); }
+            None    => { ws2.write_string(r, 9, "미계산").ok(); }
+        }
+        match row.ranking {
+            Some(rk) => { ws2.write_number(r, 10, rk as f64).ok(); }
+            None     => { ws2.write_string(r, 10, "").ok(); }
+        }
+        ws2.write_string(r, 11, match row.recommended {
+            Some(1) => "O",
+            _       => "X",
+        }).ok();
+        ws2.write_string(r, 12, if row.abandoned == 1 { "O" } else { "X" }).ok();
     }
 
     let buf = wb
