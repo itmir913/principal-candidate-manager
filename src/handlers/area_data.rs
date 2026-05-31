@@ -835,13 +835,24 @@ pub async fn base_data_import(
 
         // value 변환 (NUMERIC/MANUAL: ×100000, CATEGORY: 그대로)
         let db_value = match area.calc_type {
-            CalcType::Numeric | CalcType::Manual => match parse_display_value(raw_value) {
-                Ok(v) => v.to_string(),
-                Err(e) => {
-                    errors.push(format!("{}행: 값 — {}", row_num, e));
+            CalcType::Numeric | CalcType::Manual => {
+                let v = match parse_display_value(raw_value) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        errors.push(format!("{}행: 값 — {}", row_num, e));
+                        continue;
+                    }
+                };
+                // MANUAL: 입력값이 곧 점수 — 만점 초과 금지
+                if area.calc_type == CalcType::Manual && v > area.max_score {
+                    errors.push(format!(
+                        "{}행: 값({})이 전형요소 만점({})을 초과합니다",
+                        row_num, fmt_score(v), fmt_score(area.max_score)
+                    ));
                     continue;
                 }
-            },
+                v.to_string()
+            }
             CalcType::Category => raw_value.to_string(),
         };
 

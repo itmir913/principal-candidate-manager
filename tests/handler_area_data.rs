@@ -130,6 +130,51 @@ async fn manual_import_dedup_rejects_entire_import() {
 }
 
 #[tokio::test]
+async fn manual_import_exceeds_max_score_rejects_entire_import() {
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    insert_student(&pool, "S002").await;
+    // max_score = 10000000 (100점 × 100000)
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    // S002의 값이 만점(100) 초과 → 전체 import 거부
+    let csv = "학생코드,값\nS001,85\nS002,101\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty(), "만점 초과 오류가 errors에 포함되어야 함");
+    assert!(result.errors[0].contains("만점"), "오류 메시지에 '만점' 포함");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback 되어 S001 행도 저장되지 않아야 함");
+}
+
+#[tokio::test]
+async fn manual_import_at_max_score_is_accepted() {
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    // 정확히 만점(100) — 허용
+    let csv = "학생코드,값\nS001,100\n";
+    let (status, _) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn category_multi_import_allows_multiple_values_per_student() {
     let pool = common::create_test_pool_shared().await;
     insert_student(&pool, "S001").await;

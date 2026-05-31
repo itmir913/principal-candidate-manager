@@ -576,3 +576,78 @@ async fn create_application_base_data_overwritten_on_resave() {
     .unwrap();
     assert_eq!(val, "4500000");
 }
+
+// ── MANUAL 만점 초과 검증 ─────────────────────────────────────────
+
+/// MANUAL 전형요소 하나만 있는 단순 환경: (sid, tid, rid, man_editable_aid)
+async fn setup_manual_only(pool: &sqlx::SqlitePool, max_score_display: &str) -> (i64, i64, i64, i64) {
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(pool).await.unwrap();
+
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)
+         VALUES ('M001', '학생', 1, 1, 1, 1) RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('테스트대') RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '학과') RETURNING id",
+    ).bind(uid).fetch_one(pool).await.unwrap();
+
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01') RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+
+    // max_score를 ×100000 변환해서 저장
+    let max_score_raw: i64 = max_score_display.parse::<f64>().unwrap() as i64 * 100_000;
+    let man_aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope)
+         VALUES ('교사평가', ?, 'MANUAL', 1, 'SIMPLE') RETURNING id",
+    ).bind(max_score_raw).fetch_one(pool).await.unwrap();
+
+    (sid, tid, rid, man_aid)
+}
+
+#[tokio::test]
+async fn create_application_manual_exceeds_max_score_returns_bad_request() {
+    let pool = common::create_test_pool_shared().await;
+    // max_score = 10점, 초과값 10.01 제출 → 400
+    let (sid, tid, rid, man_aid) = setup_manual_only(&pool, "10").await;
+
+    let res = teacher_create_application(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+        Json(CreateApplicationBody {
+            student_id: sid, track_id: tid, round_id: rid,
+            department_name: "학과명".into(),
+            base_data_entries: vec![
+                BaseDataEntry { area_id: man_aid, values: vec!["10.01".into()] },
+            ],
+        }),
+    ).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_application_manual_at_max_score_is_accepted() {
+    let pool = common::create_test_pool_shared().await;
+    // max_score = 10점, 정확히 10 제출 → 201
+    let (sid, tid, rid, man_aid) = setup_manual_only(&pool, "10").await;
+
+    let res = teacher_create_application(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+        Json(CreateApplicationBody {
+            student_id: sid, track_id: tid, round_id: rid,
+            department_name: "학과명".into(),
+            base_data_entries: vec![
+                BaseDataEntry { area_id: man_aid, values: vec!["10".into()] },
+            ],
+        }),
+    ).await;
+    assert_eq!(res.unwrap(), StatusCode::CREATED);
+}

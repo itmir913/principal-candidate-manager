@@ -382,6 +382,7 @@ pub async fn teacher_create_application(
         teacher_editable: bool,
         lookup_scope: LookupScope,
         multi_value: bool,
+        max_score: i64,
     }
 
     let all_areas: Vec<AreaInfo> = {
@@ -392,9 +393,10 @@ pub async fn teacher_create_application(
             teacher_editable: bool,
             lookup_scope: LookupScope,
             multi_value: bool,
+            max_score: i64,
         }
         sqlx::query_as::<_, Row>(
-            "SELECT id, calc_type, teacher_editable, lookup_scope, multi_value FROM areas",
+            "SELECT id, calc_type, teacher_editable, lookup_scope, multi_value, max_score FROM areas",
         )
         .fetch_all(&state.db)
         .await
@@ -406,6 +408,7 @@ pub async fn teacher_create_application(
             teacher_editable: r.teacher_editable,
             lookup_scope: r.lookup_scope,
             multi_value: r.multi_value,
+            max_score: r.max_score,
         })
         .collect()
     };
@@ -468,6 +471,18 @@ pub async fn teacher_create_application(
                         format!("전형요소 id={}: {}", entry.area_id, e),
                     )
                 })?;
+                // MANUAL: 입력값이 곧 점수 — 만점 초과 금지
+                if info.calc_type == CalcType::Manual && v > info.max_score {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        format!(
+                            "전형요소 id={}: 값({})이 만점({})을 초과합니다",
+                            entry.area_id,
+                            crate::handlers::area_data::fmt_score(v),
+                            crate::handlers::area_data::fmt_score(info.max_score),
+                        ),
+                    ));
+                }
                 vec![v.to_string()]
             }
             CalcType::Category => {
