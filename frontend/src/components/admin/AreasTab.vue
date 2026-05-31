@@ -19,83 +19,6 @@
             @click="openAddForm">+ 추가</button>
         </div>
 
-        <!-- 전형요소 추가 폼 -->
-        <div v-if="showAddForm" class="mb-4 rounded-xl"
-             style="padding: 18px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-          <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
-          <div class="space-y-3">
-            <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
-              <input v-model="newArea.name" type="text"
-                     class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                     style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
-            </div>
-            <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율)</label>
-              <input v-model="newArea.max_score_display" type="number" step="0.00001"
-                     class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                     style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
-            </div>
-            <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식</label>
-              <select v-model="newArea.calc_type"
-                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-                <option value="NUMERIC">구간 조회</option>
-                <option value="CATEGORY">범주 선택</option>
-                <option value="MANUAL">수기 입력</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준</label>
-              <select v-model="newArea.lookup_scope"
-                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-                <option value="SIMPLE">기본 조회</option>
-                <option value="COMPOSITE">대학별 환산점수 조회</option>
-              </select>
-            </div>
-            <div v-if="newArea.calc_type === 'NUMERIC'">
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">구간 탐색 방향 <span style="color: #ef4444;">*</span></label>
-              <select v-model="newArea.match_mode"
-                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-                <option value="">선택하세요</option>
-                <option value="UPPER">▲ 기준값 이상(클수록 만점)</option>
-                <option value="LOWER">▼ 기준값 이하(작을수록 만점)</option>
-                <option value="EXACT">〓 정확히 일치</option>
-              </select>
-            </div>
-            <div v-if="newArea.calc_type === 'CATEGORY'">
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">복수 활동 처리 방식 <span style="color: #ef4444;">*</span></label>
-              <select v-model="newArea.category_agg"
-                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-                <option value="">선택하세요</option>
-                <option value="SUM">중복 선택 가능 (점수 합산)</option>
-                <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
-              </select>
-            </div>
-            <div class="flex items-center gap-2">
-              <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
-              <label for="te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
-            </div>
-            <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
-              전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
-            </div>
-            <div class="flex gap-2 pt-1">
-              <button
-                  class="text-base font-semibold rounded-lg"
-                  style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                  @click="addArea">저장</button>
-              <button
-                  class="text-base rounded-lg"
-                  style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                  @click="showAddForm = false">취소</button>
-            </div>
-          </div>
-        </div>
-
         <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
 
         <!-- 전형요소 카드 목록 -->
@@ -170,8 +93,86 @@
         </div>
       </div>
 
+      <!-- 전형요소 추가 폼 -->
+      <div v-if="showAddForm" class="mb-4 rounded-xl"
+           style="padding: 18px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
+            <input v-model="newArea.name" type="text"
+                   class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                   style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+          </div>
+          <div>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율)</label>
+            <input v-model="newArea.max_score_display" type="number" step="0.00001"
+                   class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                   style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+          </div>
+          <div>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식</label>
+            <select v-model="newArea.calc_type"
+                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+              <option value="NUMERIC">구간 조회</option>
+              <option value="CATEGORY">범주 선택</option>
+              <option value="MANUAL">수기 입력</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준</label>
+            <select v-model="newArea.lookup_scope"
+                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+              <option value="SIMPLE">기본 조회</option>
+              <option value="COMPOSITE">대학별 환산점수 조회</option>
+            </select>
+          </div>
+          <div v-if="newArea.calc_type === 'NUMERIC'">
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">구간 탐색 방향 <span style="color: #ef4444;">*</span></label>
+            <select v-model="newArea.match_mode"
+                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+              <option value="">선택하세요</option>
+              <option value="UPPER">▲ 기준값 이상(클수록 만점)</option>
+              <option value="LOWER">▼ 기준값 이하(작을수록 만점)</option>
+              <option value="EXACT">〓 정확히 일치</option>
+            </select>
+          </div>
+          <div v-if="newArea.calc_type === 'CATEGORY'">
+            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">복수 활동 처리 방식 <span style="color: #ef4444;">*</span></label>
+            <select v-model="newArea.category_agg"
+                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+              <option value="">선택하세요</option>
+              <option value="SUM">중복 선택 가능 (점수 합산)</option>
+              <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
+            <label for="te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
+          </div>
+          <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+            전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
+          </div>
+          <div class="flex gap-2 pt-1">
+            <button
+                class="text-base font-semibold rounded-lg"
+                style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                @click="addArea">저장</button>
+            <button
+                class="text-base rounded-lg"
+                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                @click="showAddForm = false">취소</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ── 우측: 전형요소 상세 ──────────────────────────────── -->
       <div class="flex-1 min-w-0" v-if="selected">
+
         <!-- 선택된 전형요소 헤더 -->
         <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div class="flex items-center gap-2 min-w-0 flex-wrap">
@@ -649,10 +650,10 @@ async function saveEdit() {
     teacher_editable: editArea.value.teacher_editable,
   }
   try {
-    await updateArea(selected.value.id, body)
-    const prevId = selected.value.id
+    await updateArea(editingAreaId.value, body)
+    const prevId = selected.value?.id
     await load()
-    selected.value = areas.value.find(a => a.id === prevId) ?? null
+    selected.value = prevId != null ? (areas.value.find(a => a.id === prevId) ?? null) : null
     editingAreaId.value = null
   } catch (e) {
     editError.value = e.response?.data ?? e.message

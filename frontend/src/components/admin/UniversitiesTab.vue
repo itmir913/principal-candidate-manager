@@ -76,8 +76,8 @@
               <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectUniv(u.id)">
                 <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
                 <p class="text-base mt-1" style="margin: 0; color: #64748b;">
-                  정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
-                  &nbsp;·&nbsp;재학우선: {{ u.prioritize_enrolled ? '○' : '-' }}
+                  대학 정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
+                  &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
                 </p>
               </div>
               <div class="flex gap-3" style="padding: 0 16px 12px;">
@@ -145,14 +145,14 @@
                 {{ selectedUniv.univ_name }} — 모집단위
               </h2>
               <p class="text-base mt-1" style="color: #64748b; margin: 0;">
-                전체 정원:
+                대학 전체 정원:
                 <span class="font-medium" style="color: #1e293b;">
                   {{ selectedUniv.total_quota != null ? selectedUniv.total_quota + '명' : '무제한' }}
                 </span>
                 <template v-if="selectedUnivStats">
-                  &nbsp;·&nbsp;추천인원:
+                  &nbsp;·&nbsp;대학 전체 추천인원:
                   <span class="font-medium" style="color: #1e293b;">{{ selectedUnivStats.total_used }}명</span>
-                  &nbsp;·&nbsp;잔여:
+                  &nbsp;·&nbsp;대학 전체 잔여인원:
                   <span class="font-medium"
                     :style="{ color: selectedUniv.total_quota != null && selectedUnivStats.total_used >= selectedUniv.total_quota ? '#ef4444' : '#1e293b' }">
                     {{ remainingLabel(selectedUnivStats.total_used, selectedUniv.total_quota) }}
@@ -184,7 +184,7 @@
                 <thead>
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">모집단위명</th>
-                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">제한 인원</th>
+                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">제한인원</th>
                     <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">추천인원</th>
                     <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">잔여인원</th>
                     <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569; width: 130px;">재학생 우선</th>
