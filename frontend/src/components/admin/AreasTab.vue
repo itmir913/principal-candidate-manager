@@ -10,7 +10,7 @@
     <div class="flex gap-6" style="align-items: flex-start;">
 
       <!-- ── 좌측: 전형요소 목록 ────────────────────────────────── -->
-      <div class="flex-shrink-0 flex flex-col" style="width: 280px;">
+      <div class="flex-shrink-0 flex flex-col" style="width: 300px;">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold" style="color: #1e293b;">전형요소 목록</h2>
           <button
@@ -21,28 +21,63 @@
 
         <p v-if="error" class="text-base mb-3" style="color: #ef4444;">{{ error }}</p>
 
-        <!-- 면적 목록 -->
+        <!-- 전형요소 카드 목록 -->
         <div class="flex flex-col gap-2">
-          <div v-for="area in areas" :key="area.id"
-            class="rounded-xl cursor-pointer transition-all"
+          <div
+            v-for="area in areas" :key="area.id"
+            class="rounded-xl transition-all"
             :style="{
-              padding: '12px 16px',
-              background: selected?.id === area.id ? '#eff6ff' : 'white',
-              border: selected?.id === area.id ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+              background: 'white',
+              border: editingAreaId === area.id ? '1px solid #fbbf24' : (selected?.id === area.id ? '1px solid #93c5fd' : '1px solid #e2e8f0'),
               boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
             }"
-            @click="selectArea(area)">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0 flex-1">
+          >
+            <!-- 보기 모드 -->
+            <template v-if="editingAreaId !== area.id">
+              <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectArea(area)">
                 <p class="text-base font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ area.name }}</p>
-                <p class="text-base mt-0.5" style="margin: 0; color: #94a3b8;">
+                <p class="text-base mt-1" style="margin: 0; color: #64748b;">
                   {{ calcTypeLabel(area.calc_type) }} · {{ lookupScopeLabel(area.lookup_scope) }}
                 </p>
               </div>
-              <button class="text-base font-medium flex-shrink-0"
-                style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                @click.stop="removeArea(area.id)">삭제</button>
-            </div>
+              <div class="flex gap-3" style="padding: 0 16px 12px;">
+                <button class="text-base font-medium"
+                  style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                  @click.stop="startEditArea(area)">편집</button>
+                <button class="text-base font-medium"
+                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                  @click.stop="removeArea(area.id)">삭제</button>
+              </div>
+            </template>
+            <!-- 편집 모드 -->
+            <template v-else>
+              <div style="padding: 14px 16px; background: #fefce8; border-radius: 10px;">
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
+                    <input v-model="editArea.name" type="text"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input v-model="editArea.teacher_editable" type="checkbox"
+                      :id="`edit-te-${area.id}`" class="accent-blue-600 w-4 h-4" />
+                    <label :for="`edit-te-${area.id}`" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
+                  </div>
+                  <p v-if="editError" class="text-base" style="color: #ef4444;">{{ editError }}</p>
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <button
+                    class="text-base font-semibold rounded-lg"
+                    style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                    @click="saveEdit">저장</button>
+                  <button
+                    class="text-base rounded-lg"
+                    style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                    @click="cancelEdit">취소</button>
+                </div>
+              </div>
+            </template>
           </div>
           <div v-if="areas.length === 0" class="text-base text-center" style="padding: 32px 0; color: #94a3b8;">
             등록된 전형요소 없음
@@ -146,53 +181,22 @@
             <span class="text-base font-medium flex-shrink-0"
               style="padding: 3px 12px; background: #f1f5f9; color: #475569; border-radius: 999px;">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
           </div>
-          <button v-if="!showEditForm"
-            class="flex-shrink-0 text-base rounded-lg"
-            style="padding: 7px 16px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-            @click="openEditForm">수정</button>
         </div>
 
         <!-- 기본 정보 카드 -->
         <div class="rounded-xl mb-5"
           style="padding: 18px 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-          <template v-if="!showEditForm">
-            <div class="flex flex-wrap gap-x-8 gap-y-2">
-              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">만점</span><span style="color: #1e293b;">{{ displayScore(selected.max_score) }}점</span></span>
-              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">조회 기준</span><span style="color: #1e293b;">{{ lookupScopeLabel(selected.lookup_scope) }}</span></span>
-              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">계산 유형</span><span style="color: #1e293b;">{{ calcTypeLabel(selected.calc_type) }}</span></span>
-              <span v-if="selected.calc_type === 'NUMERIC'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">탐색 방향</span><span style="color: #1e293b;">{{ matchModeLabel(selected.match_mode) }}</span></span>
-              <span v-if="selected.calc_type === 'CATEGORY'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">범주 집계</span><span style="color: #1e293b;">{{ categoryAggLabel(selected.category_agg) }}</span></span>
-              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">담임교사 입력</span><span style="color: #1e293b;">{{ selected.teacher_editable ? '허용' : '불가' }}</span></span>
-            </div>
-            <p class="text-base mt-3" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
-              전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
-            </p>
-          </template>
-          <template v-else>
-            <div class="space-y-3">
-              <div>
-                <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
-                <input v-model="editArea.name" type="text"
-                  class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box; max-width: 320px;" />
-              </div>
-              <div class="flex items-center gap-2">
-                <input v-model="editArea.teacher_editable" type="checkbox" id="edit-te" class="accent-blue-600 w-4 h-4" />
-                <label for="edit-te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
-              </div>
-              <p v-if="editError" class="text-base" style="color: #ef4444;">{{ editError }}</p>
-              <div class="flex gap-2 pt-1">
-                <button
-                  class="text-base font-semibold rounded-lg"
-                  style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                  @click="saveEdit">저장</button>
-                <button
-                  class="text-base rounded-lg"
-                  style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                  @click="cancelEdit">취소</button>
-              </div>
-            </div>
-          </template>
+          <div class="flex flex-wrap gap-x-8 gap-y-2">
+            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">만점</span><span style="color: #1e293b;">{{ displayScore(selected.max_score) }}점</span></span>
+            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">조회 기준</span><span style="color: #1e293b;">{{ lookupScopeLabel(selected.lookup_scope) }}</span></span>
+            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">계산 유형</span><span style="color: #1e293b;">{{ calcTypeLabel(selected.calc_type) }}</span></span>
+            <span v-if="selected.calc_type === 'NUMERIC'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">탐색 방향</span><span style="color: #1e293b;">{{ matchModeLabel(selected.match_mode) }}</span></span>
+            <span v-if="selected.calc_type === 'CATEGORY'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">범주 집계</span><span style="color: #1e293b;">{{ categoryAggLabel(selected.category_agg) }}</span></span>
+            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">담임교사 입력</span><span style="color: #1e293b;">{{ selected.teacher_editable ? '허용' : '불가' }}</span></span>
+          </div>
+          <p class="text-base mt-3" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
+            전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
+          </p>
         </div>
 
         <!-- 서브탭 -->
@@ -526,7 +530,7 @@ const basePage    = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
 
-const showEditForm = ref(false)
+const editingAreaId = ref(null)
 const editArea = ref({ name: '', teacher_editable: false })
 const editError = ref('')
 
@@ -566,7 +570,7 @@ async function load() {
 function selectArea(area) {
   selected.value = area
   activeTab.value = area.calc_type === 'MANUAL' ? 'base' : 'score'
-  showEditForm.value = false
+  editingAreaId.value = null
 
   scoreResult.value = null
   baseResult.value  = null
@@ -628,17 +632,14 @@ async function removeArea(id) {
   } catch (e) { error.value = e.response?.data ?? e.message }
 }
 
-function openEditForm() {
-  editArea.value = {
-    name: selected.value.name,
-    teacher_editable: selected.value.teacher_editable,
-  }
+function startEditArea(area) {
+  editArea.value = { name: area.name, teacher_editable: area.teacher_editable }
   editError.value = ''
-  showEditForm.value = true
+  editingAreaId.value = area.id
 }
 
 function cancelEdit() {
-  showEditForm.value = false
+  editingAreaId.value = null
 }
 
 async function saveEdit() {
@@ -652,7 +653,7 @@ async function saveEdit() {
     const prevId = selected.value.id
     await load()
     selected.value = areas.value.find(a => a.id === prevId) ?? null
-    showEditForm.value = false
+    editingAreaId.value = null
   } catch (e) {
     editError.value = e.response?.data ?? e.message
   }
@@ -660,6 +661,7 @@ async function saveEdit() {
 
 function openAddForm() {
   newArea.value = defaultNewArea()
+  editingAreaId.value = null
   showAddForm.value = true
 }
 
