@@ -7,6 +7,7 @@ use axum::{
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use principal_candidate_manager::handlers::scoring::{
     calc_area_score, calculate_scores, export_results, lookup_range_score, recommend_result,
+    unrecommend_result,
     AreaRow, ResultRow, StudentTrackCtx,
 };
 use principal_candidate_manager::score::Score;
@@ -1451,4 +1452,86 @@ async fn recommend_abandoned_student_does_not_count_toward_quota() {
     // 포기자가 있어도 unit_quota=1 자리 남아 있음 → 추천 성공 기대
     let res = recommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
     assert_eq!(res.unwrap(), StatusCode::NO_CONTENT);
+}
+
+// ── unrecommend_result ────────────────────────────────────────────
+
+#[tokio::test]
+async fn unrecommend_on_closed_round_clears_flag() {
+    // CLOSED 상태에서 recommended=1 → unrecommend → recommended=0
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_with_quota(&pool, None, None).await;
+
+    // 먼저 추천 확정
+    recommend_result(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
+        .await
+        .unwrap();
+    let rec_before: i64 =
+        sqlx::query_scalar("SELECT recommended FROM results WHERE student_id = ? AND round_id = ?")
+            .bind(sid)
+            .bind(rid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rec_before, 1);
+
+    // 추천 취소
+    unrecommend_result(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
+        .await
+        .unwrap();
+
+    let rec_after: i64 =
+        sqlx::query_scalar("SELECT recommended FROM results WHERE student_id = ? AND round_id = ?")
+            .bind(sid)
+            .bind(rid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rec_after, 0);
+}
+
+#[tokio::test]
+async fn unrecommend_on_open_round_returns_bad_request() {
+    // OPEN 상태에서는 추천 취소 불가
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    // applications → results 순으로 삽입 (FK 제약 준수)
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
+         VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO results \
+         (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 0, 1, 1, '2025-01-01T00:00:00Z')",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let res = unrecommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn unrecommend_on_finalized_round_returns_bad_request() {
+    // FINALIZED 상태에서는 추천 취소 불가
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_with_quota(&pool, None, None).await;
+    // CLOSED → FINALIZED
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED', finalized_at = '2025-01-03T00:00:00Z' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let res = unrecommend_result(State(common::make_state(pool)), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }

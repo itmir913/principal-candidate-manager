@@ -659,14 +659,23 @@ pub async fn teacher_delete_application(
         ));
     }
 
-    let ok: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
-    )
-    .bind(sid)
-    .bind(claims.grade)
-    .bind(claims.class_no)
-    .fetch_one(&state.db)
-    .await
+    let ok: bool = if is_grad_teacher(&claims) {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND is_enrolled = 0)",
+        )
+        .bind(sid)
+        .fetch_one(&state.db)
+        .await
+    } else {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND grade = ? AND class_no = ?)",
+        )
+        .bind(sid)
+        .bind(claims.grade)
+        .bind(claims.class_no)
+        .fetch_one(&state.db)
+        .await
+    }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if !ok {

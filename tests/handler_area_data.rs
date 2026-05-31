@@ -36,7 +36,8 @@ fn graduated_query() -> Query<StudentTypeQuery> {
 }
 
 fn default_page_query() -> Query<BaseDataPageQuery> {
-    Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "enrolled".to_string() })
+    // insert_student은 is_enrolled=0(졸업생)을 삽입하므로 student_type은 "graduated"
+    Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "graduated".to_string() })
 }
 
 async fn insert_student(pool: &sqlx::SqlitePool, code: &str) -> i64 {

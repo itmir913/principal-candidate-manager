@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use principal_candidate_manager::handlers::rounds::{
-    close_round, finalize_round, get_current_round, open_round,
+    close_round, finalize_round, get_current_round, open_round, reopen_round,
 };
 
 // ── open_round ────────────────────────────────────────────────────
@@ -143,4 +143,221 @@ async fn get_current_round_returns_the_open_round() {
     let axum::Json(result) =
         get_current_round(State(common::make_state(pool))).await.unwrap();
     assert_eq!(result.unwrap().id, expected_id);
+}
+
+// ── reopen_round ──────────────────────────────────────────────────
+
+/// CLOSED 상태의 라운드를 만들고 results에 ranked+recommended 행을 삽입하는 헬퍼
+async fn setup_closed_with_result(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash)
+        .execute(pool)
+        .await
+        .unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
+         VALUES (?, ?, ?, 1, 0)",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO results \
+         (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 500000, 1, 1, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(pool)
+    .await
+    .unwrap();
+    (sid, tid, rid)
+}
+
+#[tokio::test]
+async fn reopen_round_changes_status_to_open() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    reopen_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "OPEN");
+}
+
+#[tokio::test]
+async fn reopen_round_clears_closed_at() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    reopen_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    let closed_at: Option<String> =
+        sqlx::query_scalar("SELECT closed_at FROM rounds WHERE id = ?")
+            .bind(rid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(closed_at.is_none(), "reopen 후 closed_at은 NULL이어야 함");
+}
+
+#[tokio::test]
+async fn reopen_round_resets_results_recommended_and_ranking() {
+    let pool = common::create_test_pool().await;
+    let (sid, _tid, rid) = setup_closed_with_result(&pool).await;
+    // 재개 전: recommended=1, ranking=1 확인
+    let (rec_before, rank_before): (i64, Option<i64>) = sqlx::query_as(
+        "SELECT recommended, ranking FROM results WHERE student_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rec_before, 1);
+    assert_eq!(rank_before, Some(1));
+
+    reopen_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+
+    let (rec_after, rank_after): (i64, Option<i64>) = sqlx::query_as(
+        "SELECT recommended, ranking FROM results WHERE student_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rec_after, 0, "reopen 후 recommended는 0이어야 함");
+    assert!(rank_after.is_none(), "reopen 후 ranking은 NULL이어야 함");
+}
+
+#[tokio::test]
+async fn reopen_nonexistent_round_returns_not_found() {
+    let pool = common::create_test_pool().await;
+    let res = reopen_round(State(common::make_state(pool)), Path(9999i64)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn reopen_open_round_returns_not_found() {
+    // OPEN 상태 라운드는 CLOSED가 아니므로 404
+    let pool = common::create_test_pool().await;
+    let (_, axum::Json(body)) =
+        open_round(State(common::make_state(pool.clone()))).await.unwrap();
+    let id = body["id"].as_i64().unwrap();
+    let res = reopen_round(State(common::make_state(pool)), Path(id)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn reopen_finalized_round_returns_not_found() {
+    // FINALIZED 상태는 reopen 불가
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    let res = reopen_round(State(common::make_state(pool)), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+}
+
+// ── finalize_round ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn finalize_round_changes_status_to_finalized() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(status, "FINALIZED");
+}
+
+#[tokio::test]
+async fn finalize_round_sets_finalized_at() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    let finalized_at: Option<String> =
+        sqlx::query_scalar("SELECT finalized_at FROM rounds WHERE id = ?")
+            .bind(rid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(finalized_at.is_some(), "finalize 후 finalized_at이 설정되어야 함");
+}
+
+#[tokio::test]
+async fn finalize_nonexistent_round_returns_not_found() {
+    let pool = common::create_test_pool().await;
+    let res = finalize_round(State(common::make_state(pool)), Path(9999i64)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn finalize_open_round_returns_not_found() {
+    // OPEN 상태는 FINALIZED 불가 — CLOSED에서만 가능
+    let pool = common::create_test_pool().await;
+    let (_, axum::Json(body)) =
+        open_round(State(common::make_state(pool.clone()))).await.unwrap();
+    let id = body["id"].as_i64().unwrap();
+    let res = finalize_round(State(common::make_state(pool)), Path(id)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn finalize_already_finalized_round_returns_not_found() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+    // 두 번째 finalize 시도
+    let res = finalize_round(State(common::make_state(pool)), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
 }

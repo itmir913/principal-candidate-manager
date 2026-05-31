@@ -819,7 +819,9 @@ pub async fn score_preview(
         let score_raw = calc_area_score(&mut *conn, q.student_id, aw, q.track_id, &ctx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-        total_raw += score_raw;
+        total_raw = total_raw.checked_add(score_raw).ok_or_else(|| {
+            (StatusCode::INTERNAL_SERVER_ERROR, "점수 합산 오버플로우".to_string())
+        })?;
         detail.push(AreaPreview {
             area_id: aw.id,
             area_name: aw.name.clone(),
