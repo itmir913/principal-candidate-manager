@@ -2,7 +2,7 @@
   <div class="min-h-screen flex items-center justify-center p-6" style="background: #eeecea;">
     <div
       class="w-full bg-white"
-      style="max-width: 420px; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05); padding: 2.5rem;"
+      style="max-width: 840px; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05); padding: 2.5rem;"
     >
       <!-- 헤더 -->
       <div class="text-center mb-8">
