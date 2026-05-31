@@ -578,6 +578,9 @@ struct RoundSummaryRow {
     unit_quota: Option<i64>,
     before_count: i64,
     this_count: i64,
+    total_quota: Option<i64>,
+    univ_before_count: i64,
+    univ_this_count: i64,
 }
 
 pub async fn export_round_summary(
@@ -601,11 +604,32 @@ pub async fn export_round_summary(
                       WHERE r3.track_id  = ut.id
                         AND r3.recommended = 1
                         AND a3.abandoned   = 0
-                        AND r3.round_id    = ?) AS INTEGER) AS this_count
+                        AND r3.round_id    = ?) AS INTEGER) AS this_count,
+                u.total_quota,
+                CAST((SELECT COUNT(*) FROM results r4
+                      JOIN applications a4 ON a4.student_id = r4.student_id
+                                          AND a4.track_id  = r4.track_id
+                                          AND a4.round_id  = r4.round_id
+                      JOIN univ_tracks ut4 ON ut4.id = r4.track_id
+                      WHERE ut4.univ_id   = u.id
+                        AND r4.recommended = 1
+                        AND a4.abandoned   = 0
+                        AND r4.round_id    < ?) AS INTEGER) AS univ_before_count,
+                CAST((SELECT COUNT(*) FROM results r5
+                      JOIN applications a5 ON a5.student_id = r5.student_id
+                                          AND a5.track_id  = r5.track_id
+                                          AND a5.round_id  = r5.round_id
+                      JOIN univ_tracks ut5 ON ut5.id = r5.track_id
+                      WHERE ut5.univ_id   = u.id
+                        AND r5.recommended = 1
+                        AND a5.abandoned   = 0
+                        AND r5.round_id    = ?) AS INTEGER) AS univ_this_count
          FROM univ_tracks ut
          JOIN universities u ON u.id = ut.univ_id
          ORDER BY u.univ_name, ut.track_name",
     )
+    .bind(round_id)
+    .bind(round_id)
     .bind(round_id)
     .bind(round_id)
     .fetch_all(&state.db)
@@ -619,8 +643,9 @@ pub async fn export_round_summary(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let headers = [
-        "대학", "모집단위", "전체 정원",
-        "라운드 전 잔여석", "이번 라운드 추천 인원", "남은 잔여석",
+        "대학", "모집단위", "모집단위 정원",
+        "모집단위 라운드 전 잔여석", "이번 라운드 추천 인원", "모집단위 남은 잔여석",
+        "대학 전체 정원", "대학 라운드 전 잔여석", "대학 남은 잔여석",
     ];
     for (col, h) in headers.iter().enumerate() {
         ws.write_string(0, col as u16, *h).ok();
@@ -644,6 +669,21 @@ pub async fn export_round_summary(
                 ws.write_string(r, 3, "무제한").ok();
                 ws.write_number(r, 4, row.this_count as f64).ok();
                 ws.write_string(r, 5, "무제한").ok();
+            }
+        }
+        match row.total_quota {
+            Some(tq) => {
+                let univ_before_remaining = (tq - row.univ_before_count).max(0);
+                let univ_after_remaining =
+                    (tq - row.univ_before_count - row.univ_this_count).max(0);
+                ws.write_number(r, 6, tq as f64).ok();
+                ws.write_number(r, 7, univ_before_remaining as f64).ok();
+                ws.write_number(r, 8, univ_after_remaining as f64).ok();
+            }
+            None => {
+                ws.write_string(r, 6, "무제한").ok();
+                ws.write_string(r, 7, "무제한").ok();
+                ws.write_string(r, 8, "무제한").ok();
             }
         }
     }
