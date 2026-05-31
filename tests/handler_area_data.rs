@@ -10,7 +10,6 @@ use principal_candidate_manager::handlers::area_data::{
     base_data_import, base_data_list, category_map_import, numeric_table_import,
     BaseDataPageQuery, StudentTypeQuery,
 };
-use principal_candidate_manager::enums::LookupScope;
 
 async fn build_multipart(csv: &str) -> Multipart {
     let boundary = "boundary42";
