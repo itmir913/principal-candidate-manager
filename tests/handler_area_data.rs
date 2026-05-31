@@ -8,7 +8,7 @@ use axum::{
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
     base_data_import, base_data_list, category_map_import, numeric_table_import,
-    PageQuery, StudentTypeQuery,
+    BaseDataPageQuery, StudentTypeQuery,
 };
 
 async fn build_multipart(csv: &str) -> Multipart {
@@ -35,8 +35,8 @@ fn graduated_query() -> Query<StudentTypeQuery> {
     Query(StudentTypeQuery { student_type: "graduated".to_string() })
 }
 
-fn default_page_query() -> Query<PageQuery> {
-    Query(PageQuery { page: 1, per_page: 50 })
+fn default_page_query() -> Query<BaseDataPageQuery> {
+    Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "enrolled".to_string() })
 }
 
 async fn insert_student(pool: &sqlx::SqlitePool, code: &str) -> i64 {
