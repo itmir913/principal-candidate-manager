@@ -76,7 +76,7 @@
         <option :value="null">전체 반</option>
         <option v-for="c in availableClasses" :key="c" :value="c">{{ c }}반</option>
       </select>
-      <button class="text-sm text-blue-600 underline" @click="loadStudents">조회</button>
+      <button class="text-sm text-blue-600 underline" @click="loadStudents()">조회</button>
       <span class="ml-auto text-sm text-gray-500">총 {{ studentPage.total }}명</span>
     </div>
 
