@@ -420,7 +420,9 @@
       </div>
 
       <div v-else class="flex-1 flex items-center justify-center" style="height: 240px;">
-        <p class="text-base" style="color: #94a3b8;">왼쪽에서 전형요소를 선택하세요.</p>
+        <p class="text-base text-center" style="color: #94a3b8;">
+          왼쪽에서 전형요소를 선택하면<br class="hidden md:block" />학교장추천전형의 영역별 반영비율과 만점을 관리할 수 있습니다.
+        </p>
       </div>
     </div>
   </div>
