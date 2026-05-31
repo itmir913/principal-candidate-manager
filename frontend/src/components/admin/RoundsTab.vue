@@ -258,15 +258,15 @@
               <div class="flex items-center gap-3 mb-3 flex-wrap">
                 <h4 class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ key }}</h4>
                 <span class="text-base" style="color: #94a3b8;">
-                  <template v-if="group.unitQuota != null">
-                    모집단위 정원 {{ group.unitQuota }}명 / 잔여 {{ group.remaining }}석
-                  </template>
-                  <template v-else>모집단위 정원 무제한</template>
-                  <span style="margin: 0 6px; color: #e2e8f0;">|</span>
                   <template v-if="group.totalQuota != null">
                     대학 정원 {{ group.totalQuota }}명 / 잔여 {{ group.univRemaining }}석
                   </template>
                   <template v-else>대학 정원 무제한</template>
+                  <span style="margin: 0 6px; color: #e2e8f0;">|</span>
+                  <template v-if="group.unitQuota != null">
+                    모집단위 정원 {{ group.unitQuota }}명 / 잔여 {{ group.remaining }}석
+                  </template>
+                  <template v-else>모집단위 정원 무제한</template>
                 </span>
               </div>
               <div class="rounded-xl overflow-hidden"
@@ -321,13 +321,13 @@
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
                             <template v-else-if="r.recommended">
-                              <span class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
+                              <span class="text-base font-semibold" style="color: #16a34a;">추천 확정됨</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg ml-2"
                                 style="padding: 3px 10px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
                                 @click="handleUnrecommend(r)"
-                              >취소</button>
+                              >추천 취소</button>
                             </template>
                             <button
                               v-else-if="selected.status === 'CLOSED'"
