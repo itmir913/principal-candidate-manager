@@ -18,37 +18,56 @@
     <div class="flex gap-6" style="align-items: flex-start;">
 
       <!-- ── 좌측: 라운드 목록 ────────────────────────────────── -->
-      <div class="flex-shrink-0" style="width: 200px;">
-        <div v-if="rounds.length === 0" class="text-base text-center" style="padding: 32px 0; color: #94a3b8;">
-          라운드 없음
+      <div class="flex-shrink-0 flex flex-col" style="width: 300px;">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold" style="color: #1e293b;">라운드 목록</h2>
         </div>
 
         <div class="flex flex-col gap-2">
           <div
             v-for="r in rounds"
             :key="r.id"
-            class="rounded-xl cursor-pointer transition-all"
+            class="rounded-xl transition-all"
             :style="{
-              padding: '14px 16px',
-              background: selected?.id === r.id ? '#eff6ff' : 'white',
+              background: 'white',
               border: selected?.id === r.id ? '1px solid #93c5fd' : '1px solid #e2e8f0',
               boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
             }"
-            @click="selectRound(r)"
           >
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-base font-semibold inline-block w-25 tabular-nums" style="color: #1e293b;">
-                {{ r.id }}차 라운드
-              </span>
-              <span
-                class="text-base font-medium"
-                style="padding: 2px 10px; border-radius: 999px; white-space: nowrap;"
-                :style="{
-                  background: r.status === 'OPEN' ? '#dcfce7' : r.status === 'CLOSED' ? '#dbeafe' : '#f3e8ff',
-                  color:      r.status === 'OPEN' ? '#15803d' : r.status === 'CLOSED' ? '#1d4ed8' : '#7c3aed',
-                }"
-              >{{ { OPEN: '진행 중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}</span>
+            <!-- 클릭 영역 -->
+            <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectRound(r)">
+              <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ r.id }}차 라운드</p>
+              <div class="mt-1.5">
+                <span
+                  class="text-base font-medium"
+                  style="padding: 2px 10px; border-radius: 999px; white-space: nowrap;"
+                  :style="{
+                    background: r.status === 'OPEN' ? '#dcfce7' : r.status === 'CLOSED' ? '#dbeafe' : '#f3e8ff',
+                    color:      r.status === 'OPEN' ? '#15803d' : r.status === 'CLOSED' ? '#1d4ed8' : '#7c3aed',
+                  }"
+                >{{ { OPEN: '진행 중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}</span>
+              </div>
             </div>
+            <!-- 상태 액션 버튼 -->
+            <div v-if="r.status !== 'FINALIZED'" class="flex gap-3" style="padding: 0 16px 12px;">
+              <template v-if="r.status === 'OPEN'">
+                <button class="text-base font-medium"
+                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                  @click.stop="handleCloseRound(r.id)">종료하기</button>
+              </template>
+              <template v-else-if="r.status === 'CLOSED'">
+                <button class="text-base font-medium"
+                  style="color: #64748b; background: none; border: none; cursor: pointer; padding: 0;"
+                  @click.stop="handleReopenRound(r.id)">다시 열기</button>
+                <button class="text-base font-medium"
+                  style="color: #7c3aed; background: none; border: none; cursor: pointer; padding: 0;"
+                  @click.stop="handleFinalizeRound(r.id)">마감하기</button>
+              </template>
+            </div>
+          </div>
+
+          <div v-if="rounds.length === 0" class="text-base text-center" style="padding: 32px 0; color: #94a3b8;">
+            라운드 없음
           </div>
         </div>
       </div>
