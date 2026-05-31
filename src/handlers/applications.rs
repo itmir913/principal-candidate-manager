@@ -46,7 +46,7 @@ pub async fn teacher_change_password(
     let ok = bcrypt::verify(&body.current_password, &current_hash)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
-        return Err((StatusCode::UNAUTHORIZED, "현재 비밀번호가 틀렸습니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "현재 비밀번호가 틀렸습니다".into()));
     }
 
     // bcrypt는 CPU 집약 — DB 접근 전 미리 계산
