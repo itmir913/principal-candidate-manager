@@ -29,29 +29,36 @@
 
 ## `close_round` — 라운드 종료 (`PUT /rounds/:id/close`)
 
-처리 순서는 세 단계다.
+**전체 흐름이 단일 `BEGIN IMMEDIATE` 트랜잭션으로 원자적으로 처리된다.**
+
+`BEGIN IMMEDIATE`를 사용하는 이유:
+- 이 시점부터 다른 커넥션의 **쓰기(base_data 수정 포함)를 차단**한다.
+- WAL 모드에서 다른 커넥션의 **읽기는 그대로 허용**된다.
+- 점수 계산이 실패하면 ROLLBACK으로 status 변경까지 함께 취소되어 **라운드는 OPEN 상태로 복귀**한다. CLOSED 상태에서 점수 없는 불일치 상태가 원천적으로 불가능하다.
 
 ### ① 기초데이터 누락 사전 검증
-
-상태 변경 전에 실행한다. 이 순서인 이유는 CLOSED 상태로 진입한 뒤 점수 계산이 실패하는 상황을 미리 막기 위함이다.
 
 검증 쿼리는 다음 조건으로 누락을 탐지한다:
 - 해당 라운드의 모든 지원 신청을 기준으로,
 - 모든 전형요소(`areas`)에 대해 해당 학생의 `base_data`가 존재하는지 확인한다.
 - COMPOSITE 전형요소는 `base_data.track_id = ap.track_id`를 추가 조건으로, SIMPLE 전형요소는 `track_id IS NULL`을 조건으로 한다.
 - `LIMIT 5`를 사용하는 이유: 누락이 있는 경우 전체 목록을 반환하면 응답이 너무 크고 사용자에게는 처음 몇 건만 표시해도 충분하기 때문이다.
-- 누락이 1건이라도 있으면 422 Unprocessable Entity를 반환하고 라운드 상태는 OPEN 그대로 유지한다.
+- 누락이 1건이라도 있으면 422 Unprocessable Entity를 반환하고 ROLLBACK. 라운드 상태는 OPEN 그대로 유지된다.
+
+**사전 검증의 한계**: base_data 존재 여부만 확인한다. `numeric_table` / `category_map`의 내용 불일치(예: UPPER 모드에서 학생 값이 모든 threshold보다 낮음, CATEGORY 범주가 맵에 없음)는 ②점수 계산 단계에서 422 오류로 감지된다. 이 경우에도 ROLLBACK으로 OPEN 상태가 유지된다.
 
 ### ② status 변경
 
 `UPDATE rounds SET status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'`을 실행한다.
 - `AND status = 'OPEN'` 조건으로 이미 CLOSED인 라운드를 이중으로 닫는 것을 방지한다.
-- `rows_affected == 0`이면 404 반환.
+- `rows_affected == 0`이면 ROLLBACK 후 404 반환.
 
-### ③ 자동 점수 계산
+### ③ 점수 계산 (같은 트랜잭션·커넥션 안에서)
 
-`run_calculate_scores`를 호출해 모든 지원자의 점수를 계산하고 `results` 테이블에 저장한다.
-응답에 계산된 지원자 수(`{ "calculated": N }`)를 포함한다.
+`run_calculate_scores_on_conn`을 호출해 모든 지원자의 점수를 계산하고 `results` 테이블에 저장한다.
+- 실패 시 ROLLBACK → status 변경(②)도 취소되어 라운드는 OPEN으로 복귀.
+- 성공 시 COMMIT → status가 CLOSED로 확정되고 results가 박제된다.
+- 응답에 계산된 지원자 수(`{ "calculated": N }`)를 포함한다.
 
 ---
 

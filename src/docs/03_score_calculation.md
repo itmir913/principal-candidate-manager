@@ -3,10 +3,11 @@
 ## 진입점
 
 점수 계산은 두 경로로 시작된다:
-- **`close_round`**: 라운드 종료 시 자동 호출 (상태 검증 없이 호출됨 — 호출 전 이미 CLOSED 검증 완료)
-- **`calculate_scores` (`POST /rounds/:id/calculate`)**: 관리자가 수동으로 재계산 요청. CLOSED 상태인지 먼저 확인 후 `run_calculate_scores` 호출.
 
-두 경로 모두 `run_calculate_scores(db, round_id)`를 최종적으로 호출한다.
+- **`close_round`**: 라운드 종료 시 자동 호출. `BEGIN IMMEDIATE` 트랜잭션 내부에서 `run_calculate_scores_on_conn(conn, round_id, now)`를 직접 호출. 실패 시 ROLLBACK으로 CLOSED 상태 변경까지 취소된다.
+- **`calculate_scores` (`POST /rounds/:id/calculate`)**: 관리자가 수동으로 재계산 요청. CLOSED 상태인지 먼저 확인 후 `run_calculate_scores(db, round_id)` 호출. 이 래퍼 함수도 내부적으로 `BEGIN IMMEDIATE`를 사용한다.
+
+핵심 로직은 `run_calculate_scores_on_conn(&mut SqliteConnection, round_id, now)`에 집중되어 있으며, `run_calculate_scores`는 단독 호출을 위한 풀 기반 래퍼다.
 
 ---
 
@@ -90,12 +91,14 @@ JSON 응답 시에는 `score_detail_as_map` 커스텀 시리얼라이저가 이 
 
 ## 트랜잭션 경계
 
-점수 계산 전체 흐름의 트랜잭션은 두 구간으로 나뉜다:
+`run_calculate_scores_on_conn`은 단일 `&mut SqliteConnection` 위에서 읽기와 쓰기를 순차적으로 수행한다. 트랜잭션 관리는 호출자가 담당한다.
 
-1. **트랜잭션 밖 (읽기 전용 계산)**: 별도 connection(`db.acquire()`)으로 모든 학생의 점수를 계산해 `Vec<(student_id, track_id, detail_json, total)>`에 수집. Connection은 계산 완료 후 drop.
-2. **트랜잭션 내 (쓰기)**: `db.begin()`으로 트랜잭션 시작 → results 저장 → 모집단위별 순위 계산·저장 → `tx.commit()`.
+- **`close_round`에서 호출 시**: 호출자가 `BEGIN IMMEDIATE`를 선점. 검증·상태 변경·점수 계산·results 저장·순위 계산 전체가 하나의 커넥션·트랜잭션으로 처리된다.
+- **`run_calculate_scores`(수동 재계산 래퍼)에서 호출 시**: 래퍼가 `BEGIN IMMEDIATE`를 선점한 뒤 `run_calculate_scores_on_conn`을 호출하고 COMMIT / ROLLBACK한다.
 
-이렇게 읽기와 쓰기를 분리한 이유는 SQLite의 동시성 제한(쓰기 잠금) 시간을 최소화하기 위함으로 추정된다.
+`BEGIN IMMEDIATE`를 사용하므로, 계산 구간 동안 다른 커넥션의 쓰기(base_data import 등)가 차단된다. SQLite WAL 모드에서 읽기는 스냅샷 격리로 계속 허용된다.
+
+점수 계산과 results INSERT가 같은 커넥션에서 이루어지므로, 순위 계산 시 방금 저장한 results를 같은 트랜잭션에서 바로 읽을 수 있다.
 
 ---
 
@@ -126,7 +129,8 @@ JSON 응답 시에는 `score_detail_as_map` 커스텀 시리얼라이저가 이 
 ## 수동 재계산 (`POST /rounds/:id/calculate`)
 
 `close_round`와의 차이점:
-- CLOSED 상태 확인을 직접 수행한다 (close_round는 상태 변경 후 호출하므로 이미 CLOSED가 보장됨).
-- 기초데이터 누락 사전 검증을 하지 않는다. 누락이 있으면 `run_calculate_scores` 내부에서 오류가 발생한다.
+- CLOSED 상태 확인을 직접 수행한다.
+- 기초데이터 누락 사전 검증을 하지 않는다. 누락이 있으면 `run_calculate_scores_on_conn` 내부에서 422 오류가 발생하고 ROLLBACK된다.
 - 상태를 변경하지 않는다. CLOSED 상태 그대로 재계산만 수행.
+- `run_calculate_scores(db, round_id)` 래퍼를 호출하며, 이 래퍼도 `BEGIN IMMEDIATE`로 계산 구간 동안 다른 커넥션의 쓰기를 차단한다.
 - 응답: `{ "calculated": N }`.
