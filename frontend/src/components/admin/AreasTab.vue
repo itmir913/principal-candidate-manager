@@ -847,16 +847,22 @@ const ExcelPanel = defineComponent({
           h('span', { style: 'color: #cbd5e1; user-select: none;' }, '|'),
         ] : []),
 
-        h('button', { style: btnStyle, disabled: downloading.value, onClick: dlTemplate }, '양식 다운로드'),
+        h('button', { style: btnStyle, disabled: downloading.value, onClick: dlTemplate },
+        props.panel === "base"
+            ? (props.studentType === 'enrolled'
+                ? '재학생 양식 다운로드'
+                : '졸업생 양식 다운로드')
+            : '양식 다운로드'
+        ),
 
         h('label', { style: uploadStyle(uploading.value) }, [
           uploading.value
               ? '가져오는 중…'
               : props.panel === 'base'
                   ? (props.studentType === 'enrolled'
-                      ? '재학생 불러오기'
-                      : '졸업생 불러오기')
-                  : '불러오기',
+                      ? '재학생 가져오기'
+                      : '졸업생 가져오기')
+                  : '가져오기',
           h('input', { type: 'file', accept: '.xlsx,.csv', style: 'display: none;', onChange: onFile }),
         ]),
 
@@ -865,8 +871,8 @@ const ExcelPanel = defineComponent({
       ]),
       h('p', { style: 'font-size: 16px; color: #92400e;' },
         props.panel === 'base'
-          ? `※ 불러오기 시 ${props.studentType === 'enrolled' ? '재학생' : '졸업생'} 기존 기초 데이터가 모두 교체됩니다.`
-          : '※ 불러오기 시 기존 점수 기준이 모두 교체됩니다.'),
+          ? `※ 가져오기 시 기존 ${props.studentType === 'enrolled' ? '재학생' : '졸업생'}의 기초 데이터가 모두 교체됩니다.`
+          : '※ 가져오기 시 기존 점수 기준이 모두 교체됩니다.'),
       err.value ? h('p', { style: 'font-size: 16px; color: #ef4444;' }, err.value) : null,
     ])
   },
