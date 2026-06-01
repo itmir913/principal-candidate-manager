@@ -16,7 +16,7 @@
           <button
             class="text-base font-medium rounded-lg"
             style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-            @click="openAddForm">+ 추가</button>
+            @click="openAddForm">+ 전형요소 추가</button>
         </div>
 
         <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
@@ -35,18 +35,18 @@
             <!-- 보기 모드 -->
             <template v-if="editingAreaId !== area.id">
               <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectArea(area)">
-                <p class="text-base font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ area.name }}</p>
+                <p class="text-lg font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ area.name }}</p>
                 <p class="text-base mt-1" style="margin: 0; color: #64748b;">
                   {{ calcTypeLabel(area.calc_type) }} · {{ lookupScopeLabel(area.lookup_scope) }}
                 </p>
-              </div>
-              <div class="flex gap-3" style="padding: 0 16px 12px;">
-                <button class="text-base font-medium"
-                  style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
-                  @click.stop="startEditArea(area)">편집</button>
-                <button class="text-base font-medium"
-                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                  @click.stop="removeArea(area.id)">삭제</button>
+                <div class="flex gap-3">
+                  <button class="text-base font-medium"
+                          style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                          @click.stop="startEditArea(area)">편집</button>
+                  <button class="text-base font-medium"
+                          style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                          @click.stop="removeArea(area.id)">삭제</button>
+                </div>
               </div>
             </template>
             <!-- 편집 모드 -->

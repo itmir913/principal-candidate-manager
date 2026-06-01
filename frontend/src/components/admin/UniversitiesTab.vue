@@ -74,19 +74,19 @@
           >
             <template v-if="editingUnivId !== u.id">
               <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectUniv(u.id)">
-                <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
+                <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
                 <p class="text-base mt-1" style="margin: 0; color: #64748b;">
                   대학 정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
                   &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
                 </p>
-              </div>
-              <div class="flex gap-3" style="padding: 0 16px 12px;">
-                <button class="text-base font-medium disabled:opacity-40"
-                  style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
-                  :disabled="saving" @click.stop="startEditUniv(u)">편집</button>
-                <button class="text-base font-medium disabled:opacity-40"
-                  style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                  :disabled="saving" @click.stop="removeUniv(u.id)">삭제</button>
+                <div class="flex gap-3">
+                  <button class="text-base font-medium disabled:opacity-40"
+                          style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                          :disabled="saving" @click.stop="startEditUniv(u)">편집</button>
+                  <button class="text-base font-medium disabled:opacity-40"
+                          style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                          :disabled="saving" @click.stop="removeUniv(u.id)">삭제</button>
+                </div>
               </div>
             </template>
 

@@ -34,7 +34,7 @@
           >
             <!-- 클릭 영역 -->
             <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectRound(r)">
-              <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ r.id }}차 라운드</p>
+              <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ r.id }}차 라운드</p>
 
               <div class="mt-1.5 flex items-center justify-start gap-2">
                 <span
