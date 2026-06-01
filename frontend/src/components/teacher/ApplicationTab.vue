@@ -1,25 +1,25 @@
 <template>
   <!-- 전체 레이아웃: 세로 flex, 뷰포트 전체 높이 -->
-  <div style="display: flex; flex-direction: column; height: 100%;">
+  <div class="flex flex-col">
 
     <!-- 페이지 헤더 -->
-    <div style="padding: 2rem 2.5rem 1.25rem; flex-shrink: 0;">
+    <div class="flex-shrink-0 pt-8 pb-5 px-4 sm:px-10">
       <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
     </div>
 
     <!-- 두 열 레이아웃 (남은 높이 전체 차지) -->
-    <div style="display: flex; gap: 1.5rem; flex: 1; min-height: 0; padding: 0 2.5rem 2rem; overflow: hidden;">
+    <div class="flex flex-col lg:flex-row gap-6 px-4 sm:px-10 pb-8">
 
       <!-- ── 좌측: 학생 목록 ── -->
       <div
-        class="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
-        style="width: 220px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+        class="flex flex-col w-full lg:flex-shrink-0 lg:w-[220px] lg:overflow-hidden rounded-xl"
+        style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
       >
         <div class="flex-shrink-0 text-base font-semibold" style="padding: 14px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">
           학생 목록 ({{ students.length }}명)
         </div>
-        <div class="flex-1 overflow-y-auto">
+        <div>
           <div
             v-for="s in students"
             :key="s.id"
@@ -45,7 +45,7 @@
       </div>
 
       <!-- ── 우측: 지원 등록 영역 ── -->
-      <div class="flex-1 overflow-y-auto" style="min-width: 0;">
+      <div class="lg:flex-1 min-w-0">
 
         <!-- 학생 미선택 -->
         <div
@@ -108,7 +108,7 @@
             </div>
 
             <!-- 대학 / 모집단위 / 학과명 -->
-            <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
               <div>
                 <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
                   대학 <span style="color: #ef4444;">*</span>
@@ -447,8 +447,8 @@ function getStudentAppCount(sid) {
 
 const areaGridClass = computed(() => {
   const n = areaContext.value.length
-  if (n >= 5) return 'grid-cols-1 md:grid-cols-3'
-  return 'grid-cols-1 md:grid-cols-2'
+  if (n >= 5) return 'grid-cols-1 lg:grid-cols-3'
+  return 'grid-cols-1 lg:grid-cols-2'
 })
 
 const canSave = computed(() => {

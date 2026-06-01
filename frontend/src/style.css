@@ -8,11 +8,13 @@
 }
 
 @layer base {
-    .overflow-x-auto {
+    .overflow-x-auto,
+    .overflow-y-auto {
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
-    .overflow-x-auto::-webkit-scrollbar {
+    .overflow-x-auto::-webkit-scrollbar,
+    .overflow-y-auto::-webkit-scrollbar {
         display: none;
     }
 
