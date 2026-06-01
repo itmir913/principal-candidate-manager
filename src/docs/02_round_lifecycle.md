@@ -15,10 +15,14 @@
 **조건 확인**
 - `rounds` 테이블에서 `status IN ('OPEN', 'CLOSED')`인 행이 1건이라도 존재하면 409 Conflict를 반환한다.
 - 즉, 진행 중(OPEN 또는 CLOSED) 라운드가 없을 때만 새 라운드를 열 수 있다.
-- `LIMIT 1`로 최소 존재 여부만 확인하므로 전체 스캔을 하지 않는다.
+
+**원자적 처리**
+- `INSERT ... SELECT ... WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE status IN ('OPEN', 'CLOSED')) RETURNING id` 패턴으로 존재 확인과 삽입을 단일 쿼리 안에서 원자적으로 처리한다.
+- `RETURNING id`가 `None`이면 이미 진행 중 라운드가 있다는 뜻이므로 409 반환.
+- 별도 SELECT → INSERT 분리 시 발생하는 TOCTOU race condition을 방지하기 위한 설계이다.
 
 **생성**
-- 상태 검사를 통과하면 `INSERT INTO rounds (status, opened_at) VALUES ('OPEN', ?)` 실행.
+- 위 조건을 통과하면 상태 `OPEN`, `opened_at = 현재 시각`으로 삽입.
 - 201 Created + `{ "id": <새 라운드 id> }` 반환.
 
 ---
@@ -74,9 +78,10 @@
 **허용 상태**: CLOSED 상태에서만 가능.
 
 **처리**
-- `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ? AND status = 'CLOSED'`
-- 아래 모집단위와 대학 검증 후 FINALIZED로 전환한다.
-- `rows_affected == 0`이면 404 반환.
+- 먼저 `SELECT status FROM rounds WHERE id = ?`로 상태를 조회한다.
+- `status != 'CLOSED'`이거나 라운드가 없으면 404 반환.
+- 이후 아래 정원 위반 검증을 수행하고, 통과하면 `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ?` 실행.
+- UPDATE에는 `AND status = 'CLOSED'` 조건이 없으므로, SELECT 직후 `reopen_round` 가 동시에 호출되면 OPEN 상태에서 FINALIZED로 전환될 수 있는 이론적 TOCTOU가 존재한다 (단일 관리자 환경에서 실질적 위험은 낮음).
 
 ⚠️ [finalize_round] 코드 내부에서 아직 자동으로 추천자를 결정하지 않으므로 관리자가 직접 추천이 완료됐는지 확인 후 확정해야 하는 운영 규칙이 있다.
 
@@ -85,6 +90,20 @@
   2. **대학 검증** — `total_quota IS NOT NULL`인 대학 중, 소속 트랙 전체 추천 합산이 `total_quota`를 초과하는 항목 탐지
 - 위반 항목이 있으면 422 + 위반 목록 JSON 반환, 상태는 `CLOSED` 유지
 - 정원이 `NULL`이면 무제한으로 처리
+
+---
+
+## 전형요소 생성·삭제 제한 (`POST /api/areas`, `DELETE /api/areas/:id`)
+
+마감된 라운드가 존재하는 경우 전형요소(`areas`)의 생성과 삭제가 차단된다.
+
+**판단 기준**: `SELECT COUNT(*) FROM rounds WHERE status IN ('CLOSED', 'FINALIZED')` 결과가 1 이상이면 차단.
+
+**반환**: 409 Conflict + 메시지 `"마감된 라운드가 존재하므로 전형요소를 생성하거나 삭제할 수 없습니다"`.
+
+**이유**: 라운드 마감 시 각 전형요소별 학생 점수를 계산해 `results.score_detail`에 박제한다. 이후 전형요소를 추가하면 기존 score_detail에 해당 항목이 없어 내보내기가 실패하고, 삭제하면 과거 점수 기록에서 해당 전형요소 데이터가 유실된다.
+
+**수정 가능한 작업**: 전형요소 `이름` 및 `teacher_editable` 변경(`PUT /api/areas/:id`)은 제한 없이 허용된다.
 
 ---
 

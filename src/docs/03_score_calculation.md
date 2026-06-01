@@ -111,12 +111,15 @@ JSON 응답 시에는 `score_detail_as_map` 커스텀 시리얼라이저가 이 
 
 ---
 
-## score_preview (`GET /api/teacher/score-preview`)
+## score_preview (`GET /api/score-preview`) — 관리자 전용
 
-담임 화면에서 학생·모집단위 조합의 전체 점수를 미리 계산하는 엔드포인트.
+관리자 화면에서 특정 학생·모집단위 조합의 전체 점수를 미리 계산하는 엔드포인트.
 
+- 라우트: `GET /api/score-preview` (`require_admin` 미들웨어 적용, 관리자만 호출 가능).
 - `run_calculate_scores`와 달리 DB에 아무것도 저장하지 않는다.
 - 전 전형요소 점수 합산 시 `checked_add`를 사용해 `i64` 오버플로우를 방지한다.
+
+담임용 미리보기는 별개 엔드포인트이다: `POST /api/teacher/area-score-preview` (`05_homeroom_flow.md` 참조). 전형요소 단위로 계산하며 `matched_keys`(하이라이팅)와 `warning`을 추가로 반환한다는 점에서 다르다.
 
 ---
 

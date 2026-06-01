@@ -55,6 +55,11 @@
 
 ### 2. 트랜잭션 내 처리 순서
 
+**⓪ 라운드 상태 재확인 (TOCTOU 방지)**
+- 트랜잭션 밖에서 이미 OPEN을 확인했더라도, 트랜잭션 시작 직후 다시 `SELECT status FROM rounds WHERE id = ?`로 상태를 재확인한다.
+- 이유: 트랜잭션 밖 확인과 트랜잭션 진입 사이에 `close_round`가 호출되어 CLOSED로 바뀌는 TOCTOU race condition을 방지하기 위함이다.
+- OPEN이 아니면 400 Bad Request 반환.
+
 **① 기초데이터 저장** (`base_data` 테이블)
 - 복수값(`multi_value=1`) 전형요소: 기존 행 전체 삭제 후 새 값들 삽입.
 - 단일값(`multi_value=0`) 전형요소: `INSERT OR REPLACE`로 기존 행 대체.
@@ -71,7 +76,8 @@
 
 **④ results 저장**
 - `INSERT INTO results ... ON CONFLICT DO UPDATE` — `close_round`에서와 동일한 패턴.
-- `ranking=NULL, recommended=0`으로 초기화.
+- 신규 삽입 시: `ranking=NULL, recommended=0`.
+- 충돌(upsert) 시: `score_detail`, `total_score`, `ranking(NULL)`, `calculated_at`만 갱신하고 `recommended`는 갱신하지 않는다 — 기존 추천 상태가 보존된다. OPEN 라운드에서는 recommended=1이 실질적으로 발생하지 않으므로 동작에는 영향 없으나, 명시적으로 0으로 초기화하지 않는다는 점을 인지해야 한다.
 
 **트랜잭션 커밋** 후 201 Created 반환.
 

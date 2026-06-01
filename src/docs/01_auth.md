@@ -81,8 +81,7 @@
 
 **관리자 비밀번호 변경 (`PUT /api/auth/admin/password`)**
 - `require_admin` 미들웨어를 통과해야 호출 가능. 즉, 로그인된 관리자만 변경 가능.
-- 현재 비밀번호 검증: 기존 해시를 조회해 `bcrypt::verify`로 확인.
-- 새 비밀번호 길이 검증: 8자 미만이면 400 Bad Request.
+- 처리 순서: ① 현재 비밀번호 `bcrypt::verify` 확인 → 불일치 시 **400 Bad Request** 반환 → ② 새 비밀번호 길이 검증(8자 미만이면 400) → ③ bcrypt 해시 계산 → ④ DB UPDATE.
 - bcrypt 해시 계산은 DB 접근 전 미리 수행 (CPU 집약 작업이므로 트랜잭션 없이 단순 UPDATE 전에 처리).
 - 성공 시 204 No Content.
 

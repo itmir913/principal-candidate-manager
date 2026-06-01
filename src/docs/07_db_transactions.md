@@ -4,6 +4,7 @@
 
 | 핸들러 | 트랜잭션 범위 | 비고 |
 |--------|---------------|------|
+| `close_round` | 기초데이터 누락 검증 + rounds 상태 변경 | 검증과 상태 변경을 원자적으로 처리. run_calculate_scores는 이 트랜잭션 커밋 후 별도 트랜잭션으로 실행 |
 | `reopen_round` | rounds 상태 변경 + results 추천·순위 초기화 | 두 UPDATE를 원자적으로 처리 |
 | `run_calculate_scores` | results 저장 전체 + 순위 계산 전체 | 읽기(점수 계산)는 트랜잭션 밖, 쓰기만 트랜잭션 내 |
 | `recommend_result` | 상태 조회 + 정원 조회 + recommended 갱신 | race condition 방지 목적 |
@@ -49,9 +50,12 @@
 | `delete_student` | `students` DELETE 1건 | 단일 DELETE는 원자적 |
 | `delete_class` | `classes` DELETE 1건 | 단일 DELETE는 원자적 |
 
-`close_round`는 트랜잭션을 사용하지 않는다. rounds UPDATE와 `run_calculate_scores` 호출이 순차적이며, `run_calculate_scores` 내부에서 별도 트랜잭션을 시작한다. 라운드 상태 변경과 점수 계산이 원자적으로 묶이지 않는다는 점은 주의사항이다.
+`close_round`는 내부에서 두 개의 분리된 트랜잭션을 사용한다.
 
-⚠️ [close_round 트랜잭션 분리] rounds UPDATE와 run_calculate_scores가 같은 트랜잭션에 없으므로, 이론상 rounds는 CLOSED로 바뀌었으나 점수 계산이 실패하는 상황이 가능하다. 이 경우 수동 재계산(`/rounds/:id/calculate`)으로 복구할 수 있다.
+1. **첫 번째 트랜잭션**: 기초데이터 누락 검증과 `UPDATE rounds SET status = 'CLOSED'`를 하나의 트랜잭션으로 묶는다. 검증 실패 시 커밋 없이 자동 롤백되어 상태가 OPEN으로 유지된다.
+2. **두 번째 트랜잭션** (`run_calculate_scores` 내부): 첫 번째 트랜잭션 커밋 후 별도로 시작되며 점수 계산·저장을 처리한다.
+
+⚠️ [close_round 트랜잭션 분리] 두 트랜잭션이 원자적으로 묶이지 않으므로, 이론상 rounds는 CLOSED로 바뀌었으나 점수 계산이 실패하는 상황이 가능하다. 이 경우 수동 재계산(`/rounds/:id/calculate`)으로 복구할 수 있다.
 
 ---
 
