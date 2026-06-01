@@ -113,8 +113,8 @@
               style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
               @click="applyTemplate(tpl)">
               <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
-              <p class="text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
-              <p style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
+              <p class="break-keep word-break-keep-all text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
+              <p class="break-keep word-break-keep-all" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
             </button>
           </div>
 
@@ -618,7 +618,7 @@ const AREA_TEMPLATES = [
     id: 'grade',
     name: '교과 내신',
     description: '대학별 내신 환산등급을 기준으로 점수를 산출합니다. 등록된 점수 기준과 정확히 일치하는 경우에만 점수가 부여됩니다.',
-    hint: '구간 조회 · 정확히 일치 · 대학별 환산점수 조회',
+    hint: '구간 조회 · 정확히 일치 · 대학별 환산점수 조회 · 담임교사 입력 불가',
     defaults: {
       name: '교과 내신',
       max_score_display: 80,
@@ -633,7 +633,7 @@ const AREA_TEMPLATES = [
     id: 'attendance',
     name: '출결',
     description: '미인정 출결에 따라 점수를 산출합니다. 미인정 횟수가 작을수록 배점이 높습니다.',
-    hint: '구간 조회 · 기준값 이하(작을수록 만점) · 기본 조회',
+    hint: '구간 조회 · 기준값 이하(작을수록 만점) · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '출결',
       max_score_display: 10,
@@ -648,7 +648,7 @@ const AREA_TEMPLATES = [
     id: 'volunteer',
     name: '봉사 활동',
     description: '누적 봉사시간에 따라 점수를 산출합니다. 봉사시간이 많을수록 배점이 높습니다.',
-    hint: '구간 조회 · 기준값 이상(클수록 만점) · 기본 조회',
+    hint: '구간 조회 · 기준값 이상(클수록 만점) · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '봉사 활동',
       max_score_display: 5,
@@ -663,7 +663,7 @@ const AREA_TEMPLATES = [
     id: 'award',
     name: '수상 실적',
     description: '수상 실적을 등록하고 가장 높은 점수 1건만 반영합니다.',
-    hint: '범주 선택 · 최대 1개만 인정 · 기본 조회',
+    hint: '범주 선택 · 최대 1개만 인정 · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '수상 실적',
       max_score_display: 3,
@@ -678,7 +678,7 @@ const AREA_TEMPLATES = [
     id: 'extracurricular',
     name: '교내 활동',
     description: '교내 활동 실적을 등록하고 점수를 합산하여 반영합니다.',
-    hint: '범주 선택 · 중복 선택 가능 · 기본 조회',
+    hint: '범주 선택 · 중복 선택 가능 · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '교내 활동',
       max_score_display: 2,

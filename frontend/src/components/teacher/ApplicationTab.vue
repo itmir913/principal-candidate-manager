@@ -238,7 +238,7 @@
                             }"
                         >
                           <td
-                              class="text-base text-left break-keep break-words min-w-0"
+                              class="text-base text-left break-keep word-break-keep-all min-w-0"
                               style="padding: 8px 12px;"
                               :style="{
                                 color: isHighlighted(area, row.key) ? '#5c320a' : '#475569',

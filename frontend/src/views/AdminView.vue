@@ -249,6 +249,7 @@ const StudentsTab = defineAsyncComponent(() => import('../components/admin/Stude
 const AreasTab    = defineAsyncComponent(() => import('../components/admin/AreasTab.vue'))
 const UnivTab     = defineAsyncComponent(() => import('../components/admin/UniversitiesTab.vue'))
 const UpdateTab   = defineAsyncComponent(() => import('../components/admin/UpdateTab.vue'))
+const ManualTab   = defineAsyncComponent(() => import('../components/admin/ManualTab.vue'))
 
 // ── 메뉴 정의 ────────────────────────────────────────────────
 const mainMenus = [
@@ -279,6 +280,7 @@ const currentTab = computed(() => {
   if (active.value === 'areas')    return AreasTab
   if (active.value === 'univs')    return UnivTab
   if (active.value === 'update')   return UpdateTab
+  if (active.value === 'manual')   return ManualTab
   return null
 })
 
