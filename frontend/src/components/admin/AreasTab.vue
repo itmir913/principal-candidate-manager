@@ -101,7 +101,28 @@
              style="padding: 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
           <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
 
-          <!-- 기본 입력 필드 -->
+          <!-- ── 1. 기본 템플릿 (맨 위) ───────────────────────── -->
+          <p class="text-base font-semibold mb-1" style="color: #1e293b;">템플릿으로 빠르게 시작</p>
+          <p class="text-base mb-3" style="color: #94a3b8;">
+            템플릿을 선택하면 아래 항목이 자동으로 채워집니다. 매뉴얼을 참고하여 적절한 전형요소 설정을 입력하세요.
+          </p>
+          <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+            <button
+              v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
+              class="template-btn rounded-xl text-left"
+              style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
+              @click="applyTemplate(tpl)">
+              <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
+              <p class="text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
+              <p style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
+            </button>
+          </div>
+
+          <!-- ── 구분선 ────────────────────────────────────────── -->
+          <hr style="margin: 0 0 20px; border: none; border-top: 1px solid #e2e8f0;" />
+
+          <!-- ── 2. 세부 설정 폼 ──────────────────────────────── -->
+          <p class="text-base font-semibold mb-3" style="color: #1e293b;">세부 설정</p>
           <div class="space-y-3">
             <div>
               <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
@@ -159,9 +180,7 @@
               <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
               <label for="te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
             </div>
-            <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
-              전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
-            </div>
+            <p v-if="addError" class="text-base" style="color: #ef4444;">{{ addError }}</p>
             <div class="flex gap-2 pt-1">
               <button
                   class="text-base font-semibold rounded-lg"
@@ -174,57 +193,35 @@
             </div>
           </div>
 
-          <!-- ── 구분선 + 유형 안내 ─────────────────────────────── -->
+          <!-- ── 구분선 + 유형 안내 (참고용) ──────────────────── -->
           <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
 
-          <div class="mb-5">
-            <p class="text-base font-semibold mb-3" style="color: #1e293b;">전형요소 유형 안내</p>
+          <p class="text-base font-semibold mb-3" style="color: #1e293b;">유형 안내</p>
 
-            <!-- 점수 산출 방식 -->
-            <p class="text-base font-medium mb-2" style="color: #64748b;">점수 산출 방식</p>
-            <div class="grid gap-3 mb-4" style="grid-template-columns: repeat(3, 1fr);">
-              <div v-for="d in CALC_TYPE_DESCS" :key="d.key"
-                   class="rounded-lg text-base"
-                   style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
-                <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
-                <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
-              </div>
-            </div>
-
-            <!-- 데이터 조회 기준 -->
-            <p class="text-base font-medium mb-2" style="color: #64748b;">데이터 조회 기준</p>
-            <div class="grid gap-3" style="grid-template-columns: repeat(2, 1fr);">
-              <div v-for="d in LOOKUP_SCOPE_DESCS" :key="d.key"
-                   class="rounded-lg text-base"
-                   style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
-                <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
-                <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
-              </div>
+          <!-- 점수 산출 방식 -->
+          <p class="text-base font-medium mb-2" style="color: #64748b;">점수 산출 방식</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div v-for="d in CALC_TYPE_DESCS" :key="d.key"
+                 class="rounded-lg text-base"
+                 style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
+              <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+              <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
             </div>
           </div>
 
-          <!-- ── 구분선 + 기본 템플릿 ──────────────────────────── -->
-          <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
-
-          <div>
-            <p class="text-base font-semibold mb-1" style="color: #1e293b;">기본 템플릿</p>
-            <p class="text-base mb-4" style="color: #94a3b8;">
-              템플릿을 선택하면 위 폼의 값이 자동으로 채워집니다. 이름과 만점은 직접 수정하세요.
-            </p>
-            <div class="grid gap-3"
-                 style="grid-template-columns: repeat(3, 1fr);">
-              <button
-                v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
-                class="rounded-xl text-left transition-all"
-                style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
-                @mouseenter="e => e.currentTarget.style.borderColor = '#93c5fd'"
-                @mouseleave="e => e.currentTarget.style.borderColor = '#e2e8f0'"
-                @click="applyTemplate(tpl)">
-                <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
-                <p class="text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
-                <p class="text-base" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
-              </button>
+          <!-- 데이터 조회 기준 -->
+          <p class="text-base font-medium mb-2" style="color: #64748b;">데이터 조회 기준</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div v-for="d in LOOKUP_SCOPE_DESCS" :key="d.key"
+                 class="rounded-lg text-base"
+                 style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
+              <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+              <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
             </div>
+          </div>
+
+          <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+            ⚠ 전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
           </div>
         </div>
 
@@ -605,12 +602,12 @@ const LOOKUP_SCOPE_DESCS = [
   {
     key: 'SIMPLE',
     label: '기본 조회',
-    desc: '모든 학생에게 동일한 점수 기준표를 적용합니다. 대부분의 항목에 사용합니다.',
+    desc: '모든 대학의 모집단위에서 동일한 점수 기준표를 적용합니다. 대부분의 항목에 사용합니다.',
   },
   {
     key: 'COMPOSITE',
     label: '대학별 환산',
-    desc: '지원하는 대학·모집단위에 따라 서로 다른 기준표를 적용합니다. 대학별 환산점수 반영 시 사용합니다.',
+    desc: '지원하는 대학·모집단위에 따라 서로 다른 기준표를 적용합니다. 대학별 환산 내신점수 반영 시 사용합니다.',
   },
 ]
 
@@ -618,10 +615,25 @@ const LOOKUP_SCOPE_DESCS = [
 // 템플릿 추가·수정·삭제는 이 배열만 편집하면 됩니다.
 const AREA_TEMPLATES = [
   {
+    id: 'grade',
+    name: '교과 내신',
+    description: '대학별 내신 환산등급을 기준으로 점수를 산출합니다. 등록된 점수 기준과 정확히 일치하는 경우에만 점수가 부여됩니다.',
+    hint: '구간 조회 · 정확히 일치 · 대학별 환산점수 조회',
+    defaults: {
+      name: '교과 내신',
+      max_score_display: 80,
+      calc_type: 'NUMERIC',
+      lookup_scope: 'COMPOSITE',
+      match_mode: 'EXACT',
+      category_agg: '',
+      teacher_editable: false,
+    },
+  },
+  {
     id: 'attendance',
     name: '출결',
-    description: '무단결석·지각·조퇴 일수를 기준으로 구간별 점수를 산출합니다.',
-    hint: '구간 조회 · 이하(작을수록 만점) · 기본 조회',
+    description: '미인정 출결에 따라 점수를 산출합니다. 미인정 횟수가 작을수록 배점이 높습니다.',
+    hint: '구간 조회 · 기준값 이하(작을수록 만점) · 기본 조회',
     defaults: {
       name: '출결',
       max_score_display: 10,
@@ -629,112 +641,52 @@ const AREA_TEMPLATES = [
       lookup_scope: 'SIMPLE',
       match_mode: 'LOWER',
       category_agg: '',
-      teacher_editable: false,
-    },
-  },
-  {
-    id: 'grade',
-    name: '교과 성적',
-    description: '내신 석차백분율 등 수치 성적을 구간별로 환산합니다.',
-    hint: '구간 조회 · 이하(작을수록 만점) · 기본 조회',
-    defaults: {
-      name: '교과 성적',
-      max_score_display: 40,
-      calc_type: 'NUMERIC',
-      lookup_scope: 'SIMPLE',
-      match_mode: 'LOWER',
-      category_agg: '',
-      teacher_editable: false,
+      teacher_editable: true,
     },
   },
   {
     id: 'volunteer',
-    name: '봉사활동',
-    description: '봉사 누적 시간이 많을수록 높은 점수를 부여합니다.',
-    hint: '구간 조회 · 이상(클수록 만점) · 기본 조회',
+    name: '봉사 활동',
+    description: '누적 봉사시간에 따라 점수를 산출합니다. 봉사시간이 많을수록 배점이 높습니다.',
+    hint: '구간 조회 · 기준값 이상(클수록 만점) · 기본 조회',
     defaults: {
-      name: '봉사활동',
+      name: '봉사 활동',
       max_score_display: 5,
       calc_type: 'NUMERIC',
       lookup_scope: 'SIMPLE',
       match_mode: 'UPPER',
-      category_agg: '',
-      teacher_editable: false,
-    },
-  },
-  {
-    id: 'award',
-    name: '수상 실적',
-    description: '수상 등급을 범주로 등록하고 최고점만 반영합니다.',
-    hint: '범주 선택 · 최대 1개 인정(최고점) · 기본 조회',
-    defaults: {
-      name: '수상 실적',
-      max_score_display: 5,
-      calc_type: 'CATEGORY',
-      lookup_scope: 'SIMPLE',
-      match_mode: '',
-      category_agg: 'MAX',
-      teacher_editable: false,
-    },
-  },
-  {
-    id: 'certificate',
-    name: '자격증',
-    description: '취득 자격증 종류를 범주로 등록하고 복수 취득 시 합산합니다.',
-    hint: '범주 선택 · 중복 선택 허용(합산) · 기본 조회',
-    defaults: {
-      name: '자격증',
-      max_score_display: 10,
-      calc_type: 'CATEGORY',
-      lookup_scope: 'SIMPLE',
-      match_mode: '',
-      category_agg: 'SUM',
-      teacher_editable: false,
-    },
-  },
-  {
-    id: 'extracurricular',
-    name: '교외 활동',
-    description: '교외 대회·활동 종류를 범주로 등록하고 최고점을 반영합니다.',
-    hint: '범주 선택 · 최대 1개 인정(최고점) · 기본 조회',
-    defaults: {
-      name: '교외 활동',
-      max_score_display: 5,
-      calc_type: 'CATEGORY',
-      lookup_scope: 'SIMPLE',
-      match_mode: '',
-      category_agg: 'MAX',
-      teacher_editable: false,
-    },
-  },
-  {
-    id: 'manual',
-    name: '담임 추천 의견',
-    description: '담임교사가 직접 점수를 수기 입력하는 항목입니다.',
-    hint: '수기 입력 · 담임 입력 허용',
-    defaults: {
-      name: '담임 추천 의견',
-      max_score_display: 10,
-      calc_type: 'MANUAL',
-      lookup_scope: 'SIMPLE',
-      match_mode: '',
       category_agg: '',
       teacher_editable: true,
     },
   },
   {
-    id: 'composite',
-    name: '대학별 환산점수',
-    description: '지원 대학·모집단위마다 다른 점수 기준표를 적용합니다.',
-    hint: '구간 조회 · 이상(클수록 만점) · 대학별 환산',
+    id: 'award',
+    name: '수상 실적',
+    description: '수상 실적을 등록하고 가장 높은 점수 1건만 반영합니다.',
+    hint: '범주 선택 · 최대 1개만 인정 · 기본 조회',
     defaults: {
-      name: '대학별 환산점수',
-      max_score_display: 30,
-      calc_type: 'NUMERIC',
-      lookup_scope: 'COMPOSITE',
-      match_mode: 'UPPER',
-      category_agg: '',
-      teacher_editable: false,
+      name: '수상 실적',
+      max_score_display: 3,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'MAX',
+      teacher_editable: true,
+    },
+  },
+  {
+    id: 'extracurricular',
+    name: '교내 활동',
+    description: '교내 활동 실적을 등록하고 점수를 합산하여 반영합니다.',
+    hint: '범주 선택 · 중복 선택 가능 · 기본 조회',
+    defaults: {
+      name: '교내 활동',
+      max_score_display: 2,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'SUM',
+      teacher_editable: true,
     },
   },
 ]
@@ -751,6 +703,7 @@ const basePage    = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 
 const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
+const addError = ref('')
 
 const editingAreaId = ref(null)
 const editArea = ref({ name: '', teacher_editable: false })
@@ -825,9 +778,10 @@ function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows(1) }
 function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows(1)  }
 
 async function addArea() {
+  addError.value = ''
   const maxScore = parseFloat(String(newArea.value.max_score_display).trim())
   if (isNaN(maxScore) || maxScore < 0) {
-    error.value = '만점: 0 이상의 숫자를 입력하세요'
+    addError.value = '만점: 0 이상의 숫자를 입력하세요'
     return
   }
   const body = {
@@ -843,7 +797,7 @@ async function addArea() {
     await createArea(body)
     showAddForm.value = false
     await load()
-  } catch (e) { error.value = e.response?.data ?? e.message }
+  } catch (e) { addError.value = e.response?.data ?? e.message }
 }
 
 async function removeArea(id) {
@@ -884,6 +838,7 @@ async function saveEdit() {
 
 function openAddForm() {
   newArea.value = defaultNewArea()
+  addError.value = ''
   editingAreaId.value = null
   showAddForm.value = true
 }
@@ -1104,7 +1059,7 @@ const ExcelPanel = defineComponent({
   },
 })
 
-// ── ImportResultBox (인라인 컴포넌트) ─────────────────────────
+// ── ImportResultBox (인라인 컴포넌트) ──────────────────────────
 const ImportResultBox = defineComponent({
   props: { result: Object },
   setup(props) {
@@ -1132,3 +1087,12 @@ const ImportResultBox = defineComponent({
   },
 })
 </script>
+
+<style scoped>
+.template-btn {
+  transition: border-color 0.15s;
+}
+.template-btn:hover {
+  border-color: #93c5fd !important;
+}
+</style>
