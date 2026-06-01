@@ -264,7 +264,7 @@ const hasUpdate = ref(false)
 
 const subMenus = computed(() => [
   { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false      },
-  { key: 'update',  label: '업데이트', icon: RefreshCw, badge: hasUpdate.value },
+  { key: 'update',  label: '업데이트 & 백업', icon: RefreshCw, badge: hasUpdate.value },
 ])
 
 const allMenus = computed(() => [...mainMenus, ...subMenus.value])

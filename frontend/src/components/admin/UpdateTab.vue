@@ -12,8 +12,28 @@
       class="rounded-xl mb-6"
       style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
     >
-      <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
+      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
         <h2 class="text-base font-semibold" style="color: #1e293b;">버전 정보</h2>
+        <div class="flex items-center gap-2">
+          <a
+            v-if="!loading && !error && !isLatest && releaseUrl"
+            :href="releaseUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-1.5 text-base font-medium"
+            style="background:#2563eb;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;color:white;text-decoration:none;"
+          >
+            <Download :size="14" /> 최신 버전 다운로드
+          </a>
+          <button
+            @click="checkUpdate"
+            :disabled="loading"
+            class="flex items-center gap-1.5 text-base disabled:opacity-40"
+            style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#64748b;"
+          >
+            <RefreshCw :size="14" /> 다시 확인
+          </button>
+        </div>
       </div>
 
       <div class="px-6 py-5">
@@ -25,7 +45,7 @@
 
         <!-- 오류 -->
         <div v-else-if="error" class="flex items-center gap-3 p-4 rounded-lg" style="background:#fef2f2; border: 1px solid #fecaca;">
-          <AlertCircle :size="18" style="color:#dc2626; flex-shrink:0; margin-top:1px;" />
+          <AlertCircle :size="18" style="color:#dc2626; flex-shrink:0;" />
           <div>
             <p class="text-base font-medium" style="color:#991b1b;">버전 확인 실패</p>
             <p class="text-base" style="color:#b91c1c; margin-top:2px;">{{ error }}</p>
@@ -68,28 +88,6 @@
               </span>
             </div>
           </div>
-        </div>
-
-        <!-- 재확인 버튼 -->
-        <div class="mt-4 flex gap-2">
-          <button
-            @click="checkUpdate"
-            :disabled="loading"
-            class="flex items-center gap-1.5 text-base disabled:opacity-40"
-            style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#64748b;"
-          >
-            <RefreshCw :size="14" /> 다시 확인
-          </button>
-          <a
-            v-if="!isLatest && releaseUrl"
-            :href="releaseUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-center gap-1.5 text-base font-medium"
-            style="background:#2563eb;border:none;border-radius:8px;padding:7px 16px;cursor:pointer;color:white;text-decoration:none;"
-          >
-            <Download :size="14" /> 최신 버전 다운로드
-          </a>
         </div>
       </div>
     </div>
@@ -170,16 +168,27 @@
       class="rounded-xl"
       style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
     >
-      <div class="px-6 py-4 flex items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
-        <Database :size="16" style="color:#64748b;" />
-        <h2 class="text-base font-semibold" style="color: #1e293b;">데이터 백업 안내</h2>
+      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
+        <div class="flex items-center gap-2">
+          <Database :size="16" style="color:#64748b;" />
+          <h2 class="text-base font-semibold" style="color: #1e293b;">데이터 백업 안내</h2>
+        </div>
+        <button
+          @click="downloadBackup"
+          :disabled="downloading"
+          class="flex items-center gap-1.5 text-base font-medium disabled:opacity-40"
+          style="background:#2563eb;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;color:white;"
+        >
+          <Download :size="14" />
+          {{ downloading ? '다운로드 중...' : 'DB 백업 다운로드' }}
+        </button>
       </div>
       <div class="px-6 py-5 space-y-5">
         <div
           class="flex items-center gap-3 p-4 rounded-lg"
           style="background:#fffbeb;border:1px solid #fde68a;"
         >
-          <AlertTriangle :size="16" style="color:#d97706;flex-shrink:0;margin-top:2px;" />
+          <AlertTriangle :size="16" style="color:#d97706;flex-shrink:0;" />
           <p class="text-base" style="color:#92400e;">
             업데이트 전 반드시 데이터베이스 파일을 백업하세요.
             설치 파일 실행 시 기존 데이터가 덮어써질 수 있습니다.
@@ -196,7 +205,7 @@
             class="rounded-lg p-3 text-base font-mono"
             style="background:#1e293b;color:#94a3b8;"
           >
-            <span style="color:#64748b;"># 예시 경로 (Tauri 패키징 기준)</span><br />
+            <span style="color:#64748b;"># 예시 경로</span><br />
             <span style="color:#e2e8f0;">C:\Users\사용자명\AppData\Local\principal-candidate-manager\</span><br />
             <span style="color:#86efac;">  └── data.db</span>  <span style="color:#64748b;">&lt;-- 이 파일을 복사하세요</span>
           </div>
@@ -207,19 +216,39 @@
           <ol class="space-y-2">
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">①</span>
+              위 <strong>DB 백업 다운로드</strong> 버튼을 눌러 현재 DB를 저장하거나,
+              탐색기에서 위 경로의 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 직접 복사합니다.
+            </li>
+            <li class="flex gap-2 text-base" style="color:#374151;">
+              <span style="color:#94a3b8;flex-shrink:0;">②</span>
+              백업 파일을 안전한 위치(바탕화면, 외부 드라이브 등)에 보관합니다.
+            </li>
+            <li class="flex gap-2 text-base" style="color:#374151;">
+              <span style="color:#94a3b8;flex-shrink:0;">③</span>
+              백업 완료 후 업데이트를 진행합니다.
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <p class="text-base font-medium mb-2" style="color:#374151;">복원 방법</p>
+          <ol class="space-y-2">
+            <li class="flex gap-2 text-base" style="color:#374151;">
+              <span style="color:#94a3b8;flex-shrink:0;">①</span>
               프로그램을 완전히 종료합니다.
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">②</span>
-              탐색기에서 위 경로의 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code> 파일을 찾습니다.
+              탐색기에서 위 경로로 이동합니다.
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">③</span>
-              파일을 안전한 위치(바탕화면, 외부 드라이브 등)에 복사합니다.
+              기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 삭제하고,
+              백업 파일을 같은 이름(<code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>)으로 붙여넣습니다.
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">④</span>
-              백업 완료 후 업데이트를 진행합니다.
+              프로그램을 다시 실행합니다.
             </li>
           </ol>
         </div>
@@ -228,10 +257,9 @@
           class="flex items-center gap-3 p-4 rounded-lg"
           style="background:#f0fdf4;border:1px solid #bbf7d0;"
         >
-          <CheckCircle2 :size="16" style="color:#16a34a;flex-shrink:0;margin-top:2px;" />
+          <CheckCircle2 :size="16" style="color:#16a34a;flex-shrink:0;" />
           <p class="text-base" style="color:#15803d;">
-            업데이트 후 문제가 발생하면, 백업한 <code class="font-mono px-1 py-0.5 rounded" style="background:#dcfce7;">data.db</code>를
-            같은 위치에 복원하면 이전 데이터로 돌아갈 수 있습니다.
+            복원 시 현재 데이터는 모두 덮어써집니다. 복원 전 현재 DB를 먼저 백업해 두는 것을 권장합니다.
           </p>
         </div>
       </div>
@@ -249,7 +277,7 @@
         <p class="text-base font-semibold" style="color: #1e293b;">학교장추천전형 선발 시스템</p>
         <div class="flex items-center gap-3">
           <p class="text-base" style="color: #64748b;">
-            © 2025 luminousky ·
+            © 2026 luminousky ·
             <a href="https://luminousky.com" target="_blank" rel="noopener noreferrer"
                style="color:#3b82f6; text-decoration:none;">luminousky.com</a>
           </p>
@@ -288,6 +316,7 @@ const latestVersion  = ref('')
 const releaseNotes   = ref('')
 const releaseUrl     = ref('')
 const isLatest       = ref(true)
+const downloading    = ref(false)
 
 function stripV(v) {
   return (v ?? '').replace(/^v/i, '').trim()
@@ -315,6 +344,23 @@ async function checkUpdate() {
     error.value = e.message || '알 수 없는 오류'
   } finally {
     loading.value = false
+  }
+}
+
+async function downloadBackup() {
+  downloading.value = true
+  try {
+    const res = await axios.get('/api/auth/db-backup', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.headers['content-disposition']?.match(/filename="(.+)"/)?.[1] ?? 'data_backup.db'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('백업 다운로드 실패: ' + (e.response?.data ? await e.response.data.text() : e.message))
+  } finally {
+    downloading.value = false
   }
 }
 

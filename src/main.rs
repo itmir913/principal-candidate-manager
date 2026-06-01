@@ -108,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
 fn build_router(state: AppState) -> Router {
     let protected_auth = Router::new()
         .route("/admin/password", put(handlers::auth::change_admin_password))
+        .route("/db-backup", get(handlers::system::download_db_backup))
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::require_admin,
