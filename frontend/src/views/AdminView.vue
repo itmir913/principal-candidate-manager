@@ -230,6 +230,7 @@
 
 <script setup>
 import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
+import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { changeAdminPassword, getCurrentRound } from '../api/admin.js'
@@ -247,6 +248,7 @@ const ClassesTab  = defineAsyncComponent(() => import('../components/admin/Class
 const StudentsTab = defineAsyncComponent(() => import('../components/admin/StudentsTab.vue'))
 const AreasTab    = defineAsyncComponent(() => import('../components/admin/AreasTab.vue'))
 const UnivTab     = defineAsyncComponent(() => import('../components/admin/UniversitiesTab.vue'))
+const UpdateTab   = defineAsyncComponent(() => import('../components/admin/UpdateTab.vue'))
 
 // ── 메뉴 정의 ────────────────────────────────────────────────
 const mainMenus = [
@@ -258,12 +260,14 @@ const mainMenus = [
   { key: 'univs',    label: '대학 설정',     icon: Building2 },
 ]
 
-const subMenus = [
-  { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false },
-  { key: 'update',  label: '업데이트', icon: RefreshCw, badge: true  },
-]
+const hasUpdate = ref(false)
 
-const allMenus = [...mainMenus, ...subMenus]
+const subMenus = computed(() => [
+  { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false      },
+  { key: 'update',  label: '업데이트', icon: RefreshCw, badge: hasUpdate.value },
+])
+
+const allMenus = computed(() => [...mainMenus, ...subMenus.value])
 
 // ── 활성 탭 ──────────────────────────────────────────────────
 const active = ref('rounds')
@@ -274,21 +278,43 @@ const currentTab = computed(() => {
   if (active.value === 'students') return StudentsTab
   if (active.value === 'areas')    return AreasTab
   if (active.value === 'univs')    return UnivTab
+  if (active.value === 'update')   return UpdateTab
   return null
 })
 
-const currentMenuItem = computed(() => allMenus.find(m => m.key === active.value))
+const currentMenuItem = computed(() => allMenus.value.find(m => m.key === active.value))
 
 // ── 사이드바 접기 ─────────────────────────────────────────────
 const collapsed = ref(false)
 
 // ── 현재 라운드 ───────────────────────────────────────────────
 const currentRound = ref(null)
+
+function stripV(v) {
+  return (v ?? '').replace(/^v/i, '').trim()
+}
+
 onMounted(async () => {
   try {
     currentRound.value = await getCurrentRound()
   } catch {
     currentRound.value = null
+  }
+
+  // 업데이트 뱃지: 백그라운드에서 조용히 확인
+  try {
+    const [verRes, ghRes] = await Promise.all([
+      axios.get('/api/version'),
+      fetch('https://api.github.com/repos/itmir913/principal-candidate-manager/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json' },
+      }),
+    ])
+    if (ghRes.ok) {
+      const gh = await ghRes.json()
+      hasUpdate.value = stripV(verRes.data.version) !== stripV(gh.tag_name)
+    }
+  } catch {
+    // 업데이트 확인 실패 시 뱃지 표시 안 함
   }
 })
 

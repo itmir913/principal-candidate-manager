@@ -7,5 +7,6 @@ pub mod classes;
 pub mod rounds;
 pub mod scoring;
 pub mod students;
+pub mod system;
 pub mod teacher_areas;
 pub mod universities;

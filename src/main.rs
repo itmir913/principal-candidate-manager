@@ -231,6 +231,7 @@ fn build_router(state: AppState) -> Router {
 
     let api = Router::new()
         .route("/health", get(health))
+        .route("/version", get(handlers::system::get_version))
         .route("/rounds/current", get(handlers::rounds::get_current_round))
         // 로그인 폼에서 반 목록 조회 (인증 불필요)
         .route("/classes", get(handlers::classes::list_classes))
