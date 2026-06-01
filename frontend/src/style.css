@@ -8,6 +8,14 @@
 }
 
 @layer base {
+    .overflow-x-auto {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .overflow-x-auto::-webkit-scrollbar {
+        display: none;
+    }
+
     body {
         font-family: var(--font-sans);
         -webkit-font-smoothing: antialiased;

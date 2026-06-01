@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 2rem 2.5rem;">
+  <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
     <div class="mb-5">

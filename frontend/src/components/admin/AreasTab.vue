@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 2rem 2.5rem;">
+  <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
     <div class="mb-5">
@@ -7,10 +7,10 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">전형요소 설정</h1>
     </div>
 
-    <div class="flex gap-6" style="align-items: flex-start;">
+    <div class="flex flex-col lg:flex-row lg:items-start gap-6">
 
       <!-- ── 좌측: 전형요소 목록 ────────────────────────────────── -->
-      <div class="flex-shrink-0 flex flex-col" style="width: 300px;">
+      <div class="flex flex-col w-full lg:w-[300px]">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold" style="color: #1e293b;">전형요소 목록</h2>
           <button

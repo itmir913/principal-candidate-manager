@@ -1,5 +1,5 @@
 ﻿<template>
-  <div style="padding: 2rem 2.5rem;">
+  <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
     <div class="mb-5">
@@ -8,7 +8,7 @@
     </div>
 
     <!-- 서브탭 네비게이션 -->
-    <div class="flex mb-6" style="border-bottom: 1px solid #e2e8f0;">
+    <div class="flex mb-6 overflow-x-auto" style="border-bottom: 1px solid #e2e8f0;">
       <button
         v-for="tab in tabs"
         :key="tab.key"
