@@ -268,13 +268,17 @@ pub async fn calc_area_score(
 
 // ── Handlers ──────────────────────────────────────────────────────
 
-/// CLOSED 상태 라운드의 전체 점수를 계산·저장하고 계산된 지원자 수를 반환한다.
-/// 상태 검증 없이 동작하므로 호출 전 반드시 CLOSED 여부를 확인해야 한다.
-pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Result<usize, String> {
+/// 단일 커넥션 위에서 점수 계산·results 저장·순위 계산을 수행한다.
+/// 트랜잭션 관리는 호출자 책임. close_round 와 calculate_scores 양쪽에서 재사용한다.
+pub async fn run_calculate_scores_on_conn(
+    conn: &mut sqlx::SqliteConnection,
+    round_id: i64,
+    now: &str,
+) -> Result<usize, String> {
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, calc_type, max_score, match_mode, category_agg, lookup_scope FROM areas ORDER BY id",
     )
-    .fetch_all(db)
+    .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -287,44 +291,31 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
          WHERE a.round_id = ? AND a.confirmed = 1",
     )
     .bind(round_id)
-    .fetch_all(db)
+    .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
-    let now = chrono::Utc::now().to_rfc3339();
     let mut count = 0usize;
 
-    // 점수 계산(읽기 전용)은 트랜잭션 밖에서 수행, conn은 tx 시작 전에 drop
-    let score_rows: Vec<(i64, i64, String, i64)> = {
-        let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
-        let mut rows: Vec<(i64, i64, String, i64)> = Vec::new();
-        for app in &applications {
-            let ctx = StudentTrackCtx {
-                student_code: app.student_code.clone(),
-                student_name: app.name.clone(),
-                univ_name: app.univ_name.clone(),
-                track_name: app.track_name.clone(),
-            };
-            let mut detail: HashMap<String, i64> = HashMap::new();
-            let mut total: i64 = 0;
-            for area in &areas {
-                let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
-                    .await?;
-                detail.insert(area.id.to_string(), sc);
-                total = total.checked_add(sc).ok_or_else(|| {
-                    format!("점수 합산 오버플로우: 지원자 {} ({})", ctx.student_name, ctx.student_code)
-                })?;
-            }
-            let detail_json = serde_json::to_string(&detail).map_err(|e| e.to_string())?;
-            rows.push((app.student_id, app.track_id, detail_json, total));
+    for app in &applications {
+        let ctx = StudentTrackCtx {
+            student_code: app.student_code.clone(),
+            student_name: app.name.clone(),
+            univ_name: app.univ_name.clone(),
+            track_name: app.track_name.clone(),
+        };
+        let mut detail: HashMap<String, i64> = HashMap::new();
+        let mut total: i64 = 0;
+        for area in &areas {
+            let sc = calc_area_score(&mut *conn, app.student_id, area, app.track_id, &ctx)
+                .await?;
+            detail.insert(area.id.to_string(), sc);
+            total = total.checked_add(sc).ok_or_else(|| {
+                format!("점수 합산 오버플로우: 지원자 {} ({})", ctx.student_name, ctx.student_code)
+            })?;
         }
-        rows
-    }; // conn dropped here
+        let detail_json = serde_json::to_string(&detail).map_err(|e| e.to_string())?;
 
-    // results 쓰기 + 순위 계산 전체를 하나의 트랜잭션으로
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
-
-    for (student_id, track_id, detail_json, total) in &score_rows {
         sqlx::query(
             "INSERT INTO results
                (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
@@ -335,15 +326,15 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
                            ranking        = NULL,
                            calculated_at  = excluded.calculated_at",
         )
-        .bind(student_id).bind(track_id).bind(round_id)
-        .bind(detail_json).bind(total).bind(&now)
-        .execute(&mut *tx)
+        .bind(app.student_id).bind(app.track_id).bind(round_id)
+        .bind(&detail_json).bind(total).bind(now)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
         count += 1;
     }
 
-    // 대학별 순위 재계산 (트랜잭션 내에서 읽어야 방금 쓴 점수가 보임)
+    // 대학별 순위 재계산 — 방금 쓴 results를 같은 conn에서 읽어 일관성 보장
     let mut track_ids: Vec<i64> = applications.iter().map(|a| a.track_id).collect();
     track_ids.sort_unstable();
     track_ids.dedup();
@@ -355,7 +346,7 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
              WHERE ut.id = ?",
         )
         .bind(tid)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -366,7 +357,7 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
              WHERE r.round_id = ? AND r.track_id = ?",
         )
         .bind(round_id).bind(tid)
-        .fetch_all(&mut *tx)
+        .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -405,15 +396,39 @@ pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Resul
                 "UPDATE results SET ranking = ? WHERE student_id = ? AND track_id = ? AND round_id = ?",
             )
             .bind(actual_rank).bind(sid).bind(tid).bind(round_id)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
         }
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
-
     Ok(count)
+}
+
+/// CLOSED 라운드 점수 재계산 전용 래퍼 (관리자 엔드포인트).
+/// BEGIN IMMEDIATE 로 계산 구간 동안 다른 커넥션의 쓰기(base_data 수정 등)를 차단한다.
+pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Result<usize, String> {
+    let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match run_calculate_scores_on_conn(&mut *conn, round_id, &now).await {
+        Ok(count) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(count)
+        }
+        Err(e) => {
+            sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
+            Err(e)
+        }
+    }
 }
 
 pub async fn calculate_scores(

@@ -7,7 +7,7 @@ use serde::Serialize;
 use sqlx::FromRow;
 
 use crate::enums::RoundStatus;
-use crate::handlers::scoring::run_calculate_scores;
+use crate::handlers::scoring::run_calculate_scores_on_conn;
 use crate::state::AppState;
 
 type ApiError = (StatusCode, String);
@@ -76,74 +76,93 @@ pub async fn close_round(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    // 기초데이터 누락 검증과 status 변경을 같은 트랜잭션으로 묶는다.
-    // 별도 쿼리로 분리하면 검증 통과 후 base_data가 삭제될 수 있고,
-    // CLOSED 진입 후 점수 계산에서 실패하는 비원자성 버그가 발생한다.
-    let mut tx = state
+    // BEGIN IMMEDIATE: 이 시점부터 다른 커넥션의 쓰기(base_data 수정 등)를 차단한다.
+    // 검증 → status 변경 → 점수 계산 전체가 단일 원자적 블록.
+    // 점수 계산 실패 시 ROLLBACK으로 status 변경도 함께 취소 — round는 OPEN 유지.
+    let mut conn = state
         .db
-        .begin()
+        .acquire()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let missing: Vec<(String, String, String, String, String)> = sqlx::query_as(
-        "SELECT a.name, s.name, s.student_code, u.univ_name, ut.track_name
-         FROM applications ap
-         JOIN students s ON s.id = ap.student_id
-         JOIN univ_tracks ut ON ut.id = ap.track_id
-         JOIN universities u ON u.id = ut.univ_id
-         CROSS JOIN areas a
-         WHERE ap.round_id = ?
-           AND NOT EXISTS (
-             SELECT 1 FROM base_data bd
-             WHERE bd.student_id = ap.student_id AND bd.area_id = a.id
-               AND CASE WHEN a.lookup_scope = 'COMPOSITE'
-                        THEN bd.track_id = ap.track_id
-                        ELSE bd.track_id IS NULL END
-           )
-         LIMIT 5",
-    )
-    .bind(id)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if !missing.is_empty() {
-        let details: Vec<String> = missing
-            .iter()
-            .map(|(area, student, code, univ, track)| {
-                format!("전형요소 '{}': {} {} 지원자 {} ({})", area, univ, track, student, code)
-            })
-            .collect();
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            format!("기초데이터 누락으로 라운드를 종료할 수 없습니다:\n{}", details.join("\n")),
-        ));
-    }
-
-    let now = chrono::Utc::now().to_rfc3339();
-    let affected = sqlx::query(
-        "UPDATE rounds SET status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'",
-    )
-    .bind(&now)
-    .bind(id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .rows_affected();
-
-    if affected == 0 {
-        return Err((StatusCode::NOT_FOUND, format!("라운드 id={} 없거나 이미 CLOSED", id)));
-    }
-
-    tx.commit()
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let count = run_calculate_scores(&state.db, id)
+    let result: Result<usize, ApiError> = async {
+        // 1. base_data 누락 검증
+        let missing: Vec<(String, String, String, String, String)> = sqlx::query_as(
+            "SELECT a.name, s.name, s.student_code, u.univ_name, ut.track_name
+             FROM applications ap
+             JOIN students s ON s.id = ap.student_id
+             JOIN univ_tracks ut ON ut.id = ap.track_id
+             JOIN universities u ON u.id = ut.univ_id
+             CROSS JOIN areas a
+             WHERE ap.round_id = ?
+               AND NOT EXISTS (
+                 SELECT 1 FROM base_data bd
+                 WHERE bd.student_id = ap.student_id AND bd.area_id = a.id
+                   AND CASE WHEN a.lookup_scope = 'COMPOSITE'
+                            THEN bd.track_id = ap.track_id
+                            ELSE bd.track_id IS NULL END
+               )
+             LIMIT 5",
+        )
+        .bind(id)
+        .fetch_all(&mut *conn)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(serde_json::json!({ "calculated": count })))
+        if !missing.is_empty() {
+            let details: Vec<String> = missing
+                .iter()
+                .map(|(area, student, code, univ, track)| {
+                    format!("전형요소 '{}': {} {} 지원자 {} ({})", area, univ, track, student, code)
+                })
+                .collect();
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("기초데이터 누락으로 라운드를 종료할 수 없습니다:\n{}", details.join("\n")),
+            ));
+        }
+
+        // 2. OPEN → CLOSED 상태 변경 (점수 계산 실패 시 ROLLBACK으로 함께 취소됨)
+        let now = chrono::Utc::now().to_rfc3339();
+        let affected = sqlx::query(
+            "UPDATE rounds SET status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'",
+        )
+        .bind(&now)
+        .bind(id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .rows_affected();
+
+        if affected == 0 {
+            return Err((StatusCode::NOT_FOUND, format!("라운드 id={} 없거나 이미 CLOSED", id)));
+        }
+
+        // 3. 점수 계산 — 실패 시 호출자에서 ROLLBACK, round는 OPEN으로 복귀
+        run_calculate_scores_on_conn(&mut *conn, id, &now)
+            .await
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))
+    }
+    .await;
+
+    match result {
+        Ok(count) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok(Json(serde_json::json!({ "calculated": count })))
+        }
+        Err(e) => {
+            sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
+            Err(e)
+        }
+    }
 }
 
 pub async fn reopen_round(

@@ -171,8 +171,7 @@ let count = match run_calculate_scores(&state.db, id).await {
 | 구분 | 건수 | 내용 |
 |------|------|------|
 | ✅ 정상 | 31건 | 명세·코드 완전 일치 |
-| ⚠️ 주의 (수정 완료) | 1건 | A-3-3: CATEGORY SUM `checked_add` 적용 |
-| ⚠️ 주의 (설계 권고) | 1건 | D-3: close_round 실패 시 자동 복구 미구현 |
+| ⚠️ 주의 (수정 완료) | 2건 | A-3-3: CATEGORY SUM `checked_add` 적용 / D-3: close_round 원자성 확보 |
 | ❌ 버그 | **0건** | — |
 
 ---
@@ -188,3 +187,23 @@ let count = match run_calculate_scores(&state.db, id).await {
 - `Score::Sum` 구현(`score.rs`)이 이미 `checked_add`를 사용하는 것과 일관성 확보
 - release 빌드에서의 묵시적 wrapping 방지
 - 실질 overflow 발생 조건은 도메인 특성상 불가능하나, Fail-Fast 정책 준수
+
+### D-3 수정 (2026-06-01)
+
+**파일**: `src/handlers/scoring.rs`, `src/handlers/rounds.rs`
+
+**변경**: `close_round`를 `BEGIN IMMEDIATE` 단일 커넥션 트랜잭션으로 재설계
+
+**구조 변경**:
+- `run_calculate_scores(pool)` → `run_calculate_scores_on_conn(conn, round_id, now)` + `run_calculate_scores(pool)` 래퍼로 분리
+- `close_round`: `BEGIN IMMEDIATE` 획득 → 검증 → status 변경 → 점수 계산 → COMMIT (실패 시 ROLLBACK)
+
+**`BEGIN IMMEDIATE`의 효과** (SQLite WAL 모드):
+- 다른 커넥션의 **쓰기 차단** (교사 base_data 수정 불가)
+- 다른 커넥션의 **읽기는 허용** (프론트엔드 조회 정상 동작)
+- 점수 계산 실패 시 ROLLBACK → `status = 'OPEN'` 유지, 데이터 변경 없음
+- CLOSED 상태 + 결과 없음이라는 불일치 상태 자체가 불가능해짐
+
+**이전 구조의 문제점 (제거됨)**:
+- tx.commit() 후 run_calculate_scores() 실패 → round CLOSED 고착
+- 검증 통과 후 커밋 전 구간에서 base_data 경쟁 쓰기 가능성
