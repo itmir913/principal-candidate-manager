@@ -93,342 +93,405 @@
         </div>
       </div>
 
-      <!-- 전형요소 추가 폼 -->
-      <div v-if="showAddForm" class="mb-4 rounded-xl"
-           style="padding: 18px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-        <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
-        <div class="space-y-3">
+      <!-- ── 우측 패널: 추가 폼 or 전형요소 상세 ────────────────── -->
+      <div class="flex-1 min-w-0">
+
+        <!-- 전형요소 추가 폼 -->
+        <div v-if="showAddForm" class="rounded-xl"
+             style="padding: 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+          <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
+
+          <!-- 기본 입력 필드 -->
+          <div class="space-y-3">
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
+              <input v-model="newArea.name" type="text"
+                     class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                     style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율)</label>
+              <input v-model="newArea.max_score_display" type="number" step="0.00001"
+                     class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                     style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식</label>
+              <select v-model="newArea.calc_type"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+                <option value="NUMERIC">구간 조회</option>
+                <option value="CATEGORY">범주 선택</option>
+                <option value="MANUAL">수기 입력</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준</label>
+              <select v-model="newArea.lookup_scope"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+                <option value="SIMPLE">기본 조회</option>
+                <option value="COMPOSITE">대학별 환산점수 조회</option>
+              </select>
+            </div>
+            <div v-if="newArea.calc_type === 'NUMERIC'">
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">구간 탐색 방향 <span style="color: #ef4444;">*</span></label>
+              <select v-model="newArea.match_mode"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+                <option value="">선택하세요</option>
+                <option value="UPPER">▲ 기준값 이상(클수록 만점)</option>
+                <option value="LOWER">▼ 기준값 이하(작을수록 만점)</option>
+                <option value="EXACT">〓 정확히 일치</option>
+              </select>
+            </div>
+            <div v-if="newArea.calc_type === 'CATEGORY'">
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">복수 활동 처리 방식 <span style="color: #ef4444;">*</span></label>
+              <select v-model="newArea.category_agg"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
+                <option value="">선택하세요</option>
+                <option value="SUM">중복 선택 가능 (점수 합산)</option>
+                <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2">
+              <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
+              <label for="te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
+            </div>
+            <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+              전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button
+                  class="text-base font-semibold rounded-lg"
+                  style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                  @click="addArea">저장</button>
+              <button
+                  class="text-base rounded-lg"
+                  style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                  @click="showAddForm = false">취소</button>
+            </div>
+          </div>
+
+          <!-- ── 구분선 + 유형 안내 ─────────────────────────────── -->
+          <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
+          <div class="mb-5">
+            <p class="text-base font-semibold mb-3" style="color: #1e293b;">전형요소 유형 안내</p>
+
+            <!-- 점수 산출 방식 -->
+            <p class="text-base font-medium mb-2" style="color: #64748b;">점수 산출 방식</p>
+            <div class="grid gap-3 mb-4" style="grid-template-columns: repeat(3, 1fr);">
+              <div v-for="d in CALC_TYPE_DESCS" :key="d.key"
+                   class="rounded-lg text-base"
+                   style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+                <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
+              </div>
+            </div>
+
+            <!-- 데이터 조회 기준 -->
+            <p class="text-base font-medium mb-2" style="color: #64748b;">데이터 조회 기준</p>
+            <div class="grid gap-3" style="grid-template-columns: repeat(2, 1fr);">
+              <div v-for="d in LOOKUP_SCOPE_DESCS" :key="d.key"
+                   class="rounded-lg text-base"
+                   style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+                <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── 구분선 + 기본 템플릿 ──────────────────────────── -->
+          <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
           <div>
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
-            <input v-model="newArea.name" type="text"
-                   class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                   style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+            <p class="text-base font-semibold mb-1" style="color: #1e293b;">기본 템플릿</p>
+            <p class="text-base mb-4" style="color: #94a3b8;">
+              템플릿을 선택하면 위 폼의 값이 자동으로 채워집니다. 이름과 만점은 직접 수정하세요.
+            </p>
+            <div class="grid gap-3"
+                 style="grid-template-columns: repeat(3, 1fr);">
+              <button
+                v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
+                class="rounded-xl text-left transition-all"
+                style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
+                @mouseenter="e => e.currentTarget.style.borderColor = '#93c5fd'"
+                @mouseleave="e => e.currentTarget.style.borderColor = '#e2e8f0'"
+                @click="applyTemplate(tpl)">
+                <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
+                <p class="text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
+                <p class="text-base" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
+              </button>
+            </div>
           </div>
-          <div>
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율)</label>
-            <input v-model="newArea.max_score_display" type="number" step="0.00001"
-                   class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                   style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+        </div>
+
+        <!-- ── 전형요소 상세 ──────────────────────────────────── -->
+        <div v-else-if="selected">
+
+          <!-- 선택된 전형요소 헤더 -->
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+              <h3 class="text-lg font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selected.name }}</h3>
+              <span class="text-base font-medium flex-shrink-0"
+                style="padding: 3px 12px; background: #f1f5f9; color: #475569; border-radius: 999px;">{{ calcTypeLabel(selected.calc_type) }}</span>
+              <span class="text-base font-medium flex-shrink-0"
+                style="padding: 3px 12px; background: #f1f5f9; color: #475569; border-radius: 999px;">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
+            </div>
           </div>
-          <div>
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식</label>
-            <select v-model="newArea.calc_type"
-                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-              <option value="NUMERIC">구간 조회</option>
-              <option value="CATEGORY">범주 선택</option>
-              <option value="MANUAL">수기 입력</option>
-            </select>
+
+          <!-- 기본 정보 카드 -->
+          <div class="rounded-xl mb-5"
+            style="padding: 18px 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+            <div class="flex flex-wrap gap-x-8 gap-y-2">
+              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">만점</span><span style="color: #1e293b;">{{ displayScore(selected.max_score) }}점</span></span>
+              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">조회 기준</span><span style="color: #1e293b;">{{ lookupScopeLabel(selected.lookup_scope) }}</span></span>
+              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">계산 유형</span><span style="color: #1e293b;">{{ calcTypeLabel(selected.calc_type) }}</span></span>
+              <span v-if="selected.calc_type === 'NUMERIC'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">탐색 방향</span><span style="color: #1e293b;">{{ matchModeLabel(selected.match_mode) }}</span></span>
+              <span v-if="selected.calc_type === 'CATEGORY'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">범주 집계</span><span style="color: #1e293b;">{{ categoryAggLabel(selected.category_agg) }}</span></span>
+              <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">담임교사 입력</span><span style="color: #1e293b;">{{ selected.teacher_editable ? '허용' : '불가' }}</span></span>
+            </div>
+            <p class="text-base mt-3" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
+              전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
+            </p>
           </div>
-          <div>
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준</label>
-            <select v-model="newArea.lookup_scope"
-                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-              <option value="SIMPLE">기본 조회</option>
-              <option value="COMPOSITE">대학별 환산점수 조회</option>
-            </select>
-          </div>
-          <div v-if="newArea.calc_type === 'NUMERIC'">
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">구간 탐색 방향 <span style="color: #ef4444;">*</span></label>
-            <select v-model="newArea.match_mode"
-                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-              <option value="">선택하세요</option>
-              <option value="UPPER">▲ 기준값 이상(클수록 만점)</option>
-              <option value="LOWER">▼ 기준값 이하(작을수록 만점)</option>
-              <option value="EXACT">〓 정확히 일치</option>
-            </select>
-          </div>
-          <div v-if="newArea.calc_type === 'CATEGORY'">
-            <label class="block text-base font-medium mb-1.5" style="color: #64748b;">복수 활동 처리 방식 <span style="color: #ef4444;">*</span></label>
-            <select v-model="newArea.category_agg"
-                    class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-              <option value="">선택하세요</option>
-              <option value="SUM">중복 선택 가능 (점수 합산)</option>
-              <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
-            </select>
-          </div>
-          <div class="flex items-center gap-2">
-            <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
-            <label for="te" class="text-base" style="color: #475569;">담임교사 입력 허용</label>
-          </div>
-          <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
-            전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
-          </div>
-          <div class="flex gap-2 pt-1">
+
+          <!-- 서브탭 -->
+          <div class="flex mb-5" style="border-bottom: 1px solid #e2e8f0;">
+            <button v-if="selected.calc_type !== 'MANUAL'"
+              class="text-base font-medium transition-colors"
+              style="padding: 10px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;"
+              :style="{
+                borderBottomColor: activeTab === 'score' ? '#2563eb' : 'transparent',
+                color: activeTab === 'score' ? '#2563eb' : '#64748b',
+                fontWeight: activeTab === 'score' ? '600' : '400',
+              }"
+              @click="activeTab = 'score'">점수 기준</button>
             <button
-                class="text-base font-semibold rounded-lg"
-                style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                @click="addArea">저장</button>
-            <button
-                class="text-base rounded-lg"
-                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                @click="showAddForm = false">취소</button>
+              class="text-base font-medium transition-colors"
+              style="padding: 10px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;"
+              :style="{
+                borderBottomColor: activeTab === 'base' ? '#2563eb' : 'transparent',
+                color: activeTab === 'base' ? '#2563eb' : '#64748b',
+                fontWeight: activeTab === 'base' ? '600' : '400',
+              }"
+              @click="activeTab = 'base'">기초 데이터</button>
           </div>
-        </div>
-      </div>
 
-      <!-- ── 우측: 전형요소 상세 ──────────────────────────────── -->
-      <div class="flex-1 min-w-0" v-if="selected">
+          <!-- ── 점수 기준 탭 ──────────────────────────────── -->
+          <div v-if="activeTab === 'score'">
+            <!-- 양식 예시 -->
+            <div class="rounded-xl mb-4"
+              style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
+              <p class="text-base font-semibold mb-3" style="color: #1d4ed8;">양식 예시 — {{ scoreEx.desc }}</p>
+              <div class="overflow-x-auto">
+                <table style="border-collapse: collapse;">
+                  <thead>
+                    <tr>
+                      <th v-for="hd in scoreEx.headers" :key="hd"
+                        class="text-base font-semibold text-left whitespace-nowrap"
+                        style="padding: 8px 14px; background: #bfdbfe; border: 1px solid #93c5fd; color: #1d4ed8;">{{ hd }}</th>
+                      <th style="background: transparent; padding: 8px 14px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, i) in scoreEx.rows" :key="i">
+                      <td v-for="(cell, j) in row" :key="j"
+                        class="text-base whitespace-nowrap"
+                        style="padding: 7px 14px; border: 1px solid #bfdbfe; color: #1e293b;">{{ cell }}</td>
+                      <td class="text-base whitespace-nowrap" style="padding: 7px 14px 7px 20px; color: #94a3b8;">{{ scoreEx.rowDescs[i] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="text-base mb-2" :class="selected.lookup_scope === 'COMPOSITE' ? 'mb-1' : 'mb-4'" style="color: #64748b;">
+              기준값·점수는 실제 값으로 작성 (예: 1.25, 30.5 / 소수점 최대 5자리)
+            </p>
+            <p v-if="selected.lookup_scope === 'COMPOSITE'" class="text-base mb-4" style="color: #2563eb;">
+              대학명·모집단위명을 비워두면 모든 대학에 공통 적용됩니다.
+            </p>
 
-        <!-- 선택된 전형요소 헤더 -->
-        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div class="flex items-center gap-2 min-w-0 flex-wrap">
-            <h3 class="text-lg font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ selected.name }}</h3>
-            <span class="text-base font-medium flex-shrink-0"
-              style="padding: 3px 12px; background: #f1f5f9; color: #475569; border-radius: 999px;">{{ calcTypeLabel(selected.calc_type) }}</span>
-            <span class="text-base font-medium flex-shrink-0"
-              style="padding: 3px 12px; background: #f1f5f9; color: #475569; border-radius: 999px;">{{ lookupScopeLabel(selected.lookup_scope) }}</span>
-          </div>
-        </div>
+            <ExcelPanel
+              :area-id="selected.id"
+              :calc-type="selected.calc_type"
+              :area-name="selected.name"
+              panel="score"
+              @result="onScoreResult" />
+            <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
 
-        <!-- 기본 정보 카드 -->
-        <div class="rounded-xl mb-5"
-          style="padding: 18px 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-          <div class="flex flex-wrap gap-x-8 gap-y-2">
-            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">만점</span><span style="color: #1e293b;">{{ displayScore(selected.max_score) }}점</span></span>
-            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">조회 기준</span><span style="color: #1e293b;">{{ lookupScopeLabel(selected.lookup_scope) }}</span></span>
-            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">계산 유형</span><span style="color: #1e293b;">{{ calcTypeLabel(selected.calc_type) }}</span></span>
-            <span v-if="selected.calc_type === 'NUMERIC'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">탐색 방향</span><span style="color: #1e293b;">{{ matchModeLabel(selected.match_mode) }}</span></span>
-            <span v-if="selected.calc_type === 'CATEGORY'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">범주 집계</span><span style="color: #1e293b;">{{ categoryAggLabel(selected.category_agg) }}</span></span>
-            <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">담임교사 입력</span><span style="color: #1e293b;">{{ selected.teacher_editable ? '허용' : '불가' }}</span></span>
-          </div>
-          <p class="text-base mt-3" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
-            전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
-          </p>
-        </div>
-
-        <!-- 서브탭 -->
-        <div class="flex mb-5" style="border-bottom: 1px solid #e2e8f0;">
-          <button v-if="selected.calc_type !== 'MANUAL'"
-            class="text-base font-medium transition-colors"
-            style="padding: 10px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;"
-            :style="{
-              borderBottomColor: activeTab === 'score' ? '#2563eb' : 'transparent',
-              color: activeTab === 'score' ? '#2563eb' : '#64748b',
-              fontWeight: activeTab === 'score' ? '600' : '400',
-            }"
-            @click="activeTab = 'score'">점수 기준</button>
-          <button
-            class="text-base font-medium transition-colors"
-            style="padding: 10px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;"
-            :style="{
-              borderBottomColor: activeTab === 'base' ? '#2563eb' : 'transparent',
-              color: activeTab === 'base' ? '#2563eb' : '#64748b',
-              fontWeight: activeTab === 'base' ? '600' : '400',
-            }"
-            @click="activeTab = 'base'">기초 데이터</button>
-        </div>
-
-        <!-- ── 점수 기준 탭 ──────────────────────────────── -->
-        <div v-if="activeTab === 'score'">
-          <!-- 양식 예시 -->
-          <div class="rounded-xl mb-4"
-            style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
-            <p class="text-base font-semibold mb-3" style="color: #1d4ed8;">양식 예시 — {{ scoreEx.desc }}</p>
-            <div class="overflow-x-auto">
-              <table style="border-collapse: collapse;">
-                <thead>
-                  <tr>
-                    <th v-for="hd in scoreEx.headers" :key="hd"
-                      class="text-base font-semibold text-left whitespace-nowrap"
-                      style="padding: 8px 14px; background: #bfdbfe; border: 1px solid #93c5fd; color: #1d4ed8;">{{ hd }}</th>
-                    <th style="background: transparent; padding: 8px 14px;"></th>
+            <!-- 점수 기준 목록 -->
+            <div class="mt-5 rounded-xl overflow-hidden"
+              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
+              <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
+                등록된 점수 기준 없음
+              </p>
+              <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; z-index: 1;">
+                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">
+                      {{ selected.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
+                    </th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">점수</th>
+                    <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
+                    </template>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, i) in scoreEx.rows" :key="i">
-                    <td v-for="(cell, j) in row" :key="j"
-                      class="text-base whitespace-nowrap"
-                      style="padding: 7px 14px; border: 1px solid #bfdbfe; color: #1e293b;">{{ cell }}</td>
-                    <td class="text-base whitespace-nowrap" style="padding: 7px 14px 7px 20px; color: #94a3b8;">{{ scoreEx.rowDescs[i] }}</td>
+                  <tr v-for="(row, i) in scorePage.rows" :key="i"
+                    :style="{ background: i % 2 === 1 ? '#f8fafc' : 'white', borderBottom: '1px solid #f1f5f9' }">
+                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">
+                      {{ selected.calc_type === 'NUMERIC' ? row.threshold : row.category }}
+                    </td>
+                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.score }}</td>
+                    <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                      <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.univ_name }}</td>
+                      <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.track_name }}</td>
+                    </template>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <div v-if="scorePage.total > 0" class="mt-4 flex items-center justify-center gap-4">
+              <button
+                class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+                :disabled="scorePage.page <= 1"
+                @click="loadScoreRows(scorePage.page - 1)">&lt; 이전</button>
+              <span class="text-base" style="color: #64748b;">
+                {{ scorePage.page }} / {{ Math.ceil(scorePage.total / scorePage.per_page) }} 페이지
+                (총 {{ scorePage.total }}행)
+              </span>
+              <button
+                class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+                :disabled="scorePage.page >= Math.ceil(scorePage.total / scorePage.per_page)"
+                @click="loadScoreRows(scorePage.page + 1)">다음 &gt;</button>
+            </div>
           </div>
-          <p class="text-base mb-2" :class="selected.lookup_scope === 'COMPOSITE' ? 'mb-1' : 'mb-4'" style="color: #64748b;">
-            기준값·점수는 실제 값으로 작성 (예: 1.25, 30.5 / 소수점 최대 5자리)
-          </p>
-          <p v-if="selected.lookup_scope === 'COMPOSITE'" class="text-base mb-4" style="color: #2563eb;">
-            대학명·모집단위명을 비워두면 모든 대학에 공통 적용됩니다.
-          </p>
 
-          <ExcelPanel
-            :area-id="selected.id"
-            :calc-type="selected.calc_type"
-            :area-name="selected.name"
-            panel="score"
-            @result="onScoreResult" />
-          <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
-
-          <!-- 점수 기준 목록 -->
-          <div class="mt-5 rounded-xl overflow-hidden"
-            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
-            <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
-              등록된 점수 기준 없음
+          <!-- ── 기초 데이터 탭 ──────────────────────────────── -->
+          <div v-if="activeTab === 'base'">
+            <!-- 양식 예시 -->
+            <div class="rounded-xl mb-4"
+              style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
+              <p class="text-base font-semibold mb-3" style="color: #1d4ed8;">양식 예시 — {{ baseEx.desc }}</p>
+              <div class="overflow-x-auto">
+                <table style="border-collapse: collapse;">
+                  <thead>
+                    <tr>
+                      <th v-for="hd in baseEx.headers" :key="hd"
+                        class="text-base font-semibold text-left whitespace-nowrap"
+                        style="padding: 8px 14px; background: #bfdbfe; border: 1px solid #93c5fd; color: #1d4ed8;">{{ hd }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, i) in baseEx.rows" :key="i">
+                      <td v-for="(cell, j) in row" :key="j"
+                        class="text-base whitespace-nowrap"
+                        style="padding: 7px 14px; border: 1px solid #bfdbfe; color: #1e293b;">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="text-base mb-4" style="color: #64748b;">
+              <template v-if="baseStudentType === 'enrolled'">학년·반·번호로 재학생을 찾아 값을 등록합니다.</template>
+              <template v-else>학생코드로 졸업생을 찾아 값을 등록합니다.</template>
+              수치형·수기 입력은 소수점 최대 5자리.
             </p>
-            <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
-              <thead style="position: sticky; top: 0; z-index: 1;">
-                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                  <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">
-                    {{ selected.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
-                  </th>
-                  <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">점수</th>
-                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
-                  </template>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, i) in scorePage.rows" :key="i"
-                  :style="{ background: i % 2 === 1 ? '#f8fafc' : 'white', borderBottom: '1px solid #f1f5f9' }">
-                  <td class="text-base" style="padding: 11px 18px; color: #1e293b;">
-                    {{ selected.calc_type === 'NUMERIC' ? row.threshold : row.category }}
-                  </td>
-                  <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.score }}</td>
-                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.univ_name }}</td>
-                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.track_name }}</td>
-                  </template>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="scorePage.total > 0" class="mt-4 flex items-center justify-center gap-4">
-            <button
-              class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-              :disabled="scorePage.page <= 1"
-              @click="loadScoreRows(scorePage.page - 1)">&lt; 이전</button>
-            <span class="text-base" style="color: #64748b;">
-              {{ scorePage.page }} / {{ Math.ceil(scorePage.total / scorePage.per_page) }} 페이지
-              (총 {{ scorePage.total }}행)
-            </span>
-            <button
-              class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-              :disabled="scorePage.page >= Math.ceil(scorePage.total / scorePage.per_page)"
-              @click="loadScoreRows(scorePage.page + 1)">다음 &gt;</button>
-          </div>
-        </div>
 
-        <!-- ── 기초 데이터 탭 ──────────────────────────────── -->
-        <div v-if="activeTab === 'base'">
-          <!-- 양식 예시 -->
-          <div class="rounded-xl mb-4"
-            style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
-            <p class="text-base font-semibold mb-3" style="color: #1d4ed8;">양식 예시 — {{ baseEx.desc }}</p>
-            <div class="overflow-x-auto">
-              <table style="border-collapse: collapse;">
-                <thead>
-                  <tr>
-                    <th v-for="hd in baseEx.headers" :key="hd"
-                      class="text-base font-semibold text-left whitespace-nowrap"
-                      style="padding: 8px 14px; background: #bfdbfe; border: 1px solid #93c5fd; color: #1d4ed8;">{{ hd }}</th>
+            <ExcelPanel
+              :area-id="selected.id"
+              :calc-type="selected.calc_type"
+              :area-name="selected.name"
+              panel="base"
+              v-model:studentType="baseStudentType"
+              @result="onBaseResult" />
+
+            <!-- 외부 프로그램 가져오기 (COMPOSITE 전용, 재학생만) -->
+            <div v-if="selected.lookup_scope === 'COMPOSITE'"
+                 v-show="baseStudentType === 'enrolled'"
+                 class="mt-3 flex flex-wrap gap-2">
+              <label class="text-base rounded-lg cursor-pointer"
+                style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569;">
+                대교협 석차연명부
+                <input type="file" accept=".xlsx" class="hidden" @change="onExternalFile('daegyo', $event)" />
+              </label>
+              <label class="text-base rounded-lg cursor-pointer"
+                style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569;">
+                유니브 석차연명부
+                <input type="file" accept=".xls" class="hidden" @change="onExternalFile('univ', $event)" />
+              </label>
+            </div>
+
+            <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
+
+            <!-- 기초 데이터 목록 -->
+            <div class="mt-5 rounded-xl overflow-hidden"
+              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
+              <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
+                등록된 기초 데이터 없음
+              </p>
+              <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; z-index: 1;">
+                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학생코드</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">이름</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">값</th>
+                    <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
+                    </template>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, i) in baseEx.rows" :key="i">
-                    <td v-for="(cell, j) in row" :key="j"
-                      class="text-base whitespace-nowrap"
-                      style="padding: 7px 14px; border: 1px solid #bfdbfe; color: #1e293b;">{{ cell }}</td>
+                  <tr v-for="(row, i) in basePage.rows" :key="i"
+                    :style="{ background: i % 2 === 1 ? '#f8fafc' : 'white', borderBottom: '1px solid #f1f5f9' }">
+                    <td class="text-base font-mono" style="padding: 11px 18px; color: #475569;">{{ row.student_code }}</td>
+                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.name }}</td>
+                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.value }}</td>
+                    <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                      <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.univ_name }}</td>
+                      <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.track_name }}</td>
+                    </template>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </div>
-          <p class="text-base mb-4" style="color: #64748b;">
-            <template v-if="baseStudentType === 'enrolled'">학년·반·번호로 재학생을 찾아 값을 등록합니다.</template>
-            <template v-else>학생코드로 졸업생을 찾아 값을 등록합니다.</template>
-            수치형·수기 입력은 소수점 최대 5자리.
-          </p>
-
-          <ExcelPanel
-            :area-id="selected.id"
-            :calc-type="selected.calc_type"
-            :area-name="selected.name"
-            panel="base"
-            v-model:studentType="baseStudentType"
-            @result="onBaseResult" />
-
-          <!-- 외부 프로그램 가져오기 (COMPOSITE 전용, 재학생만) -->
-          <div v-if="selected.lookup_scope === 'COMPOSITE'"
-               v-show="baseStudentType === 'enrolled'"
-               class="mt-3 flex flex-wrap gap-2">
-            <label class="text-base rounded-lg cursor-pointer"
-              style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569;">
-              대교협 석차연명부
-              <input type="file" accept=".xlsx" class="hidden" @change="onExternalFile('daegyo', $event)" />
-            </label>
-            <label class="text-base rounded-lg cursor-pointer"
-              style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569;">
-              유니브 석차연명부
-              <input type="file" accept=".xls" class="hidden" @change="onExternalFile('univ', $event)" />
-            </label>
-          </div>
-
-          <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
-
-          <!-- 기초 데이터 목록 -->
-          <div class="mt-5 rounded-xl overflow-hidden"
-            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
-            <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
-              등록된 기초 데이터 없음
-            </p>
-            <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
-              <thead style="position: sticky; top: 0; z-index: 1;">
-                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                  <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학생코드</th>
-                  <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">이름</th>
-                  <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">값</th>
-                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
-                  </template>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, i) in basePage.rows" :key="i"
-                  :style="{ background: i % 2 === 1 ? '#f8fafc' : 'white', borderBottom: '1px solid #f1f5f9' }">
-                  <td class="text-base font-mono" style="padding: 11px 18px; color: #475569;">{{ row.student_code }}</td>
-                  <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.name }}</td>
-                  <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.value }}</td>
-                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.univ_name }}</td>
-                    <td class="text-base" style="padding: 11px 18px; color: #1e293b;">{{ row.track_name }}</td>
-                  </template>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="basePage.total > 0" class="mt-4 flex items-center justify-center gap-4">
-            <button
-              class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-              :disabled="basePage.page <= 1"
-              @click="loadBaseRows(basePage.page - 1)">&lt; 이전</button>
-            <span class="text-base" style="color: #64748b;">
-              {{ basePage.page }} / {{ Math.ceil(basePage.total / basePage.per_page) }} 페이지
-              (총 {{ basePage.total }}행)
-            </span>
-            <button
-              class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-              :disabled="basePage.page >= Math.ceil(basePage.total / basePage.per_page)"
-              @click="loadBaseRows(basePage.page + 1)">다음 &gt;</button>
+            <div v-if="basePage.total > 0" class="mt-4 flex items-center justify-center gap-4">
+              <button
+                class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+                :disabled="basePage.page <= 1"
+                @click="loadBaseRows(basePage.page - 1)">&lt; 이전</button>
+              <span class="text-base" style="color: #64748b;">
+                {{ basePage.page }} / {{ Math.ceil(basePage.total / basePage.per_page) }} 페이지
+                (총 {{ basePage.total }}행)
+              </span>
+              <button
+                class="text-base rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+                :disabled="basePage.page >= Math.ceil(basePage.total / basePage.per_page)"
+                @click="loadBaseRows(basePage.page + 1)">다음 &gt;</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-else class="flex-1 flex items-center justify-center" style="height: 240px;">
-        <p class="text-base text-center" style="color: #94a3b8;">
-          왼쪽에서 전형요소를 선택하면<br class="hidden md:block" />학교장추천전형의 영역별 반영비율과 만점을 관리할 수 있습니다.
-        </p>
+        <!-- 비어있는 상태 -->
+        <div v-else class="flex items-center justify-center" style="height: 240px;">
+          <p class="text-base text-center" style="color: #94a3b8;">
+            왼쪽에서 전형요소를 선택하면<br class="hidden md:block" />학교장추천전형의 영역별 반영비율과 만점을 관리할 수 있습니다.
+          </p>
+        </div>
+
       </div>
+      <!-- ── 우측 패널 끝 ─────────────────────────────────────── -->
+
     </div>
   </div>
 
@@ -519,6 +582,163 @@ import {
 } from '../../api/admin.js'
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 
+// ── 전형요소 유형 안내 데이터 ────────────────────────────────────
+const CALC_TYPE_DESCS = [
+  {
+    key: 'NUMERIC',
+    label: '구간 조회',
+    desc: '기준값 범위에 따라 점수를 자동 산출합니다. 출결·성적·봉사 시간 등 연속적인 수치 데이터에 적합합니다.',
+  },
+  {
+    key: 'CATEGORY',
+    label: '범주 선택',
+    desc: '미리 정의한 범주에 해당하는 항목을 선택해 점수를 부여합니다. 자격증·수상·봉사 종류 등에 적합합니다.',
+  },
+  {
+    key: 'MANUAL',
+    label: '수기 입력',
+    desc: '담임교사 또는 관리자가 직접 점수를 입력합니다. 별도 기준표 없이 자유롭게 평가할 때 사용합니다.',
+  },
+]
+
+const LOOKUP_SCOPE_DESCS = [
+  {
+    key: 'SIMPLE',
+    label: '기본 조회',
+    desc: '모든 학생에게 동일한 점수 기준표를 적용합니다. 대부분의 항목에 사용합니다.',
+  },
+  {
+    key: 'COMPOSITE',
+    label: '대학별 환산',
+    desc: '지원하는 대학·모집단위에 따라 서로 다른 기준표를 적용합니다. 대학별 환산점수 반영 시 사용합니다.',
+  },
+]
+
+// ── 기본 템플릿 데이터 ─────────────────────────────────────────
+// 템플릿 추가·수정·삭제는 이 배열만 편집하면 됩니다.
+const AREA_TEMPLATES = [
+  {
+    id: 'attendance',
+    name: '출결',
+    description: '무단결석·지각·조퇴 일수를 기준으로 구간별 점수를 산출합니다.',
+    hint: '구간 조회 · 이하(작을수록 만점) · 기본 조회',
+    defaults: {
+      name: '출결',
+      max_score_display: 10,
+      calc_type: 'NUMERIC',
+      lookup_scope: 'SIMPLE',
+      match_mode: 'LOWER',
+      category_agg: '',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'grade',
+    name: '교과 성적',
+    description: '내신 석차백분율 등 수치 성적을 구간별로 환산합니다.',
+    hint: '구간 조회 · 이하(작을수록 만점) · 기본 조회',
+    defaults: {
+      name: '교과 성적',
+      max_score_display: 40,
+      calc_type: 'NUMERIC',
+      lookup_scope: 'SIMPLE',
+      match_mode: 'LOWER',
+      category_agg: '',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'volunteer',
+    name: '봉사활동',
+    description: '봉사 누적 시간이 많을수록 높은 점수를 부여합니다.',
+    hint: '구간 조회 · 이상(클수록 만점) · 기본 조회',
+    defaults: {
+      name: '봉사활동',
+      max_score_display: 5,
+      calc_type: 'NUMERIC',
+      lookup_scope: 'SIMPLE',
+      match_mode: 'UPPER',
+      category_agg: '',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'award',
+    name: '수상 실적',
+    description: '수상 등급을 범주로 등록하고 최고점만 반영합니다.',
+    hint: '범주 선택 · 최대 1개 인정(최고점) · 기본 조회',
+    defaults: {
+      name: '수상 실적',
+      max_score_display: 5,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'MAX',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'certificate',
+    name: '자격증',
+    description: '취득 자격증 종류를 범주로 등록하고 복수 취득 시 합산합니다.',
+    hint: '범주 선택 · 중복 선택 허용(합산) · 기본 조회',
+    defaults: {
+      name: '자격증',
+      max_score_display: 10,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'SUM',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'extracurricular',
+    name: '교외 활동',
+    description: '교외 대회·활동 종류를 범주로 등록하고 최고점을 반영합니다.',
+    hint: '범주 선택 · 최대 1개 인정(최고점) · 기본 조회',
+    defaults: {
+      name: '교외 활동',
+      max_score_display: 5,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'MAX',
+      teacher_editable: false,
+    },
+  },
+  {
+    id: 'manual',
+    name: '담임 추천 의견',
+    description: '담임교사가 직접 점수를 수기 입력하는 항목입니다.',
+    hint: '수기 입력 · 담임 입력 허용',
+    defaults: {
+      name: '담임 추천 의견',
+      max_score_display: 10,
+      calc_type: 'MANUAL',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: '',
+      teacher_editable: true,
+    },
+  },
+  {
+    id: 'composite',
+    name: '대학별 환산점수',
+    description: '지원 대학·모집단위마다 다른 점수 기준표를 적용합니다.',
+    hint: '구간 조회 · 이상(클수록 만점) · 대학별 환산',
+    defaults: {
+      name: '대학별 환산점수',
+      max_score_display: 30,
+      calc_type: 'NUMERIC',
+      lookup_scope: 'COMPOSITE',
+      match_mode: 'UPPER',
+      category_agg: '',
+      teacher_editable: false,
+    },
+  },
+]
+
 // ── 상태 ──────────────────────────────────────────────────────
 const areas    = ref([])
 const selected = ref(null)
@@ -573,6 +793,7 @@ function selectArea(area) {
   selected.value = area
   activeTab.value = area.calc_type === 'MANUAL' ? 'base' : 'score'
   editingAreaId.value = null
+  showAddForm.value = false
 
   scoreResult.value = null
   baseResult.value  = null
@@ -665,6 +886,10 @@ function openAddForm() {
   newArea.value = defaultNewArea()
   editingAreaId.value = null
   showAddForm.value = true
+}
+
+function applyTemplate(tpl) {
+  newArea.value = { ...tpl.defaults }
 }
 
 // ── 외부 가져오기 모달 ────────────────────────────────────────────
