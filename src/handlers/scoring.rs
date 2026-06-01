@@ -229,7 +229,10 @@ pub async fn calc_area_score(
                 ));
             }
             match area.category_agg {
-                Some(CategoryAgg::Sum) => scores.iter().sum::<i64>(),
+                Some(CategoryAgg::Sum) => scores
+                    .iter()
+                    .try_fold(0i64, |acc, &s| acc.checked_add(s))
+                    .ok_or_else(|| format!("전형요소 '{}': CATEGORY SUM 점수 합산 오버플로우", area.name))?,
                 Some(CategoryAgg::Max) => *scores.iter().max()
                     .ok_or_else(|| format!("전형요소 '{}': MAX 집계이지만 점수 목록이 비어 있습니다", area.name))?,
                 None => return Err(format!(

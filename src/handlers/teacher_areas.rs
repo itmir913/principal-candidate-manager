@@ -413,7 +413,12 @@ pub async fn teacher_area_score_preview(
             }
 
             let raw_score = match agg {
-                CategoryAgg::Sum => scores.iter().sum::<i64>(),
+                CategoryAgg::Sum => scores
+                    .iter()
+                    .try_fold(0i64, |acc, &s| acc.checked_add(s))
+                    .ok_or_else(|| {
+                        (StatusCode::INTERNAL_SERVER_ERROR, format!("전형요소 id={}: CATEGORY SUM 점수 합산 오버플로우", body.area_id))
+                    })?,
                 CategoryAgg::Max => *scores.iter().max().unwrap(),
             };
             let capped = raw_score.min(area.max_score);
