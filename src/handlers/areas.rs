@@ -57,10 +57,29 @@ pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRo
     Ok(Json(rows))
 }
 
+async fn guard_no_closed_round(db: &sqlx::SqlitePool) -> Result<(), ApiError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM rounds WHERE status IN ('CLOSED', 'FINALIZED')",
+    )
+    .fetch_one(db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if count > 0 {
+        return Err((
+            StatusCode::CONFLICT,
+            "마감된 라운드가 존재하므로 전형요소를 생성하거나 삭제할 수 없습니다".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn create_area(
     State(state): State<AppState>,
     Json(body): Json<CreateAreaBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    guard_no_closed_round(&state.db).await?;
+
     if body.max_score.raw() < 0 {
         return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
@@ -124,6 +143,8 @@ pub async fn delete_area(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    guard_no_closed_round(&state.db).await?;
+
     sqlx::query("DELETE FROM areas WHERE id = ?")
         .bind(id)
         .execute(&state.db)
