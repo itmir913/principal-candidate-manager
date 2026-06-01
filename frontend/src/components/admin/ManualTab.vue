@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div style="padding: 2rem 2.5rem;">
 
     <!-- 페이지 헤더 -->
@@ -33,13 +33,13 @@
         처음 시스템을 사용할 때는 사전 설정을 먼저 완료해 주세요. 이후 매 선발마다 라운드 운영만 반복하면 됩니다.
       </p>
 
-      <div class="rounded-xl mb-4" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
-        <div class="px-6 pt-5">
-          <div class="flex items-center gap-2 mb-4">
+      <div class="rounded-xl mb-5" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
+        <div class="px-6 pt-5 pb-5">
+          <div class="flex items-center gap-2 mb-3">
             <span class="text-base font-bold" style="color: #1d4ed8; background: #dbeafe; padding: 3px 12px; border-radius: 6px;">1단계 · 사전 설정</span>
             <span class="text-base" style="color: #94a3b8;">학교장추천전형 시작 전 최초 1회</span>
           </div>
-          <div class="flex flex-wrap gap-3 mb-4">
+          <div class="flex flex-wrap gap-3">
             <div
               v-for="step in setupSteps"
               :key="step.num"
@@ -58,11 +58,10 @@
           </div>
         </div>
 
-        <div class="flex justify-center pb-3" style="border-bottom: 1px solid #f1f5f9;">
-        </div>
+        <div style="border-bottom: 1px solid #f1f5f9;"></div>
 
-        <div class="px-6 pt-6 pb-5">
-          <div class="flex items-center gap-2 mb-4">
+        <div class="px-6 pt-5 pb-5">
+          <div class="flex items-center gap-2 mb-3">
             <span class="text-base font-bold" style="color: #7c3aed; background: #f3e8ff; padding: 3px 12px; border-radius: 6px;">2단계 · 라운드 운영</span>
             <span class="text-base" style="color: #94a3b8;">매 선발마다 반복</span>
           </div>
@@ -120,15 +119,15 @@
               <p class="text-base" style="color: #94a3b8; margin: 2px 0 0;">{{ item.where }}</p>
             </div>
           </div>
-          <div class="px-6 py-4 text-base" style="color: #475569; line-height: 1.7;">
+          <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
             {{ item.desc }}
           </div>
-          <div v-if="item.note" class="px-6 pb-4">
+          <div v-if="item.note" class="px-6 pb-5">
             <div class="rounded-lg text-base" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
               {{ item.note }}
             </div>
           </div>
-          <div v-if="item.warning" class="px-6 pb-4">
+          <div v-if="item.warning" class="px-6 pb-5">
             <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
               {{ item.warning }}
             </div>
@@ -140,7 +139,7 @@
     <!-- ── 전형요소 설정 ─────────────────────────────────────────── -->
     <div v-else-if="activeTab === 'areas'">
       <p class="text-base mb-6" style="color: #475569; line-height: 1.7;">
-        전형요소는 각 대학이 학교장추천 전형에서 반영하는 평가 항목입니다 (예: 교과 성적, 수상 경력, 봉사 시간 등).
+        전형요소는 각 고등학교가 학교장추천 전형에서 반영하는 평가 항목입니다 (예: 교과 성적, 수상 경력, 봉사 시간 등).
         전형요소를 먼저 등록한 뒤 점수 기준표와 기초 데이터를 업로드해야 점수가 자동으로 계산됩니다.
       </p>
 
@@ -158,9 +157,9 @@
               class="rounded-xl text-base"
               style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0;"
             >
-              <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ ct.label }}</p>
+              <p class="font-semibold mb-1" style="color: #1e293b;">{{ ct.label }}</p>
               <p style="color: #64748b; margin: 0; line-height: 1.6;">{{ ct.desc }}</p>
-              <p class="mt-2 text-base" style="color: #94a3b8; margin: 0;">예) {{ ct.example }}</p>
+              <p class="mt-2 text-base" style="color: #94a3b8;">예) {{ ct.example }}</p>
             </div>
           </div>
         </div>
@@ -173,7 +172,7 @@
           <p class="text-base mt-1" style="color: #64748b; margin: 0;">어떤 값에 몇 점을 줄지 정하는 기준표입니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
-          <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none; margin: 0;">
+          <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none;">
             <li class="flex items-start gap-2">
               <span class="font-bold flex-shrink-0" style="color: #2563eb;">①</span>
               <span><strong>전형요소 설정 탭</strong>에서 해당 전형요소를 클릭합니다.</span>
@@ -200,7 +199,7 @@
           <p class="text-base mt-1" style="color: #64748b; margin: 0;">학생별 실제 데이터(내신 등급, 수상 실적 등)입니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
-          <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none; margin: 0;">
+          <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none;">
             <li class="flex items-start gap-2">
               <span class="font-bold flex-shrink-0" style="color: #2563eb;">①</span>
               <span><strong>전형요소 설정 탭</strong>에서 해당 전형요소를 클릭합니다.</span>
@@ -227,14 +226,14 @@
           <p class="text-base mt-1" style="color: #64748b; margin: 0;">같은 전형요소라도 대학별로 점수 기준이 다를 때 사용합니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
-          <p class="mb-3" style="margin: 0 0 12px;">전형요소를 등록할 때 <strong>데이터 조회 기준</strong>을 설정할 수 있습니다.</p>
+          <p class="mb-3">전형요소를 등록할 때 <strong>데이터 조회 기준</strong>을 설정할 수 있습니다.</p>
           <div class="grid gap-3" style="grid-template-columns: 1fr 1fr;">
             <div class="rounded-xl" style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0;">
-              <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">공통 기준</p>
+              <p class="text-base font-semibold mb-1" style="color: #1e293b;">공통 기준</p>
               <p class="text-base" style="color: #64748b; margin: 0; line-height: 1.6;">모든 대학에 동일한 점수 기준표를 적용합니다.</p>
             </div>
             <div class="rounded-xl" style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0;">
-              <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">대학별 기준</p>
+              <p class="text-base font-semibold mb-1" style="color: #1e293b;">대학별 기준</p>
               <p class="text-base" style="color: #64748b; margin: 0; line-height: 1.6;">대학·모집단위마다 다른 점수 기준을 적용합니다. 점수 기준표에 대학명과 모집단위명을 함께 입력합니다.</p>
             </div>
           </div>
@@ -264,7 +263,7 @@
             <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ step.title }}</h2>
           </div>
           <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
-            <p class="mb-3" style="margin: 0 0 12px;">{{ step.desc }}</p>
+            <p class="mb-3">{{ step.desc }}</p>
             <ul v-if="step.items" class="space-y-2" style="padding-left: 0; list-style: none; margin: 0;">
               <li v-for="(item, i) in step.items" :key="i" class="flex items-start gap-2">
                 <span class="flex-shrink-0" style="color: #7c3aed;">•</span>
@@ -272,12 +271,12 @@
               </li>
             </ul>
           </div>
-          <div v-if="step.note" class="px-6 pb-4">
+          <div v-if="step.note" class="px-6 pb-5">
             <div class="rounded-lg text-base" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
               {{ step.note }}
             </div>
           </div>
-          <div v-if="step.warning" class="px-6 pb-4">
+          <div v-if="step.warning" class="px-6 pb-5">
             <div class="rounded-lg text-base" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
               {{ step.warning }}
             </div>
@@ -452,3 +451,5 @@ const roundGuides = [
   },
 ]
 </script>
+
+
