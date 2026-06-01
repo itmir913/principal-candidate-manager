@@ -191,6 +191,7 @@ import {
   downloadGraduatedTemplate,
   importGraduated,
   deleteStudent,
+  blobErrMsg,
 } from '../../api/admin.js'
 
 const studentPage = ref({ rows: [], total: 0, page: 1, per_page: 100 })
@@ -292,7 +293,7 @@ async function dlTemplate() {
     } else {
       saveBlob(await downloadGraduatedTemplate(), 'students_graduated_template.xlsx')
     }
-  } catch (e) { error.value = e.response?.data ?? e.message }
+  } catch (e) { error.value = await blobErrMsg(e) }
   finally { downloading.value = false }
 }
 
@@ -305,7 +306,7 @@ function onImport(evt) {
 async function dlAll() {
   downloading.value = true
   try { saveBlob(await exportStudents(), 'students_all.xlsx') }
-  catch (e) { error.value = e.response?.data ?? e.message }
+  catch (e) { error.value = await blobErrMsg(e) }
   finally { downloading.value = false }
 }
 

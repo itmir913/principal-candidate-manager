@@ -384,6 +384,7 @@ import {
   exportResultsExcel,
   exportRoundSummary,
   getQuotaStats,
+  blobErrMsg,
 } from '../../api/admin.js'
 
 function fmtDt(s) {
@@ -624,7 +625,7 @@ async function downloadExcel() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    alert(e.response?.data || e.message)
+    alert(await blobErrMsg(e))
   } finally {
     downloading.value = false
   }
@@ -642,7 +643,7 @@ async function downloadSummary() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    alert(e.response?.data || e.message)
+    alert(await blobErrMsg(e))
   } finally {
     downloadingSummary.value = false
   }

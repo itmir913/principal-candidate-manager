@@ -1,5 +1,16 @@
 import axios from 'axios'
 
+// blob responseType 요청에서 에러가 발생하면 response.data가 Blob 객체로 오기 때문에
+// alert(e.response?.data)가 "[object Blob]"을 표시한다.
+// 이 헬퍼는 Blob이면 text()로 읽어 문자열로 반환한다.
+export async function blobErrMsg(e) {
+  const d = e.response?.data
+  if (d instanceof Blob) {
+    try { return await d.text() } catch { /* fall through */ }
+  }
+  return typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
+}
+
 export const getClasses = () => axios.get('/api/classes').then(r => r.data)
 
 export const upsertClass = (grade, classNo, body) =>

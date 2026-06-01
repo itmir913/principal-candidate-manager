@@ -191,7 +191,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getClasses, upsertClass, deleteClass, downloadClassTemplate, exportClasses, importClasses } from '../../api/admin.js'
+import { getClasses, upsertClass, deleteClass, downloadClassTemplate, exportClasses, importClasses, blobErrMsg } from '../../api/admin.js'
 
 const classes = ref([])
 const error = ref('')
@@ -297,7 +297,7 @@ async function dlTemplate() {
     const res = await downloadClassTemplate()
     saveBlob(res, 'classes_template.xlsx')
   } catch (e) {
-    error.value = e.response?.data ?? e.message
+    error.value = await blobErrMsg(e)
   } finally {
     downloading.value = false
   }
@@ -309,7 +309,7 @@ async function dlExport() {
     const res = await exportClasses()
     saveBlob(res, 'classes.xlsx')
   } catch (e) {
-    error.value = e.response?.data ?? e.message
+    error.value = await blobErrMsg(e)
   } finally {
     downloading.value = false
   }

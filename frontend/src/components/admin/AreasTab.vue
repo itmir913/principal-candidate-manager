@@ -515,6 +515,7 @@ import {
   downloadBaseDataTemplate, exportBaseData, importBaseData,
   getNumericTableList, getCategoryMapList, getBaseDataList,
   previewDaegyoImport, importDaegyo, previewUnivImport, importUniv,
+  blobErrMsg,
 } from '../../api/admin.js'
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 
@@ -767,7 +768,7 @@ const ExcelPanel = defineComponent({
           const res = await downloadBaseDataTemplate(props.areaId, props.studentType)
           saveBlob(res, `${props.areaName}_base_data_${props.studentType}_template.xlsx`)
         }
-      } catch (e) { err.value = e.response?.data ?? e.message }
+      } catch (e) { err.value = await blobErrMsg(e) }
       finally { downloading.value = false }
     }
 
@@ -786,7 +787,7 @@ const ExcelPanel = defineComponent({
           const res = await exportBaseData(props.areaId)
           saveBlob(res, `${props.areaName}_base_data.xlsx`)
         }
-      } catch (e) { err.value = e.response?.data ?? e.message }
+      } catch (e) { err.value = await blobErrMsg(e) }
       finally { downloading.value = false }
     }
 
