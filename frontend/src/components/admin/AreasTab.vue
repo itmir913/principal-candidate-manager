@@ -850,7 +850,13 @@ const ExcelPanel = defineComponent({
         h('button', { style: btnStyle, disabled: downloading.value, onClick: dlTemplate }, '양식 다운로드'),
 
         h('label', { style: uploadStyle(uploading.value) }, [
-          uploading.value ? '가져오는 중…' : '불러오기',
+          uploading.value
+              ? '가져오는 중…'
+              : props.panel === 'base'
+                  ? (props.studentType === 'enrolled'
+                      ? '재학생 불러오기'
+                      : '졸업생 불러오기')
+                  : '불러오기',
           h('input', { type: 'file', accept: '.xlsx,.csv', style: 'display: none;', onChange: onFile }),
         ]),
 
