@@ -108,14 +108,14 @@
         <table class="w-full min-w-max" style="border-collapse: collapse;">
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">학생코드</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 100px;">이름</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 130px;">학생코드</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 130px;">이름</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">구분</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 70px;">학년</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 60px;">반</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 60px;">번호</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 100px;">졸업연도</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">삭제</th>
+              <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569; width: 80px;">삭제</th>
             </tr>
           </thead>
           <tbody>
@@ -134,9 +134,9 @@
               <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.class_no ?? '-' }}</td>
               <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.seq_no ?? '-' }}</td>
               <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ s.grad_year ?? '-' }}</td>
-              <td style="padding: 13px 20px;">
+              <td class="text-center" style="padding: 13px 20px;">
                 <button
-                  class="text-base font-medium rounded-lg"
+                  class="text-base font-medium rounded-lg whitespace-nowrap"
                   style="padding: 5px 12px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
                   @click="remove(s)"
                 >삭제</button>
