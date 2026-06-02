@@ -64,14 +64,19 @@ impl Default for Config {
     }
 }
 
+/// exe 위치 기준으로 파일 경로를 반환한다. 경로 취득 실패 시 파일명만 반환.
+fn exe_relative(filename: &str) -> std::path::PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(filename)))
+        .unwrap_or_else(|| std::path::PathBuf::from(filename))
+}
+
 /// exe 위치 기준으로 config.json을 읽는다.
 /// 파일이 없으면 기본값으로 생성한다.
 /// 파싱에 실패하면 경고 로그 후 기본값을 반환한다.
 fn load_config() -> Config {
-    let config_path = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(CONFIG_FILENAME)))
-        .unwrap_or_else(|| std::path::PathBuf::from(CONFIG_FILENAME));
+    let config_path = exe_relative(CONFIG_FILENAME);
 
     match std::fs::read_to_string(&config_path) {
         Ok(contents) => match serde_json::from_str::<Config>(&contents) {
@@ -118,8 +123,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = load_config();
+    let db_path = exe_relative("data.db");
 
-    let db = db::init_pool("data.db").await?;
+    let db = db::init_pool(db_path.to_str().unwrap_or("data.db")).await?;
     tracing::info!("database ready");
 
     let mut secret_bytes = [0u8; 32];
@@ -154,6 +160,7 @@ fn main() {
 
     let config = load_config();
     let port = config.port;
+    let db_path = exe_relative("data.db");
 
     // tokio 런타임을 수동 생성 (메인 스레드를 tokio에 넘기지 않기 위해)
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -161,7 +168,7 @@ fn main() {
         .build()
         .expect("tokio 런타임 생성 실패");
 
-    let db = match rt.block_on(db::init_pool("data.db")) {
+    let db = match rt.block_on(db::init_pool(db_path.to_str().unwrap_or("data.db"))) {
         Ok(d) => d,
         Err(e) => {
             eprintln!("데이터베이스 초기화 오류: {}", e);
