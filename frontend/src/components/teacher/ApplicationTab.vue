@@ -360,6 +360,7 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import {
   getCurrentRound,
@@ -462,6 +463,22 @@ const canSave = computed(() => {
   })
 })
 
+// 폼이 열려 있고 사용자가 값을 하나라도 입력한 상태
+const isDirty = computed(() => {
+  if (!showForm.value) return false
+  if (form.trackId) return true
+  return (
+    Object.values(areaValues.value).some(v => v !== '') ||
+    Object.values(areaMultiValues.value).some(arr => arr.length > 0)
+  )
+})
+
+onBeforeRouteLeave(() => {
+  if (isDirty.value) {
+    return confirm('입력 중인 데이터가 있습니다. 페이지를 떠나시겠습니까?')
+  }
+})
+
 // ── 초기 로드 ─────────────────────────────────────────────────────
 async function loadAll() {
   const [round, sts, univs] = await Promise.all([
@@ -480,6 +497,8 @@ async function loadAll() {
 
 // ── 학생 선택 ─────────────────────────────────────────────────────
 function selectStudent(s) {
+  if (s.id === selectedStudent.value?.id) return
+  if (isDirty.value && !confirm('입력 중인 데이터가 있습니다. 저장하지 않고 이동하시겠습니까?')) return
   selectedStudent.value = s
   closeForm()
 }
