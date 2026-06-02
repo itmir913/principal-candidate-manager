@@ -1069,13 +1069,16 @@ const ImportResultBox = defineComponent({
       const hasWarnings = r.warnings?.length > 0
       const bgStyle = hasErrors
         ? 'padding: 14px 18px; border-radius: 12px; border: 1px solid #fca5a5; background: #fef2f2;'
-        : 'padding: 14px 18px; border-radius: 12px; border: 1px solid #86efac; background: #f0fdf4;'
+        : hasWarnings
+          ? 'padding: 14px 18px; border-radius: 12px; border: 1px solid #fcd34d; background: #fffbeb;'
+          : 'padding: 14px 18px; border-radius: 12px; border: 1px solid #86efac; background: #f0fdf4;'
+      const titleColor = hasErrors ? '#991b1b' : hasWarnings ? '#92400e' : '#15803d'
       const countStr = r.rows != null ? `${r.rows}건` : r.inserted != null ? `신규 ${r.inserted}명, 수정 ${r.updated}명` : ''
       return h('div', { style: bgStyle }, [
-        h('p', { style: `font-size: 16px; font-weight: 600; margin: 0 0 4px; color: ${hasErrors ? '#991b1b' : '#15803d'};` },
+        h('p', { style: `font-size: 16px; font-weight: 600; margin: 0 0 4px; color: ${titleColor};` },
           hasErrors ? '오류 발생 — 가져오기 실패' : `완료 — ${countStr} 처리됨`),
         hasWarnings
-          ? h('ul', { style: 'font-size: 16px; color: #15803d; padding-left: 20px; margin: 0;' },
+          ? h('ul', { style: 'font-size: 16px; color: #92400e; padding-left: 20px; margin: 0;' },
               r.warnings.map((w, i) => h('li', { key: i }, w)))
           : null,
         hasErrors

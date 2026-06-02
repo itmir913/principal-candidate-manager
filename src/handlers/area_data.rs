@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use crate::{
-    enums::{CalcType, LookupScope},
+    enums::{CalcType, LookupScope, MatchMode},
     excel, score::Score, state::AppState,
 };
 
@@ -59,6 +59,7 @@ pub(crate) struct AreaInfo {
     pub(crate) max_score: i64,
     pub(crate) calc_type: CalcType,
     pub(crate) lookup_scope: LookupScope,
+    pub(crate) match_mode: Option<MatchMode>,
     pub(crate) multi_value: bool,
 }
 
@@ -98,7 +99,7 @@ pub(crate) fn fmt_score(v: i64) -> String {
 
 pub(crate) async fn get_area(db: &Db, id: i64) -> Result<AreaInfo, ApiError> {
     sqlx::query_as::<_, AreaInfo>(
-        "SELECT max_score, calc_type, lookup_scope, multi_value FROM areas WHERE id = ?",
+        "SELECT max_score, calc_type, lookup_scope, match_mode, multi_value FROM areas WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(db)
@@ -370,6 +371,29 @@ pub async fn numeric_table_import(
         // tx이 drop되면 자동 rollback — 부분 삽입 없음
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
+
+    // ▲ 이상(Upper) 방향: 기준값 0 행이 없으면 최저값 미만 학생이 점수 산출 실패 → 경고
+    if area.match_mode == Some(MatchMode::Upper) {
+        let track_ids: HashSet<Option<i64>> = seen.iter().map(|(tid, _)| *tid).collect();
+        for tid in &track_ids {
+            if !seen.contains(&(*tid, 0)) {
+                let min_th = seen.iter()
+                    .filter(|(t, _)| t == tid)
+                    .map(|(_, th)| *th)
+                    .min()
+                    .unwrap_or(0);
+                let label = match tid {
+                    Some(t) => format!(" (모집단위 id={})", t),
+                    None => String::new(),
+                };
+                warnings.push(format!(
+                    "기준값 0 항목이 없습니다{}: 최저 기준값 {} 미만 학생은 점수 산출이 되지 않습니다",
+                    label, fmt_score(min_th)
+                ));
+            }
+        }
+    }
+
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }

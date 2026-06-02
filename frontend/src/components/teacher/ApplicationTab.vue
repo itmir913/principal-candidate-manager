@@ -163,7 +163,7 @@
                 전형요소
               </p>
 
-              <div class="grid gap-4" :class="areaGridClass">
+              <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
                 <div
                   v-for="area in areaContext"
                   :key="area.area_id"
@@ -444,12 +444,6 @@ const studentApps = computed(() =>
 function getStudentAppCount(sid) {
   return applications.value.filter(a => a.student_id === sid).length
 }
-
-const areaGridClass = computed(() => {
-  const n = areaContext.value.length
-  if (n >= 5) return 'grid-cols-1 @3xl:grid-cols-2 @4xl:grid-cols-3'
-  return 'grid-cols-1 @3xl:grid-cols-2'
-})
 
 const canSave = computed(() => {
   if (!selectedStudent.value || !form.trackId || !currentRound.value || !form.departmentName.trim()) return false
