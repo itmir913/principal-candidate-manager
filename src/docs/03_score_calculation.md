@@ -62,6 +62,18 @@
 
 ---
 
+## 음수 값 허용 정책
+
+`base_data`의 값(value) 필드는 **음수를 허용**한다. NUMERIC·MANUAL 전형요소 모두 해당된다.
+
+- **설계 의도**: 특정 전형요소는 감점 방식으로 운영될 수 있다. 예를 들어 출결 불량 시 -5점 처리.
+- `parse_display_value`는 소수점 5자리 초과 여부만 검증하고 부호(±)는 제한하지 않는다.
+- 관리자 import(`base_data_import`)와 담임 입력(`teacher_create_application`) 양쪽 모두 음수 허용.
+- MANUAL은 `max_score` 상한만 적용하며 하한(음수 제한)은 없다.
+- 음수 값은 합산 점수(`total_score`)에 그대로 반영되므로 전체 합이 음수가 될 수도 있다.
+
+---
+
 ## LookupScope 처리 (COMPOSITE vs SIMPLE)
 
 - **SIMPLE**: `base_data`, `numeric_table`, `category_map` 조회 시 `track_id IS NULL` 조건.

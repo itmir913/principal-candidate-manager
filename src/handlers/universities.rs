@@ -112,13 +112,16 @@ pub async fn create_university(
     State(state): State<AppState>,
     Json(body): Json<CreateUnivBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    if body.univ_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
+    }
     let total_quota = body.total_quota.flatten();
     let enrolled = body.prioritize_enrolled as i64;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name, total_quota, prioritize_enrolled)
          VALUES (?, ?, ?) RETURNING id",
     )
-    .bind(&body.univ_name)
+    .bind(body.univ_name.trim())
     .bind(total_quota)
     .bind(enrolled)
     .fetch_one(&state.db)
@@ -134,6 +137,10 @@ pub async fn update_university(
     Json(body): Json<UpdateUnivBody>,
 ) -> Result<StatusCode, ApiError> {
     if let Some(v) = body.univ_name {
+        let v = v.trim().to_string();
+        if v.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
+        }
         sqlx::query("UPDATE universities SET univ_name = ? WHERE id = ?")
             .bind(v).bind(id).execute(&state.db).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -221,6 +228,9 @@ pub async fn create_track(
     Path(univ_id): Path<i64>,
     Json(body): Json<CreateTrackBody>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    if body.track_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
+    }
     let unit_quota = body.unit_quota.flatten();
     let enrolled = body.prioritize_enrolled as i64;
     let id: i64 = sqlx::query_scalar(
@@ -228,7 +238,7 @@ pub async fn create_track(
          VALUES (?, ?, ?, ?) RETURNING id",
     )
     .bind(univ_id)
-    .bind(&body.track_name)
+    .bind(body.track_name.trim())
     .bind(unit_quota)
     .bind(enrolled)
     .fetch_one(&state.db)
@@ -244,6 +254,10 @@ pub async fn update_track(
     Json(body): Json<UpdateTrackBody>,
 ) -> Result<StatusCode, ApiError> {
     if let Some(v) = body.track_name {
+        let v = v.trim().to_string();
+        if v.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
+        }
         sqlx::query("UPDATE univ_tracks SET track_name = ? WHERE id = ?")
             .bind(v).bind(id).execute(&state.db).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

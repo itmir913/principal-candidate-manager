@@ -329,11 +329,15 @@ pub async fn numeric_table_import(
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
 
-        let th = match parse_display_value(excel::get_col(cols, &col, "기준값")) {
+        let raw_th = excel::get_col(cols, &col, "기준값");
+        if raw_th.is_empty() { errors.push(format!("{}행: 기준값 누락", row_num)); continue; }
+        let th = match parse_display_value(raw_th) {
             Ok(v) => v,
             Err(e) => { errors.push(format!("{}행: 기준값 — {}", row_num, e)); continue; }
         };
-        let sc = match parse_display_value(excel::get_col(cols, &col, "점수")) {
+        let raw_sc = excel::get_col(cols, &col, "점수");
+        if raw_sc.is_empty() { errors.push(format!("{}행: 점수 누락", row_num)); continue; }
+        let sc = match parse_display_value(raw_sc) {
             Ok(v) => v,
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };
@@ -510,7 +514,9 @@ pub async fn category_map_import(
             errors.push(format!("{}행: 범주 누락", row_num));
             continue;
         }
-        let sc = match parse_display_value(excel::get_col(cols, &col, "점수")) {
+        let raw_sc = excel::get_col(cols, &col, "점수");
+        if raw_sc.is_empty() { errors.push(format!("{}행: 점수 누락", row_num)); continue; }
+        let sc = match parse_display_value(raw_sc) {
             Ok(v) => v,
             Err(e) => { errors.push(format!("{}행: 점수 — {}", row_num, e)); continue; }
         };

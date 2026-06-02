@@ -80,6 +80,9 @@ pub async fn create_area(
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     guard_no_closed_round(&state.db).await?;
 
+    if body.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "전형요소 이름은 필수입니다".into()));
+    }
     if body.max_score.raw() < 0 {
         return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
@@ -121,6 +124,10 @@ pub async fn update_area(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if let Some(v) = body.name {
+        let v = v.trim().to_string();
+        if v.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "전형요소 이름은 필수입니다".into()));
+        }
         sqlx::query("UPDATE areas SET name = ? WHERE id = ?")
             .bind(v).bind(id)
             .execute(&mut *tx).await

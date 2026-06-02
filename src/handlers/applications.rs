@@ -511,7 +511,16 @@ pub async fn teacher_create_application(
                         ),
                     ));
                 }
-                entry.values.clone()
+                let trimmed: Vec<String> = entry.values.iter()
+                    .map(|v| v.trim().to_string())
+                    .collect();
+                if trimmed.iter().any(|v| v.is_empty()) {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        format!("전형요소 id={}: 빈 범주 값은 허용되지 않습니다", entry.area_id),
+                    ));
+                }
+                trimmed
             }
         };
 
