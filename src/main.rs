@@ -290,12 +290,12 @@ fn main() {
     use tray_icon::{Icon, TrayIconBuilder};
 
     let icon = {
-        let size = 32u32;
-        let rgba: Vec<u8> = std::iter::repeat([0x22u8, 0x55, 0x99, 0xFF])
-            .take(size as usize * size as usize)
-            .flatten()
-            .collect();
-        Icon::from_rgba(rgba, size, size).expect("트레이 아이콘 생성 실패")
+        const ICON_BYTES: &[u8] = include_bytes!("../assets/icon.ico");
+        let img = image::load_from_memory(ICON_BYTES)
+            .expect("assets/icon.ico 로드 실패")
+            .into_rgba8();
+        let (w, h) = img.dimensions();
+        Icon::from_rgba(img.into_raw(), w, h).expect("트레이 아이콘 생성 실패")
     };
 
     let menu = Menu::new();
