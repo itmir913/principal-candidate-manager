@@ -72,11 +72,18 @@ fn exe_relative(filename: &str) -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from(filename))
 }
 
+/// exe 옆 pcm/ 서브폴더를 데이터 디렉토리로 사용한다. 없으면 자동 생성.
+fn data_dir() -> std::path::PathBuf {
+    let dir = exe_relative("pcm");
+    std::fs::create_dir_all(&dir).ok();
+    dir
+}
+
 /// exe 위치 기준으로 config.json을 읽는다.
 /// 파일이 없으면 기본값으로 생성한다.
 /// 파싱에 실패하면 경고 로그 후 기본값을 반환한다.
 fn load_config() -> Config {
-    let config_path = exe_relative(CONFIG_FILENAME);
+    let config_path = data_dir().join(CONFIG_FILENAME);
 
     match std::fs::read_to_string(&config_path) {
         Ok(contents) => match serde_json::from_str::<Config>(&contents) {
@@ -173,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = load_config();
-    let db_path = exe_relative("data.db");
+    let db_path = data_dir().join("data.db");
 
     let db = db::init_pool(db_path.to_str().unwrap_or("data.db")).await?;
     tracing::info!("database ready");
@@ -210,7 +217,7 @@ fn main() {
 
     let config = load_config();
     let port = config.port;
-    let db_path = exe_relative("data.db");
+    let db_path = data_dir().join("data.db");
 
     // tokio 런타임을 수동 생성 (메인 스레드를 tokio에 넘기지 않기 위해)
     let rt = tokio::runtime::Builder::new_multi_thread()
