@@ -49,11 +49,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: package artifact
-        shell: bash
+        shell: pwsh
         run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          zip "principal-candidate-manager-${VERSION}-${{ matrix.artifact_name }}.zip" \
-              "target/release/${{ matrix.binary }}"
+          $VERSION = "${{ steps.version.outputs.VERSION }}"
+          Compress-Archive -Path "target/release/${{ matrix.binary }}" `
+            -DestinationPath "principal-candidate-manager-${VERSION}-${{ matrix.artifact_name }}.zip"
 
       - name: upload artifact
         uses: actions/upload-artifact@v7
