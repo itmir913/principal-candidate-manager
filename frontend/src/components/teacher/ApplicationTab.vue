@@ -45,7 +45,7 @@
       </div>
 
       <!-- ── 우측: 지원 등록 영역 ── -->
-      <div class="lg:flex-1 min-w-0">
+      <div class="lg:flex-1 min-w-0 @container">
 
         <!-- 학생 미선택 -->
         <div
@@ -108,7 +108,7 @@
             </div>
 
             <!-- 대학 / 모집단위 / 학과명 -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 @4xl:grid-cols-3 gap-4 mb-6">
               <div>
                 <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
                   대학 <span style="color: #ef4444;">*</span>
@@ -447,8 +447,8 @@ function getStudentAppCount(sid) {
 
 const areaGridClass = computed(() => {
   const n = areaContext.value.length
-  if (n >= 5) return 'grid-cols-1 lg:grid-cols-3'
-  return 'grid-cols-1 lg:grid-cols-2'
+  if (n >= 5) return 'grid-cols-1 @3xl:grid-cols-2 @4xl:grid-cols-3'
+  return 'grid-cols-1 @3xl:grid-cols-2'
 })
 
 const canSave = computed(() => {

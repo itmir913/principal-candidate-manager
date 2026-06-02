@@ -5,6 +5,10 @@
 
 @theme {
     --font-sans: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+
+    /* 커스텀 컨테이너 쿼리 브레이크포인트 */
+    --container-3xl: 900px;
+    --container-4xl: 1200px;
 }
 
 @layer base {
