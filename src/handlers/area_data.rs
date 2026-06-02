@@ -1,7 +1,7 @@
 /// 전형요소별 데이터 Excel 업로드/다운로드 핸들러
 /// - 점수 기준: numeric_table (RANGE), category_map (CATEGORY)
 /// - 기초 데이터: base_data (모든 calc_type)
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use axum::{
     extract::{Multipart, Path, Query, State},
@@ -325,6 +325,7 @@ pub async fn numeric_table_import(
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let mut seen: HashSet<(Option<i64>, i64)> = HashSet::new();
+    let mut track_rows: HashMap<Option<i64>, Vec<(i64, i64)>> = HashMap::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
@@ -366,7 +367,10 @@ pub async fn numeric_table_import(
         )
         .bind(id).bind(track_id).bind(th).bind(sc)
         .execute(&mut *tx).await {
-            Ok(_) => rows += 1,
+            Ok(_) => {
+                rows += 1;
+                track_rows.entry(track_id).or_default().push((th, sc));
+            }
             Err(e) => errors.push(format!("{}행: {}", row_num, e)),
         }
     }
@@ -396,6 +400,48 @@ pub async fn numeric_table_import(
                 ));
             }
         }
+    }
+
+    // 단조성 검사: UPPER → threshold↑ 시 score 비감소, LOWER → threshold↑ 시 score 비증가
+    // 역전 입력(예: 높은 기준값에 낮은 점수를 UPPER 모드로 등록)은 silent wrong 점수를 생성하므로 오류 처리
+    if let Some(mode) = area.match_mode {
+        if mode == MatchMode::Upper || mode == MatchMode::Lower {
+            for (tid, pairs) in &mut track_rows {
+                pairs.sort_by_key(|&(th, _)| th);
+                let label = match tid {
+                    Some(t) => format!(" (모집단위 id={})", t),
+                    None => String::new(),
+                };
+                for w in pairs.windows(2) {
+                    let (th1, sc1) = w[0];
+                    let (th2, sc2) = w[1];
+                    let violated = match mode {
+                        MatchMode::Upper => sc2 < sc1,
+                        MatchMode::Lower => sc2 > sc1,
+                        MatchMode::Exact => false,
+                    };
+                    if violated {
+                        let hint = match mode {
+                            MatchMode::Upper => "UPPER 모드에서는 기준값이 높을수록 점수도 높거나 같아야 합니다",
+                            MatchMode::Lower => "LOWER 모드에서는 기준값이 높을수록 점수도 낮거나 같아야 합니다",
+                            MatchMode::Exact => "",
+                        };
+                        errors.push(format!(
+                            "점수 순서 오류{}: 기준값 {}→{} 구간에서 점수가 {}→{} — {}",
+                            label,
+                            fmt_score(th1), fmt_score(th2),
+                            fmt_score(sc1), fmt_score(sc2),
+                            hint
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
 
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

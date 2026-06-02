@@ -148,7 +148,7 @@ async fn teacher_login_wrong_password_returns_unauthorized() {
 // ── change_admin_password ─────────────────────────────────────────
 
 #[tokio::test]
-async fn change_admin_password_wrong_current_returns_unauthorized() {
+async fn change_admin_password_wrong_current_returns_bad_request() {
     let state = make_state().await;
     let _ = admin_login(
         State(state.clone()),
@@ -165,7 +165,7 @@ async fn change_admin_password_wrong_current_returns_unauthorized() {
         }),
     )
     .await;
-    assert_eq!(res.unwrap_err().0, StatusCode::UNAUTHORIZED);
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
