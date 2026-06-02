@@ -606,10 +606,12 @@ async function handleFinalizeRound(id) {
 
 async function handleCalculate() {
   if (!selected.value) return
+  const roundId = selected.value.id
   calcLoading.value = true
   calcMsg.value = null
   try {
-    const res = await calculateScores(selected.value.id)
+    const res = await calculateScores(roundId)
+    if (selected.value?.id !== roundId) return
     calcMsg.value = { ok: true, text: `점수 재계산 완료: ${res.calculated}건` }
     await loadResults()
   } catch (e) {

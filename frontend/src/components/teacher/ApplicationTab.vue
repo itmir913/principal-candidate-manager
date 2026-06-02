@@ -396,6 +396,7 @@ const form = reactive({
 })
 const tracksLoading  = ref(false)
 const contextLoading = ref(false)
+let _trackCtxSeq = 0
 
 // areaValues: { [area_id]: string }  (NUMERIC, MANUAL, CATEGORY 단일)
 const areaValues      = ref({})
@@ -522,6 +523,7 @@ async function onUnivChange() {
 
 // ── 모집단위 선택 → area-context 로드 ────────────────────────────
 async function onTrackChange() {
+  const seq = ++_trackCtxSeq
   areaContext.value   = []
   areaValues.value    = {}
   areaMultiValues.value = {}
@@ -531,13 +533,14 @@ async function onTrackChange() {
   contextLoading.value = true
   try {
     const ctx = await teacherGetAreaContext(selectedStudent.value.id, form.trackId)
+    if (seq !== _trackCtxSeq) return
     areaContext.value    = ctx
     initAreaValues(ctx)
     contextLoading.value = false
     // 기저장 값이 있는 항목에 대해 즉시 점수 계산 (테이블 렌더링 후 실행)
     await triggerInitialPreviews(ctx)
   } finally {
-    contextLoading.value = false
+    if (seq === _trackCtxSeq) contextLoading.value = false
   }
 }
 
