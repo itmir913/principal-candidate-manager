@@ -689,6 +689,21 @@ const AREA_TEMPLATES = [
       teacher_editable: true,
     },
   },
+  {
+    id: 'penalty',
+    name: '생활태도',
+    description: '징계·학교폭력·선도처분 미이수 등 감점 사유를 복수 선택하면 각 항목의 점수(음수)가 합산됩니다. 만점은 0점이며 사유가 없으면 감점 없이 0점입니다.',
+    hint: '범주 선택 · 중복 선택 가능(합산) · 기본 조회 · 담임교사 입력 허용',
+    defaults: {
+      name: '생활태도',
+      max_score_display: 0,
+      calc_type: 'CATEGORY',
+      lookup_scope: 'SIMPLE',
+      match_mode: '',
+      category_agg: 'SUM',
+      teacher_editable: true,
+    },
+  },
 ]
 
 // ── 상태 ──────────────────────────────────────────────────────
