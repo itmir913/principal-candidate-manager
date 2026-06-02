@@ -163,7 +163,7 @@
                 전형요소
               </p>
 
-              <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+              <div class="grid gap-4 grid-cols-1 @4xl:grid-cols-3">
                 <div
                   v-for="area in areaContext"
                   :key="area.area_id"
