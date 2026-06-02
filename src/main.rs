@@ -1,3 +1,5 @@
+#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+
 use principal_candidate_manager::{db, handlers, middleware};
 use principal_candidate_manager::state::AppState;
 
@@ -19,6 +21,33 @@ mod frontend {
     #[derive(Embed)]
     #[folder = "frontend/dist/"]
     pub struct Assets;
+}
+
+// Win32 메시지 펌프 (릴리스 빌드 전용)
+#[cfg(not(feature = "dev"))]
+mod win32 {
+    #[repr(C)]
+    pub struct MSG {
+        pub hwnd: isize,
+        pub message: u32,
+        pub w_param: usize,
+        pub l_param: isize,
+        pub time: u32,
+        pub pt_x: i32,
+        pub pt_y: i32,
+    }
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        pub fn GetMessageW(
+            lpmsg: *mut MSG,
+            hwnd: isize,
+            wmsgfiltermin: u32,
+            wmsgfiltermax: u32,
+        ) -> i32;
+        pub fn TranslateMessage(lpmsg: *const MSG) -> i32;
+        pub fn DispatchMessageW(lpmsg: *const MSG) -> isize;
+    }
 }
 
 const DEFAULT_PORT: u16 = 8080;
@@ -60,7 +89,6 @@ fn load_config() -> Config {
             }
         },
         Err(_) => {
-            // 파일 없음 → 기본값으로 생성 시도
             let default_cfg = Config::default();
             if let Ok(json) = serde_json::to_string_pretty(&default_cfg) {
                 if let Err(e) = std::fs::write(&config_path, json) {
@@ -74,6 +102,11 @@ fn load_config() -> Config {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// dev 빌드: 기존 방식 (tokio::main + 콘솔)
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "dev")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -103,6 +136,133 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 릴리스 빌드: 트레이 아이콘 + 브라우저 자동 열기
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[cfg(not(feature = "dev"))]
+fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let config = load_config();
+    let port = config.port;
+
+    // tokio 런타임을 수동 생성 (메인 스레드를 tokio에 넘기지 않기 위해)
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio 런타임 생성 실패");
+
+    let db = match rt.block_on(db::init_pool("data.db")) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("데이터베이스 초기화 오류: {}", e);
+            std::process::exit(1);
+        }
+    };
+    tracing::info!("database ready");
+
+    let mut secret_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
+    let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let state = AppState { db, jwt_secret };
+
+    let app = build_router(state);
+    let addr = format!("0.0.0.0:{}", port);
+
+    // 서버가 바인딩되면 Ok(()), 실패하면 Err(메시지) 전송
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+
+    std::thread::spawn(move || {
+        rt.block_on(async move {
+            match tokio::net::TcpListener::bind(&addr).await {
+                Ok(listener) => {
+                    tracing::info!("listening on http://{}", addr);
+                    let _ = ready_tx.send(Ok(()));
+                    if let Err(e) = axum::serve(listener, app).await {
+                        eprintln!("서버 오류: {}", e);
+                    }
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(e.to_string()));
+                }
+            }
+        });
+    });
+
+    match ready_rx.recv() {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            eprintln!("서버 시작 실패 (포트 {}): {}", port, e);
+            std::process::exit(1);
+        }
+        Err(_) => {
+            eprintln!("서버 스레드 비정상 종료");
+            std::process::exit(1);
+        }
+    }
+
+    let url = format!("http://localhost:{}", port);
+    let _ = webbrowser::open(&url);
+
+    // 트레이 아이콘 설정
+    use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+    use tray_icon::{Icon, TrayIconBuilder};
+
+    let icon = {
+        let size = 32u32;
+        let rgba: Vec<u8> = std::iter::repeat([0x22u8, 0x55, 0x99, 0xFF])
+            .take(size as usize * size as usize)
+            .flatten()
+            .collect();
+        Icon::from_rgba(rgba, size, size).expect("트레이 아이콘 생성 실패")
+    };
+
+    let menu = Menu::new();
+    let open_item = MenuItem::new("열기", true, None);
+    let quit_item = MenuItem::new("종료", true, None);
+    menu.append(&open_item).expect("메뉴 항목 추가 실패");
+    menu.append(&quit_item).expect("메뉴 항목 추가 실패");
+    let open_id = open_item.id().clone();
+    let quit_id = quit_item.id().clone();
+
+    let _tray = TrayIconBuilder::new()
+        .with_icon(icon)
+        .with_menu(Box::new(menu))
+        .with_tooltip("학교장추천 관리 시스템")
+        .build()
+        .expect("트레이 생성 실패");
+
+    let menu_channel = MenuEvent::receiver();
+
+    // Win32 메시지 루프 (메인 스레드에서 실행 필수)
+    unsafe {
+        let mut msg: win32::MSG = std::mem::zeroed();
+        loop {
+            let ret = win32::GetMessageW(&mut msg, 0, 0, 0);
+            if ret == 0 || ret == -1 {
+                break;
+            }
+            win32::TranslateMessage(&msg);
+            win32::DispatchMessageW(&msg);
+
+            while let Ok(event) = menu_channel.try_recv() {
+                if event.id == open_id {
+                    let _ = webbrowser::open(&url);
+                } else if event.id == quit_id {
+                    std::process::exit(0);
+                }
+            }
+        }
+    }
 }
 
 fn build_router(state: AppState) -> Router {
@@ -174,7 +334,6 @@ fn build_router(state: AppState) -> Router {
         .route("/univ-tracks/:id", put(handlers::universities::update_track))
         .route("/univ-tracks/:id", delete(handlers::universities::delete_track))
         .route("/univ-tracks/:id/recommended-list", get(handlers::universities::get_track_recommended_list))
-        // 5단계: 라운드 관리
         .route("/rounds", get(handlers::rounds::list_rounds))
         .route("/rounds/open", post(handlers::rounds::open_round))
         .route("/rounds/:id/close", put(handlers::rounds::close_round))
@@ -184,9 +343,7 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
         .route("/rounds/:id/summary/export", get(handlers::scoring::export_round_summary))
-        // 7단계: 점수 미리보기
         .route("/score-preview", get(handlers::scoring::score_preview))
-        // 5단계: 지원·추천
         .route("/applications", get(handlers::applications::admin_list_applications))
         .route(
             "/applications/:sid/:tid/:rid/abandon",
@@ -223,7 +380,6 @@ fn build_router(state: AppState) -> Router {
         .route("/password", put(handlers::applications::teacher_change_password))
         .route("/area-context", get(handlers::teacher_areas::teacher_area_context))
         .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))
-        // 7단계: 담임 결과 조회
         .route("/results", get(handlers::scoring::teacher_get_results))
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
@@ -234,7 +390,6 @@ fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/version", get(handlers::system::get_version))
         .route("/rounds/current", get(handlers::rounds::get_current_round))
-        // 로그인 폼에서 반 목록 조회 (인증 불필요)
         .route("/classes", get(handlers::classes::list_classes))
         .nest("/auth", auth_routes)
         .merge(admin_routes)
@@ -245,8 +400,6 @@ fn build_router(state: AppState) -> Router {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    // 개발 모드: Vite dev server(5173)가 정적파일 담당, API만 제공
-    // 릴리스 모드: 내장 dist/ 를 SPA fallback으로 제공
     #[cfg(not(feature = "dev"))]
     let app = app.fallback(static_handler);
 
@@ -276,7 +429,6 @@ async fn static_handler(uri: axum::http::Uri) -> axum::response::Response {
                 .body(Body::from(file.data.into_owned()))
                 .unwrap()
         }
-        // SPA fallback: 클라이언트 라우트는 index.html 반환
         None => match frontend::Assets::get("index.html") {
             Some(file) => Response::builder()
                 .header(header::CONTENT_TYPE, "text/html; charset=utf-8")

@@ -14,9 +14,6 @@ jobs:
           - platform: windows-latest
             artifact_name: windows-x64
             binary: principal-candidate-manager.exe
-          - platform: macos-latest
-            artifact_name: macos
-            binary: principal-candidate-manager
 
     runs-on: ${{ matrix.platform }}
 
