@@ -339,8 +339,9 @@ fn main() {
 
             while let Ok(event) = menu_channel.try_recv() {
                 if event.id == autostart_id {
-                    let new_state = !autostart_item.is_checked();
-                    autostart_item.set_checked(new_state);
+                    // muda가 클릭 시 checked 상태를 자동 토글하므로
+                    // is_checked()는 이미 새 상태를 반환함
+                    let new_state = autostart_item.is_checked();
                     if new_state {
                         autostart_registry_set(&exe_path);
                     } else {
