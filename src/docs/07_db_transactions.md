@@ -17,19 +17,19 @@
 | `import_students` | 전체 행 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `import_enrolled` | 재학생 위치 기반 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `import_graduated` | 졸업생 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
-| `import_classes` | 학급 upsert 반복 | bcrypt 계산은 행 단위로 트랜잭션 진입 전에 수행 |
+| `import_classes` | 학급 upsert 반복 | tx.begin() 후 루프 내에서 행마다 bcrypt 계산(tx 커넥션은 사용하지 않는 순수 CPU 단계). upsert_class와 달리 tx 시작 이후 계산 |
 | `upsert_class` | classes INSERT 또는 UPDATE | 신규/기존 분기 처리 원자화 |
 | `daegyo_import` / `univ_import` | 모집단위별 삭제 + 행 삽입 반복 | `do_import` 함수 공통 사용 |
 
 ---
 
-## bcrypt 위치 — 트랜잭션 진입 전 계산
+## bcrypt 위치 — DB 쓰기 전 계산
 
-**확인된 모든 위치에서 bcrypt는 트랜잭션 진입 전에 계산한다.**
+**확인된 모든 위치에서 bcrypt는 DB 쓰기(INSERT/UPDATE) 전에 계산한다.** `import_classes`만 예외적으로 `tx.begin()` 이후 루프 내에서 계산하나, tx 커넥션을 사용하지 않는 순수 CPU 단계이므로 DB 잠금에 영향이 없다.
 
 - `change_admin_password` (handlers/auth.rs): `bcrypt::hash` → `UPDATE app_configs` (트랜잭션 없음, 단일 쿼리)
 - `teacher_change_password` (handlers/applications.rs): `bcrypt::hash` → `UPDATE classes` (트랜잭션 없음, 단일 쿼리)
-- `import_classes` (handlers/classes.rs): 루프 내에서 행마다 `bcrypt::hash`를 트랜잭션 밖에서 계산 후 → 트랜잭션 내 INSERT/UPDATE. 주석에 "bcrypt는 CPU 작업이므로 트랜잭션 진입 전에 미리 계산"이라고 명시되어 있음.
+- `import_classes` (handlers/classes.rs): `tx.begin()` 이후 루프 내에서 행마다 `bcrypt::hash`를 계산한다. tx 커넥션을 사용하지 않는 순수 CPU 단계에서 계산하므로 DB 잠금 유지 시간에 영향이 없다. `upsert_class`와 달리 tx 시작 이전이 아님에 주의. (코드 내 주석 "트랜잭션 진입 전에 미리 계산"은 해당 행의 DB 접근 전을 의미한다.)
 - `upsert_class` (handlers/classes.rs): 동일하게 `bcrypt::hash` 먼저 계산 후 트랜잭션 시작.
 
 **이유**: bcrypt는 CPU 집약 연산으로, 트랜잭션 내에서 실행하면 DB 잠금 유지 시간이 늘어난다. SQLite는 동시 쓰기가 제한적이므로 이를 방지하기 위한 설계.

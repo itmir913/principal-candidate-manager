@@ -86,14 +86,11 @@
 ## 저장 가능 조건 (canSave) 검증
 
 **백엔드 검증 방식**:
-- 백엔드에서는 `teacher_editable=true`인 전형요소에 값이 없어도 거부하지 않는다. 비어 있는 `values` 배열을 가진 `base_data_entries`는 조용히 건너뛴다.
 - `teacher_editable=false` 전형요소는 값을 전송하면 거부(403)하지만, 전송하지 않는 것은 허용한다.
+- `teacher_editable=true` 전형요소는 **모두** 값을 제출해야 한다. 하나라도 누락되면 422 Unprocessable Entity 반환.
+- `values`가 비어 있는 항목은 미제출로 간주해 위 422 검증에 걸린다.
 
-**설계 의도 추정**: canSave 조건(모든 전형요소 값 입력 완료 여부)은 **프론트엔드에서만 검증**하는 것으로 보인다. 백엔드는 값이 없는 teacher_editable 전형요소가 있어도 저장 자체는 허용한다. 다만, CLOSED 시점의 `run_calculate_scores`에서 해당 base_data가 없으면 오류가 발생하므로 실질적으로는 등록 전 전체 입력이 강제된다.
-
-기존 코드는 `teacher_editable=false` 영역에 값이 전송되면 403으로 거부했지만, 반대로 `teacher_editable=true` 영역의 값이 누락된 경우는 조용히 통과시켰습니다.
-
-추가된 검증([applications.rs:432](src/handlers/applications.rs))은 `all_areas` 중 `teacher_editable=true`인 모든 전형요소가 `submitted_area_ids`에 포함되어 있는지 확인하며, 하나라도 빠지면 422(UNPROCESSABLE_ENTITY)로 거부합니다. 이제 프론트엔드 `canSave` 가드 없이도 백엔드에서 완전성을 보장합니다.
+**구현** (`applications.rs:434`): `values`가 1건 이상인 area_id를 `submitted_area_ids`로 수집한 뒤, `teacher_editable=true`인 모든 전형요소가 포함되어 있는지 확인한다. 누락 시 422.
 
 ---
 

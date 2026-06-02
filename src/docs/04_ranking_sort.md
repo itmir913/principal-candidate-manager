@@ -19,15 +19,12 @@
 
 ## ranking 부여 방식
 
-**확인된 내용**: 순서대로 `rank + 1`을 순차 부여한다 (`for (rank, ...) in ranked.iter().enumerate()`). 즉, **동점자에게 동일 순위를 부여하지 않는다** — 정렬 순서에 따라 1, 2, 3, … 순차 부여.
-
-**이유**: 동점자가 있을 때 어느 학생을 먼저 배치할지는 정렬 안정성(stable sort 아닌 점, 비교 함수의 동점 처리 방식)에 달려 있다. Rust의 `sort_by`는 안정 정렬이므로 동점자 사이에서는 원래 순서가 유지된다. 그러나 동일 순위 번호를 부여하는 로직은 없다.
-
-⚠️ [ranking 동점 처리] ranking 로직을 동점자에게 같은 순위를 부여하는 방식(standard competition ranking: 1,2,2,4...)으로 수정함. 동점자 정원 초과 시 관리자 확인이 필요함. 
+**동점 처리 방식**: Standard competition ranking(1,1,3,4,...) — 동점자에게 동일 순위를 부여한다.
 
 - 동점 판정: `prioritize` 트랙이면 `is_enrolled` + `total_score` 둘 다 동일해야 동점, 아니면 `total_score`만 비교
 - 동점이면 이전 학생과 같은 `actual_rank` 유지; 동점이 아니면 `i + 1`로 갱신
 - 결과 예시: 점수가 100, 100, 90, 80이면 순위는 1, 1, 3, 4
+- 동점자 정원 초과 시 `finalize_round`에서 422가 발생하므로 관리자 확인 필요
 
 **ranking이 채워지는 시점**: `run_calculate_scores` 내부 트랜잭션 커밋 시점. 즉, `close_round` 완료 후 또는 수동 재계산(`calculate_scores`) 완료 후.
 
