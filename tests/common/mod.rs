@@ -11,7 +11,7 @@ use principal_candidate_manager::{
 use sqlx::SqlitePool;
 
 pub fn make_state(pool: SqlitePool) -> AppState {
-    AppState { db: pool, jwt_secret: "test".into() }
+    AppState { db: pool, jwt_secret: "test".into(), db_path: std::path::PathBuf::from(":memory:") }
 }
 
 pub fn teacher_claims(grade: i64, class_no: i64) -> TeacherClaims {

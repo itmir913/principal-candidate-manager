@@ -189,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
     rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
     let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
 
-    let state = AppState { db, jwt_secret };
+    let state = AppState { db, jwt_secret, db_path: db_path.clone() };
 
     let app = build_router(state);
 
@@ -240,7 +240,7 @@ fn main() {
     let mut secret_bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
     let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-    let state = AppState { db, jwt_secret };
+    let state = AppState { db, jwt_secret, db_path: db_path.clone() };
 
     let app = build_router(state);
     let addr = format!("0.0.0.0:{}", port);

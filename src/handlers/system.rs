@@ -26,39 +26,32 @@ pub async fn download_db_backup(
     State(state): State<AppState>,
     Extension(_claims): Extension<auth::AdminClaims>,
 ) -> Result<Response<Body>, ApiError> {
-    // 커넥션 하나를 점유해 BEGIN IMMEDIATE — 다른 writers 차단
-    let mut conn = state
-        .db
-        .acquire()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("data_backup_{}.db", timestamp);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("트랜잭션 시작 실패: {}", e)))?;
+    // VACUUM INTO: 중첩 트랜잭션 없이 일관된 스냅샷 복사본 생성
+    let tmp_path = state
+        .db_path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join(format!("backup_tmp_{}.db", timestamp));
 
-    let bytes = tokio::fs::read("data.db").await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("DB 파일 읽기 실패: {}", e),
-        )
+    let tmp_str = tmp_path.to_string_lossy().to_string();
+    sqlx::query("VACUUM INTO ?")
+        .bind(&tmp_str)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("백업 생성 실패: {}", e)))?;
+
+    let bytes = tokio::fs::read(&tmp_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("백업 파일 읽기 실패: {}", e))
     })?;
 
-    // 변경 없이 잠금만 해제
-    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-
-    let filename = format!(
-        "data_backup_{}.db",
-        chrono::Local::now().format("%Y%m%d_%H%M%S")
-    );
+    tokio::fs::remove_file(&tmp_path).await.ok();
 
     let response = Response::builder()
         .header("Content-Type", "application/octet-stream")
-        .header(
-            "Content-Disposition",
-            format!("attachment; filename=\"{}\"", filename),
-        )
+        .header("Content-Disposition", format!("attachment; filename=\"{}\"", filename))
         .body(Body::from(bytes))
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

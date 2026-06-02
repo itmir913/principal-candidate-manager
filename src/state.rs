@@ -4,4 +4,5 @@ use sqlx::SqlitePool;
 pub struct AppState {
     pub db: SqlitePool,
     pub jwt_secret: String,
+    pub db_path: std::path::PathBuf,
 }
