@@ -201,7 +201,7 @@
                           class="text-base font-medium"
                           style="color: #2563eb;"
                         >
-                          예상 {{ scorePreview[area.area_id].score }}점
+                          예상 {{ Number(scorePreview[area.area_id].score).toFixed(2) }}점
                           <span v-if="scorePreview[area.area_id].warning" style="color: #d97706;"> ⚠</span>
                         </span>
                       </template>

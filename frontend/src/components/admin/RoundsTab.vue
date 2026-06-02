@@ -89,20 +89,23 @@
               <!-- 상태 액션 버튼 -->
               <template v-if="selected.status === 'OPEN'">
                 <button
-                  class="text-base font-medium rounded-lg"
+                  class="text-base font-medium rounded-lg disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
+                  :disabled="roundActing"
                   @click="handleCloseRound(selected.id)"
                 >종료하기</button>
               </template>
               <template v-else-if="selected.status === 'CLOSED'">
                 <button
-                  class="text-base font-medium rounded-lg"
+                  class="text-base font-medium rounded-lg disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                  :disabled="roundActing"
                   @click="handleReopenRound(selected.id)"
                 >다시 열기</button>
                 <button
-                  class="text-base font-medium rounded-lg"
+                  class="text-base font-medium rounded-lg disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #d8b4fe; background: white; color: #7c3aed; cursor: pointer;"
+                  :disabled="roundActing"
                   @click="handleFinalizeRound(selected.id)"
                 >마감하기</button>
               </template>
@@ -403,6 +406,7 @@ const apps    = ref([])
 const results = ref([])
 const areas   = ref([])
 
+const roundActing        = ref(false)
 const calcLoading        = ref(false)
 const calcMsg            = ref(null)
 const downloading        = ref(false)
@@ -547,7 +551,9 @@ async function handleOpenRound() {
 }
 
 async function handleCloseRound(id) {
+  if (roundActing.value) return
   if (!confirm('라운드를 종료하시겠습니까? (담임 입력이 차단됩니다)')) return
+  roundActing.value = true
   try {
     await closeRound(id)
     await loadRounds()
@@ -557,11 +563,15 @@ async function handleCloseRound(id) {
     }
   } catch (e) {
     alert(e.response?.data || e.message)
+  } finally {
+    roundActing.value = false
   }
 }
 
 async function handleReopenRound(id) {
+  if (roundActing.value) return
   if (!confirm('라운드를 다시 열시겠습니까? (추천 플래그가 초기화됩니다)')) return
+  roundActing.value = true
   try {
     await reopenRound(id)
     await loadRounds()
@@ -571,11 +581,15 @@ async function handleReopenRound(id) {
     }
   } catch (e) {
     alert(e.response?.data || e.message)
+  } finally {
+    roundActing.value = false
   }
 }
 
 async function handleFinalizeRound(id) {
+  if (roundActing.value) return
   if (!confirm('라운드를 마감하시겠습니까? (추천 확정이 박제되고 결과가 공개됩니다)')) return
+  roundActing.value = true
   try {
     await finalizeRound(id)
     await loadRounds()
@@ -585,6 +599,8 @@ async function handleFinalizeRound(id) {
     }
   } catch (e) {
     alert(e.response?.data || e.message)
+  } finally {
+    roundActing.value = false
   }
 }
 
