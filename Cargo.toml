@@ -30,5 +30,8 @@ chrono       = { version = "0.4", features = ["serde"] }
 tray-icon    = "0.22"
 webbrowser   = "1"
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

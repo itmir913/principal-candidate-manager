@@ -108,6 +108,56 @@ fn load_config() -> Config {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// 자동 실행 설정 (app_configs 테이블 + Windows 레지스트리)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const AUTOSTART_KEY: &str = "autostart_enabled";
+const AUTOSTART_REG_NAME: &str = "PCM";
+const AUTOSTART_REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+
+async fn get_autostart(db: &sqlx::SqlitePool) -> bool {
+    sqlx::query_scalar::<_, String>(
+        "SELECT value FROM app_configs WHERE key = ?",
+    )
+    .bind(AUTOSTART_KEY)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .map(|v| v == "1")
+    .unwrap_or(true) // 기본값: 활성화
+}
+
+async fn save_autostart(db: &sqlx::SqlitePool, enabled: bool) {
+    let value = if enabled { "1" } else { "0" };
+    let _ = sqlx::query(
+        "INSERT OR REPLACE INTO app_configs (key, value) VALUES (?, ?)",
+    )
+    .bind(AUTOSTART_KEY)
+    .bind(value)
+    .execute(db)
+    .await;
+}
+
+#[cfg(all(target_os = "windows", not(feature = "dev")))]
+fn autostart_registry_set(exe_path: &str) {
+    use winreg::{enums::*, RegKey};
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+        let _ = key.set_value(AUTOSTART_REG_NAME, &exe_path);
+    }
+}
+
+#[cfg(all(target_os = "windows", not(feature = "dev")))]
+fn autostart_registry_remove() {
+    use winreg::{enums::*, RegKey};
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+        let _ = key.delete_value(AUTOSTART_REG_NAME);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // dev 빌드: 기존 방식 (tokio::main + 콘솔)
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -177,6 +227,9 @@ fn main() {
     };
     tracing::info!("database ready");
 
+    let db_for_tray = db.clone();
+    let rt_handle = rt.handle().clone();
+
     let mut secret_bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
     let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
@@ -220,8 +273,20 @@ fn main() {
     let url = format!("http://localhost:{}", port);
     let _ = webbrowser::open(&url);
 
+    // 자동 실행 초기 상태 읽기 및 레지스트리 반영
+    let autostart_on = rt_handle.block_on(get_autostart(&db_for_tray));
+    let exe_path = std::env::current_exe()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if autostart_on {
+        autostart_registry_set(&exe_path);
+    } else {
+        autostart_registry_remove();
+    }
+
     // 트레이 아이콘 설정
-    use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+    use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
     use tray_icon::{Icon, TrayIconBuilder};
 
     let icon = {
@@ -234,10 +299,14 @@ fn main() {
     };
 
     let menu = Menu::new();
+    let autostart_item = CheckMenuItem::new("시작 시 자동 실행", true, autostart_on, None);
     let open_item = MenuItem::new("열기", true, None);
     let quit_item = MenuItem::new("종료", true, None);
+    menu.append(&autostart_item).expect("메뉴 항목 추가 실패");
+    menu.append(&PredefinedMenuItem::separator()).expect("메뉴 항목 추가 실패");
     menu.append(&open_item).expect("메뉴 항목 추가 실패");
     menu.append(&quit_item).expect("메뉴 항목 추가 실패");
+    let autostart_id = autostart_item.id().clone();
     let open_id = open_item.id().clone();
     let quit_id = quit_item.id().clone();
 
@@ -262,7 +331,16 @@ fn main() {
             win32::DispatchMessageW(&msg);
 
             while let Ok(event) = menu_channel.try_recv() {
-                if event.id == open_id {
+                if event.id == autostart_id {
+                    let new_state = !autostart_item.is_checked();
+                    autostart_item.set_checked(new_state);
+                    if new_state {
+                        autostart_registry_set(&exe_path);
+                    } else {
+                        autostart_registry_remove();
+                    }
+                    rt_handle.block_on(save_autostart(&db_for_tray, new_state));
+                } else if event.id == open_id {
                     let _ = webbrowser::open(&url);
                 } else if event.id == quit_id {
                     std::process::exit(0);
