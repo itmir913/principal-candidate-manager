@@ -19,6 +19,9 @@ pub fn parse_file_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
 pub fn parse_file_rows_with_headers(
     bytes: &[u8],
 ) -> anyhow::Result<(Vec<String>, Vec<Vec<String>>)> {
+    if is_xls(bytes) {
+        anyhow::bail!("'.xls' 형식은 지원하지 않습니다. Excel에서 '다른 이름으로 저장 → .xlsx'로 변환 후 업로드해 주세요.");
+    }
     let mut all = if is_xlsx(bytes) {
         parse_xlsx_all_rows(bytes)?
     } else {
@@ -30,6 +33,21 @@ pub fn parse_file_rows_with_headers(
     }
 
     let headers = all.remove(0);
+
+    // 중복 헤더 감지 — 동일한 컬럼명이 두 번 이상이면 어느 열을 사용하는지 불명확
+    let mut seen_headers = std::collections::HashSet::new();
+    let mut duplicates: Vec<String> = Vec::new();
+    for h in &headers {
+        let trimmed = h.trim().to_string();
+        if trimmed.is_empty() { continue; }
+        if !seen_headers.insert(trimmed.clone()) && !duplicates.contains(&trimmed) {
+            duplicates.push(trimmed);
+        }
+    }
+    if !duplicates.is_empty() {
+        anyhow::bail!("헤더 행에 중복된 열 이름이 있습니다: {}", duplicates.join(", "));
+    }
+
     let data = all
         .into_iter()
         .filter(|row| !row.iter().all(|c| c.is_empty()))
