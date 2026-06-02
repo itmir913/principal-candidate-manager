@@ -223,74 +223,101 @@ pub async fn finalize_round(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    // CLOSED 상태인지 먼저 확인
-    let status: Option<String> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&state.db)
+    // BEGIN IMMEDIATE: 상태 검증·정원 검증·status UPDATE를 원자적으로 처리.
+    // 트랜잭션 없이 개별 pool 쿼리를 사용하면 두 요청이 동시에 CLOSED를 확인하고 둘 다 UPDATE할 수 있다.
+    let mut conn = state.db.acquire().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    if status.as_deref() != Some("CLOSED") {
-        return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없거나 CLOSED 상태가 아닙니다".into()));
+
+    let result: Result<(), ApiError> = async {
+        // CLOSED 상태인지 확인 (UPDATE WHERE status='CLOSED' 가드와 이중 방어)
+        let status: Option<String> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if status.as_deref() != Some("CLOSED") {
+            return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없거나 CLOSED 상태가 아닙니다".into()));
+        }
+
+        // 모집단위 정원 초과 검증 (unit_quota IS NOT NULL인 트랙만)
+        let track_violations: Vec<TrackOverQuota> = sqlx::query_as(
+            "SELECT ut.track_name, u.univ_name, ut.unit_quota,
+                    COUNT(*) AS total_recommended
+             FROM results r
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
+             JOIN univ_tracks ut ON ut.id = r.track_id
+             JOIN universities u  ON u.id  = ut.univ_id
+             WHERE r.recommended = 1 AND a.abandoned = 0
+               AND ut.unit_quota IS NOT NULL
+             GROUP BY ut.id
+             HAVING COUNT(*) > ut.unit_quota
+             LIMIT 5",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // 대학 전체 정원 초과 검증 (total_quota IS NOT NULL인 대학만)
+        let univ_violations: Vec<UnivOverQuota> = sqlx::query_as(
+            "SELECT u.univ_name, u.total_quota,
+                    COUNT(*) AS total_recommended
+             FROM results r
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
+             JOIN univ_tracks ut ON ut.id = r.track_id
+             JOIN universities u  ON u.id  = ut.univ_id
+             WHERE r.recommended = 1 AND a.abandoned = 0
+               AND u.total_quota IS NOT NULL
+             GROUP BY u.id
+             HAVING COUNT(*) > u.total_quota
+             LIMIT 5",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if !track_violations.is_empty() || !univ_violations.is_empty() {
+            let body = serde_json::json!({
+                "error": "정원 초과로 라운드를 확정할 수 없습니다",
+                "track_violations": track_violations,
+                "univ_violations": univ_violations,
+            });
+            return Err((StatusCode::UNPROCESSABLE_ENTITY, body.to_string()));
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ? AND status = 'CLOSED'",
+        )
+        .bind(&now)
+        .bind(id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        Ok(())
     }
+    .await;
 
-    // 모집단위 정원 초과 검증 (unit_quota IS NOT NULL인 트랙만)
-    let track_violations: Vec<TrackOverQuota> = sqlx::query_as(
-        "SELECT ut.track_name, u.univ_name, ut.unit_quota,
-                COUNT(*) AS total_recommended
-         FROM results r
-         JOIN applications a ON a.student_id = r.student_id
-                             AND a.track_id  = r.track_id
-                             AND a.round_id  = r.round_id
-         JOIN univ_tracks ut ON ut.id = r.track_id
-         JOIN universities u  ON u.id  = ut.univ_id
-         WHERE r.recommended = 1 AND a.abandoned = 0
-           AND ut.unit_quota IS NOT NULL
-         GROUP BY ut.id
-         HAVING COUNT(*) > ut.unit_quota
-         LIMIT 5",
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // 대학 전체 정원 초과 검증 (total_quota IS NOT NULL인 대학만)
-    let univ_violations: Vec<UnivOverQuota> = sqlx::query_as(
-        "SELECT u.univ_name, u.total_quota,
-                COUNT(*) AS total_recommended
-         FROM results r
-         JOIN applications a ON a.student_id = r.student_id
-                             AND a.track_id  = r.track_id
-                             AND a.round_id  = r.round_id
-         JOIN univ_tracks ut ON ut.id = r.track_id
-         JOIN universities u  ON u.id  = ut.univ_id
-         WHERE r.recommended = 1 AND a.abandoned = 0
-           AND u.total_quota IS NOT NULL
-         GROUP BY u.id
-         HAVING COUNT(*) > u.total_quota
-         LIMIT 5",
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if !track_violations.is_empty() || !univ_violations.is_empty() {
-        let body = serde_json::json!({
-            "error": "정원 초과로 라운드를 확정할 수 없습니다",
-            "track_violations": track_violations,
-            "univ_violations": univ_violations,
-        });
-        return Err((StatusCode::UNPROCESSABLE_ENTITY, body.to_string()));
+    match result {
+        Ok(()) => {
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Err(e) => {
+            sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
+            Err(e)
+        }
     }
-
-    let now = chrono::Utc::now().to_rfc3339();
-    sqlx::query(
-        "UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ?",
-    )
-    .bind(&now)
-    .bind(id)
-    .execute(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    Ok(StatusCode::NO_CONTENT)
 }
