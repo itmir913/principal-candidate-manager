@@ -99,9 +99,9 @@
             <span class="whitespace-nowrap">{{ item.label }}</span>
             <span
               v-if="item.badge"
-              class="ml-auto text-base font-bold"
+              class="ml-auto text-xs font-bold"
               style="color: #dc2626; background: #fee2e2; padding: 2px 8px; border-radius: 999px;"
-            >NEW</span>
+            >NEW</span><!-- 이 곳에서만 text-xs 허용함 -->
           </template>
         </button>
       </nav>
