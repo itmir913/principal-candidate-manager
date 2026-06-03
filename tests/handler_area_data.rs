@@ -554,3 +554,278 @@ async fn base_data_list_category_non_numeric_value_is_ok() {
     assert_eq!(page.rows.len(), 1);
     assert_eq!(page.rows[0].value, "회장");
 }
+
+// ── 누락된 열 → 400 ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn numeric_table_import_missing_required_column_returns_bad_request() {
+    // "기준값" 열 없음 → require_cols 실패 → Err(400) 반환
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "점수\n50.0\n"; // "기준값" 열 없음
+    // require_cols 실패 시 Err((400, ...))을 반환하므로 match 사용
+    match numeric_table_import(State(state), Path(aid), build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+#[tokio::test]
+async fn category_map_import_missing_required_column_returns_bad_request() {
+    // "범주" 열 없음 → require_cols 실패 → Err(400) 반환
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "점수\n10.0\n"; // "범주" 열 없음
+    match category_map_import(State(state), Path(aid), build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+#[tokio::test]
+async fn base_data_import_graduated_missing_student_code_column_returns_bad_request() {
+    // 졸업생 모드: "학생코드" 열 없음 → require_cols 실패 → Err(400) 반환
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "이름,값\n홍길동,85.0\n"; // "학생코드" 열 없음
+    match base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+// ── numeric_table_import: 값 오류 시나리오 ────────────────────────
+
+#[tokio::test]
+async fn numeric_table_import_non_numeric_threshold_rejects() {
+    // 기준값이 숫자가 아닌 문자 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\nabc,50.0\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+}
+
+#[tokio::test]
+async fn numeric_table_import_upper_monotonicity_violation_rejects() {
+    // UPPER 모드: 기준값↑ → 점수↑ 이어야 하는데 점수가 감소 → 오류
+    // 기준표: (10→50점), (20→30점) → 기준값이 높아졌는데 점수가 낮아짐 → 위반
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n0,0\n10,50\n20,30\n"; // 10→50, 20→30: 점수 역전
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("순서 오류") || e.contains("UPPER")));
+}
+
+#[tokio::test]
+async fn numeric_table_import_lower_monotonicity_violation_rejects() {
+    // LOWER 모드: 기준값↑ → 점수↓ 이어야 하는데 점수가 증가 → 오류
+    // 기준표: (10→30점), (20→50점) → 기준값이 높아졌는데 점수도 높아짐 → 위반
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Lower), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n10,30\n20,50\n"; // 10→30, 20→50: LOWER 위반
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("순서 오류") || e.contains("LOWER")));
+}
+
+#[tokio::test]
+async fn numeric_table_import_upper_no_zero_threshold_adds_warning() {
+    // UPPER 모드에서 기준값 0 항목 없음 → 삽입 성공(200)이지만 warning 포함
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    // 기준값 0 없이 10부터 시작 → 10 미만 학생은 점수 산출 실패 → warning
+    let csv = "기준값,점수\n10,50\n20,80\n30,100\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 3);
+    assert!(result.errors.is_empty());
+    assert!(!result.warnings.is_empty(), "기준값 0 없음 → warning 필수");
+}
+
+#[tokio::test]
+async fn numeric_table_import_duplicate_threshold_rejects() {
+    // 같은 기준값이 두 번 등장 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n0,0\n10,50\n10,80\n"; // 기준값 10 중복
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("중복")));
+}
+
+// ── category_map_import: 추가 시나리오 ───────────────────────────
+
+#[tokio::test]
+async fn category_map_import_requires_zero_score_entry() {
+    // 양수 점수만 있고 0점 기준(해당하지 않음) 항목이 없으면 → 422
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+    let state = common::make_state(pool.clone());
+
+    // "회장→10점" 만 있고 "해당없음→0점" 없음
+    let csv = "범주,점수\n회장,10.0\n부회장,5.0\n";
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("0점")));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM category_map WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "0점 기준 없음 오류 시 rollback 되어야 함");
+}
+
+#[tokio::test]
+async fn category_map_import_duplicate_category_rejects() {
+    // 같은 범주가 두 번 등장 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "범주,점수\n회장,10.0\n회장,8.0\n일반,0.0\n"; // "회장" 중복
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("중복")));
+}
+
+#[tokio::test]
+async fn category_map_import_deduction_only_no_zero_required() {
+    // 감점 전용(모든 점수 < 0) 범주표 → 0점 기준 없어도 허용
+    let pool = common::create_test_pool_shared().await;
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, category_agg, lookup_scope, multi_value) \
+         VALUES ('규정위반', 0, 'CATEGORY', 'SUM', 'SIMPLE', 1) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let state = common::make_state(pool.clone());
+
+    // 음수 점수만 — 양수가 없으므로 0점 기준 필수 규칙 적용 안 됨
+    let csv = "범주,점수\n규정위반,-3.0\n";
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+    assert!(result.errors.is_empty());
+}
+
+// ── base_data_import: 엔롤드 모드 누락 열 ─────────────────────────
+
+#[tokio::test]
+async fn base_data_import_enrolled_missing_required_column_returns_bad_request() {
+    // 재학생 모드: "학년" 열 없음 → require_cols 실패 → Err(400) 반환
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "반,번호,값\n1,1,85.0\n"; // "학년" 열 없음
+
+    use axum::extract::Query;
+    use principal_candidate_manager::handlers::area_data::StudentTypeQuery;
+    let enrolled_query = Query(StudentTypeQuery { student_type: "enrolled".to_string() });
+
+    match base_data_import(State(state), Path(aid), enrolled_query, build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+// ── base_data_import: 값 비어 있음 ───────────────────────────────
+
+#[tokio::test]
+async fn base_data_import_empty_value_rejects() {
+    // "값" 열이 있지만 내용이 비어 있는 행 → 오류 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,값\nS001,\n"; // 값 비어 있음
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+}
+
+// ── base_data_import: 숫자 아닌 값 ───────────────────────────────
+
+#[tokio::test]
+async fn base_data_import_manual_non_numeric_value_rejects() {
+    // MANUAL 전형요소에 숫자가 아닌 문자열 값 → 오류 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,값\nS001,홍길동\n"; // 숫자 아닌 문자열
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+}

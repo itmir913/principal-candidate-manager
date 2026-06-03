@@ -854,6 +854,32 @@ async fn calc_range_exact_match_miss_returns_error() {
     assert!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.is_err());
 }
 
+// ── calculate_scores: 라운드 상태 검증 ────────────────────────────
+
+#[tokio::test]
+async fn calculate_scores_open_round_returns_bad_request() {
+    // OPEN 상태 라운드 → 점수 계산 불가 (CLOSED에서만 허용)
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_full(&pool).await;
+    // 라운드는 OPEN 상태로 setup_full에서 생성됨
+    let res = calculate_scores(State(common::make_state(pool)), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn calculate_scores_finalized_round_returns_bad_request() {
+    // FINALIZED 상태 라운드도 점수 재계산 불가
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_full(&pool).await;
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED', closed_at = '2025-01-02', finalized_at = '2025-01-03' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let res = calculate_scores(State(common::make_state(pool)), Path(rid)).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
 // ── calc_area_score: 새 Err 케이스 ────────────────────────────────
 
 #[tokio::test]
