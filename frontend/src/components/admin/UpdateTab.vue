@@ -144,7 +144,7 @@
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
               style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
           >2</span>
-          <p class="text-base" style="color:#374151;">맨 위 <strong>최신 버전 다운로드</strong> 버튼을 눌러 ZIP 파일을 내려받고 압축을 풉니다.</p>
+          <p class="text-base" style="color:#374151;">이 프로그램이 실행 중인 PC에서 맨 위 <strong>최신 버전 다운로드</strong> 버튼을 눌러 GitHub 릴리스 페이지로 이동한 후, ZIP 파일을 내려받고 압축을 풉니다.</p>
         </div>
         <div class="flex gap-3">
           <span
