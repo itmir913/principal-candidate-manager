@@ -91,3 +91,27 @@ async fn create_category_area_without_category_agg_rejected() {
     let res = create_area(State(common::make_state(pool)), Json(body)).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn create_area_whitespace_only_name_rejected() {
+    // 이름이 공백만 있는 경우 → 400 (trim 후 빈 문자열)
+    let pool = common::create_test_pool().await;
+    let res = create_area(
+        State(common::make_state(pool)),
+        Json(manual_area_body("   ", Score::from_raw(1_000_000))),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn create_area_empty_name_rejected() {
+    // 이름이 빈 문자열 → 400
+    let pool = common::create_test_pool().await;
+    let res = create_area(
+        State(common::make_state(pool)),
+        Json(manual_area_body("", Score::from_raw(1_000_000))),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
