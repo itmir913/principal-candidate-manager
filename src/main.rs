@@ -300,7 +300,6 @@ fn main() {
     }
 
     let url = format!("http://localhost:{}", port);
-    let _ = webbrowser::open(&url);
 
     // 자동 실행 초기 상태 읽기 및 레지스트리 반영
     let autostart_on = rt_handle.block_on(get_autostart(&db_for_tray));
