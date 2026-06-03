@@ -255,11 +255,11 @@ const ManualTab   = defineAsyncComponent(() => import('../components/admin/Manua
 // ── 메뉴 정의 ────────────────────────────────────────────────
 const mainMenus = [
   { key: 'home',     label: '개요',          icon: Home },
-  { key: 'rounds',   label: '라운드 관리',   icon: Trophy },
   { key: 'classes',  label: '학급 관리',     icon: LayoutGrid },
   { key: 'students', label: '학생 관리',     icon: Users },
   { key: 'areas',    label: '전형요소 설정', icon: SlidersHorizontal },
   { key: 'univs',    label: '대학 설정',     icon: Building2 },
+  { key: 'rounds',   label: '라운드 관리',   icon: Trophy },
 ]
 
 const hasUpdate = ref(false)
@@ -276,11 +276,11 @@ const active = ref('home')
 
 const currentTab = computed(() => {
   if (active.value === 'home')     return OverviewTab
-  if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'classes')  return ClassesTab
   if (active.value === 'students') return StudentsTab
   if (active.value === 'areas')    return AreasTab
   if (active.value === 'univs')    return UnivTab
+  if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'update')   return UpdateTab
   if (active.value === 'manual')   return ManualTab
   return null
