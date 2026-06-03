@@ -15,7 +15,7 @@
             <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
         </div>
-        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">학교장추천전형</h1>
+        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">학교장 추천자</h1>
         <p class="text-base" style="color: #94a3b8; margin: 0;">선발 관리 시스템</p>
       </div>
 
