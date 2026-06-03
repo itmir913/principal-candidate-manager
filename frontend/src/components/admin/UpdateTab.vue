@@ -208,9 +208,10 @@
           >
             <span style="color:#64748b;"># 예시 경로 (프로그램을 C:\PCM에 설치한 경우)</span><br />
             <span style="color:#e2e8f0;">C:\PCM\</span><br />
-            <span style="color:#e2e8f0;">  ├── principal-candidate-manager.exe</span><br />
-            <span style="color:#e2e8f0;">  └── pcm\</span><br />
-            <span style="color:#86efac;">      └── data.db</span>  <span style="color:#64748b;">&lt;-- 이 파일을 복사하세요</span>
+            <span style="color:#e2e8f0;">&nbsp;&nbsp;├── principal-candidate-manager.exe</span><br />
+            <span style="color:#e2e8f0;">&nbsp;&nbsp;└── pcm\</span><br />
+            <span style="color:#86efac;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── data.db</span>&nbsp;&nbsp;<span style="color:#64748b;">&lt;-- 이 파일을 복사하세요</span><br />
+            <span style="color:#e2e8f0;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── config.json</span>
           </div>
         </div>
 
