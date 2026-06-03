@@ -277,7 +277,7 @@
         <h2 class="text-base font-semibold" style="color: #1e293b;">About</h2>
       </div>
       <div class="px-6 py-5 flex flex-col gap-1.5">
-        <p class="text-base font-semibold" style="color: #1e293b;">학교장추천전형 선발 시스템</p>
+        <p class="text-base font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
         <div class="flex items-center gap-3">
           <p class="text-base" style="color: #64748b;">
             © 2026 luminousky ·
