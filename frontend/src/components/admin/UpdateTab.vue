@@ -199,15 +199,18 @@
           <p class="text-base font-medium mb-2" style="color:#374151;">백업 파일 위치</p>
           <p class="text-base mb-3" style="color:#64748b;">
             데이터베이스 파일 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>는
-            프로그램 실행 파일과 같은 폴더에 있습니다.
+            프로그램 실행 파일(<code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">.exe</code>) 옆
+            <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">pcm\</code> 폴더 안에 있습니다.
           </p>
           <div
             class="rounded-lg p-3 text-base font-mono"
             style="background:#1e293b;color:#94a3b8;"
           >
-            <span style="color:#64748b;"># 예시 경로</span><br />
-            <span style="color:#e2e8f0;">C:\Users\사용자명\AppData\Local\principal-candidate-manager\</span><br />
-            <span style="color:#86efac;">  └── data.db</span>  <span style="color:#64748b;">&lt;-- 이 파일을 복사하세요</span>
+            <span style="color:#64748b;"># 예시 경로 (프로그램을 C:\PCM에 설치한 경우)</span><br />
+            <span style="color:#e2e8f0;">C:\PCM\</span><br />
+            <span style="color:#e2e8f0;">  ├── principal-candidate-manager.exe</span><br />
+            <span style="color:#e2e8f0;">  └── pcm\</span><br />
+            <span style="color:#86efac;">      └── data.db</span>  <span style="color:#64748b;">&lt;-- 이 파일을 복사하세요</span>
           </div>
         </div>
 

@@ -133,10 +133,14 @@ fn load_config() -> Config {
 // 자동 실행 설정 (app_configs 테이블 + Windows 레지스트리)
 // ──────────────────────────────────────────────────────────────────────────────
 
+#[cfg(not(feature = "dev"))]
 const AUTOSTART_KEY: &str = "autostart_enabled";
+#[cfg(all(target_os = "windows", not(feature = "dev")))]
 const AUTOSTART_REG_NAME: &str = "PCM";
+#[cfg(all(target_os = "windows", not(feature = "dev")))]
 const AUTOSTART_REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
+#[cfg(not(feature = "dev"))]
 async fn get_autostart(db: &sqlx::SqlitePool) -> bool {
     sqlx::query_scalar::<_, String>(
         "SELECT value FROM app_configs WHERE key = ?",
@@ -150,6 +154,7 @@ async fn get_autostart(db: &sqlx::SqlitePool) -> bool {
     .unwrap_or(true) // 기본값: 활성화
 }
 
+#[cfg(not(feature = "dev"))]
 async fn save_autostart(db: &sqlx::SqlitePool, enabled: bool) {
     let value = if enabled { "1" } else { "0" };
     let _ = sqlx::query(
