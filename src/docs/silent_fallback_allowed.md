@@ -87,3 +87,23 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 ### 19. `src/handlers/classes.rs` — `.unwrap_or("")` (Excel export `teacher_name`)
 `teacher_name`이 NULL인 반(담임 미지정 상태)에서 빈 문자열 기재가 올바른 표현. Excel 내보내기 경로, 점수·추천과 무관.  
 **조건**: `export_classes`의 Excel 렌더링 경로에서만.
+
+### 20. `src/handlers/area_data.rs` — `.unwrap_or(0)` (단조성 경고 최소값)
+`min_th` 계산 시 사용. `seen.iter().filter(...)`는 by construction 항상 비어있지 않아 실제 도달 불가 분기. 경고 메시지 문자열 생성 전용, 점수 계산 무관.  
+**조건**: `numeric_table_import`의 단조성 경고 생성 경로에서만.
+
+### 21. `src/handlers/auth.rs` — `.unwrap_or_default()` (teacher_login 졸업생 분기)
+`teacher_login`의 grade=0/class_no=0 분기. 바로 다음 줄 `if hash.is_empty() { return Err(UNAUTHORIZED) }`로 명시적 처리. 허용 목록 #2(admin_login)와 동일 패턴.  
+**조건**: `teacher_login` 함수의 졸업생 분기에서만.
+
+### 22. `src/handlers/teacher_areas.rs` — `.unwrap_or_default()` (`matched_keys`, 라인 drift)
+허용 목록 #12와 동일 위치. 코드 수정으로 라인 번호가 346으로 drift됨.  
+**조건**: #12와 동일.
+
+### 23. `src/main.rs` — `.unwrap_or_default()` (자동시작 exe 경로)
+`std::env::current_exe()` 실패 시 빈 문자열 → autostart 레지스트리 등록이 잘못되지만 서버 시작·점수 계산에 영향 없음. Windows 정상 환경에서 발생 불가.  
+**조건**: `main.rs` autostart 초기화 경로에서만.
+
+### 24. `src/handlers/system.rs` — `.unwrap_or(Path::new("."))` (백업 임시 파일 경로)
+`db_path.parent()`가 None인 경우(루트 경로) 현재 디렉토리 fallback. 백업 다운로드 기능에만 영향. 실패 시 사용자에게 파일 다운로드 오류 표시됨. 점수·추천과 무관.  
+**조건**: `download_db_backup`의 임시 파일 경로 생성에서만.
