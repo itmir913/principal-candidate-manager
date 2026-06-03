@@ -378,7 +378,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import {
   getRounds, openRound, closeRound, reopenRound, finalizeRound,
   calculateScores, getResults, recommendResult, unrecommendResult,
@@ -396,6 +396,8 @@ function fmtDt(s) {
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
+
+const refreshSidebarRound = inject('refreshRound', () => {})
 
 const rounds  = ref([])
 const selected = ref(null)
@@ -543,6 +545,7 @@ async function handleOpenRound() {
     await loadRounds()
     const open = rounds.value.find(r => r.status === 'OPEN')
     if (open) await selectRound(open)
+    await refreshSidebarRound()
   } catch (e) {
     alert(e.response?.data || e.message)
   } finally {
@@ -560,7 +563,9 @@ async function handleCloseRound(id) {
     if (selected.value?.id === id) {
       const updated = rounds.value.find(r => r.id === id)
       if (updated) selected.value = updated
+      await loadResults()
     }
+    await refreshSidebarRound()
   } catch (e) {
     alert(e.response?.data || e.message)
   } finally {
@@ -579,6 +584,7 @@ async function handleReopenRound(id) {
       const updated = rounds.value.find(r => r.id === id)
       if (updated) selected.value = updated
     }
+    await refreshSidebarRound()
   } catch (e) {
     alert(e.response?.data || e.message)
   } finally {
@@ -597,6 +603,7 @@ async function handleFinalizeRound(id) {
       const updated = rounds.value.find(r => r.id === id)
       if (updated) selected.value = updated
     }
+    await refreshSidebarRound()
   } catch (e) {
     alert(e.response?.data || e.message)
   } finally {

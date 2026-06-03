@@ -4,6 +4,7 @@ pub mod areas;
 pub mod external_import;
 pub mod auth;
 pub mod classes;
+pub mod overview;
 pub mod rounds;
 pub mod scoring;
 pub mod students;

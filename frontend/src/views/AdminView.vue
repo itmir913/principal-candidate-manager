@@ -229,7 +229,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted, provide } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
@@ -243,6 +243,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 // ── 탭 컴포넌트 ──────────────────────────────────────────────
+const OverviewTab = defineAsyncComponent(() => import('../components/admin/OverviewTab.vue'))
 const RoundsTab   = defineAsyncComponent(() => import('../components/admin/RoundsTab.vue'))
 const ClassesTab  = defineAsyncComponent(() => import('../components/admin/ClassesTab.vue'))
 const StudentsTab = defineAsyncComponent(() => import('../components/admin/StudentsTab.vue'))
@@ -271,9 +272,10 @@ const subMenus = computed(() => [
 const allMenus = computed(() => [...mainMenus, ...subMenus.value])
 
 // ── 활성 탭 ──────────────────────────────────────────────────
-const active = ref('rounds')
+const active = ref('home')
 
 const currentTab = computed(() => {
+  if (active.value === 'home')     return OverviewTab
   if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'classes')  return ClassesTab
   if (active.value === 'students') return StudentsTab
@@ -292,16 +294,22 @@ const collapsed = ref(false)
 // ── 현재 라운드 ───────────────────────────────────────────────
 const currentRound = ref(null)
 
-function stripV(v) {
-  return (v ?? '').replace(/^v/i, '').trim()
-}
-
-onMounted(async () => {
+async function refreshRound() {
   try {
     currentRound.value = await getCurrentRound()
   } catch {
     currentRound.value = null
   }
+}
+
+provide('refreshRound', refreshRound)
+
+function stripV(v) {
+  return (v ?? '').replace(/^v/i, '').trim()
+}
+
+onMounted(async () => {
+  await refreshRound()
 
   // 업데이트 뱃지: 백그라운드에서 조용히 확인
   try {

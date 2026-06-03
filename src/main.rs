@@ -51,6 +51,21 @@ mod win32 {
 }
 
 const DEFAULT_PORT: u16 = 8080;
+
+/// 현재 시스템에서 LAN 라우팅에 사용될 IPv4 주소를 감지한다.
+/// UdpSocket을 이용해 실제 패킷 없이 로컬 바인딩 주소를 얻는 방식으로,
+/// loopback·VPN 어댑터보다 실제 LAN 인터페이스가 우선 선택된다.
+fn detect_lan_ip() -> String {
+    use std::net::UdpSocket;
+    if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
+        if sock.connect("8.8.8.8:80").is_ok() {
+            if let Ok(addr) = sock.local_addr() {
+                return addr.ip().to_string();
+            }
+        }
+    }
+    "127.0.0.1".to_string()
+}
 const CONFIG_FILENAME: &str = "config.json";
 
 #[derive(Serialize, Deserialize)]
@@ -189,7 +204,8 @@ async fn main() -> anyhow::Result<()> {
     rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
     let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
 
-    let state = AppState { db, jwt_secret, db_path: db_path.clone() };
+    let server_addr = format!("{}:{}", detect_lan_ip(), config.port);
+    let state = AppState { db, jwt_secret, db_path: db_path.clone(), server_addr };
 
     let app = build_router(state);
 
@@ -240,7 +256,8 @@ fn main() {
     let mut secret_bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
     let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-    let state = AppState { db, jwt_secret, db_path: db_path.clone() };
+    let server_addr = format!("{}:{}", detect_lan_ip(), port);
+    let state = AppState { db, jwt_secret, db_path: db_path.clone(), server_addr };
 
     let app = build_router(state);
     let addr = format!("0.0.0.0:{}", port);
@@ -374,6 +391,7 @@ fn build_router(state: AppState) -> Router {
         .merge(protected_auth);
 
     let admin_routes = Router::new()
+        .route("/overview", get(handlers::overview::get_overview))
         // classes GET은 로그인 폼(반 목록 조회)에서도 필요하므로 공개 라우트에 별도 등록
         .route("/students", get(handlers::students::list_students))
         .route("/students/grade-options", get(handlers::students::grade_options))

@@ -11,6 +11,8 @@ export async function blobErrMsg(e) {
   return typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
 }
 
+export const getOverview = () => axios.get('/api/overview').then(r => r.data)
+
 export const getClasses = () => axios.get('/api/classes').then(r => r.data)
 
 export const upsertClass = (grade, classNo, body) =>
