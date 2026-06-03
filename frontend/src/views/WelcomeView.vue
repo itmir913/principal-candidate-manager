@@ -39,6 +39,18 @@
           </p>
         </div>
 
+        <div
+          class="rounded-xl text-base leading-relaxed mb-4"
+          style="padding: 16px 20px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f;"
+        >
+          <p class="font-semibold mb-1.5" style="color: #92400e;">라이선스 안내</p>
+          <p>
+            본 프로그램은 <strong>PolyForm Noncommercial 1.0.0</strong> 라이선스에 따라
+            학교·교육청 등 <strong>비상업적 목적에 한해</strong> 무료로 사용할 수 있습니다.
+            학원·유료 입시 컨설팅 등 영리 목적의 사교육 기관에서의 사용은 엄격히 금지됩니다.
+          </p>
+        </div>
+
         <label class="flex items-start gap-3 cursor-pointer mb-4">
           <input
             v-model="checked"

@@ -92,47 +92,6 @@
       </div>
     </div>
 
-    <!-- 업데이트 방법 (업데이트가 있을 때) -->
-    <div
-      v-if="!loading && !error && !isLatest"
-      class="rounded-xl mb-6"
-      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
-    >
-      <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h2 class="text-base font-semibold" style="color: #1e293b;">업데이트 방법</h2>
-      </div>
-      <div class="px-6 py-5 space-y-3">
-        <div class="flex gap-3">
-          <span
-            class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-            style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
-          >1</span>
-          <p class="text-base" style="color:#374151;">아래 <strong>데이터 백업 안내</strong>를 먼저 읽고 DB를 백업합니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-            class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-            style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
-          >2</span>
-          <p class="text-base" style="color:#374151;">위 <strong>최신 버전 다운로드</strong> 버튼을 눌러 GitHub에서 설치 파일을 받습니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-            class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-            style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
-          >3</span>
-          <p class="text-base" style="color:#374151;">기존 프로그램이 실행 중이면 종료하고, 새 설치 파일(`.exe`)을 실행합니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-            class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-            style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
-          >4</span>
-          <p class="text-base" style="color:#374151;">설치 완료 후 프로그램을 실행하면 업데이트가 적용됩니다.</p>
-        </div>
-      </div>
-    </div>
-
     <!-- 최신 릴리스 노트 -->
     <div
       v-if="!loading && !error && releaseNotes"
@@ -163,6 +122,54 @@
       </div>
     </div>
 
+    <!-- 업데이트 방법 (업데이트가 있을 때) -->
+    <div
+        v-if="!loading && !error && !isLatest"
+        class="rounded-xl mb-6"
+        style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
+    >
+      <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
+        <h2 class="text-base font-semibold" style="color: #1e293b;">업데이트 방법</h2>
+      </div>
+      <div class="px-6 py-5 space-y-3">
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+          >1</span>
+          <p class="text-base" style="color:#374151;">아래 <strong>DB 백업 다운로드</strong> 버튼을 눌러 데이터를 먼저 백업합니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+          >2</span>
+          <p class="text-base" style="color:#374151;">맨 위 <strong>최신 버전 다운로드</strong> 버튼을 눌러 ZIP 파일을 내려받고 압축을 풉니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+          >3</span>
+          <p class="text-base" style="color:#374151;">시스템 트레이 아이콘을 우클릭한 후 <strong>종료</strong>를 선택해 프로그램을 완전히 닫습니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+          >4</span>
+          <p class="text-base" style="color:#374151;">기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">principal-candidate-manager.exe</code>를 새 파일로 교체합니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+          >5</span>
+          <p class="text-base" style="color:#374151;">프로그램을 다시 실행하면 업데이트가 적용됩니다.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- DB 백업 안내 -->
     <div
       class="rounded-xl"
@@ -184,17 +191,6 @@
         </button>
       </div>
       <div class="px-6 py-5 space-y-5">
-        <div
-          class="flex items-center gap-3 p-4 rounded-lg"
-          style="background:#fffbeb;border:1px solid #fde68a;"
-        >
-          <AlertTriangle :size="16" style="color:#d97706;flex-shrink:0;" />
-          <p class="text-base" style="color:#92400e;">
-            업데이트 전 반드시 데이터베이스 파일을 백업하세요.
-            설치 파일 실행 시 기존 데이터가 덮어써질 수 있습니다.
-          </p>
-        </div>
-
         <div>
           <p class="text-base font-medium mb-2" style="color:#374151;">백업 파일 위치</p>
           <p class="text-base mb-3" style="color:#64748b;">
@@ -220,8 +216,8 @@
           <ol class="space-y-2">
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">①</span>
-              위 <strong>DB 백업 다운로드</strong> 버튼을 눌러 현재 DB를 저장하거나,
-              탐색기에서 위 경로의 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 직접 복사합니다.
+              <span>위 <strong>DB 백업 다운로드</strong> 버튼을 눌러 현재 DB를 저장하거나,
+              탐색기에서 위 경로의 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 직접 복사합니다.</span>
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">②</span>
@@ -247,24 +243,14 @@
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">③</span>
-              기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 삭제하고,
-              백업 파일을 같은 이름(<code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>)으로 붙여넣습니다.
+              <span>기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>를 삭제하고,
+              백업 파일을 같은 이름(<code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">data.db</code>)으로 붙여넣습니다.</span>
             </li>
             <li class="flex gap-2 text-base" style="color:#374151;">
               <span style="color:#94a3b8;flex-shrink:0;">④</span>
               프로그램을 다시 실행합니다.
             </li>
           </ol>
-        </div>
-
-        <div
-          class="flex items-center gap-3 p-4 rounded-lg"
-          style="background:#f0fdf4;border:1px solid #bbf7d0;"
-        >
-          <CheckCircle2 :size="16" style="color:#16a34a;flex-shrink:0;" />
-          <p class="text-base" style="color:#15803d;">
-            복원 시 현재 데이터는 모두 덮어써집니다. 복원 전 현재 DB를 먼저 백업해 두는 것을 권장합니다.
-          </p>
         </div>
       </div>
     </div>
@@ -278,7 +264,7 @@
         <h2 class="text-base font-semibold" style="color: #1e293b;">About</h2>
       </div>
       <div class="px-6 py-5 flex flex-col gap-1.5">
-        <p class="text-base font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
+        <p class="text-xl font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
         <div class="flex items-center gap-3">
           <p class="text-base" style="color: #64748b;">
             © 2026 luminousky ·
@@ -297,6 +283,19 @@
             </svg>
             GitHub
           </a>
+        </div>
+        <div class="mt-3 pt-3" style="border-top: 1px solid #f1f5f9;">
+          <p class="text-base" style="color: #64748b;">
+            본 프로그램은
+            <a
+              href="https://polyformproject.org/licenses/noncommercial/1.0.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="color:#3b82f6; text-decoration:none;"
+            >PolyForm Noncommercial 1.0.0</a>
+            라이선스에 따라 학교·교육청 등 <strong style="color:#374151;">비상업적 목적에 한해</strong> 무료로 사용할 수 있습니다.<br class="hidden xl:block" />
+            학원·유료 입시 컨설팅 등 영리 목적의 사교육 기관에서의 사용은 엄격히 금지됩니다.
+          </p>
         </div>
       </div>
     </div>
