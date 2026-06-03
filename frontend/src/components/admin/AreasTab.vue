@@ -36,7 +36,7 @@
             <template v-if="editingAreaId !== area.id">
               <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectArea(area)">
                 <p class="text-lg font-semibold" style="color: #1e293b; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ area.name }}</p>
-                <p class="text-base mt-1" style="margin: 0; color: #64748b;">
+                <p class="text-base" style="margin: 4px 0 0; color: #64748b;">
                   {{ calcTypeLabel(area.calc_type) }} · {{ lookupScopeLabel(area.lookup_scope) }}
                 </p>
                 <div class="flex gap-3">
@@ -112,9 +112,9 @@
               class="template-btn rounded-xl text-left flex flex-col"
               style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
               @click="applyTemplate(tpl)">
-              <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
-              <p class="break-keep word-break-keep-all text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
-              <p class="break-keep word-break-keep-all text-base mb-3" style="color: #94a3b8; margin: 0;">{{ tpl.hint }}</p>
+              <p class="text-base font-semibold" style="color: #1e293b; margin: 0 0 4px;">{{ tpl.name }}</p>
+              <p class="break-keep word-break-keep-all text-base" style="color: #64748b; margin: 0 0 8px; line-height: 1.5;">{{ tpl.description }}</p>
+              <p class="break-keep word-break-keep-all text-base" style="color: #94a3b8; margin: 0 0 12px;">{{ tpl.hint }}</p>
               <button
                 class="text-base mt-auto"
                 style="padding: 0; border: none; background: none; color: #2563eb; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px;"
@@ -211,7 +211,7 @@
             <div v-for="d in CALC_TYPE_DESCS" :key="d.key"
                  class="rounded-lg text-base"
                  style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
-              <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+              <p class="font-semibold" style="color: #1e293b; margin: 0 0 4px;">{{ d.label }}</p>
               <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
             </div>
           </div>
@@ -222,7 +222,7 @@
             <div v-for="d in LOOKUP_SCOPE_DESCS" :key="d.key"
                  class="rounded-lg text-base"
                  style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
-              <p class="font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ d.label }}</p>
+              <p class="font-semibold" style="color: #1e293b; margin: 0 0 4px;">{{ d.label }}</p>
               <p style="color: #64748b; margin: 0; line-height: 1.5;">{{ d.desc }}</p>
             </div>
           </div>
@@ -257,7 +257,7 @@
               <span v-if="selected.calc_type === 'CATEGORY'" class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">범주 집계</span><span style="color: #1e293b;">{{ categoryAggLabel(selected.category_agg) }}</span></span>
               <span class="text-base"><span class="font-medium mr-2" style="color: #94a3b8;">담임교사 입력</span><span style="color: #1e293b;">{{ selected.teacher_editable ? '허용' : '불가' }}</span></span>
             </div>
-            <p class="text-base mt-3" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
+            <p class="text-base" style="color: #94a3b8; margin: 0; padding-top: 12px; border-top: 1px solid #f1f5f9;">
               전형요소 등록 후에는 이름과 담임교사 입력 허용 여부만 변경할 수 있습니다.
             </p>
           </div>

@@ -52,7 +52,7 @@
               >{{ step.num }}</div>
               <div>
                 <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ step.title }}</p>
-                <p class="text-base mt-1" style="color: #64748b; margin: 0; line-height: 1.5;">{{ step.desc }}</p>
+                <p class="text-base" style="color: #64748b; margin: 4px 0 0; line-height: 1.5;">{{ step.desc }}</p>
               </div>
             </div>
           </div>
@@ -78,7 +78,7 @@
               >{{ step.num }}</div>
               <div>
                 <p class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ step.title }}</p>
-                <p class="text-base mt-1" style="color: #64748b; margin: 0; line-height: 1.5;">{{ step.desc }}</p>
+                <p class="text-base" style="color: #64748b; margin: 4px 0 0; line-height: 1.5;">{{ step.desc }}</p>
               </div>
             </div>
           </div>
@@ -152,7 +152,7 @@
       <div class="rounded-xl mb-5" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
         <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
           <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">계산 유형</h2>
-          <p class="text-base mt-1" style="color: #64748b; margin: 0;">전형요소를 등록할 때 아래 네 가지 계산 방식 중 하나를 선택합니다.</p>
+          <p class="text-base" style="color: #64748b; margin: 4px 0 0;">전형요소를 등록할 때 아래 네 가지 계산 방식 중 하나를 선택합니다.</p>
         </div>
         <div class="px-6 py-5">
           <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
@@ -174,7 +174,7 @@
       <div class="rounded-xl mb-5" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
         <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
           <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">점수 기준표 업로드</h2>
-          <p class="text-base mt-1" style="color: #64748b; margin: 0;">어떤 값에 몇 점을 줄지 정하는 기준표입니다. 수치 범위·범주 전형요소에만 사용하며, 직접 입력(MANUAL) 전형요소에는 필요 없습니다.</p>
+          <p class="text-base" style="color: #64748b; margin: 4px 0 0;">어떤 값에 몇 점을 줄지 정하는 기준표입니다. 수치 범위·범주 전형요소에만 사용하며, 직접 입력(MANUAL) 전형요소에는 필요 없습니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
           <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none;">
@@ -201,7 +201,7 @@
       <div class="rounded-xl mb-5" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
         <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
           <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">기초 데이터 업로드</h2>
-          <p class="text-base mt-1" style="color: #64748b; margin: 0;">학생별 실제 데이터(내신 등급, 수상 실적 등)입니다.</p>
+          <p class="text-base" style="color: #64748b; margin: 4px 0 0;">학생별 실제 데이터(내신 등급, 수상 실적 등)입니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
           <ul class="space-y-2 mb-4" style="padding-left: 0; list-style: none;">
@@ -228,7 +228,7 @@
       <div class="rounded-xl" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
         <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
           <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">대학마다 다른 기준 적용하기</h2>
-          <p class="text-base mt-1" style="color: #64748b; margin: 0;">같은 전형요소라도 대학별로 점수 기준이 다를 때 사용합니다.</p>
+          <p class="text-base" style="color: #64748b; margin: 4px 0 0;">같은 전형요소라도 대학별로 점수 기준이 다를 때 사용합니다.</p>
         </div>
         <div class="px-6 py-5 text-base" style="color: #475569; line-height: 1.7;">
           <p class="mb-3">전형요소를 등록할 때 점수 기준을 모든 대학에 동일하게 적용할지, 대학·모집단위별로 다르게 적용할지 선택할 수 있습니다(<strong>데이터 조회 기준</strong>).</p>

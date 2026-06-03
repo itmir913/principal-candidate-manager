@@ -75,7 +75,7 @@
             <template v-if="editingUnivId !== u.id">
               <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectUniv(u.id)">
                 <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
-                <p class="text-base mt-1" style="margin: 0; color: #64748b;">
+                <p class="text-base" style="margin: 4px 0 0; color: #64748b;">
                   대학 정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
                   &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
                 </p>
@@ -144,7 +144,7 @@
               <h2 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">
                 {{ selectedUniv.univ_name }} — 모집단위
               </h2>
-              <p class="text-base mt-1" style="color: #64748b; margin: 0;">
+              <p class="text-base" style="color: #64748b; margin: 4px 0 0;">
                 대학 전체 정원:
                 <span class="font-medium" style="color: #1e293b;">
                   {{ selectedUniv.total_quota != null ? selectedUniv.total_quota + '명' : '무제한' }}
@@ -314,7 +314,7 @@
       <div class="flex items-center justify-between flex-shrink-0" style="padding: 18px 22px; border-bottom: 1px solid #f1f5f9;">
         <div>
           <h3 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ modal.trackName }} 추천 확정 목록</h3>
-          <p class="text-base mt-0.5" style="color: #94a3b8; margin: 0;">총 {{ modal.entries.length }}명</p>
+          <p class="text-base" style="color: #94a3b8; margin: 2px 0 0;">총 {{ modal.entries.length }}명</p>
         </div>
         <button
           class="text-xl leading-none"
