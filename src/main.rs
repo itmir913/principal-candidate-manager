@@ -420,6 +420,7 @@ fn build_router(state: AppState) -> Router {
         )
         .route("/areas", get(handlers::areas::list_areas))
         .route("/areas", post(handlers::areas::create_area))
+        .route("/areas/score-template/:name", get(handlers::areas::score_template))
         .route("/areas/:id", put(handlers::areas::update_area))
         .route("/areas/:id", delete(handlers::areas::delete_area))
         .route("/areas/:id/numeric-table/list",     get(handlers::area_data::numeric_table_list))

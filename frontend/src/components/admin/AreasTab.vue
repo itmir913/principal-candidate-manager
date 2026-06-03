@@ -107,15 +107,22 @@
             템플릿을 선택하면 아래 항목이 자동으로 채워집니다. 매뉴얼을 참고하여 적절한 전형요소 설정을 입력하세요.
           </p>
           <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-            <button
+            <div
               v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
-              class="template-btn rounded-xl text-left"
+              class="template-btn rounded-xl text-left flex flex-col"
               style="padding: 14px 16px; background: white; border: 1px solid #e2e8f0; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"
               @click="applyTemplate(tpl)">
               <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
               <p class="break-keep word-break-keep-all text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
-              <p class="break-keep word-break-keep-all" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
-            </button>
+              <p class="break-keep word-break-keep-all mb-3" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
+              <button
+                class="text-base mt-auto"
+                style="padding: 0; border: none; background: none; color: #2563eb; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px;"
+                :disabled="dlTemplateId === tpl.id"
+                @click.stop="dlScoreTemplate(tpl)">
+                {{ dlTemplateId === tpl.id ? '다운로드 중…' : '점수 기준 샘플 ↓' }}
+              </button>
+            </div>
           </div>
 
           <!-- ── 구분선 ────────────────────────────────────────── -->
@@ -570,6 +577,7 @@
 import { ref, watch, onMounted, defineComponent, h, computed } from 'vue'
 import {
   getAreas, createArea, updateArea, deleteArea,
+  downloadAreaScoreTemplate,
   downloadNumericTableTemplate, exportNumericTable, importNumericTable,
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
   downloadBaseDataTemplate, exportBaseData, importBaseData,
@@ -860,6 +868,26 @@ function openAddForm() {
 
 function applyTemplate(tpl) {
   newArea.value = { ...tpl.defaults }
+}
+
+const dlTemplateId = ref(null)
+
+async function dlScoreTemplate(tpl) {
+  if (dlTemplateId.value) return
+  dlTemplateId.value = tpl.id
+  try {
+    const res = await downloadAreaScoreTemplate(tpl.id)
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${tpl.name}_점수기준_샘플.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    alert('샘플 파일을 불러오지 못했습니다. 아직 파일이 준비되지 않았을 수 있습니다.')
+  } finally {
+    dlTemplateId.value = null
+  }
 }
 
 // ── 외부 가져오기 모달 ────────────────────────────────────────────

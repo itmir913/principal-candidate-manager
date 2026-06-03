@@ -1,6 +1,8 @@
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::StatusCode,
+    http::{header, StatusCode},
+    response::Response,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -160,4 +162,27 @@ pub async fn delete_area(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+const SCORE_TEMPLATE_NAMES: &[&str] = &[
+    "grade", "attendance", "volunteer", "award", "extracurricular", "penalty",
+];
+
+pub async fn score_template(Path(name): Path<String>) -> Result<Response, ApiError> {
+    if !SCORE_TEMPLATE_NAMES.contains(&name.as_str()) {
+        return Err((StatusCode::NOT_FOUND, "존재하지 않는 템플릿입니다".into()));
+    }
+
+    let filename = format!("{}.xlsx", name);
+    match crate::score_templates::Assets::get(&filename) {
+        Some(file) => {
+            let disposition = format!("attachment; filename=\"{}_score_sample.xlsx\"", name);
+            Ok(Response::builder()
+                .header(header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header(header::CONTENT_DISPOSITION, disposition)
+                .body(Body::from(file.data.into_owned()))
+                .unwrap())
+        }
+        None => Err((StatusCode::NOT_FOUND, "샘플 파일이 아직 준비되지 않았습니다".into())),
+    }
 }

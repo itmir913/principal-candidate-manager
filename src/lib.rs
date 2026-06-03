@@ -5,4 +5,5 @@ pub mod excel;
 pub mod handlers;
 pub mod middleware;
 pub mod score;
+pub mod score_templates;
 pub mod state;

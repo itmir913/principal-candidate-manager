@@ -40,6 +40,9 @@ export const updateArea = (id, body) => axios.put(`/api/areas/${id}`, body).then
 
 export const deleteArea = (id) => axios.delete(`/api/areas/${id}`)
 
+export const downloadAreaScoreTemplate = (name) =>
+  axios.get(`/api/areas/score-template/${name}`, { responseType: 'blob' })
+
 // ── 점수 기준 Excel (numeric-table) ────────────────────────────
 export const downloadNumericTableTemplate = (id) =>
   axios.get(`/api/areas/${id}/numeric-table/template`, { responseType: 'blob' })
