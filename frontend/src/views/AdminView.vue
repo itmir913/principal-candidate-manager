@@ -100,7 +100,7 @@
             <span
               v-if="item.badge"
               class="ml-auto text-base font-bold"
-              style="color: #dc2626; background: #fee2e2; padding: 2px 8px; border-radius: 999px; font-size: 11px;"
+              style="color: #dc2626; background: #fee2e2; padding: 2px 8px; border-radius: 999px;"
             >NEW</span>
           </template>
         </button>
@@ -112,7 +112,7 @@
         <div v-if="collapsed" class="flex justify-center items-center" style="padding: 6px 0;">
           <div
             class="flex items-center justify-center rounded-full font-bold"
-            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 14px;"
+            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 16px;"
           >관</div>
         </div>
         <!-- 펼침: 정보 카드 -->

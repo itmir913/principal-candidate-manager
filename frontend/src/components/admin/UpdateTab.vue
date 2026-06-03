@@ -135,35 +135,35 @@
         <div class="flex gap-3">
           <span
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
           >1</span>
           <p class="text-base" style="color:#374151;">아래 <strong>DB 백업 다운로드</strong> 버튼을 눌러 데이터를 먼저 백업합니다.</p>
         </div>
         <div class="flex gap-3">
           <span
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
           >2</span>
           <p class="text-base" style="color:#374151;">이 프로그램이 실행 중인 PC에서 맨 위 <strong>최신 버전 다운로드</strong> 버튼을 눌러 GitHub 릴리스 페이지로 이동한 후, ZIP 파일을 내려받고 압축을 풉니다.</p>
         </div>
         <div class="flex gap-3">
           <span
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
           >3</span>
           <p class="text-base" style="color:#374151;">시스템 트레이 아이콘을 우클릭한 후 <strong>종료</strong>를 선택해 프로그램을 완전히 닫습니다.</p>
         </div>
         <div class="flex gap-3">
           <span
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
           >4</span>
           <p class="text-base" style="color:#374151;">기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">principal-candidate-manager.exe</code>를 새 파일로 교체합니다.</p>
         </div>
         <div class="flex gap-3">
           <span
               class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:24px;height:24px;background:#dbeafe;color:#1d4ed8;font-size:12px;"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
           >5</span>
           <p class="text-base" style="color:#374151;">프로그램을 다시 실행하면 업데이트가 적용됩니다.</p>
         </div>

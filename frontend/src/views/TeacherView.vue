@@ -71,7 +71,7 @@
         <div v-if="collapsed" class="flex justify-center items-center" style="padding: 6px 0;">
           <div
             class="flex items-center justify-center rounded-full font-bold"
-            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 14px;"
+            style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 16px;"
           >{{ auth.grade === 0 ? '졸' : '담' }}</div>
         </div>
         <!-- 펼침: 정보 카드 -->

@@ -302,7 +302,7 @@
                           }"
                           @click="toggleRow(`${r.student_id}-${r.track_id}`)"
                         >
-                          <td class="text-center" style="padding: 12px 8px; color: #94a3b8; font-size: 12px; user-select: none;">
+                          <td class="text-base text-center" style="padding: 12px 8px; color: #94a3b8; user-select: none;">
                             {{ expandedRows[`${r.student_id}-${r.track_id}`] ? '▼' : '▶' }}
                           </td>
                           <td class="text-base text-center" style="padding: 12px 16px; color: #475569;">{{ r.ranking ?? '-' }}</td>

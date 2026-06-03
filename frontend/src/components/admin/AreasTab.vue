@@ -114,7 +114,7 @@
               @click="applyTemplate(tpl)">
               <p class="text-base font-semibold mb-1" style="color: #1e293b; margin: 0;">{{ tpl.name }}</p>
               <p class="break-keep word-break-keep-all text-base mb-2" style="color: #64748b; margin: 0; line-height: 1.5;">{{ tpl.description }}</p>
-              <p class="break-keep word-break-keep-all mb-3" style="color: #94a3b8; margin: 0; font-size: 13px;">{{ tpl.hint }}</p>
+              <p class="break-keep word-break-keep-all text-base mb-3" style="color: #94a3b8; margin: 0;">{{ tpl.hint }}</p>
               <button
                 class="text-base mt-auto"
                 style="padding: 0; border: none; background: none; color: #2563eb; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px;"
