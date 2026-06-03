@@ -86,11 +86,16 @@
       </div>
 
       <div class="rounded-xl" style="padding: 18px 22px; background: #fffbeb; border: 1px solid #fcd34d;">
-        <h3 class="text-base font-semibold mb-3" style="color: #92400e; margin: 0;">시작 전 꼭 확인하세요</h3>
-        <ul class="text-base space-y-2" style="color: #78350f; padding-left: 0; list-style: none; margin: 0;">
-          <li class="flex items-start gap-2"><span>•</span><span>전형요소 설정과 대학 설정은 라운드를 열기 전에 완료해 주세요.</span></li>
-          <li class="flex items-start gap-2"><span>•</span><span>학급·학생 데이터는 매 학년도 초에 새로 불러오기를 권장합니다.</span></li>
-          <li class="flex items-start gap-2"><span>•</span><span>라운드 종료 시 모든 점수가 자동 계산됩니다. 종료 전 모든 지원자의 데이터가 입력되었는지 확인하세요.</span></li>
+        <h3 class="text-base font-semibold" style="color: #92400e;">시작 전 꼭 확인하세요</h3>
+        <ul class="text-base space-y-2 mt-3" style="color: #78350f; padding-left: 0; list-style: none;">
+          <li class="flex items-start gap-2">
+            <span>•</span>
+            <span><strong>전형요소와 대학·모집단위는 지원 기록이 생기면 삭제할 수 없습니다.</strong> 전형요소 설정과 대학 설정을 완전히 마친 뒤 라운드를 여세요.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span>•</span>
+            <span>라운드 종료 시 모든 지원자의 전형요소 점수가 자동으로 계산되어 순위가 산출됩니다. <strong>기초 데이터가 누락된 지원자가 있으면 점수 계산에 실패하여 라운드를 종료할 수 없습니다.</strong> 종료 전 모든 지원자의 데이터가 입력되었는지 확인하세요.</span>
+          </li>
         </ul>
       </div>
     </div>
@@ -302,18 +307,18 @@ const tabs = [
 ]
 
 const setupSteps = [
-  { num: 1, title: '학급 데이터 불러오기',  desc: '학급 관리 탭에서 NEIS 학급 데이터 업로드' },
-  { num: 2, title: '학생 데이터 불러오기',  desc: '학생 관리 탭에서 NEIS 학생 데이터 업로드' },
-  { num: 3, title: '전형요소 설정',         desc: '전형요소 설정 탭에서 평가 항목 정의 및 점수 기준표 업로드' },
-  { num: 4, title: '대학 설정',             desc: '대학 설정 탭에서 지원 가능 대학·모집단위·정원 입력' },
+  { num: 1, title: '학급 데이터 불러오기',  desc: '학급·담임 정보를 업로드합니다. 담임교사 계정이 자동으로 생성됩니다.' },
+  { num: 2, title: '학생 데이터 불러오기',  desc: '재학생·졸업생 학적 명렬표를 각각 업로드합니다.' },
+  { num: 3, title: '전형요소 설정',         desc: '평가 항목(전형요소)을 등록하고 점수 기준표와 기초 데이터를 업로드합니다.' },
+  { num: 4, title: '대학 설정',             desc: '지원 가능한 대학·모집단위와 모집 정원을 입력합니다.' },
 ]
 
 const roundSteps = [
-  { num: 5, title: '라운드 열기',   desc: '담임교사가 지원자를 등록할 수 있는 상태로 전환' },
-  { num: 6, title: '지원 접수',     desc: '담임교사가 담당 학생 지원서 및 데이터 입력' },
-  { num: 7, title: '라운드 종료',   desc: '지원 마감 후 라운드 종료 → 점수 자동 계산' },
-  { num: 8, title: '추천 확정',     desc: '산출된 순위를 보고 추천자 확정' },
-  { num: 9, title: '마감',          desc: '처리 완료 후 라운드 최종 마감' },
+  { num: 1, title: '라운드 열기 (관리자)',   desc: '담임교사가 지원자를 등록할 수 있도록 새로운 라운드를 열어 접수를 시작합니다.' },
+  { num: 2, title: '지원 접수 (담임교사)',     desc: '담임교사가 지원 희망 학생의 지원서와 전형요소 데이터를 입력합니다.' },
+  { num: 3, title: '라운드 종료 (관리자)',   desc: '접수를 마감합니다. 종료와 동시에 모든 지원자의 점수와 순위가 자동으로 계산됩니다.' },
+  { num: 4, title: '추천 확정 (관리자)',     desc: '모집단위별 자동 계산된 순위를 검토하고 대학별 추천자를 확정합니다.' },
+  { num: 5, title: '라운드 마감(관리자)',          desc: '추천 확정이 완료되면 라운드를 최종 마감합니다. 마감 후에는 변경할 수 없습니다.' },
 ]
 
 const setupGuides = [

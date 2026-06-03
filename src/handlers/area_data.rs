@@ -16,6 +16,7 @@ use sqlx::Row;
 use crate::{
     enums::{CalcType, LookupScope, MatchMode},
     excel, score::Score, state::AppState,
+    handlers::areas::guard_no_closed_round,
 };
 
 type ApiError = (StatusCode, String);
@@ -304,6 +305,7 @@ pub async fn numeric_table_import(
     Path(id): Path<i64>,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
+    guard_no_closed_round(&state.db).await?;
     let area = get_area(&state.db, id).await?;
     if area.calc_type != CalcType::Numeric {
         return Err((StatusCode::BAD_REQUEST, "RANGE 전형요소만 구간표를 사용합니다".into()));
@@ -530,6 +532,7 @@ pub async fn category_map_import(
     Path(id): Path<i64>,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
+    guard_no_closed_round(&state.db).await?;
     let area = get_area(&state.db, id).await?;
     if area.calc_type != CalcType::Category {
         return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소만 범주표를 사용합니다".into()));

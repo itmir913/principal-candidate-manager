@@ -57,7 +57,7 @@ pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRo
     Ok(Json(rows))
 }
 
-async fn guard_no_closed_round(db: &sqlx::SqlitePool) -> Result<(), ApiError> {
+pub(crate) async fn guard_no_closed_round(db: &sqlx::SqlitePool) -> Result<(), ApiError> {
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM rounds WHERE status IN ('CLOSED', 'FINALIZED')",
     )
@@ -68,7 +68,7 @@ async fn guard_no_closed_round(db: &sqlx::SqlitePool) -> Result<(), ApiError> {
     if count > 0 {
         return Err((
             StatusCode::CONFLICT,
-            "마감된 라운드가 존재하므로 전형요소를 생성하거나 삭제할 수 없습니다".into(),
+            "종료되거나 마감된 라운드가 존재하므로 전형요소 설정을 변경할 수 없습니다".into(),
         ));
     }
     Ok(())
@@ -120,6 +120,7 @@ pub async fn update_area(
     Path(id): Path<i64>,
     Json(body): Json<UpdateAreaBody>,
 ) -> Result<StatusCode, ApiError> {
+    guard_no_closed_round(&state.db).await?;
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
