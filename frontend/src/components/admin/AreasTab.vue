@@ -132,19 +132,19 @@
           <p class="text-base font-semibold mb-3" style="color: #1e293b;">세부 설정</p>
           <div class="space-y-3">
             <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름</label>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전형요소 이름 <span style="color: #ef4444;">*</span></label>
               <input v-model="newArea.name" type="text"
                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
             </div>
             <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율)</label>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">만점(반영 비율) <span style="color: #ef4444;">*</span></label>
               <input v-model="newArea.max_score_display" type="number" step="0.00001"
                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
             </div>
             <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식</label>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">점수 산출 방식 <span style="color: #ef4444;">*</span></label>
               <select v-model="newArea.calc_type"
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
@@ -154,7 +154,7 @@
               </select>
             </div>
             <div>
-              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준</label>
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">데이터 조회 기준 <span style="color: #ef4444;">*</span></label>
               <select v-model="newArea.lookup_scope"
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
@@ -614,7 +614,7 @@ const LOOKUP_SCOPE_DESCS = [
   },
   {
     key: 'COMPOSITE',
-    label: '대학별 환산',
+    label: '대학별 환산점수 조회',
     desc: '지원하는 대학·모집단위에 따라 서로 다른 기준표를 적용합니다. 대학별 환산 내신점수 반영 시 사용합니다.',
   },
 ]
