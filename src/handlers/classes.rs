@@ -88,7 +88,7 @@ pub async fn import_classes(
     let (headers, rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
-    excel::require_cols(&col, &["학년", "반"])
+    excel::require_cols(&col, &["학년", "반", "담임명"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let mut inserted = 0usize;
@@ -109,10 +109,12 @@ pub async fn import_classes(
             Some(c) if c > 0 => c,
             _ => { errors.push(format!("{}행: 반 값이 올바르지 않습니다", line)); continue; }
         };
-        let teacher_name: Option<String> = {
-            let v = excel::get_col(row, &col, "담임명").to_string();
-            if v.is_empty() { None } else { Some(v) }
-        };
+        let teacher_name_str = excel::get_col(row, &col, "담임명").to_string();
+        if teacher_name_str.is_empty() {
+            errors.push(format!("{}행: 담임명 누락", line));
+            continue;
+        }
+        let teacher_name = Some(teacher_name_str);
         let password: Option<String> = {
             let v = excel::get_col(row, &col, "비밀번호").to_string();
             if v.is_empty() { None } else { Some(v) }

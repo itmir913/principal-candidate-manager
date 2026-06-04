@@ -816,10 +816,10 @@ pub async fn base_data_import(
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let col = excel::col_map(&headers);
     if enrolled {
-        excel::require_cols(&col, &["학년", "반", "번호", "값"])
+        excel::require_cols(&col, &["학년", "반", "번호", "이름", "값"])
             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     } else {
-        excel::require_cols(&col, &["학생코드", "값"])
+        excel::require_cols(&col, &["학생코드", "이름", "값"])
             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     }
 
@@ -847,6 +847,11 @@ pub async fn base_data_import(
         let student_id: i64;
         let student_label: String;
         if enrolled {
+            let name_val = excel::get_col(cols, &col, "이름");
+            if name_val.is_empty() {
+                errors.push(format!("{}행: 이름 누락", row_num));
+                continue;
+            }
             let grade_s   = excel::get_col(cols, &col, "학년");
             let class_s   = excel::get_col(cols, &col, "반");
             let seq_s     = excel::get_col(cols, &col, "번호");
@@ -886,6 +891,11 @@ pub async fn base_data_import(
             let student_code = excel::get_col(cols, &col, "학생코드");
             if student_code.is_empty() {
                 errors.push(format!("{}행: 학생코드 누락", row_num));
+                continue;
+            }
+            let name_val = excel::get_col(cols, &col, "이름");
+            if name_val.is_empty() {
+                errors.push(format!("{}행: 이름 누락", row_num));
                 continue;
             }
             let sid: Option<i64> = sqlx::query_scalar(

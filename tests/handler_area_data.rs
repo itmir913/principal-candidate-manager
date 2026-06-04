@@ -84,7 +84,7 @@ async fn numeric_import_dedup_rejects_entire_import() {
     let state = common::make_state(pool.clone());
 
     // S001이 두 번 등장 → 전체 import 거부(422), DB에 아무것도 저장되지 않음
-    let csv = "학생코드,값\nS001,30.5\nS001,25.0\n";
+    let csv = "학생코드,이름,값\nS001,테스트,30.5\nS001,테스트,25.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -110,7 +110,7 @@ async fn manual_import_dedup_rejects_entire_import() {
     let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학생코드,값\nS001,85.0\nS001,90.0\n";
+    let csv = "학생코드,이름,값\nS001,테스트,85.0\nS001,테스트,90.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -138,7 +138,7 @@ async fn manual_import_exceeds_max_score_rejects_entire_import() {
     let state = common::make_state(pool.clone());
 
     // S002의 값이 만점(100) 초과 → 전체 import 거부
-    let csv = "학생코드,값\nS001,85\nS002,101\n";
+    let csv = "학생코드,이름,값\nS001,테스트,85\nS002,테스트,101\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -165,7 +165,7 @@ async fn manual_import_at_max_score_is_accepted() {
     let state = common::make_state(pool.clone());
 
     // 정확히 만점(100) — 허용
-    let csv = "학생코드,값\nS001,100\n";
+    let csv = "학생코드,이름,값\nS001,테스트,100\n";
     let (status, _) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -181,7 +181,7 @@ async fn category_multi_import_allows_multiple_values_per_student() {
     let state = common::make_state(pool.clone());
 
     // CATEGORY multi_value=1: 같은 학생이 서로 다른 범주 → 두 행 모두 삽입
-    let csv = "학생코드,값\nS001,회장\nS001,부회장\n";
+    let csv = "학생코드,이름,값\nS001,테스트,회장\nS001,테스트,부회장\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -207,7 +207,7 @@ async fn numeric_import_multiple_students_succeeds() {
     let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학생코드,값\nS001,30.5\nS002,25.0\n";
+    let csv = "학생코드,이름,값\nS001,테스트,30.5\nS002,테스트,25.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -233,7 +233,7 @@ async fn import_unknown_student_rejects_entire_import() {
     let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학생코드,값\nS001,30.5\nS999,25.0\n"; // S999 미등록
+    let csv = "학생코드,이름,값\nS001,테스트,30.5\nS999,테스트,25.0\n"; // S999 미등록
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -263,7 +263,7 @@ async fn numeric_base_data_import_negative_value_allowed() {
     insert_student(&pool, "S001").await;
     let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
 
-    let csv = "학생코드,값\nS001,-1.0\n";
+    let csv = "학생코드,이름,값\nS001,테스트,-1.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
             .await.unwrap();
@@ -283,7 +283,7 @@ async fn manual_base_data_import_negative_value_allowed() {
     insert_student(&pool, "S001").await;
     let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
 
-    let csv = "학생코드,값\nS001,-5.0\n";
+    let csv = "학생코드,이름,값\nS001,테스트,-5.0\n";
     let (status, axum::Json(result)) =
         base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
             .await.unwrap();
@@ -798,7 +798,7 @@ async fn base_data_import_empty_value_rejects() {
     let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학생코드,값\nS001,\n"; // 값 비어 있음
+    let csv = "학생코드,이름,값\nS001,테스트,\n"; // 값 비어 있음
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -819,7 +819,7 @@ async fn base_data_import_manual_non_numeric_value_rejects() {
     let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학생코드,값\nS001,홍길동\n"; // 숫자 아닌 문자열
+    let csv = "학생코드,이름,값\nS001,테스트,홍길동\n"; // 숫자 아닌 문자열
     let (status, axum::Json(result)) =
         base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
             .await
@@ -828,4 +828,101 @@ async fn base_data_import_manual_non_numeric_value_rejects() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.rows, 0);
     assert!(!result.errors.is_empty());
+}
+
+// ── 이름 열 누락/빈 셀 검증 ──────────────────────────────────────
+
+#[tokio::test]
+async fn base_data_import_graduated_missing_name_column_returns_bad_request() {
+    // 졸업생 모드: "이름" 열 없음 → require_cols 실패 → 400
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,값\nS001,85.0\n"; // "이름" 열 없음
+    match base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+#[tokio::test]
+async fn base_data_import_graduated_empty_name_rejects() {
+    // 졸업생 모드: 이름 열이 있지만 비어 있는 행 → 오류 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nS001,,85.0\n"; // 이름 비어 있음
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn base_data_import_enrolled_missing_name_column_returns_bad_request() {
+    // 재학생 모드: "이름" 열 없음 → require_cols 실패 → 400
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,번호,값\n1,1,1,85.0\n"; // "이름" 열 없음
+    use axum::extract::Query;
+    use principal_candidate_manager::handlers::area_data::StudentTypeQuery;
+    let enrolled_query = Query(StudentTypeQuery { student_type: "enrolled".to_string() });
+
+    match base_data_import(State(state), Path(aid), enrolled_query, build_multipart(csv).await).await {
+        Ok(_) => panic!("400 BAD_REQUEST가 예상됨"),
+        Err((status, _)) => assert_eq!(status, StatusCode::BAD_REQUEST),
+    }
+}
+
+#[tokio::test]
+async fn base_data_import_enrolled_empty_name_rejects() {
+    // 재학생 모드: 이름 열이 있지만 비어 있는 행 → 오류 → 전체 거부
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 1, 1).await;
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('20250101', '홍길동', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,번호,이름,값\n1,1,1,,85.0\n"; // 이름 비어 있음
+    use axum::extract::Query;
+    use principal_candidate_manager::handlers::area_data::StudentTypeQuery;
+    let enrolled_query = Query(StudentTypeQuery { student_type: "enrolled".to_string() });
+
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), enrolled_query, build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
 }

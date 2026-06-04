@@ -16,7 +16,7 @@ async fn import_classes_error_rejects_all() {
     let state = common::make_state(pool.clone());
 
     // 2행: 비밀번호가 4자 미만(="ab") → 오류 → 전체 거부
-    let csv = "학년,반,비밀번호\n1,1,pass1234\n1,2,ab\n";
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n1,2,이순신,ab\n";
     let (status, axum::Json(result)) =
         import_classes(State(state), common::csv_multipart(csv).await)
             .await
@@ -38,7 +38,7 @@ async fn import_classes_success_commits() {
     let pool = common::create_test_pool().await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학년,반,비밀번호\n1,1,pass1234\n1,2,pass5678\n2,1,pass9012\n";
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n1,2,이순신,pass5678\n2,1,김철수,pass9012\n";
     let (status, axum::Json(result)) =
         import_classes(State(state), common::csv_multipart(csv).await)
             .await
@@ -164,13 +164,54 @@ async fn import_classes_missing_required_column_returns_bad_request() {
 }
 
 #[tokio::test]
+async fn import_classes_empty_teacher_name_rejects_all() {
+    // 담임명 열이 있지만 빈 셀 → 전체 거부
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+
+    // 1행: 정상, 2행: 담임명 비어 있음 → 전체 거부
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n1,2,,pass5678\n";
+    let (status, axum::Json(result)) =
+        import_classes(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result["inserted"], 0);
+    assert!(!result["errors"].as_array().unwrap().is_empty());
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback — 1행도 저장되면 안 됨");
+}
+
+#[tokio::test]
+async fn import_classes_missing_teacher_name_column_returns_bad_request() {
+    // "담임명" 열 없음 → require_cols 실패 → 400
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,비밀번호\n1,1,pass1234\n";
+    let res = import_classes(State(state), common::csv_multipart(csv).await).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
 async fn import_classes_grade_zero_rejects_all() {
     // grade=0은 졸업생 sentinel — import에서는 유효하지 않은 값
     let pool = common::create_test_pool().await;
     let state = common::make_state(pool.clone());
 
     // 1행: 정상, 2행: grade=0 → 2행 오류 → 전체 거부
-    let csv = "학년,반,비밀번호\n1,1,pass1234\n0,2,pass5678\n";
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n0,2,이순신,pass5678\n";
     let (status, axum::Json(result)) =
         import_classes(State(state), common::csv_multipart(csv).await)
             .await
@@ -192,7 +233,7 @@ async fn import_classes_non_numeric_grade_rejects_all() {
     let pool = common::create_test_pool().await;
     let state = common::make_state(pool.clone());
 
-    let csv = "학년,반,비밀번호\nabc,1,pass1234\n";
+    let csv = "학년,반,담임명,비밀번호\nabc,1,홍길동,pass1234\n";
     let (status, axum::Json(result)) =
         import_classes(State(state), common::csv_multipart(csv).await)
             .await
