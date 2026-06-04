@@ -328,9 +328,21 @@ onMounted(async () => {
 // ── 클립보드 복사 ─────────────────────────────────────────────
 function handleCopy() {
   const url = `http://${data.value.server_addr}`
-  navigator.clipboard.writeText(url).then(() => {
+  const confirm = () => {
     copied.value = true
     setTimeout(() => { copied.value = false }, 2000)
-  })
+  }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(confirm)
+  } else {
+    const el = document.createElement('textarea')
+    el.value = url
+    el.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    confirm()
+  }
 }
 </script>
