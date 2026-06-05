@@ -41,6 +41,21 @@ export const useAuthStore = defineStore('auth', () => {
           _persist()
           _router?.push('/login')
         }
+        if (
+          err.response?.status === 503 &&
+          _router?.currentRoute.value.path !== '/server-error'
+        ) {
+          const d = err.response.data ?? {}
+          _router?.replace({
+            path: '/server-error',
+            query: {
+              code:    d.code    ?? 'SERVER_ERROR',
+              message: d.message ?? '서버 오류가 발생했습니다.',
+              ...(d.db_ver  != null ? { db_ver:  d.db_ver  } : {}),
+              ...(d.app_ver != null ? { app_ver: d.app_ver } : {}),
+            },
+          })
+        }
         return Promise.reject(err)
       }
     )

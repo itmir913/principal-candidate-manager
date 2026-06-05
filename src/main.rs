@@ -23,7 +23,7 @@ mod frontend {
     pub struct Assets;
 }
 
-// Win32 메시지 펌프 (릴리스 빌드 전용)
+// Win32 메시지 펌프 + 다이얼로그 (릴리스 빌드 전용)
 #[cfg(not(feature = "dev"))]
 mod win32 {
     #[repr(C)]
@@ -47,6 +47,23 @@ mod win32 {
         ) -> i32;
         pub fn TranslateMessage(lpmsg: *const MSG) -> i32;
         pub fn DispatchMessageW(lpmsg: *const MSG) -> isize;
+        pub fn MessageBoxW(
+            hwnd: isize,
+            text: *const u16,
+            caption: *const u16,
+            utype: u32,
+        ) -> i32;
+    }
+}
+
+#[cfg(not(feature = "dev"))]
+fn show_error_dialog(title: &str, message: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    let title_w: Vec<u16> = OsStr::new(title).encode_wide().chain(std::iter::once(0)).collect();
+    let msg_w: Vec<u16> = OsStr::new(message).encode_wide().chain(std::iter::once(0)).collect();
+    unsafe {
+        win32::MessageBoxW(0, msg_w.as_ptr(), title_w.as_ptr(), 0x10 /* MB_ICONERROR */);
     }
 }
 
@@ -246,25 +263,59 @@ fn main() {
         .build()
         .expect("tokio 런타임 생성 실패");
 
-    let db = match rt.block_on(db::init_pool(db_path.to_str().unwrap_or("data.db"))) {
-        Ok(d) => d,
+    // DB 초기화 성공 여부에 따라 정상/Degraded 라우터를 분기한다.
+    // Degraded 모드에서도 서버는 기동하여 브라우저에서 에러 확인 가능.
+    enum DbOutcome {
+        Normal(sqlx::SqlitePool),
+        Degraded(String), // 브라우저로 전달할 에러 JSON
+    }
+
+    let outcome = match rt.block_on(db::init_pool(db_path.to_str().unwrap_or("data.db"))) {
+        Ok(pool) => {
+            tracing::info!("database ready");
+            DbOutcome::Normal(pool)
+        }
         Err(e) => {
-            eprintln!("데이터베이스 초기화 오류: {}", e);
-            std::process::exit(1);
+            tracing::error!("데이터베이스 초기화 오류: {}", e);
+            let error_json = if let Some(schema_err) = e.downcast_ref::<db::SchemaTooNewError>() {
+                serde_json::json!({
+                    "code": "SCHEMA_TOO_NEW",
+                    "message": schema_err.to_string(),
+                    "db_ver": schema_err.db_ver,
+                    "app_ver": schema_err.app_ver,
+                })
+                .to_string()
+            } else {
+                serde_json::json!({
+                    "code": "SERVER_ERROR",
+                    "message": format!("서버 초기화 중 오류가 발생했습니다: {}", e),
+                })
+                .to_string()
+            };
+            DbOutcome::Degraded(error_json)
         }
     };
-    tracing::info!("database ready");
 
-    let db_for_tray = db.clone();
     let rt_handle = rt.handle().clone();
 
-    let mut secret_bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
-    let jwt_secret: String = secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-    let server_addr = format!("{}:{}", detect_lan_ip(), port);
-    let state = AppState { db, jwt_secret, db_path: db_path.clone(), server_addr };
+    let (app, opt_db) = match outcome {
+        DbOutcome::Normal(pool) => {
+            let mut secret_bytes = [0u8; 32];
+            rand::rngs::OsRng.fill_bytes(&mut secret_bytes);
+            let jwt_secret: String =
+                secret_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            let server_addr = format!("{}:{}", detect_lan_ip(), port);
+            let state = AppState {
+                db: pool.clone(),
+                jwt_secret,
+                db_path: db_path.clone(),
+                server_addr,
+            };
+            (build_router(state), Some(pool))
+        }
+        DbOutcome::Degraded(error_json) => (build_degraded_router(error_json), None),
+    };
 
-    let app = build_router(state);
     let addr = format!("0.0.0.0:{}", port);
 
     // 서버가 바인딩되면 Ok(()), 실패하면 Err(메시지) 전송
@@ -290,28 +341,31 @@ fn main() {
     match ready_rx.recv() {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
-            eprintln!("서버 시작 실패 (포트 {}): {}", port, e);
+            // 포트 바인딩 실패 — 브라우저 접속 자체가 불가하므로 창으로 알림
+            let msg = format!(
+                "포트 {}에 서버를 시작할 수 없습니다.\n\n{}\n\n다른 프로그램이 해당 포트를 사용 중이거나, \
+                 config.json에서 포트 번호를 변경해 주세요.",
+                port, e
+            );
+            show_error_dialog("학교장추천 관리 시스템 — 시작 실패", &msg);
             std::process::exit(1);
         }
         Err(_) => {
-            eprintln!("서버 스레드 비정상 종료");
+            show_error_dialog(
+                "학교장추천 관리 시스템 — 시작 실패",
+                "서버 스레드가 비정상 종료되었습니다.",
+            );
             std::process::exit(1);
         }
     }
 
     let url = format!("http://localhost:{}", port);
 
-    // 자동 실행 초기 상태 읽기 및 레지스트리 반영
-    let autostart_on = rt_handle.block_on(get_autostart(&db_for_tray));
+    // 자동 실행 설정 — DB가 없는 Degraded 모드에서는 건너뜀
     let exe_path = std::env::current_exe()
         .ok()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
-    if autostart_on {
-        autostart_registry_set(&exe_path);
-    } else {
-        autostart_registry_remove();
-    }
 
     // 트레이 아이콘 설정
     use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -327,21 +381,39 @@ fn main() {
     };
 
     let menu = Menu::new();
-    let autostart_item = CheckMenuItem::new("시작 시 자동 실행", true, autostart_on, None);
     let open_item = MenuItem::new("열기", true, None);
     let quit_item = MenuItem::new("종료", true, None);
-    menu.append(&autostart_item).expect("메뉴 항목 추가 실패");
-    menu.append(&PredefinedMenuItem::separator()).expect("메뉴 항목 추가 실패");
+
+    // 자동 실행 토글은 DB가 있는 정상 모드에서만 표시
+    let autostart_state: Option<(CheckMenuItem, sqlx::SqlitePool)> =
+        if let Some(ref pool) = opt_db {
+            let autostart_on = rt_handle.block_on(get_autostart(pool));
+            if autostart_on {
+                autostart_registry_set(&exe_path);
+            } else {
+                autostart_registry_remove();
+            }
+            let item = CheckMenuItem::new("시작 시 자동 실행", true, autostart_on, None);
+            menu.append(&item).expect("메뉴 항목 추가 실패");
+            menu.append(&PredefinedMenuItem::separator()).expect("메뉴 항목 추가 실패");
+            Some((item, pool.clone()))
+        } else {
+            None
+        };
+
     menu.append(&open_item).expect("메뉴 항목 추가 실패");
     menu.append(&quit_item).expect("메뉴 항목 추가 실패");
-    let autostart_id = autostart_item.id().clone();
-    let open_id = open_item.id().clone();
-    let quit_id = quit_item.id().clone();
+
+    let tooltip = if opt_db.is_some() {
+        "학교장추천 관리 시스템"
+    } else {
+        "학교장추천 관리 시스템 (서버 오류)"
+    };
 
     let _tray = TrayIconBuilder::new()
         .with_icon(icon)
         .with_menu(Box::new(menu))
-        .with_tooltip("학교장추천 관리 시스템")
+        .with_tooltip(tooltip)
         .build()
         .expect("트레이 생성 실패");
 
@@ -359,24 +431,56 @@ fn main() {
             win32::DispatchMessageW(&msg);
 
             while let Ok(event) = menu_channel.try_recv() {
-                if event.id == autostart_id {
-                    // muda가 클릭 시 checked 상태를 자동 토글하므로
-                    // is_checked()는 이미 새 상태를 반환함
-                    let new_state = autostart_item.is_checked();
-                    if new_state {
-                        autostart_registry_set(&exe_path);
-                    } else {
-                        autostart_registry_remove();
+                if let Some((ref autostart_item, ref db_for_tray)) = autostart_state {
+                    if event.id == *autostart_item.id() {
+                        let new_state = autostart_item.is_checked();
+                        if new_state {
+                            autostart_registry_set(&exe_path);
+                        } else {
+                            autostart_registry_remove();
+                        }
+                        rt_handle.block_on(save_autostart(db_for_tray, new_state));
+                        continue;
                     }
-                    rt_handle.block_on(save_autostart(&db_for_tray, new_state));
-                } else if event.id == open_id {
+                }
+                if event.id == *open_item.id() {
                     let _ = webbrowser::open(&url);
-                } else if event.id == quit_id {
+                } else if event.id == *quit_item.id() {
                     std::process::exit(0);
                 }
             }
         }
     }
+}
+
+/// DB 초기화 실패 시 정적 에셋은 제공하면서 모든 /api/* 요청에 503을 반환하는 라우터.
+/// 브라우저에서 접속한 모든 클라이언트가 에러 화면을 볼 수 있다.
+#[cfg(not(feature = "dev"))]
+fn build_degraded_router(error_json: String) -> Router {
+    use axum::{
+        body::Body,
+        http::{header, StatusCode},
+        response::Response,
+    };
+    use std::sync::Arc;
+
+    let body = Arc::new(error_json);
+
+    Router::new()
+        .nest(
+            "/api",
+            Router::new().fallback(move || {
+                let b = body.clone();
+                async move {
+                    Response::builder()
+                        .status(StatusCode::SERVICE_UNAVAILABLE)
+                        .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
+                        .body(Body::from((*b).clone()))
+                        .unwrap()
+                }
+            }),
+        )
+        .fallback(static_handler)
 }
 
 fn build_router(state: AppState) -> Router {

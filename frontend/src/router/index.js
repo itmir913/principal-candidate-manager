@@ -4,6 +4,11 @@ import { useAuthStore } from '../stores/auth'
 const routes = [
   { path: '/', redirect: '/login' },
   {
+    path: '/server-error',
+    component: () => import('../views/ServerErrorView.vue'),
+    // 인증·초기화 가드 없이 항상 표시 가능해야 함
+  },
+  {
     path: '/welcome',
     component: () => import('../views/WelcomeView.vue'),
     // 가드는 beforeEach에서 일괄 처리
@@ -35,6 +40,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async to => {
+  // 서버 오류 뷰는 checkStatus API 호출 없이 즉시 표시
+  // (checkStatus가 또 503을 받아 무한 리다이렉트 방지)
+  if (to.path === '/server-error') return true
+
   const auth = useAuthStore()
 
   // 초기화 상태를 아직 모르면 서버에 확인
