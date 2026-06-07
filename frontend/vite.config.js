@@ -7,6 +7,14 @@ export default defineConfig({
     vue(),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        manual: 'manual.html',
+      },
+    },
+  },
   server: {
     port: 5173,
     host: true,

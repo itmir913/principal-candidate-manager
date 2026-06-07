@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>학교장 추천자 선발 관리 시스템 — 사용 매뉴얼</title>
+    <title>사용 매뉴얼 — 학교장 추천자 선발 관리 시스템</title>
 
-    <!-- CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-          rel="stylesheet">
+
+    <!-- Tailwind + Pretendard (빌드된 CSS) -->
+    <script type="module" src="/src/manual.js"></script>
 
     <style>
-        /* ── 기본 화면 스타일 ── */
         body {
-            font-family: "Pretendard Variable", Pretendard, -apple-system, sans-serif;
             font-size: 16px;
             color: #334155;
             background: #f8fafc;
@@ -28,11 +26,8 @@
             padding: 60px 80px;
         }
 
-        /* ── 인쇄 스타일 ── */
         @media print {
-            @page {
-                size: A4;
-            }
+            @page { size: A4; }
 
             body {
                 font-size: 11pt;
@@ -42,45 +37,24 @@
                 padding: 0;
             }
 
-            .page-break {
-                page-break-before: always;
-                break-before: page;
-            }
+            .page-break      { page-break-before: always; break-before: page; }
+            .page-break-after { page-break-after: always; break-after: page; }
 
-            .page-break-after {
-                page-break-after: always;
-                break-after: page;
-            }
+            * { box-shadow: none !important; }
 
-            * {
-                box-shadow: none !important;
-            }
-
-            a {
-                color: inherit !important;
-                text-decoration: none !important;
-            }
+            a { color: inherit !important; text-decoration: none !important; }
 
             .print-keep-bg {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
 
-            #loading {
-                display: none !important;
-            }
+            #loading { display: none !important; }
 
-            #manual {
-                padding: 0;
-                max-width: 100%;
-            }
+            #manual { padding: 0; max-width: 100%; }
 
-            section {
-                padding: 0 !important;
-                margin-bottom: 0 !important;
-            }
+            section { padding: 0 !important; margin-bottom: 0 !important; }
 
-            /* 박스·표가 페이지 경계에서 잘리지 않도록 */
             table,
             .bg-slate-50, .bg-slate-100,
             .bg-indigo-50, .bg-amber-50, .bg-rose-50 {
@@ -88,10 +62,7 @@
                 page-break-inside: avoid;
             }
 
-            /* 소제목 앞에 페이지 단절 허용 (강제는 하지 않음) */
-            h3 {
-                break-before: auto;
-            }
+            h3 { break-before: auto; }
         }
     </style>
 </head>
@@ -125,14 +96,13 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return await res.text();
         } catch (e) {
-            return `<section class="page-break print-keep-bg p-8 text-center text-red-500 text-sm">
+            return `<section class="page-break print-keep-bg p-8 text-center text-red-500 text-base">
           섹션을 불러오지 못했습니다: ${url}
         </section>`;
         }
     }
 
     async function init() {
-        // 병렬 fetch 후 순서 보장 삽입
         const results = await Promise.all(SECTIONS.map(loadSection));
 
         const manual = document.getElementById('manual');

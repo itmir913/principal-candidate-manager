@@ -2,9 +2,21 @@
   <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
-    <div class="mb-5">
-      <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
-      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">매뉴얼</h1>
+    <div class="flex items-end justify-between flex-wrap gap-3 mb-5">
+      <div>
+        <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
+        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">매뉴얼</h1>
+      </div>
+      <a
+        href="/manual.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 text-base font-medium rounded-lg"
+        style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; text-decoration: none;"
+      >
+        <component :is="ExternalLink" :size="16" />
+        더 자세한 매뉴얼 확인하기
+      </a>
     </div>
 
     <!-- 서브탭 네비게이션 -->
@@ -295,7 +307,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { LayoutList, Settings2, SlidersHorizontal, Trophy } from 'lucide-vue-next'
+import { ExternalLink, LayoutList, Settings2, SlidersHorizontal, Trophy } from 'lucide-vue-next'
 
 const activeTab = ref('overview')
 
