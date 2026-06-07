@@ -1,0 +1,248 @@
+<section class="page-break print-keep-bg" style="padding: 40px 0;">
+
+    <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-2">3. 관리자 사전 설정</h2>
+    <p class="text-lg text-slate-500 leading-relaxed mb-8">라운드를 열기 전 학교장추천 담당자가 반드시 완료해야 하는 설정입니다. 아래 항목을 순서대로
+        진행하십시오.</p>
+
+    <!-- ── 3-1 ── -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">3-1. 학급·담임 계정 설정</h3>
+        <p class="text-lg text-slate-600 leading-relaxed mb-4">
+            관리자 화면의 <strong>학급 관리</strong> 탭에서 학년·반별 담임교사 계정을 일괄 생성합니다.
+            화면의 <strong>양식 다운로드</strong> 버튼으로 양식 파일을 받아 작성한 뒤 업로드하면 계정이 자동 생성됩니다.
+            파일에 입력한 비밀번호가 그대로 계정 비밀번호가 되므로, 해당 비밀번호를 담임교사에게 안내하십시오. 담임교사가 비밀번호를 분실할 경우 관리자는 <strong>학급 관리</strong> 탭에서 새로운 비밀번호를 설정할 수 있습니다.
+        </p>
+
+        <table class="w-full text-lg border-collapse mb-4">
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">학년</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">반</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">담임명</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">비밀번호</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">담임A</td>
+                <td class="border border-slate-200 px-4 py-2">teacher1!</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+                <td class="border border-slate-200 px-4 py-2">담임B</td>
+                <td class="border border-slate-200 px-4 py-2">teacher2@</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">담임C</td>
+                <td class="border border-slate-200 px-4 py-2">teacher3#</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">3</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">담임D</td>
+                <td class="border border-slate-200 px-4 py-2">teacher4$</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ── 3-2 ── -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">3-2. 학생 기초데이터 업로드</h3>
+        <p class="text-lg text-slate-600 leading-relaxed mb-4">
+            학생 명부를 Excel 파일(.xlsx) 형식으로 준비한 후 관리자 화면의 <strong>학생 관리</strong> 탭에서 업로드합니다.
+            업로드 시 기존 데이터는 같은 학생 유형(재학생/졸업생) 기준으로 전체 교체됩니다.
+            헤더 행이 포함된 파일이어야 하며, 아래 열 이름을 반드시 포함해야 합니다.
+        </p>
+
+        <table class="w-full text-lg border-collapse mb-4">
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">학번</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">이름</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">학년</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">반</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">번호</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">10101</td>
+                <td class="border border-slate-200 px-4 py-2">학생A</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">10215</td>
+                <td class="border border-slate-200 px-4 py-2">학생B</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+                <td class="border border-slate-200 px-4 py-2">15</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">20308</td>
+                <td class="border border-slate-200 px-4 py-2">학생C</td>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+                <td class="border border-slate-200 px-4 py-2">3</td>
+                <td class="border border-slate-200 px-4 py-2">8</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">30122</td>
+                <td class="border border-slate-200 px-4 py-2">학생D</td>
+                <td class="border border-slate-200 px-4 py-2">3</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">22</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div>
+            <!-- <img src="../assets/base-data-upload.png" alt="기초데이터 업로드 화면" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: 기초데이터 업로드 화면
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3-3 ── -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">3-3. 대학·모집단위 설정</h3>
+        <p class="text-lg text-slate-600 leading-relaxed mb-4">
+            관리자 화면의 <strong>대학 설정</strong> 탭에서 추천 대상 대학명, 모집단위명, 모집 정원을 입력합니다.
+            각 모집단위는 독립적으로 관리되며, 추후 전형요소 설정의 COMPOSITE 기준과 연동됩니다.
+        </p>
+
+        <table class="w-full text-lg border-collapse mb-4">
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">대학명</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">모집단위</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">정원</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">서울대학교</td>
+                <td class="border border-slate-200 px-4 py-2">컴퓨터공학부</td>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">연세대학교</td>
+                <td class="border border-slate-200 px-4 py-2">경영학과</td>
+                <td class="border border-slate-200 px-4 py-2">3</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">고려대학교</td>
+                <td class="border border-slate-200 px-4 py-2">의과대학</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">성균관대학교</td>
+                <td class="border border-slate-200 px-4 py-2">소프트웨어학과</td>
+                <td class="border border-slate-200 px-4 py-2">2</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div>
+            <!-- <img src="../assets/university-setup.png" alt="대학·모집단위 설정 화면" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: 대학·모집단위 설정 화면
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3-4 ── -->
+    <div class="mb-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">3-4. 전형요소 설정</h3>
+        <p class="text-lg text-slate-600 leading-relaxed mb-5">
+            관리자 화면의 <strong>전형요소 설정</strong> 탭에서 점수 산출에 사용할 전형요소를 정의합니다.
+            유형과 적용 범위의 조합에 따라 아래와 같이 구분됩니다.
+        </p>
+
+        <!-- 입력 유형 -->
+        <div class="space-y-3 mb-6">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">NUMERIC — 수치형 입력</p>
+                <p class="text-slate-600 leading-relaxed">담임교사가 숫자를 직접 입력합니다. 최솟값(min)과 최댓값(max) 범위를 설정하고, 입력값을 점수로 환산하는
+                    방식(높을수록 고득점 / 낮을수록 고득점)을 지정합니다. 예: 내신 등급 1~9, 낮을수록 고득점.</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">CATEGORY — 선택형 입력</p>
+                <p class="text-slate-600 leading-relaxed">담임교사가 미리 정의된 선택지 중 하나를 고릅니다. 각 선택지에 고정 점수를 매핑합니다. 예: 수상실적 — 금상
+                    10점 / 은상 7점 / 동상 5점 / 없음 0점.</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">MANUAL — 관리자 직접 입력</p>
+                <p class="text-slate-600 leading-relaxed">관리자가 점수를 직접 입력합니다. 면접·서류 등 외부 기관 평가 결과처럼 학교 내부에서 산출할 수 없는 점수에
+                    활용합니다.</p>
+            </div>
+        </div>
+
+        <!-- 적용 범위 -->
+        <div class="grid grid-cols-2 gap-3 mb-6">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">SIMPLE — 공통 기준</p>
+                <p class="text-slate-600 leading-relaxed">모든 지원자에게 동일한 기준이 적용됩니다. 대부분의 전형요소에 사용합니다.</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">COMPOSITE — 조합별 기준</p>
+                <p class="text-slate-600 leading-relaxed">지원한 대학·모집단위 조합별로 다른 기준을 적용할 수 있습니다. 모집단위마다 면접 기준이 다른 경우에
+                    활용합니다.</p>
+            </div>
+        </div>
+
+        <!-- 예시 시나리오 표 -->
+        <p class="text-lg font-bold text-slate-700 mb-2">예시 시나리오</p>
+        <table class="w-full text-lg border-collapse mb-6">
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">전형요소명</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">유형</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">범위</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">설명</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">내신 등급</td>
+                <td class="border border-slate-200 px-4 py-2">NUMERIC</td>
+                <td class="border border-slate-200 px-4 py-2">SIMPLE</td>
+                <td class="border border-slate-200 px-4 py-2">1~9등급, 낮을수록 고득점 환산</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">수상실적</td>
+                <td class="border border-slate-200 px-4 py-2">CATEGORY</td>
+                <td class="border border-slate-200 px-4 py-2">SIMPLE</td>
+                <td class="border border-slate-200 px-4 py-2">금상 10점 / 은상 7점 / 동상 5점 / 없음 0점</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">면접 점수</td>
+                <td class="border border-slate-200 px-4 py-2">MANUAL</td>
+                <td class="border border-slate-200 px-4 py-2">COMPOSITE</td>
+                <td class="border border-slate-200 px-4 py-2">모집단위별 면접 기준 상이</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div>
+            <!-- <img src="../assets/area-setup-1.png" alt="전형요소 설정 화면 1" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: 전형요소 목록 및 추가 화면
+            </div>
+        </div>
+        <div>
+            <!-- <img src="../assets/area-setup-2.png" alt="전형요소 설정 화면 2" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: CATEGORY 전형요소 선택지 설정 화면
+            </div>
+        </div>
+    </div>
+
+</section>

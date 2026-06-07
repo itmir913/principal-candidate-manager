@@ -1,0 +1,100 @@
+<section class="page-break print-keep-bg" style="padding: 40px 0;">
+
+    <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">6. 자주 묻는 질문</h2>
+
+    <div class="space-y-6">
+
+        <!-- Q1 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                포트를 변경하려면 어떻게 하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                실행 파일과 같은 폴더의 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/config.json</code>
+                파일을 텍스트 편집기로 열어
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">"port"</code> 값을 원하는
+                번호로 수정합니다.
+                수정 후 프로그램을 재시작해야 변경이 반영됩니다. 기본값은 <code
+                    class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">8080</code>입니다.
+            </p>
+        </div>
+
+        <!-- Q2 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                담임교사가 비밀번호를 분실했다면?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                관리자 화면의 <strong>학급 관리</strong> 탭에서 해당 담임교사 계정을 선택한 후 비밀번호를 초기화할 수 있습니다.
+                초기화된 비밀번호는 담임교사에게 전달하고, 최초 로그인 후 즉시 변경하도록 안내하십시오.
+            </p>
+        </div>
+
+        <!-- Q3 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                이미 CLOSED 상태인데 점수 기준을 수정해야 한다면?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+                및
+                <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+                상태에서는 전형요소 값 수정이 차단됩니다.
+                수정이 불가피한 경우, 현재 라운드를 포기하고 새 라운드를 생성하여 처음부터 다시 진행해야 합니다.
+                이 경우 담임교사가 입력한 데이터는 새 라운드에서 다시 입력해야 합니다.
+            </p>
+        </div>
+
+        <!-- Q4 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                데이터를 다른 PC로 이전하려면?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                기존 PC의 <code
+                    class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code> 파일을
+                복사하여
+                새 PC의 동일한 위치(<code
+                    class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/</code> 폴더)에
+                붙여넣습니다.
+                새 PC에 프로그램을 먼저 설치한 후, 프로그램을 종료한 상태에서 파일을 교체하십시오.
+                이후 프로그램을 실행하면 기존 데이터가 그대로 복원됩니다.
+            </p>
+        </div>
+
+        <!-- Q5 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                동점자가 모집 정원을 초과하면 어떻게 처리하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                시스템이 동점자 상황을 자동으로 감지하고 관리자에게 알립니다.
+                관리자는 동점자 목록을 확인한 후 추천할 학생을 직접 선택해야 합니다.
+                관리자가 선택을 완료하기 전까지 해당 모집단위의 추천 확정은 진행되지 않습니다.
+                선택 기준은 학교 내부 규정에 따라 관리자가 판단합니다.
+            </p>
+        </div>
+
+        <!-- Q6 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-xs font-bold mr-2 print-keep-bg">Q</span>
+                프로그램을 종료하면 데이터가 사라지나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                아닙니다. 모든 데이터는 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code>
+                파일에 영구 저장됩니다.
+                프로그램을 종료하거나 PC를 재시작해도 데이터는 유지됩니다.
+                단, <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">data.db</code> 파일을
+                삭제하면 모든 데이터가 영구적으로 소실되므로 주의하십시오.
+            </p>
+        </div>
+
+    </div>
+
+</section>
