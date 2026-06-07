@@ -53,59 +53,82 @@
 
     <!-- ── 3-2 ── -->
     <div class="mb-10">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">3-2. 학생 기초데이터 업로드</h3>
+        <h3 class="text-lg font-bold text-slate-700 mb-3">3-2. 학생 명단 등록</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            학생 명부를 Excel 파일(.xlsx) 형식으로 준비한 후 관리자 화면의 <strong>학생 관리</strong> 탭에서 업로드합니다.
-            업로드 시 기존 데이터는 같은 학생 유형(재학생/졸업생) 기준으로 전체 교체됩니다.
-            헤더 행이 포함된 파일이어야 하며, 아래 열 이름을 반드시 포함해야 합니다.
+            관리자 화면의 <strong>학생 관리</strong> 탭에서 재학생과 졸업생을 별도로 등록합니다.
+            Excel 파일(.xlsx)로 일괄 가져오거나 <strong>+ 추가</strong> 버튼으로 한 명씩 직접 입력할 수 있습니다.
+            가져오기는 <strong>추가·업데이트 방식</strong>으로 동작합니다. 파일에 없는 기존 학생은 삭제되지 않으며,
+            같은 식별자(재학생: 학년·반·번호, 졸업생: 학생코드)가 이미 있으면 이름 등 정보를 업데이트하고, 없으면 새로 추가합니다.
         </p>
 
-        <table class="w-full text-lg border-collapse mb-4">
+        <!-- 재학생 -->
+        <p class="text-lg font-bold text-slate-700 mb-2">재학생 가져오기 양식</p>
+        <p class="text-lg text-slate-600 leading-relaxed mb-3">
+            학생코드는 시스템이 자동 생성하므로 파일에 포함하지 않습니다.
+            같은 학년·반·번호가 이미 등록된 경우 이름이 업데이트됩니다.
+        </p>
+        <table class="w-full text-lg border-collapse mb-6">
             <thead>
             <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">학번</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">이름</th>
                 <th class="border border-slate-200 px-4 py-2 text-left">학년</th>
                 <th class="border border-slate-200 px-4 py-2 text-left">반</th>
                 <th class="border border-slate-200 px-4 py-2 text-left">번호</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">이름</th>
             </tr>
             </thead>
             <tbody class="text-slate-600">
             <tr>
-                <td class="border border-slate-200 px-4 py-2">10101</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
+                <td class="border border-slate-200 px-4 py-2">1</td>
                 <td class="border border-slate-200 px-4 py-2">학생A</td>
-                <td class="border border-slate-200 px-4 py-2">1</td>
-                <td class="border border-slate-200 px-4 py-2">1</td>
-                <td class="border border-slate-200 px-4 py-2">1</td>
             </tr>
             <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">10215</td>
-                <td class="border border-slate-200 px-4 py-2">학생B</td>
                 <td class="border border-slate-200 px-4 py-2">1</td>
                 <td class="border border-slate-200 px-4 py-2">2</td>
                 <td class="border border-slate-200 px-4 py-2">15</td>
+                <td class="border border-slate-200 px-4 py-2">학생B</td>
             </tr>
             <tr>
-                <td class="border border-slate-200 px-4 py-2">20308</td>
-                <td class="border border-slate-200 px-4 py-2">학생C</td>
-                <td class="border border-slate-200 px-4 py-2">2</td>
-                <td class="border border-slate-200 px-4 py-2">3</td>
-                <td class="border border-slate-200 px-4 py-2">8</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">30122</td>
-                <td class="border border-slate-200 px-4 py-2">학생D</td>
                 <td class="border border-slate-200 px-4 py-2">3</td>
                 <td class="border border-slate-200 px-4 py-2">1</td>
                 <td class="border border-slate-200 px-4 py-2">22</td>
+                <td class="border border-slate-200 px-4 py-2">학생C</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 졸업생 -->
+        <p class="text-lg font-bold text-slate-700 mb-2">졸업생 가져오기 양식</p>
+        <p class="text-lg text-slate-600 leading-relaxed mb-3">
+            학생코드를 직접 입력합니다. 같은 학생코드가 이미 등록된 경우 이름과 졸업연도가 업데이트됩니다.
+        </p>
+        <table class="w-full text-lg border-collapse mb-6">
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">학생코드</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">이름</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">졸업연도</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">20240001</td>
+                <td class="border border-slate-200 px-4 py-2">졸업생A</td>
+                <td class="border border-slate-200 px-4 py-2">2024</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">20230015</td>
+                <td class="border border-slate-200 px-4 py-2">졸업생B</td>
+                <td class="border border-slate-200 px-4 py-2">2023</td>
             </tr>
             </tbody>
         </table>
 
         <div>
-            <!-- <img src="../assets/base-data-upload.png" alt="기초데이터 업로드 화면" class="w-full rounded-xl my-4"> -->
+            <!-- <img src="../assets/student-upload.png" alt="학생 명단 등록 화면" class="w-full rounded-xl my-4"> -->
             <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: 기초데이터 업로드 화면
+                📷 스크린샷: 학생 명단 등록 화면
             </div>
         </div>
     </div>
