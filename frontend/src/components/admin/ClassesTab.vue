@@ -10,25 +10,25 @@
       <div class="flex flex-wrap items-center gap-2">
         <button
             class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
-            style="padding: 9px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
-            :disabled="showAddForm"
-            @click="showAddForm = true"
-        >+ 추가</button>
-        <span style="color: #cbd5e1; user-select: none;">|</span>
-        <button
-          class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
-          style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-          :disabled="uploading || downloading"
-          @click="dlTemplate"
+            style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            :disabled="uploading || downloading"
+            @click="dlTemplate"
         >양식 다운로드</button>
         <label
-          class="flex items-center gap-1.5 text-base font-medium rounded-lg cursor-pointer"
-          :class="uploading ? 'opacity-60' : ''"
-          style="padding: 9px 16px; background: #2563eb; color: white;"
+            class="flex items-center gap-1.5 text-base font-medium rounded-lg cursor-pointer"
+            :class="uploading ? 'opacity-60' : ''"
+            style="padding: 9px 16px; background: #2563eb; color: white;"
         >
           {{ uploading ? '가져오는 중…' : '가져오기' }}
           <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="uploading" @change="onFileChange" />
         </label>
+        <span style="color: #cbd5e1; user-select: none;">|</span>
+        <button
+            class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 9px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
+            :disabled="showAddForm"
+            @click="showAddForm = true"
+        >+ 추가</button>
         <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
           class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"

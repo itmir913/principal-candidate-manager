@@ -10,6 +10,21 @@ use sqlx::FromRow;
 
 use crate::{excel, state::AppState};
 
+#[derive(Deserialize)]
+pub struct AddEnrolledBody {
+    pub name: String,
+    pub grade: i64,
+    pub class_no: i64,
+    pub seq_no: i64,
+}
+
+#[derive(Deserialize)]
+pub struct AddGraduatedBody {
+    pub student_code: String,
+    pub name: String,
+    pub grad_year: i64,
+}
+
 type ApiError = (StatusCode, String);
 
 // ── 구조체 ───────────────────────────────────────────────────────
@@ -26,7 +41,7 @@ pub struct StudentRow {
     pub grad_year: Option<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ImportResult {
     pub inserted: usize,
     pub updated: usize,
@@ -554,6 +569,72 @@ pub async fn find_unique_code(conn: &mut sqlx::SqliteConnection, base: &str) -> 
         }
     }
     Err(format!("학생코드 자동 생성 실패: {} 충돌이 너무 많습니다", base))
+}
+
+// ── 학생 개별 추가 ────────────────────────────────────────────────
+
+/// POST /api/students/enrolled/add
+pub async fn add_enrolled(
+    State(state): State<AppState>,
+    Json(body): Json<AddEnrolledBody>,
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
+    let name = body.name.trim().to_string();
+    if name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "이름이 비어있습니다".into()));
+    }
+    let rec = StudentRecord {
+        student_code: String::new(),
+        name,
+        is_enrolled: true,
+        grade: Some(body.grade),
+        class_no: Some(body.class_no),
+        seq_no: Some(body.seq_no),
+        grad_year: None,
+    };
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut inserted = 0usize;
+    let mut updated = 0usize;
+    upsert_enrolled_by_position(&mut *tx, &rec, &mut inserted, &mut updated)
+        .await
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
+}
+
+/// POST /api/students/graduated/add
+pub async fn add_graduated(
+    State(state): State<AppState>,
+    Json(body): Json<AddGraduatedBody>,
+) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
+    let name = body.name.trim().to_string();
+    let student_code = body.student_code.trim().to_string();
+    if name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "이름이 비어있습니다".into()));
+    }
+    if student_code.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "학생코드가 비어있습니다".into()));
+    }
+    let rec = StudentRecord {
+        student_code,
+        name,
+        is_enrolled: false,
+        grade: None,
+        class_no: None,
+        seq_no: None,
+        grad_year: Some(body.grad_year),
+    };
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut inserted = 0usize;
+    let mut updated = 0usize;
+    upsert_student(&mut *tx, &rec, &mut inserted, &mut updated)
+        .await
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
 
 // ── 학생 삭제 ─────────────────────────────────────────────────────

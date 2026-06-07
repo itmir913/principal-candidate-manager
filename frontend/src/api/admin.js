@@ -139,6 +139,12 @@ export const importGraduated = (file) => {
   return axios.post('/api/students/graduated/import', fd).then(r => r.data)
 }
 
+export const addEnrolledStudent = (body) =>
+  axios.post('/api/students/enrolled/add', body).then(r => r.data)
+
+export const addGraduatedStudent = (body) =>
+  axios.post('/api/students/graduated/add', body).then(r => r.data)
+
 export const deleteStudent = (id) => axios.delete(`/api/students/${id}`)
 
 // ── 대학 마스터 관리 ───────────────────────────────────────────

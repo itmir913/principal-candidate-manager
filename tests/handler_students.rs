@@ -3,9 +3,11 @@ mod common;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    Json,
 };
 use principal_candidate_manager::handlers::students::{
-    delete_student, find_unique_code, upsert_enrolled_by_position, upsert_student, StudentRecord,
+    add_enrolled, add_graduated, delete_student, find_unique_code,
+    upsert_enrolled_by_position, upsert_student, AddEnrolledBody, AddGraduatedBody, StudentRecord,
 };
 
 fn enrolled_rec(code: &str, name: &str, g: i64, c: i64, s: i64) -> StudentRecord {
@@ -301,6 +303,109 @@ async fn find_unique_code_increments_suffix_until_free() {
     let mut tx = pool.begin().await.unwrap();
     let code = find_unique_code(&mut *tx, "20251101").await.unwrap();
     assert_eq!(code, "20251101-3");
+}
+
+// ── add_enrolled ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn add_enrolled_inserts_new_student() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 2).await;
+    let body = AddEnrolledBody { name: "홍길동".into(), grade: 3, class_no: 2, seq_no: 15 };
+    let (status, Json(res)) = add_enrolled(State(common::make_state(pool.clone())), Json(body))
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(res.inserted, 1);
+    assert_eq!(res.updated, 0);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE is_enrolled=1")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn add_enrolled_updates_existing_by_position() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 2).await;
+    let body = AddEnrolledBody { name: "홍길동".into(), grade: 3, class_no: 2, seq_no: 15 };
+    let _ = add_enrolled(State(common::make_state(pool.clone())), Json(body)).await.unwrap();
+    let body2 = AddEnrolledBody { name: "이순신".into(), grade: 3, class_no: 2, seq_no: 15 };
+    let (status, Json(res)) = add_enrolled(State(common::make_state(pool.clone())), Json(body2))
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(res.updated, 1);
+    let name: String =
+        sqlx::query_scalar("SELECT name FROM students WHERE grade=3 AND class_no=2 AND seq_no=15")
+            .fetch_one(&pool).await.unwrap();
+    assert_eq!(name, "이순신");
+}
+
+#[tokio::test]
+async fn add_enrolled_empty_name_returns_bad_request() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddEnrolledBody { name: "   ".into(), grade: 3, class_no: 2, seq_no: 1 };
+    let err = add_enrolled(State(common::make_state(pool)), Json(body)).await.unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn add_enrolled_missing_class_returns_unprocessable() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddEnrolledBody { name: "홍길동".into(), grade: 9, class_no: 9, seq_no: 1 };
+    let err = add_enrolled(State(common::make_state(pool)), Json(body)).await.unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+// ── add_graduated ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn add_graduated_inserts_new_student() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddGraduatedBody { student_code: "GR001".into(), name: "김철수".into(), grad_year: 2024 };
+    let (status, Json(res)) = add_graduated(State(common::make_state(pool.clone())), Json(body))
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(res.inserted, 1);
+    assert_eq!(res.updated, 0);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE is_enrolled=0")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn add_graduated_updates_existing_by_code() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddGraduatedBody { student_code: "GR001".into(), name: "김철수".into(), grad_year: 2024 };
+    let _ = add_graduated(State(common::make_state(pool.clone())), Json(body)).await.unwrap();
+    let body2 = AddGraduatedBody { student_code: "GR001".into(), name: "박영희".into(), grad_year: 2023 };
+    let (status, Json(res)) = add_graduated(State(common::make_state(pool.clone())), Json(body2))
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(res.updated, 1);
+    let (name, year): (String, i64) =
+        sqlx::query_as("SELECT name, grad_year FROM students WHERE student_code='GR001'")
+            .fetch_one(&pool).await.unwrap();
+    assert_eq!(name, "박영희");
+    assert_eq!(year, 2023);
+}
+
+#[tokio::test]
+async fn add_graduated_empty_code_returns_bad_request() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddGraduatedBody { student_code: "  ".into(), name: "김철수".into(), grad_year: 2024 };
+    let err = add_graduated(State(common::make_state(pool)), Json(body)).await.unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn add_graduated_empty_name_returns_bad_request() {
+    let pool = common::create_test_pool_shared().await;
+    let body = AddGraduatedBody { student_code: "GR001".into(), name: "".into(), grad_year: 2024 };
+    let err = add_graduated(State(common::make_state(pool)), Json(body)).await.unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
 }
 
 // ── delete_student ────────────────────────────────────────────────

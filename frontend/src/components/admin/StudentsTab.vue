@@ -40,18 +40,124 @@
         </label>
         <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
-          class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
-          style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-          :disabled="downloading"
-          @click="dlAll"
+            class="flex items-center gap-1.5 text-base font-medium rounded-lg"
+            style="padding: 9px 16px; background: #16a34a; color: white; cursor: pointer;"
+            @click="openAddModal"
+        >+ 추가</button>
+        <span style="color: #cbd5e1; user-select: none;">|</span>
+        <button
+            class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            :disabled="downloading"
+            @click="dlAll"
         >전체 목록 다운로드</button>
       </div>
     </div>
 
-    <!-- 가져오기 교체 안내 -->
+    <!-- 가져오기 안내 -->
     <div class="mb-4 rounded-lg flex items-start gap-2 text-base"
       style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
-      ⚠ 가져오기 시 선택한 유형(재학생/졸업생)의 기존 명단이 모두 교체됩니다.
+      <template v-if="studentType === 'enrolled'">
+        재학생 가져오기: 같은 학년·반·번호가 있으면 이름을 업데이트하고, 없으면 새로 추가합니다.
+      </template>
+      <template v-else>
+        졸업생 가져오기: 같은 학생코드가 있으면 이름과 졸업연도를 업데이트하고, 없으면 새로 추가합니다.
+      </template>
+    </div>
+
+    <!-- 학생 개별 추가 모달 -->
+    <div v-if="showAddModal"
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      style="background: rgba(0,0,0,0.35);"
+      @click.self="closeAddModal">
+      <div class="rounded-2xl bg-white shadow-2xl w-full max-w-sm"
+        style="padding: 28px 28px 24px;">
+        <h2 class="text-xl font-semibold mb-5" style="color: #1e293b;">학생 추가</h2>
+
+        <!-- 재학생/졸업생 선택 -->
+        <div class="flex gap-4 mb-5">
+          <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+            <input type="radio" v-model="addType" value="enrolled" class="accent-blue-600" />
+            재학생
+          </label>
+          <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+            <input type="radio" v-model="addType" value="graduated" class="accent-blue-600" />
+            졸업생
+          </label>
+        </div>
+
+        <!-- 재학생 필드 -->
+        <div v-if="addType === 'enrolled'" class="space-y-3 mb-5">
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="text-base font-medium block mb-1" style="color: #64748b;">학년</label>
+              <input type="number" v-model.number="addForm.grade" min="1" max="3"
+                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style="padding: 9px 12px;" placeholder="3" />
+            </div>
+            <div class="flex-1">
+              <label class="text-base font-medium block mb-1" style="color: #64748b;">반</label>
+              <input type="number" v-model.number="addForm.class_no" min="1"
+                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style="padding: 9px 12px;" placeholder="2" />
+            </div>
+            <div class="flex-1">
+              <label class="text-base font-medium block mb-1" style="color: #64748b;">번호</label>
+              <input type="number" v-model.number="addForm.seq_no" min="1"
+                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                style="padding: 9px 12px;" placeholder="15" />
+            </div>
+          </div>
+          <div>
+            <label class="text-base font-medium block mb-1" style="color: #64748b;">이름</label>
+            <input type="text" v-model="addForm.name"
+              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="padding: 9px 12px;" placeholder="홍길동"
+              @keydown.enter="submitAdd" />
+          </div>
+        </div>
+
+        <!-- 졸업생 필드 -->
+        <div v-else class="space-y-3 mb-5">
+          <div>
+            <label class="text-base font-medium block mb-1" style="color: #64748b;">학생코드</label>
+            <input type="text" v-model="addForm.student_code"
+              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="padding: 9px 12px;" placeholder="20240001" />
+          </div>
+          <div>
+            <label class="text-base font-medium block mb-1" style="color: #64748b;">졸업연도</label>
+            <input type="number" v-model.number="addForm.grad_year"
+              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="padding: 9px 12px;" placeholder="2024" />
+          </div>
+          <div>
+            <label class="text-base font-medium block mb-1" style="color: #64748b;">이름</label>
+            <input type="text" v-model="addForm.name"
+              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              style="padding: 9px 12px;" placeholder="김철수"
+              @keydown.enter="submitAdd" />
+          </div>
+        </div>
+
+        <!-- 모달 오류 -->
+        <p v-if="addError" class="text-base mb-3" style="color: #ef4444;">{{ addError }}</p>
+
+        <!-- 버튼 -->
+        <div class="flex justify-end gap-2">
+          <button
+            class="text-base font-medium rounded-lg"
+            style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            @click="closeAddModal"
+          >취소</button>
+          <button
+            class="text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 9px 20px; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="addSaving"
+            @click="submitAdd"
+          >{{ addSaving ? '저장 중…' : '저장' }}</button>
+        </div>
+      </div>
     </div>
 
     <!-- 업로드 결과 -->
@@ -190,6 +296,8 @@ import {
   importEnrolled,
   downloadGraduatedTemplate,
   importGraduated,
+  addEnrolledStudent,
+  addGraduatedStudent,
   deleteStudent,
   blobErrMsg,
 } from '../../api/admin.js'
@@ -204,6 +312,52 @@ const gradeOptions = ref({ grades: [], by_grade: {} })
 const downloading = ref(false)
 const uploading = ref(false)
 const studentType = ref('enrolled')
+
+// ── 개별 추가 모달 ──────────────────────────────────────────────
+const showAddModal = ref(false)
+const addType = ref('enrolled')
+const addForm = ref({ name: '', grade: null, class_no: null, seq_no: null, student_code: '', grad_year: null })
+const addError = ref('')
+const addSaving = ref(false)
+
+function openAddModal() {
+  addType.value = studentType.value
+  addForm.value = { name: '', grade: null, class_no: null, seq_no: null, student_code: '', grad_year: null }
+  addError.value = ''
+  showAddModal.value = true
+}
+
+function closeAddModal() {
+  showAddModal.value = false
+}
+
+async function submitAdd() {
+  addError.value = ''
+  addSaving.value = true
+  try {
+    if (addType.value === 'enrolled') {
+      const { grade, class_no, seq_no, name } = addForm.value
+      if (!grade || !class_no || !seq_no || !name?.trim()) {
+        addError.value = '학년, 반, 번호, 이름을 모두 입력하세요.'
+        return
+      }
+      await addEnrolledStudent({ grade, class_no, seq_no, name: name.trim() })
+    } else {
+      const { student_code, name, grad_year } = addForm.value
+      if (!student_code?.trim() || !name?.trim() || !grad_year) {
+        addError.value = '학생코드, 이름, 졸업연도를 모두 입력하세요.'
+        return
+      }
+      await addGraduatedStudent({ student_code: student_code.trim(), name: name.trim(), grad_year })
+    }
+    closeAddModal()
+    await Promise.all([loadStudents(), loadGradeOptions()])
+  } catch (e) {
+    addError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
+  } finally {
+    addSaving.value = false
+  }
+}
 
 // 선택 학년에 따라 드롭다운에 표시할 반 목록
 const availableClasses = computed(() => {
