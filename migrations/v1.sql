@@ -77,7 +77,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
 --   COMPOSITE = 지원 모집단위별로 점수가 달라지는 전형요소
 -- calc_type:
 --   NUMERIC  = 숫자 측정값을 점수 테이블에서 조회 (match_mode 필수)
---   CATEGORY = 텍스트 범주 선택 후 매핑 (category_agg 필수)
+--   CATEGORY = 텍스트 범주 중 하나 선택 후 매핑 (category_agg 필수)
 --   MANUAL   = 담임교사 직접 입력
 -- match_mode (NUMERIC 전용):
 --   UPPER = threshold가 하한선 (값이 클수록 유리, 봉사시간 등)

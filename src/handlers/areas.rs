@@ -89,10 +89,10 @@ pub async fn create_area(
         return Err((StatusCode::BAD_REQUEST, "만점은 0 이상이어야 합니다".into()));
     }
     if body.calc_type == CalcType::Numeric && body.match_mode.is_none() {
-        return Err((StatusCode::BAD_REQUEST, "구간 조회 전형요소는 구간 탐색 방향(UPPER/LOWER/EXACT)이 필수입니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "수치형 입력 전형요소는 구간 탐색 방향(UPPER/LOWER/EXACT)이 필수입니다".into()));
     }
     if body.calc_type == CalcType::Category && body.category_agg.is_none() {
-        return Err((StatusCode::BAD_REQUEST, "범주 선택 전형요소는 복수 활동 처리 방식(SUM/MAX)이 필수입니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "선택형 입력 전형요소는 복수 활동 처리 방식(SUM/MAX)이 필수입니다".into()));
     }
     let multi_value = body.category_agg == Some(CategoryAgg::Sum);
 

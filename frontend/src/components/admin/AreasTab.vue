@@ -148,9 +148,9 @@
               <select v-model="newArea.calc_type"
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-                <option value="NUMERIC">구간 조회</option>
-                <option value="CATEGORY">범주 선택</option>
-                <option value="MANUAL">수기 입력</option>
+                <option value="NUMERIC">수치형 입력</option>
+                <option value="CATEGORY">선택형 입력</option>
+                <option value="MANUAL">점수 직접 입력</option>
               </select>
             </div>
             <div>
@@ -406,7 +406,7 @@
             <p class="text-base mb-4" style="color: #64748b;">
               <template v-if="baseStudentType === 'enrolled'">학년·반·번호로 재학생을 찾아 값을 등록합니다.</template>
               <template v-else>학생코드로 졸업생을 찾아 값을 등록합니다.</template>
-              수치형·수기 입력은 소수점 최대 5자리.
+              소수점 최대 5자리까지 지원합니다.
             </p>
 
             <ExcelPanel
@@ -591,17 +591,17 @@ import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 const CALC_TYPE_DESCS = [
   {
     key: 'NUMERIC',
-    label: '구간 조회',
+    label: '수치형 입력',
     desc: '기준값 범위에 따라 점수를 자동 산출합니다. 출결·성적·봉사 시간 등 연속적인 수치 데이터에 적합합니다.',
   },
   {
     key: 'CATEGORY',
-    label: '범주 선택',
+    label: '선택형 입력',
     desc: '미리 정의한 범주에 해당하는 항목을 선택해 점수를 부여합니다. 자격증·수상·봉사 종류 등에 적합합니다.',
   },
   {
     key: 'MANUAL',
-    label: '수기 입력',
+    label: '점수 직접 입력',
     desc: '담임교사 또는 관리자가 직접 점수를 입력합니다. 별도 기준표 없이 자유롭게 평가할 때 사용합니다.',
   },
 ]
@@ -626,7 +626,7 @@ const AREA_TEMPLATES = [
     id: 'grade',
     name: '교과 내신',
     description: '대학별 내신 환산등급을 기준으로 점수를 산출합니다. 등록된 점수 기준과 정확히 일치하는 경우에만 점수가 부여됩니다.',
-    hint: '구간 조회 · 정확히 일치 · 대학별 환산점수 조회 · 담임교사 입력 불가',
+    hint: '수치형 입력 · 정확히 일치 · 대학별 환산점수 조회 · 담임교사 입력 불가',
     defaults: {
       name: '교과 내신',
       max_score_display: 80,
@@ -641,7 +641,7 @@ const AREA_TEMPLATES = [
     id: 'attendance',
     name: '출결',
     description: '미인정 출결에 따라 점수를 산출합니다. 미인정 횟수가 작을수록 배점이 높습니다.',
-    hint: '구간 조회 · 기준값 이하(작을수록 만점) · 기본 조회 · 담임교사 입력 허용',
+    hint: '수치형 입력 · 기준값 이하(작을수록 만점) · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '출결',
       max_score_display: 10,
@@ -656,7 +656,7 @@ const AREA_TEMPLATES = [
     id: 'volunteer',
     name: '봉사 활동',
     description: '누적 봉사시간에 따라 점수를 산출합니다. 봉사시간이 많을수록 배점이 높습니다.',
-    hint: '구간 조회 · 기준값 이상(클수록 만점) · 기본 조회 · 담임교사 입력 허용',
+    hint: '수치형 입력 · 기준값 이상(클수록 만점) · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '봉사 활동',
       max_score_display: 5,
@@ -671,7 +671,7 @@ const AREA_TEMPLATES = [
     id: 'award',
     name: '수상 실적',
     description: '수상 실적을 등록하고 가장 높은 점수 1건만 반영합니다.',
-    hint: '범주 선택 · 최대 1개만 인정 · 기본 조회 · 담임교사 입력 허용',
+    hint: '선택형 입력 · 최대 1개만 인정 · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '수상 실적',
       max_score_display: 3,
@@ -686,7 +686,7 @@ const AREA_TEMPLATES = [
     id: 'extracurricular',
     name: '교내 활동',
     description: '교내 활동 실적을 등록하고 점수를 합산하여 반영합니다.',
-    hint: '범주 선택 · 중복 선택 가능 · 기본 조회 · 담임교사 입력 허용',
+    hint: '선택형 입력 · 중복 선택 가능 · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '교내 활동',
       max_score_display: 2,
@@ -701,7 +701,7 @@ const AREA_TEMPLATES = [
     id: 'penalty',
     name: '생활태도',
     description: '징계·학교폭력·선도처분 미이수 등 감점 사유를 복수 선택하면 각 항목의 점수(음수)가 합산됩니다. 만점은 0점이며 사유가 없으면 감점 없이 0점입니다.',
-    hint: '범주 선택 · 중복 선택 가능(합산) · 기본 조회 · 담임교사 입력 허용',
+    hint: '선택형 입력 · 중복 선택 가능(합산) · 기본 조회 · 담임교사 입력 허용',
     defaults: {
       name: '생활태도',
       max_score_display: 0,
@@ -739,7 +739,7 @@ function defaultNewArea() {
 }
 
 
-const CALC_TYPE_LABELS    = { NUMERIC: '구간 조회', CATEGORY: '범주 선택', MANUAL: '수기 입력' }
+const CALC_TYPE_LABELS    = { NUMERIC: '수치형 입력', CATEGORY: '선택형 입력', MANUAL: '점수 직접 입력' }
 const LOOKUP_SCOPE_LABELS = { SIMPLE: '기본 조회', COMPOSITE: '대학별 환산점수 조회' }
 const MATCH_MODE_LABELS   = { UPPER: '▲ 이상(클수록 만점)', LOWER: '▼ 이하(작을수록 만점)', EXACT: '정확히 일치' }
 const CATEGORY_AGG_LABELS = { SUM: '중복 선택 가능(합산)', MAX: '최대 1개 선택(최고점)' }
