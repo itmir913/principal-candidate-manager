@@ -40,9 +40,10 @@
         </label>
         <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
-            class="flex items-center gap-1.5 text-base font-medium rounded-lg"
+            class="flex items-center gap-1.5 text-base font-medium rounded-lg disabled:opacity-40"
             style="padding: 9px 16px; background: #16a34a; color: white; cursor: pointer;"
-            @click="openAddModal"
+            :disabled="showAddForm"
+            @click="openAddForm"
         >+ 추가</button>
         <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
@@ -65,99 +66,105 @@
       </template>
     </div>
 
-    <!-- 학생 개별 추가 모달 -->
-    <div v-if="showAddModal"
-      class="fixed inset-0 z-50 flex items-center justify-center"
-      style="background: rgba(0,0,0,0.35);"
-      @click.self="closeAddModal">
-      <div class="rounded-2xl bg-white shadow-2xl w-full max-w-sm"
-        style="padding: 28px 28px 24px;">
-        <h2 class="text-xl font-semibold mb-5" style="color: #1e293b;">학생 추가</h2>
+    <!-- 학생 추가 폼 -->
+    <div v-if="showAddForm" class="mb-5 rounded-xl"
+      style="padding: 20px 22px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+      <h3 class="text-lg font-semibold mb-4" style="color: #1e293b;">새 학생 추가</h3>
 
-        <!-- 재학생/졸업생 선택 -->
-        <div class="flex gap-4 mb-5">
-          <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
-            <input type="radio" v-model="addType" value="enrolled" class="accent-blue-600" />
-            재학생
-          </label>
-          <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
-            <input type="radio" v-model="addType" value="graduated" class="accent-blue-600" />
-            졸업생
-          </label>
+      <!-- 재학생/졸업생 선택 -->
+      <div class="flex gap-4 mb-4">
+        <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+          <input type="radio" v-model="addType" value="enrolled" class="accent-blue-600" />
+          재학생
+        </label>
+        <label class="flex items-center gap-1.5 text-base cursor-pointer" style="color: #475569;">
+          <input type="radio" v-model="addType" value="graduated" class="accent-blue-600" />
+          졸업생
+        </label>
+      </div>
+
+      <!-- 재학생 필드 -->
+      <div v-if="addType === 'enrolled'" class="flex gap-4 items-end flex-wrap">
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">학년</label>
+          <input v-model.number="addForm.grade" type="number" min="1" max="3"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 72px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="3" />
         </div>
-
-        <!-- 재학생 필드 -->
-        <div v-if="addType === 'enrolled'" class="space-y-3 mb-5">
-          <div class="flex gap-2">
-            <div class="flex-1">
-              <label class="text-base font-medium block mb-1" style="color: #64748b;">학년</label>
-              <input type="number" v-model.number="addForm.grade" min="1" max="3"
-                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                style="padding: 9px 12px;" placeholder="3" />
-            </div>
-            <div class="flex-1">
-              <label class="text-base font-medium block mb-1" style="color: #64748b;">반</label>
-              <input type="number" v-model.number="addForm.class_no" min="1"
-                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                style="padding: 9px 12px;" placeholder="2" />
-            </div>
-            <div class="flex-1">
-              <label class="text-base font-medium block mb-1" style="color: #64748b;">번호</label>
-              <input type="number" v-model.number="addForm.seq_no" min="1"
-                class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                style="padding: 9px 12px;" placeholder="15" />
-            </div>
-          </div>
-          <div>
-            <label class="text-base font-medium block mb-1" style="color: #64748b;">이름</label>
-            <input type="text" v-model="addForm.name"
-              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              style="padding: 9px 12px;" placeholder="홍길동"
-              @keydown.enter="submitAdd" />
-          </div>
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">반</label>
+          <input v-model.number="addForm.class_no" type="number" min="1"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 72px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="2" />
         </div>
-
-        <!-- 졸업생 필드 -->
-        <div v-else class="space-y-3 mb-5">
-          <div>
-            <label class="text-base font-medium block mb-1" style="color: #64748b;">학생코드</label>
-            <input type="text" v-model="addForm.student_code"
-              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              style="padding: 9px 12px;" placeholder="20240001" />
-          </div>
-          <div>
-            <label class="text-base font-medium block mb-1" style="color: #64748b;">졸업연도</label>
-            <input type="number" v-model.number="addForm.grad_year"
-              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              style="padding: 9px 12px;" placeholder="2024" />
-          </div>
-          <div>
-            <label class="text-base font-medium block mb-1" style="color: #64748b;">이름</label>
-            <input type="text" v-model="addForm.name"
-              class="w-full text-base border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              style="padding: 9px 12px;" placeholder="김철수"
-              @keydown.enter="submitAdd" />
-          </div>
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">번호</label>
+          <input v-model.number="addForm.seq_no" type="number" min="1"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 72px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="15" />
         </div>
-
-        <!-- 모달 오류 -->
-        <p v-if="addError" class="text-base mb-3" style="color: #ef4444;">{{ addError }}</p>
-
-        <!-- 버튼 -->
-        <div class="flex justify-end gap-2">
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">이름</label>
+          <input v-model="addForm.name" type="text"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 140px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="홍길동" @keydown.enter="submitAdd" />
+        </div>
+        <div class="flex gap-2">
           <button
-            class="text-base font-medium rounded-lg"
-            style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-            @click="closeAddModal"
-          >취소</button>
-          <button
-            class="text-base font-medium rounded-lg disabled:opacity-40"
-            style="padding: 9px 20px; background: #2563eb; color: white; cursor: pointer;"
-            :disabled="addSaving"
-            @click="submitAdd"
+            class="text-base font-semibold rounded-lg disabled:opacity-40"
+            style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="addSaving" @click="submitAdd"
           >{{ addSaving ? '저장 중…' : '저장' }}</button>
+          <button
+            class="text-base rounded-lg"
+            style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+            @click="cancelAdd"
+          >취소</button>
         </div>
       </div>
+
+      <!-- 졸업생 필드 -->
+      <div v-else class="flex gap-4 items-end flex-wrap">
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">학생코드</label>
+          <input v-model="addForm.student_code" type="text"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 140px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="20240001" />
+        </div>
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">졸업연도</label>
+          <input v-model.number="addForm.grad_year" type="number"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 100px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="2024" />
+        </div>
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">이름</label>
+          <input v-model="addForm.name" type="text"
+            class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="width: 140px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
+            placeholder="김철수" @keydown.enter="submitAdd" />
+        </div>
+        <div class="flex gap-2">
+          <button
+            class="text-base font-semibold rounded-lg disabled:opacity-40"
+            style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="addSaving" @click="submitAdd"
+          >{{ addSaving ? '저장 중…' : '저장' }}</button>
+          <button
+            class="text-base rounded-lg"
+            style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+            @click="cancelAdd"
+          >취소</button>
+        </div>
+      </div>
+
+      <p v-if="addError" class="text-base mt-3" style="color: #ef4444;">{{ addError }}</p>
     </div>
 
     <!-- 업로드 결과 -->
@@ -313,22 +320,24 @@ const downloading = ref(false)
 const uploading = ref(false)
 const studentType = ref('enrolled')
 
-// ── 개별 추가 모달 ──────────────────────────────────────────────
-const showAddModal = ref(false)
+// ── 개별 추가 폼 ────────────────────────────────────────────────
+const showAddForm = ref(false)
 const addType = ref('enrolled')
 const addForm = ref({ name: '', grade: null, class_no: null, seq_no: null, student_code: '', grad_year: null })
 const addError = ref('')
 const addSaving = ref(false)
 
-function openAddModal() {
+function openAddForm() {
   addType.value = studentType.value
   addForm.value = { name: '', grade: null, class_no: null, seq_no: null, student_code: '', grad_year: null }
   addError.value = ''
-  showAddModal.value = true
+  showAddForm.value = true
 }
 
-function closeAddModal() {
-  showAddModal.value = false
+function cancelAdd() {
+  showAddForm.value = false
+  addForm.value = { name: '', grade: null, class_no: null, seq_no: null, student_code: '', grad_year: null }
+  addError.value = ''
 }
 
 async function submitAdd() {
@@ -350,7 +359,7 @@ async function submitAdd() {
       }
       await addGraduatedStudent({ student_code: student_code.trim(), name: name.trim(), grad_year })
     }
-    closeAddModal()
+    cancelAdd()
     await Promise.all([loadStudents(), loadGradeOptions()])
   } catch (e) {
     addError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
