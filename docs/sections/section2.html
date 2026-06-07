@@ -1,0 +1,119 @@
+<section class="page-break print-keep-bg" style="padding: 40px 0;">
+
+    <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">2. 라운드 개념 이해</h2>
+
+    <!-- 도입 배경 -->
+    <div class="mb-8">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">도입 배경</h3>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="text-slate-600 leading-relaxed">
+                학교장추천전형 선발은 한 번에 끝나지 않습니다. 지원자 모집 → 점수 확인 → 추천 확정 → 포기 발생 → 재선발의 사이클이 반복됩니다.
+                <strong>라운드</strong>는 이 사이클의 각 단계를 명확히 구분하여 어느 시점의 데이터인지 보장하고, 이미 추천된 학생의 수정을 차단함으로써 결과의 신뢰성을 확보하는
+                단위입니다. 각 라운드는 독립적으로 기록이 보존되므로, 이전 라운드의 데이터를 언제든 조회할 수 있습니다.
+            </p>
+        </div>
+    </div>
+
+    <!-- 상태 흐름도 -->
+    <div class="mb-8">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">라운드 상태 흐름</h3>
+        <div class="flex items-center justify-center gap-6 py-6 print-keep-bg">
+            <!-- OPEN -->
+            <div class="text-center">
+                <span class="inline-block px-4 py-2 rounded-lg text-base font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 print-keep-bg">OPEN</span>
+                <p class="text-base text-slate-500 mt-2">지원자 등록·입력</p>
+            </div>
+
+            <!-- 화살표 (양방향) -->
+            <div class="flex flex-col items-center gap-1">
+                <i class="fa-solid fa-arrows-left-right text-slate-400 text-lg"></i>
+                <span class="text-base text-slate-400">종료 / 재개방</span>
+            </div>
+
+            <!-- CLOSED -->
+            <div class="text-center">
+                <span class="inline-block px-4 py-2 rounded-lg text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+                <p class="text-base text-slate-500 mt-2">점수 확인·추천 확정</p>
+            </div>
+
+            <!-- 화살표 -->
+            <div class="flex flex-col items-center gap-1">
+                <i class="fa-solid fa-arrow-right text-slate-400 text-lg"></i>
+                <span class="text-base text-slate-400">라운드 마감</span>
+            </div>
+
+            <!-- FINALIZED -->
+            <div class="text-center">
+                <span class="inline-block px-4 py-2 rounded-lg text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+                <p class="text-base text-slate-500 mt-2">추천 완료·포기 처리</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 각 상태 설명 -->
+    <div class="mb-8 space-y-4">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">각 상태 설명</h3>
+
+        <!-- OPEN -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <div class="text-xl flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 print-keep-bg">OPEN</span>
+                <span class="font-semibold text-slate-700">담임교사 지원자 정보 입력</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed">
+                <strong>담임교사가 지원자를 등록하고 전형요소 값을 입력할 수 있는 활성 상태</strong>다.
+                담임교사는 점수 미리보기를 통해 저장 전에도 예상 점수를 확인할 수 있다.
+                관리자는 이 단계에서 전체 현황을 모니터링한다. <strong>관리자로 로그인한 후 개요 탭의 학급별 지원자 현황</strong>에서 담임교사의 지원자 입력 여부를 확인할 수 있다.
+            </p>
+        </div>
+
+        <!-- CLOSED -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <div class="text-xl flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+                <span class="font-semibold text-slate-700">담임교사 입력 마감 및 담당자 추천 대상 확정</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed">
+                담임교사의 입력 마감 상태다. 담임교사의 전형요소 값 입력 및 수정이 차단된다. 관리자는 OPEN 상태에서 모든 담임교사가 입력을 완료하였는지 확인한 뒤 라운드를 종료해야 한다.
+                <strong>관리자는 전체 학생의 점수·순위를 확인하고 추천 대상을 확정</strong>한다.
+                담임교사는 관리자의 추천 확정이 끝날 때까지 대기한다.
+            </p>
+        </div>
+
+        <!-- FINALIZED -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <div class="text-xl flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+                <span class="font-semibold text-slate-700">추천 대상 확정</span>
+            </div>
+            <p class="text-slate-600 leading-relaxed">
+                추천 확정이 완료된 최종 상태다. 데이터 수정은 불가하며, 기추천자의 지원 포기 처리만 가능하다. <strong>담임교사는 언제든지 추천 확정자를 포기처리할 수 있으며, 한번 포기하면 취소할 수 없다.</strong> 포기한 학생이 다시 지원하기를 원하면 새 라운드에 다시 지원해야 한다.
+                관리자는 새 라운드를 생성하여 차순위 학생 선발을 진행한다. <strong>추천을 포기한 학생이 발생할 경우, 다음
+                라운드에서 잔여석이 자동 갱신</strong>된다.
+            </p>
+        </div>
+    </div>
+
+    <!-- 라운드가 여러 개 필요한 이유 -->
+    <div class="mb-6">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">라운드가 여러 개 필요한 이유</h3>
+        <p class="text-lg text-slate-600 leading-relaxed mb-3">
+            추천 확정 이후 지원자가 포기 의사를 밝히면, 해당 모집단위의 정원이 다시 공석이 된다.
+            이 경우 기존 라운드의 데이터를 보존하면서 차순위 학생을 재선발하기 위해 새 라운드를 열어 진행한다.
+            각 라운드는 독립적으로 기록되므로 선발 과정의 이력을 완전하게 추적할 수 있다.
+        </p>
+    </div>
+
+    <!-- 주의 박스 -->
+    <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg print-keep-bg">
+        <p class="font-bold text-amber-700 mb-1"><i class="fa-solid fa-triangle-exclamation mr-2"></i>주의</p>
+        <p class="text-amber-800 leading-relaxed">
+            하나의 라운드라도 <span
+                class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+            및
+            <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+            되었다면 전형요소를 수정할 수 없습니다. 학교장 추천기준을 충분히 검토한 후 라운드를 열어 선발을 진행하십시오.
+        </p>
+    </div>
+
+</section>
