@@ -1,144 +1,156 @@
 <section class="page-break print-keep-bg" style="padding: 40px 0;">
 
-    <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">5. 결과 내보내기 및 백업</h2>
+    <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">5. 라운드별 역할 안내</h2>
 
-    <!-- Excel 결과 파일 다운로드 -->
+    <!-- ── 5-1 OPEN ── -->
     <div class="mb-10">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">Excel 결과 파일 다운로드</h3>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            관리자 화면의 <strong>라운드 관리</strong> 탭 → <strong>결과</strong> 탭에서 아래 두 버튼을 통해 Excel 파일을 다운로드할 수 있습니다.
-        </p>
+        <div class="flex items-center gap-3 mb-4">
+            <h3 class="text-lg font-bold text-slate-700">5-1. OPEN 상태</h3>
+            <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 print-keep-bg">OPEN</span>
+        </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-2 gap-4 mb-4">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">전체 지원자 목록 다운로드</p>
-                <p class="text-slate-600 leading-relaxed">점수 계산 완료 후 활성화. 전체 지원자의 점수·순위·추천 여부를 포함한 <strong>전체결과</strong>
-                    시트를 내려받습니다.</p>
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-user-shield text-slate-400 mr-2"></i>관리자
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>라운드 생성 및 OPEN 상태로 전환</li>
+                    <li>담임교사에게 입력 기간 및 마감일 공지</li>
+                    <li>전체 지원 현황 모니터링</li>
+                </ul>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">라운드 결과 다운로드</p>
-                <p class="text-slate-600 leading-relaxed">
-                    <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
-                    상태에서만 활성화. 추천 확정 요약 시트를 내려받습니다.
-                </p>
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chalkboard-user text-slate-400 mr-2"></i>담임교사
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>지원 희망 학생 등록</li>
+                    <li>대학·모집단위별 전형요소 값 입력</li>
+                    <li>점수 미리보기로 예상 점수 확인 후 저장</li>
+                </ul>
             </div>
         </div>
 
-        <p class="text-lg font-bold text-slate-700 mb-2">전체결과 시트 열 구성</p>
-        <table class="w-full text-lg border-collapse mb-2">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">열 이름</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">설명</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">순위</td>
-                <td class="border border-slate-200 px-4 py-2">모집단위 내 순위 (미계산 시 공백)</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">대학</td>
-                <td class="border border-slate-200 px-4 py-2">지원 대학명</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">모집단위</td>
-                <td class="border border-slate-200 px-4 py-2">지원 모집단위명 (트랙)</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">지원학과</td>
-                <td class="border border-slate-200 px-4 py-2">담임교사가 등록한 세부 지원학과명</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">학생명</td>
-                <td class="border border-slate-200 px-4 py-2">학생 이름</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">학생코드</td>
-                <td class="border border-slate-200 px-4 py-2">학번 등 학생 고유 코드</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">학년</td>
-                <td class="border border-slate-200 px-4 py-2">소속 학년</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">반</td>
-                <td class="border border-slate-200 px-4 py-2">소속 반</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">번호</td>
-                <td class="border border-slate-200 px-4 py-2">반 내 출석번호</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">재학구분</td>
-                <td class="border border-slate-200 px-4 py-2">재학 / 졸업</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">[전형요소 이름] × N</td>
-                <td class="border border-slate-200 px-4 py-2">전형요소 설정 탭에 등록된 전형요소별 점수 열이 동적으로 추가됨</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">총점</td>
-                <td class="border border-slate-200 px-4 py-2">전형요소 합산 점수</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">추천</td>
-                <td class="border border-slate-200 px-4 py-2">추천 확정 시 "추천", 그 외 공백</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">포기</td>
-                <td class="border border-slate-200 px-4 py-2">지원 포기 처리 시 "포기", 그 외 공백</td>
-            </tr>
-            </tbody>
-        </table>
-        <p class="text-base text-slate-400 mb-4">* 열 순서는 위 표의 순서와 동일합니다. 전형요소 열은 학교별 설정에 따라 달라집니다.</p>
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-indigo-700 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>팁</p>
+            <p class="text-indigo-800 leading-relaxed">점수 미리보기는 저장 전에도 확인할 수 있습니다. 단, 미리보기 결과는 저장이 완료되어야 공식 점수로 반영됩니다.
+                입력 완료 후 반드시 저장 버튼을 눌러 확정하십시오.</p>
+        </div>
 
         <div>
-            <!-- <img src="../assets/export-result.png" alt="결과 내보내기 화면" class="w-full rounded-xl my-4"> -->
+            <!-- <img src="../assets/teacher-input.png" alt="담임 입력 화면" class="w-full rounded-xl my-4"> -->
             <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: 라운드 관리 탭 → 결과 탭의 다운로드 버튼 영역
+                📷 스크린샷: 담임교사 전형요소 입력 화면
             </div>
         </div>
     </div>
 
-    <!-- DB 백업 -->
-    <div class="mb-8">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">데이터베이스 백업</h3>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            모든 데이터는 실행 파일과 같은 폴더의
-            <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/data.db</code>
-            파일에 저장됩니다. 이 파일을 복사해두는 것만으로 완전한 백업이 됩니다.
-        </p>
+    <!-- ── 5-2 CLOSED ── -->
+    <div class="mb-10">
+        <div class="flex items-center gap-3 mb-4">
+            <h3 class="text-lg font-bold text-slate-700">5-2. CLOSED 상태</h3>
+            <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-user-shield text-slate-400 mr-2"></i>관리자
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>라운드를 CLOSED 상태로 전환하여 입력 마감</li>
+                    <li>전체 학생 점수·순위 확인</li>
+                    <li>모집단위별 추천 대상 확정</li>
+                    <li>동점자 발생 시 수동으로 추천 대상 선택</li>
+                </ul>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chalkboard-user text-slate-400 mr-2"></i>담임교사
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>소속 학생의 점수·순위 조회</li>
+                    <li>입력·수정 불가 (읽기 전용)</li>
+                </ul>
+            </div>
+        </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2">백업 방법</p>
+            <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-scale-balanced text-slate-400 mr-2"></i>동점자가
+                모집 정원을 초과하는 경우</p>
             <ol class="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside">
-                <li>프로그램이 실행 중인 상태에서 파일 탐색기를 엽니다.</li>
-                <li>실행 파일이 있는 폴더로 이동하여 <code
-                        class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/</code> 폴더를 엽니다.
-                </li>
-                <li><code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">data.db</code> 파일을 외부 드라이브
-                    또는 별도 폴더에 복사합니다.
-                </li>
+                <li>시스템이 동점자 발생 상황을 감지하고 관리자에게 알림을 표시합니다.</li>
+                <li>관리자는 동점자 목록을 확인한 후 추천할 학생을 직접 선택합니다.</li>
+                <li>선택 완료 후 해당 모집단위에 대한 추천 확정이 가능해집니다.</li>
             </ol>
         </div>
 
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2">복원 방법</p>
-            <p class="text-slate-600 leading-relaxed">
-                백업한 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">data.db</code> 파일을
-                <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/</code> 폴더에 덮어씌우면 됩니다.
-                복원 전 프로그램을 종료한 후 진행하십시오.
-            </p>
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-amber-700 mb-1"><i class="fa-solid fa-triangle-exclamation mr-2"></i>주의</p>
+            <p class="text-amber-800 leading-relaxed">CLOSED 상태로 전환하면 담임교사의 전형요소 값 입력 및 수정이 즉시 차단됩니다. 전환 전에 모든 담임교사의 입력
+                완료 여부를 반드시 확인하십시오.</p>
         </div>
 
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg print-keep-bg">
-            <p class="font-bold text-indigo-700 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>팁</p>
-            <p class="text-indigo-800 leading-relaxed">
-                라운드가 FINALIZED 상태로 전환된 직후 백업을 권장합니다.
-                최종 추천 결과가 확정된 시점의 데이터가 가장 중요하므로,
-                이 시점에 백업 파일을 별도로 보관해 두면 분쟁 발생 시 근거 자료로 활용할 수 있습니다.
-            </p>
+        <div>
+            <!-- <img src="../assets/admin-rank-view.png" alt="관리자 순위 확인 화면" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: 관리자 전체 점수·순위 확인 화면
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 5-3 FINALIZED ── -->
+    <div class="mb-6">
+        <div class="flex items-center gap-3 mb-4">
+            <h3 class="text-lg font-bold text-slate-700">5-3. FINALIZED 상태</h3>
+            <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-user-shield text-slate-400 mr-2"></i>관리자
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>라운드를 FINALIZED 상태로 전환</li>
+                    <li>지원 포기 학생 처리</li>
+                    <li>포기자 발생 시 다음 라운드 생성하여 재선발 진행</li>
+                    <li>결과 파일 내보내기 및 데이터 백업</li>
+                </ul>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-chalkboard-user text-slate-400 mr-2"></i>담임교사
+                    역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                    <li>소속 학생의 최종 추천 결과 확인</li>
+                    <li>지원 포기 의사 접수 및 보고</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><i class="fa-solid fa-rotate text-slate-400 mr-2"></i>포기 발생 시 재선발
+                절차</p>
+            <div class="flex items-center gap-3 flex-wrap text-base">
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">포기 접수</span>
+                <i class="fa-solid fa-arrow-right text-slate-300"></i>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">관리자 포기 처리</span>
+                <i class="fa-solid fa-arrow-right text-slate-300"></i>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">새 라운드 생성</span>
+                <i class="fa-solid fa-arrow-right text-slate-300"></i>
+                <span class="bg-emerald-100 border border-emerald-300 rounded px-3 py-1.5 text-emerald-700 font-semibold print-keep-bg">OPEN</span>
+                <i class="fa-solid fa-arrow-right text-slate-300"></i>
+                <span class="text-slate-500">재선발 진행</span>
+            </div>
+        </div>
+
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-amber-700 mb-1"><i class="fa-solid fa-triangle-exclamation mr-2"></i>주의</p>
+            <p class="text-amber-800 leading-relaxed">FINALIZED 상태에서는 추천 취소가 불가합니다. 포기 처리만 가능합니다. FINALIZED 전환 전에 추천 대상을
+                신중히 확인하십시오.</p>
+        </div>
+
+        <div>
+            <!-- <img src="../assets/finalized-view.png" alt="FINALIZED 상태 화면" class="w-full rounded-xl my-4"> -->
+            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
+                📷 스크린샷: FINALIZED 상태 최종 결과 화면
+            </div>
         </div>
     </div>
 
