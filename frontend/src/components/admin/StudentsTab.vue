@@ -57,7 +57,7 @@
 
     <!-- 가져오기 안내 -->
     <div class="mb-4 rounded-lg flex items-start gap-2 text-base"
-      style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+      style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;">
       <template v-if="studentType === 'enrolled'">
         재학생 가져오기: 같은 학년·반·번호가 있으면 이름을 업데이트하고, 없으면 새로 추가합니다.
       </template>
