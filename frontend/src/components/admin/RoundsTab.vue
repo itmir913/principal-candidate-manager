@@ -594,7 +594,7 @@ async function handleReopenRound(id) {
 
 async function handleFinalizeRound(id) {
   if (roundActing.value) return
-  if (!confirm('라운드를 마감하시겠습니까? (추천 확정이 박제되고 결과가 공개됩니다)')) return
+  if (!confirm('라운드를 마감하시겠습니까? 한번 마감된 라운드는 절대로 취소할 수 없습니다. (추천 확정이 박제되고 결과가 담임교사에게 공개됩니다)')) return
   roundActing.value = true
   try {
     await finalizeRound(id)

@@ -13,144 +13,157 @@
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
                 <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자
                     역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
                     <li>라운드 생성 및 OPEN 상태로 전환</li>
-                    <li>담임교사에게 입력 기간 및 마감일 공지</li>
+                    <li>담임교사에게 서버 IP 주소·입력 기간·마감일 공지</li>
+                    <li><span class="font-semibold text-slate-700">개요</span> 탭에서 담임교사별 입력 현황(교사별 등록 학생 수 등) 통계 확인</li>
                     <li>전체 지원 현황 모니터링</li>
                 </ul>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
                 <p class="font-bold text-slate-700 mb-2"><span class="mr-2">👨‍🏫</span>담임교사
                     역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
-                    <li>지원 희망 학생 등록</li>
-                    <li>대학·모집단위별 전형요소 값 입력</li>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
+                    <li>담당 학급의 지원 희망 학생 등록</li>
+                    <li>학생별로 지원한 <span class="font-semibold text-slate-700">모든 대학·모집단위</span>의 전형요소 값 입력</li>
                     <li>점수 미리보기로 예상 점수 확인 후 저장</li>
+                    <li>입력 오류 시 해당 지원내역 삭제 가능</li>
                 </ul>
             </div>
         </div>
 
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-indigo-700 mb-1"><span class="mr-2">💡</span>팁</p>
-            <p class="text-indigo-800 leading-relaxed">점수 미리보기는 저장 전에도 확인할 수 있습니다. 단, 미리보기 결과는 저장이 완료되어야 공식 점수로 반영됩니다.
-                입력 완료 후 반드시 저장 버튼을 눌러 확정하십시오.</p>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🌐</span>담임교사 접속 주소 확인 방법</p>
+            <p class="text-slate-600 leading-relaxed mb-3">관리자로 로그인한 후 <span class="font-semibold text-slate-800">개요</span> 탭의 <span class="font-semibold text-slate-800">서버 접속 정보</span> 항목에서 서버 IP 주소를 확인할 수 있습니다.</p>
+            <div class="flex items-center gap-2 flex-wrap text-base">
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">관리자 로그인</span>
+                <span class="text-slate-300">→</span>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">개요 탭</span>
+                <span class="text-slate-300">→</span>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 font-semibold text-indigo-700 border-indigo-200 print-keep-bg">서버 접속 정보</span>
+                <span class="text-slate-300">→</span>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">IP 주소 복사 후 담임교사에게 공유</span>
+            </div>
         </div>
 
-        <div>
-            <!-- <img src="../assets/teacher-input.png" alt="담임 입력 화면" class="w-full rounded-xl my-4"> -->
-            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: 담임교사 전형요소 입력 화면
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">📋</span>지원서 입력 방법</p>
+                <p class="text-slate-600 leading-relaxed">학생에게 지원서를 받은 뒤, 해당 학생이 지원한 <span class="font-semibold text-slate-700">모든 대학·모집단위를 빠짐없이 입력</span>합니다. 학생 한 명이 여러 대학·모집단위에 동시 지원할 수 있으며, 지원 건마다 전형요소 값을 별도로 입력해야 합니다.</p>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-amber-700 mb-2"><span class="mr-2">✏️</span>입력 내용을 수정해야 하는 경우</p>
+                <p class="text-amber-800 leading-relaxed">저장된 지원 내역은 직접 수정할 수 없습니다. 오류가 있다면 해당 지원 내역의 <span class="font-semibold">취소 버튼</span>을 눌러 삭제한 뒤 다시 입력하십시오. 라운드가 종료(CLOSED)되면 지원 내역 삭제도 불가합니다.</p>
+            </div>
+        </div>
+
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">🎓</span>졸업생 지원자가 있는 경우</p>
+            <p class="text-indigo-800 leading-relaxed mb-3">졸업생 지원자 입력은 담임교사가 없으므로 <span class="font-semibold">관리자가 직접 담당</span>합니다. 로그인 화면의 <span class="font-semibold">학년</span> 목록에서 <span class="font-semibold">졸업생</span>을 선택하고 관리자 비밀번호로 로그인하면, 담임교사와 동일한 입력 화면에서 졸업생 지원자를 등록하고 전형요소 값을 입력할 수 있습니다.</p>
+            <div class="flex items-center gap-2 flex-wrap text-base">
+                <span class="bg-white border border-indigo-200 rounded px-3 py-1.5 text-indigo-700 print-keep-bg">로그인 화면</span>
+                <span class="text-indigo-300">→</span>
+                <span class="bg-white border border-indigo-200 rounded px-3 py-1.5 text-indigo-700 print-keep-bg">학년: <span class="font-semibold">졸업생</span> 선택</span>
+                <span class="text-indigo-300">→</span>
+                <span class="bg-white border border-indigo-200 rounded px-3 py-1.5 text-indigo-700 print-keep-bg">관리자 비밀번호 입력</span>
+                <span class="text-indigo-300">→</span>
+                <span class="bg-white border border-indigo-200 rounded px-3 py-1.5 text-indigo-700 print-keep-bg">졸업생 지원자 입력</span>
             </div>
         </div>
     </div>
 
     <!-- ── 5-2 CLOSED ── -->
-    <div class="mb-10">
+    <div class="mb-10 break-before-page">
         <div class="flex items-center gap-3 mb-4">
             <h3 class="text-lg font-bold text-slate-700">5-2. CLOSED 상태</h3>
             <span class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자
-                    역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
-                    <li>라운드를 CLOSED 상태로 전환하여 입력 마감</li>
-                    <li>전체 학생 점수·순위 확인</li>
-                    <li>모집단위별 추천 대상 확정</li>
-                    <li>동점자 발생 시 수동으로 추천 대상 선택</li>
-                </ul>
-            </div>
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">👨‍🏫</span>담임교사
-                    역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
-                    <li>입력·수정 불가 (읽기 전용)</li>
-                    <li>관리자의 추천 확정·마감 대기 (점수·순위는 라운드 마감 후 조회 가능)</li>
-                </ul>
-            </div>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자 역할</p>
+            <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
+                <li>라운드를 CLOSED 상태로 전환 (담임교사 입력·수정 즉시 차단)</li>
+                <li>전환 시 모든 지원 내역의 점수 산출 및 순위 자동 계산</li>
+                <li>산출된 점수·순위를 모집단위별로 검토</li>
+                <li>동점자 여부를 직접 확인하고 추천 대상 판단</li>
+                <li>모집단위별로 <span class="font-semibold text-slate-700">추천 확정</span> 버튼을 눌러 추천 대상 확정</li>
+            </ul>
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">⚖️</span>동점자가
-                모집 정원을 초과하는 경우</p>
-            <ol class="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside">
-                <li>시스템이 동점자 발생 상황을 감지하고 관리자에게 알림을 표시합니다.</li>
-                <li>관리자는 동점자 목록을 확인한 후 추천할 학생을 직접 선택합니다.</li>
-                <li>선택 완료 후 해당 모집단위에 대한 추천 확정이 가능해집니다.</li>
-            </ol>
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">⚖️</span>동점자가 발생한 경우</p>
+            <p class="text-slate-600 leading-relaxed">시스템은 동점자를 자동으로 감지하거나 알리지 않습니다. 동점자는 같은 순위로 표시될 뿐이며, <span class="font-semibold text-slate-700">관리자가 순위 목록을 직접 검토하여 판단</span>해야 합니다. 동점자 중 모집 정원을 초과하는 경우, 추천할 학생을 관리자가 직접 선택한 후 추천 확정을 진행합니다.</p>
+        </div>
+
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">🔓</span>CLOSED → OPEN 역전환</p>
+            <p class="text-indigo-800 leading-relaxed">CLOSED 상태는 다시 OPEN으로 되돌릴 수 있습니다. 라운드 종료 후 담임교사가 입력 누락을 알린 경우, 라운드를 OPEN으로 재전환하여 추가 입력을 허용한 뒤 다시 종료하면 됩니다. 단, FINALIZED(최종 마감) 상태는 어떤 상태로도 되돌릴 수 없습니다.</p>
         </div>
 
         <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-amber-700 mb-1"><span class="mr-2">⚠️</span>주의</p>
-            <p class="text-amber-800 leading-relaxed">CLOSED 상태로 전환하면 담임교사의 전형요소 값 입력 및 수정이 즉시 차단됩니다. 전환 전에 모든 담임교사의 입력
-                완료 여부를 반드시 확인하십시오.</p>
-        </div>
-
-        <div>
-            <!-- <img src="../assets/admin-rank-view.png" alt="관리자 순위 확인 화면" class="w-full rounded-xl my-4"> -->
-            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: 관리자 전체 점수·순위 확인 화면
-            </div>
+            <p class="font-bold text-amber-700 mb-2"><span class="mr-2">⚠️</span>주의 사항</p>
+            <ul class="space-y-1 text-amber-800 leading-relaxed list-disc list-outside pl-5">
+                <li>점수 산출 중 오류가 발생하면 CLOSED 상태로 전환할 수 없습니다. 라운드 종료 전에 모든 담임교사의 입력 완료 여부를 반드시 확인하십시오.</li>
+                <li>시스템은 추천 확정 누락을 자동으로 차단하지 않습니다. 마감 버튼을 누르기 전에 관리자가 <span class="font-semibold">모든 모집단위의 추천 확정 버튼을 빠짐없이 눌렀는지 직접 확인</span>하십시오.</li>
+            </ul>
         </div>
     </div>
 
     <!-- ── 5-3 FINALIZED ── -->
-    <div class="space-y-6">
+    <div class="space-y-4 break-before-page">
         <div class="flex items-center gap-3 mb-4">
             <h3 class="text-lg font-bold text-slate-700">5-3. FINALIZED 상태</h3>
             <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-2 gap-4">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자
-                    역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
+                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자 역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
                     <li>라운드를 FINALIZED 상태로 전환</li>
-                    <li>지원 포기 학생 처리</li>
-                    <li>포기자 발생 시 다음 라운드 생성하여 재선발 진행</li>
-                    <li>결과 파일 내보내기 및 데이터 백업</li>
+                    <li><span class="font-semibold text-slate-700">라운드 관리</span> 탭에서 전체 지원자 목록·라운드 결과 엑셀 다운로드</li>
+                    <li>엑셀 파일을 장부에 기록 후 잔여석 계산 및 공지</li>
+                    <li>포기 발생 시 잔여석 갱신 확인 후 재선발 여부 판단</li>
+                    <li>재선발이 필요한 경우 새 라운드 생성</li>
                 </ul>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">👨‍🏫</span>담임교사
-                    역할</p>
-                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-inside">
-                    <li>소속 학생의 최종 추천 결과 확인</li>
-                    <li>추천 확정자의 지원 포기 처리 (시스템에서 직접 처리 가능)</li>
+                <p class="font-bold text-slate-700 mb-2"><span class="mr-2">👨‍🏫</span>담임교사 역할</p>
+                <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
+                    <li>마감 시점부터 소속 학생의 추천 확정 결과 조회 가능</li>
+                    <li>추천 확정된 학생이 지원을 포기할 경우 <span class="font-semibold text-slate-700">지원 포기 버튼</span>으로 처리</li>
                 </ul>
             </div>
         </div>
 
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🔄</span>포기 발생 시 재선발
-                절차</p>
-            <div class="flex items-center gap-3 flex-wrap text-base">
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">📥</span>결과 다운로드 안내</p>
+            <p class="text-slate-600 leading-relaxed"><span class="font-semibold text-slate-700">라운드 관리</span> 탭의 다운로드 버튼을 통해 엑셀 파일 두 종류를 받을 수 있습니다. 이번 라운드 지원자 전체 명단, 추천 확정 학생 수, 모집단위별 잔여석이 자동으로 계산되어 제공됩니다. 해당 파일을 별도 장부에 기록해 두고 학교장추천인원 잔여석을 최종 집계한 뒤 공지하십시오.</p>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🔄</span>포기 발생 시 재선발 절차</p>
+            <p class="text-slate-600 leading-relaxed mb-3">포기가 발생하면 해당 모집단위의 잔여석이 갱신됩니다. 단, <span class="font-semibold text-slate-700">시스템이 자동으로 후순위 지원자를 선발하지는 않습니다.</span> 잔여석을 채우려면 새 라운드를 열어야 합니다.</p>
+            <div class="flex items-center gap-2 flex-wrap text-base">
                 <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">포기 접수</span>
                 <span class="text-slate-300">→</span>
-                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">관리자 포기 처리</span>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">잔여석 갱신 확인</span>
                 <span class="text-slate-300">→</span>
                 <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">새 라운드 생성</span>
                 <span class="text-slate-300">→</span>
                 <span class="bg-emerald-100 border border-emerald-300 rounded px-3 py-1.5 text-emerald-700 font-semibold print-keep-bg">OPEN</span>
                 <span class="text-slate-300">→</span>
-                <span class="text-slate-500">재선발 진행</span>
+                <span class="bg-white border border-slate-200 rounded px-3 py-1.5 text-slate-600 print-keep-bg">재선발 진행</span>
             </div>
         </div>
 
-        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-amber-700 mb-1"><span class="mr-2">⚠️</span>주의</p>
-            <p class="text-amber-800 leading-relaxed">FINALIZED 상태에서는 추천 취소가 불가합니다. 포기 처리만 가능합니다. FINALIZED 전환 전에 추천 대상을
-                신중히 확인하십시오.</p>
-        </div>
-
-        <div>
-            <!-- <img src="../assets/finalized-view.png" alt="FINALIZED 상태 화면" class="w-full rounded-xl my-4"> -->
-            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: FINALIZED 상태 최종 결과 화면
-            </div>
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-amber-700 mb-2"><span class="mr-2">⚠️</span>주의 사항</p>
+            <ul class="space-y-2 text-amber-800 leading-relaxed list-disc list-outside pl-5">
+                <li><span class="font-semibold">지원 포기는 되돌릴 수 없습니다.</span> 담임교사가 실수로 포기 버튼을 누른 경우, 새 라운드를 열어 해당 학생을 다시 입력한 뒤 즉시 라운드를 종료하고 추천 확정하는 방식으로 복구해야 합니다.</li>
+                <li><span class="font-semibold">추천 확정 누락을 마감 후에 발견한 경우</span>, 새 라운드를 생성하여 누락된 지원자를 수동으로 입력한 뒤 다시 추천 확정을 진행해야 합니다.</li>
+                <li>시스템은 한번 포기한 학생이 동일 모집단위에 재지원하는 것을 막지 않습니다. 학교장추천기준상 재지원을 제한해야 한다면 <span class="font-semibold">별도 장부로 내부 관리</span>하십시오.</li>
+            </ul>
         </div>
     </div>
 
