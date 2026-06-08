@@ -93,7 +93,7 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode)
             .max_by_key(|(th, _)| *th)
             .map(|(_, sc)| *sc)
             .ok_or_else(|| {
-                format!("UPPER 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다 (모든 하한치보다 낮습니다)", value)
+                format!("UPPER 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다 (모든 하한치보다 낮습니다)", value as f64 / 100_000.0)
             }),
         MatchMode::Lower => {
             if rows.is_empty() {
@@ -115,7 +115,7 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode)
             .iter()
             .find(|(th, _)| *th == value)
             .map(|(_, sc)| *sc)
-            .ok_or_else(|| format!("EXACT 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다", value)),
+            .ok_or_else(|| format!("EXACT 매칭 실패: 값 {}에 해당하는 구간 항목이 없습니다", value as f64 / 100_000.0)),
     }
 }
 
