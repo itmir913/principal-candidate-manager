@@ -8,6 +8,19 @@
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                여러 PC에서 동시에 접속할 수 있나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                네. 프로그램은 관리자 PC 한 대에서만 실행하고, 담임교사들은 각자의 PC 브라우저에서
+                관리자 PC의 IP와 포트(<code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">예: http://192.168.0.10:8080</code>)로 접속합니다.
+                동시 접속 인원 제한은 없으나, 반드시 같은 교내 네트워크(LAN) 안에 있어야 합니다.
+            </p>
+        </div>
+
+        <!-- Q2 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
                 포트를 변경하려면 어떻게 하나요?
             </p>
             <p class="text-slate-600 leading-relaxed">
@@ -20,7 +33,7 @@
             </p>
         </div>
 
-        <!-- Q2 -->
+        <!-- Q3 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -32,7 +45,57 @@
             </p>
         </div>
 
-        <!-- Q3 -->
+        <!-- Q4 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                관리자 비밀번호를 분실했다면?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                관리자 비밀번호는 다른 계정으로 초기화할 수 없습니다.
+                프로그램을 종료한 뒤 <strong>DB Browser for SQLite</strong>(무료) 같은 도구로
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code>를 열고,
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">app_configs</code> 테이블에서
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">admin_password_hash</code> 행을 삭제한 뒤 저장합니다.
+                이후 프로그램을 재시작하면 관리자 로그인 화면에서 입력하는 비밀번호가 새 관리자 비밀번호로 설정됩니다.
+            </p>
+        </div>
+
+        <!-- Q5 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                엑셀 파일 업로드 오류가 납니다. 어떻게 해야 하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                업로드 양식은 반드시 화면에서 제공하는 <strong>샘플 파일을 기준</strong>으로 작성해야 합니다.
+                열 이름(헤더)을 변경하면 오류가 발생합니다.
+                또한 숫자 열(점수 등)에 문자가 섞이거나 필수 값이 비어 있는 경우, 중복 행이 있는 경우에도 전체 업로드가 거부됩니다.
+                오류 메시지에 표시된 행 번호와 항목을 확인하여 원인을 수정한 뒤 다시 업로드하십시오.
+                이 프로그램은 <strong>엑셀(Excel)</strong>에서 테스트되었으므로, 타사 프로그램의 경우 <strong>CSV</strong> 파일로 저장하여 가져오기를 시도하십시오.
+            </p>
+        </div>
+
+        <!-- Q6 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                담임이 지원 정보를 제출한 후 수정할 수 있나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                라운드가
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-green-100 text-green-700 border border-green-300 print-keep-bg">OPEN</span>
+                상태인 동안에는 기존 지원을 취소하고 다시 등록하거나, 점수 데이터를 재제출할 수 있습니다.
+                라운드가
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
+                또는
+                <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+                상태가 되면 담임 교사의 지원 정보 수정·취소가 불가합니다.
+                수정이 필요한 경우 관리자에게 라운드를 OPEN으로 되돌려 달라고 요청하십시오.
+            </p>
+        </div>
+
+        <!-- Q7 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -43,13 +106,41 @@
                 및
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
                 상태에서는 전형요소 설정(이름·점수 기준표)을 수정할 수 없습니다.
-                CLOSED 라운드라면 <strong>라운드 관리 탭의 재개방</strong> 기능으로 OPEN 상태로 되돌린 뒤 수정할 수 있습니다.
+                CLOSED 라운드라면 <strong>라운드 관리 탭에서 다시 열기</strong> 버튼으로 OPEN 상태로 되돌린 뒤 수정할 수 있습니다.
                 다만 이미 마감(FINALIZED)된 다른 라운드가 하나라도 있으면 전형요소 설정 변경이 계속 차단되므로,
                 이 경우에는 수정할 수 없습니다. 따라서 점수 기준은 첫 라운드를 열기 전에 충분히 검토하여 확정하시기 바랍니다.
             </p>
         </div>
 
-        <!-- Q4 -->
+        <!-- Q8 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                동점자가 모집 정원을 초과하면 어떻게 처리하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                시스템은 순위 계산만 수행하며, 추천 확정은 관리자가 직접 판단하여 버튼을 눌러야 합니다.
+                동점자가 발생했을 때는 <strong>라운드 관리 탭 → 결과 탭</strong>의 학생 목록에서 해당 학생을 클릭하면
+                전형요소별 세부 점수를 확인할 수 있습니다.
+                이를 바탕으로 학교 내부 동점자 처리 기준을 적용하여 추천 대상자를 결정한 뒤 추천 확정 버튼을 누르십시오.
+            </p>
+        </div>
+
+        <!-- Q9 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                데이터 정기 백업은 어떻게 하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                프로그램이 실행 중이 아닐 때 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code>
+                파일을 복사하여 별도 위치(외장 드라이브, 네트워크 공유 폴더 등)에 보관하십시오.
+                중요한 작업(기초데이터 업로드, 라운드 마감 등) 전후로 수동 복사하는 것을 권장합니다.
+                복원이 필요할 때는 프로그램을 종료한 상태에서 백업 파일로 교체한 뒤 재시작하면 됩니다.
+            </p>
+        </div>
+
+        <!-- Q10 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -67,21 +158,7 @@
             </p>
         </div>
 
-        <!-- Q5 -->
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2">
-                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
-                동점자가 모집 정원을 초과하면 어떻게 처리하나요?
-            </p>
-            <p class="text-slate-600 leading-relaxed">
-                시스템이 동점자 상황을 자동으로 감지하고 관리자에게 알립니다.
-                관리자는 동점자 목록을 확인한 후 추천할 학생을 직접 선택해야 합니다.
-                관리자가 선택을 완료하기 전까지 해당 모집단위의 추천 확정은 진행되지 않습니다.
-                선택 기준은 학교 내부 규정에 따라 관리자가 판단합니다.
-            </p>
-        </div>
-
-        <!-- Q6 -->
+        <!-- Q11 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
