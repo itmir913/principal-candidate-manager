@@ -8,12 +8,12 @@
     <div class="mb-10">
         <h3 class="text-lg font-bold text-slate-700 mb-3">3-1. 학급·담임 계정 설정</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            관리자 화면의 <strong>학급 관리</strong> 탭에서 학년·반별 담임교사 계정을 일괄 생성합니다.
-            화면의 <strong>양식 다운로드</strong> 버튼으로 양식 파일을 받아 작성한 뒤 업로드하면 계정이 자동 생성됩니다.
+            관리자로 로그인한 후 <strong>학급 관리</strong> 탭에서 학년·반별 담임교사 계정을 일괄 생성합니다.
+            관리자 화면의 <strong>양식 다운로드</strong> 버튼으로 양식 파일을 받아 학급을 작성한 뒤 <strong>가져오기</strong> 버튼으로 업로드하면 담임교사 계정이 자동 생성됩니다.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            파일에 입력한 비밀번호가 그대로 계정 비밀번호가 되므로, 해당 비밀번호를 담임교사에게 안내하십시오. 담임교사가 비밀번호를 분실할 경우 관리자는 <strong>학급 관리</strong> 탭에서
-            새로운 비밀번호를 설정할 수 있습니다.
+            엑셀 파일에 입력한 비밀번호가 그대로 계정 비밀번호가 됩니다. 해당 비밀번호를 담임교사에게 안내하십시오.
+            담임교사가 비밀번호를 분실할 경우 관리자는 <strong>학급 관리</strong> 탭에서 새로운 비밀번호를 설정할 수 있습니다.
         </p>
 
         <table class="w-full text-lg border-collapse mb-4">
@@ -58,7 +58,7 @@
     <div class="mb-10">
         <h3 class="text-lg font-bold text-slate-700 mb-3">3-2. 학생 명단 등록</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            관리자 화면의 <strong>학생 관리</strong> 탭에서 재학생과 졸업생을 별도로 등록합니다.
+            관리자 화면의 <strong>학생 관리</strong> 탭에서 재학생과 졸업생을 각각 등록합니다.
             Excel 파일(.xlsx)로 일괄 가져오거나 <strong>+ 추가</strong> 버튼으로 한 명씩 직접 입력할 수 있습니다.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
@@ -136,6 +136,22 @@
         <p class="text-lg text-slate-600 leading-relaxed mb-5">
             관리자 화면의 <strong>전형요소 설정</strong> 탭에서 점수 산출에 사용할 전형요소를 정의합니다. 유형과 적용 범위의 조합에 따라 아래와 같이 구분됩니다.
         </p>
+
+        <!-- 입력 유형 요약 -->
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">NUMERIC</p>
+                <p class="text-slate-500 text-base leading-relaxed">담임교사가 숫자를 입력하면 시스템이 구간 기준에 따라 점수를 자동 계산합니다.</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">CATEGORY</p>
+                <p class="text-slate-500 text-base leading-relaxed">미리 정의된 선택지 중 하나 또는 여러 개를 고르면 해당 배점을 합산합니다.</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 mb-1">MANUAL</p>
+                <p class="text-slate-500 text-base leading-relaxed">담임교사가 전형요소 점수를 직접 숫자로 입력합니다.</p>
+            </div>
+        </div>
 
         <!-- 입력 유형 -->
         <div class="space-y-3 mb-6">
