@@ -102,7 +102,7 @@
         <ul class="text-base space-y-2 mt-3" style="color: #78350f; padding-left: 0; list-style: none;">
           <li class="flex items-start gap-2">
             <span>•</span>
-            <span><strong>전형요소와 대학·모집단위는 지원 기록이 생기면 삭제할 수 없습니다.</strong> 전형요소 설정과 대학 설정을 완전히 마친 뒤 라운드를 여세요.</span>
+            <span><strong>대학·모집단위는 지원 기록이 생기면 삭제할 수 없고, 전형요소는 종료·마감된 라운드가 하나라도 있으면 수정·삭제할 수 없습니다.</strong> 전형요소 설정과 대학 설정을 완전히 마친 뒤 라운드를 여세요.</span>
           </li>
           <li class="flex items-start gap-2">
             <span>•</span>
