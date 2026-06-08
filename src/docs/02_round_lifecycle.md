@@ -114,6 +114,56 @@
 
 ---
 
+## `base_data` 무결성 보호 — DB 트리거
+
+### 보호 대상
+
+CLOSED 상태 라운드에 지원서가 있는 학생의 `base_data` 행에 대한 **명시적 DELETE**를 DB 레벨에서 차단한다.
+
+### 트리거: `trg_prevent_base_data_delete_for_applied`
+
+```sql
+CREATE TRIGGER IF NOT EXISTS trg_prevent_base_data_delete_for_applied
+BEFORE DELETE ON base_data
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete base_data: student has application in CLOSED round')
+    WHERE EXISTS (
+        SELECT 1 FROM applications ap
+        JOIN rounds r ON r.id = ap.round_id
+        WHERE ap.student_id = OLD.student_id
+          AND r.status = 'CLOSED'
+    );
+END;
+```
+
+### 논리 근거
+
+`close_round`는 CLOSED 전이 전에 모든 지원자의 `base_data` 완전성을 사전 검증한다 (①번 단계).  
+따라서 **CLOSED 상태 = base_data 완전성 보장**이 DB 불변식이 된다.  
+이 불변식을 깨는 경로는 명시적 DELETE뿐이므로, 트리거 하나로 완전한 보호가 가능하다.
+
+### UPSERT는 항상 허용 — SQLite INSERT OR REPLACE 동작
+
+`INSERT OR REPLACE`는 내부적으로 DELETE + INSERT를 수행하지만, BEFORE DELETE 트리거를 발동시키지 **않는다**.  
+따라서 기초데이터 수정(UPSERT) — 담임교사 재입력, 관리자 Excel 재업로드 — 은 CLOSED 상태에서도 자유롭게 허용된다.
+
+### CLOSED-only 조건 선택 이유
+
+FINALIZED 라운드는 새 OPEN 라운드와 공존 가능하다.  
+FINALIZED 조건을 추가하면 이전 라운드에서 FINALIZED된 학생이 새 라운드에서 기초데이터를 제출할 때 차단된다.  
+CLOSED만을 조건으로 함으로써 다중 라운드 시나리오에서도 적법한 요청을 막지 않는다.
+
+### 명시적 DELETE 경로 (전체 2곳)
+
+| 위치 | 경로 | 트리거 발동 여부 |
+|------|------|-----------------|
+| `area_data.rs:982` | 관리자 Excel 복수값 import — `DELETE FROM base_data WHERE student_id=? AND area_id=?` | CLOSED 지원자면 ABORT |
+| `applications.rs:559` | 담임 복수값 재제출 DELETE | OPEN 라운드 활성 = CLOSED 없음 = 미발동 (항상 안전) |
+
+**핸들러 레벨 체크를 별도로 추가하지 말 것.** 이 트리거가 단일 진실 원천이다.
+
+---
+
 ## `get_current_round` — 현재 라운드 조회 (`GET /api/rounds/current`, 공개 엔드포인트)
 
 - `SELECT ... FROM rounds WHERE status = 'OPEN' LIMIT 1`
