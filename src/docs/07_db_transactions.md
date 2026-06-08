@@ -7,19 +7,20 @@
 | `close_round` | 기초데이터 누락 검증 + rounds 상태 변경 + 점수 계산·results 저장 + 순위 계산 전체 | `BEGIN IMMEDIATE` 단일 커넥션·트랜잭션. 점수 계산 실패 시 ROLLBACK으로 상태 변경까지 취소됨 |
 | `reopen_round` | rounds 상태 변경 + results 추천·순위 초기화 | 두 UPDATE를 원자적으로 처리 |
 | `run_calculate_scores` | results 저장 전체 + 순위 계산 전체 | `BEGIN IMMEDIATE` 래퍼. 읽기·쓰기 모두 동일 커넥션에서 순차 처리 |
-| `recommend_result` | 상태 조회 + 정원 조회 + recommended 갱신 | race condition 방지 목적 |
-| `unrecommend_result` | 상태 조회 + recommended 갱신 | race condition 방지 목적 |
+| `recommend_result` | 상태 조회 + 정원 조회 + recommended 갱신 | `BEGIN IMMEDIATE`. 정원 체크(SELECT COUNT)~UPDATE 사이 TOCTOU 방지 |
+| `unrecommend_result` | 상태 조회 + recommended 갱신 | 일반 트랜잭션. recommended 갱신 원자화 |
+| `finalize_round` | 상태 확인 + 정원 검증 + rounds UPDATE | `BEGIN IMMEDIATE`. 상태 확인~FINALIZED 변경까지 원자적 처리. UPDATE에 `AND status='CLOSED'` 이중 가드 |
 | `teacher_create_application` | base_data 저장 + applications upsert + 점수 계산 + results 저장 | 4단계 원자적 처리 |
 | `teacher_delete_application` | results 삭제 + applications 삭제 | FK 제약 순서(results 먼저 삭제) 보장. 졸업생 담당 분기 포함(is_enrolled=0 검증). |
 | `numeric_table_import` | 전체 삭제 + 행 삽입 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `category_map_import` | 전체 삭제 + 행 삽입 반복 + 0점 검증 | 오류 시 tx drop으로 자동 롤백 |
-| `base_data_import` | student_type별 삭제 + 행 삽입 반복 | 오류 시 tx drop으로 자동 롤백 |
+| `base_data_import` | 단일값: INSERT OR REPLACE / 복수값: (student, track) 조합별 DELETE + INSERT | 오류 시 tx drop으로 자동 롤백. 파일에 없는 학생 데이터는 보존됨 |
 | `import_students` | 전체 행 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `import_enrolled` | 재학생 위치 기반 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `import_graduated` | 졸업생 upsert 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `import_classes` | 학급 upsert 반복 | tx.begin() 후 루프 내에서 행마다 bcrypt 계산(tx 커넥션은 사용하지 않는 순수 CPU 단계). upsert_class와 달리 tx 시작 이후 계산 |
 | `upsert_class` | classes INSERT 또는 UPDATE | 신규/기존 분기 처리 원자화 |
-| `daegyo_import` / `univ_import` | 모집단위별 삭제 + 행 삽입 반복 | `do_import` 함수 공통 사용 |
+| `daegyo_import` / `univ_import` | INSERT OR REPLACE 반복 (파일에 없는 학생 보존) | `do_import` 함수 공통 사용 |
 
 ---
 
@@ -44,9 +45,10 @@
 | `change_admin_password` | `app_configs` UPDATE 1건 | 단일 UPDATE는 원자적 |
 | `teacher_change_password` | `classes` UPDATE 1건 | 단일 UPDATE는 원자적 |
 | `open_round` | `rounds` INSERT 1건 | 단일 INSERT는 원자적 |
-| `finalize_round` | `rounds` UPDATE 1건 | 단일 UPDATE는 원자적 |
 | `abandon_application` (관리자) | `applications` UPDATE 1건 | 단일 UPDATE는 원자적 |
 | `teacher_abandon_application` | `applications` UPDATE 1건 | 단일 UPDATE는 원자적 |
+| `add_enrolled_student` | `students` INSERT OR REPLACE 1건 | 위치(학년·반·번호) 기반 upsert. student_code 자동 생성 |
+| `add_graduated_student` | `students` INSERT OR REPLACE 1건 | student_code 기반 upsert |
 | `delete_student` | `students` DELETE 1건 | 단일 DELETE는 원자적 |
 | `delete_class` | `classes` DELETE 1건 | 단일 DELETE는 원자적 |
 
@@ -75,8 +77,11 @@
 ## Import 핸들러의 트랜잭션 경계와 오류 정책
 
 ### `base_data_import`
-- begin → student_type 기반 DELETE → 행별 INSERT 반복 → 오류 시 422 + 자동 롤백 → 성공 시 commit
-- 재학생(`enrolled`)과 졸업생(`graduated`) 데이터를 독립적으로 교체한다: `DELETE ... WHERE student_id IN (SELECT id FROM students WHERE is_enrolled = ?)`로 해당 student_type의 데이터만 삭제.
+- begin → 행별 UPSERT 반복 → 오류 시 422 + 자동 롤백 → 성공 시 commit
+- **단일값(`multi_value=0`)**: `INSERT OR REPLACE`로 기존 행 덮어쓰기.
+- **복수값(`multi_value=1`)**: 파일에 등장하는 `(student_id, track_id)` 조합의 기존 행을 DELETE 후 INSERT. 파일에 없는 다른 학생의 행은 건드리지 않는다.
+- **파일에 없는 학생 데이터는 보존된다.** 이전 전체 DELETE+INSERT 방식과 달리, 기초데이터는 학생별 측정 사실값이므로 교체 대상이 아닌 데이터는 유지한다.
+- 재학생/졸업생 독립 업로드 구조는 유지된다 (`student_type` 파라미터로 대상 학생 필터링).
 
 ### `import_students`
 - begin → 행별 `upsert_student` 반복 → 오류 시 422 + 자동 롤백 → 성공 시 commit

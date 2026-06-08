@@ -84,11 +84,17 @@
 
 **허용 상태**: CLOSED 상태에서만 가능.
 
-**처리**
-- 먼저 `SELECT status FROM rounds WHERE id = ?`로 상태를 조회한다.
-- `status != 'CLOSED'`이거나 라운드가 없으면 404 반환.
-- 이후 아래 정원 위반 검증을 수행하고, 통과하면 `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ?` 실행.
-- UPDATE에는 `AND status = 'CLOSED'` 조건이 없으므로, SELECT 직후 `reopen_round` 가 동시에 호출되면 OPEN 상태에서 FINALIZED로 전환될 수 있는 이론적 TOCTOU가 존재한다 (단일 관리자 환경에서 실질적 위험은 낮음).
+**처리 (`BEGIN IMMEDIATE` 단일 트랜잭션)**
+
+전체 흐름이 `BEGIN IMMEDIATE` 트랜잭션 안에서 원자적으로 처리된다.
+
+1. `SELECT status FROM rounds WHERE id = ?` 로 현재 상태 확인.
+   - `status != 'CLOSED'`이거나 라운드가 없으면 404 반환, ROLLBACK.
+2. 아래 정원 위반 검증 수행. 위반이 있으면 422 반환, ROLLBACK.
+3. `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ? AND status = 'CLOSED'` 실행.
+   - `AND status = 'CLOSED'` 가드: 트랜잭션 보유 중 외부 변경 방어.
+
+`BEGIN IMMEDIATE` 덕분에 상태 확인부터 UPDATE까지 다른 커넥션이 끼어들 수 없어, 과거에 존재하던 TOCTOU 위험이 해소됐다.
 
 ⚠️ [finalize_round] 코드 내부에서 아직 자동으로 추천자를 결정하지 않으므로 관리자가 직접 추천이 완료됐는지 확인 후 확정해야 하는 운영 규칙이 있다.
 
@@ -100,17 +106,25 @@
 
 ---
 
-## 전형요소 생성·삭제 제한 (`POST /api/areas`, `DELETE /api/areas/:id`)
+## 전형요소 설정 변경 제한 (`guard_no_closed_round`)
 
-마감된 라운드가 존재하는 경우 전형요소(`areas`)의 생성과 삭제가 차단된다.
+마감된 라운드(CLOSED 또는 FINALIZED)가 하나라도 존재하면 전형요소 관련 쓰기 작업이 전면 차단된다.
 
 **판단 기준**: `SELECT COUNT(*) FROM rounds WHERE status IN ('CLOSED', 'FINALIZED')` 결과가 1 이상이면 차단.
 
-**반환**: 409 Conflict + 메시지 `"마감된 라운드가 존재하므로 전형요소를 생성하거나 삭제할 수 없습니다"`.
+**반환**: 409 Conflict
 
-**이유**: 라운드 마감 시 각 전형요소별 학생 점수를 계산해 `results.score_detail`에 박제한다. 이후 전형요소를 추가하면 기존 score_detail에 해당 항목이 없어 내보내기가 실패하고, 삭제하면 과거 점수 기록에서 해당 전형요소 데이터가 유실된다.
+**차단 대상 — `guard_no_closed_round` 적용 핸들러:**
 
-**수정 가능한 작업**: 전형요소 `이름` 및 `teacher_editable` 변경(`PUT /api/areas/:id`)은 제한 없이 허용된다.
+| 핸들러 | 엔드포인트 | 차단 이유 |
+|--------|-----------|-----------|
+| `create_area` | `POST /api/areas` | 추가된 전형요소가 기존 `score_detail`에 없어 내보내기 실패 가능 |
+| `delete_area` | `DELETE /api/areas/:id` | 과거 score_detail에서 해당 전형요소 데이터 유실 |
+| `update_area` | `PUT /api/areas/:id` | 이름·설정 변경이 기존 박제 결과와 불일치 유발 가능 |
+| `numeric_table_import` | `POST /api/areas/:id/numeric-table/import` | 점수 기준 변경은 재계산을 강제해야 하므로 CLOSED 상태에서 금지 |
+| `category_map_import` | `POST /api/areas/:id/category-map/import` | 동일 이유 |
+
+**허용되는 수정**: 전형요소 이름·`teacher_editable` 변경 자체는 차단 대상이나, 실질적으로 `update_area`가 차단되므로 CLOSED/FINALIZED 라운드 존재 시에는 어떠한 수정도 불가.
 
 ---
 

@@ -74,6 +74,28 @@
 
 ---
 
+## 구간표(`numeric_table`) import 시 검증
+
+`numeric_table_import`는 저장 전에 두 가지 품질 검증을 수행한다.
+
+### 단조성(Monotonicity) 검증 — 오류
+
+threshold 오름차순으로 점수가 단조적이지 않으면 import를 거부한다(422).
+
+| `match_mode` | 요구 조건 | 위반 예시 |
+|---|---|---|
+| `UPPER` | threshold 증가 시 점수 **비감소** (같거나 증가) | threshold 30→60인데 점수 90→80 |
+| `LOWER` | threshold 증가 시 점수 **비증가** (같거나 감소) | threshold 0→3인데 점수 50→60 |
+| `EXACT` | 해당 없음 (단조성 제약 없음) | — |
+
+**이유**: UPPER(상한→유리)와 LOWER(하한→유리) 모드에서 점수가 역전되면 점수 계산 시 silent wrong 결과가 나온다. import 단계에서 차단해 데이터 품질을 강제한다.
+
+### UPPER 기준값 0 누락 — 경고(warning)
+
+UPPER 모드 구간표에 `threshold=0` 행이 없으면 경고를 반환한다. import는 허용하되, 실제 학생 데이터가 모든 threshold보다 낮을 경우 `close_round` 시 해당 학생의 점수 계산이 실패할 수 있음을 사전 안내한다.
+
+---
+
 ## LookupScope 처리 (COMPOSITE vs SIMPLE)
 
 - **SIMPLE**: `base_data`, `numeric_table`, `category_map` 조회 시 `track_id IS NULL` 조건.
