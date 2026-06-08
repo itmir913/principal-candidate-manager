@@ -231,6 +231,21 @@ BEGIN
       );
 END;
 
+-- CLOSED 라운드 지원자의 기초데이터 삭제 방지
+-- INSERT OR REPLACE는 내부 DELETE에 대해 BEFORE DELETE 트리거를 발동시키지 않으므로
+-- UPSERT(수정)는 자유롭게 허용되고 명시적 DELETE만 차단된다.
+CREATE TRIGGER IF NOT EXISTS trg_prevent_base_data_delete_for_applied
+BEFORE DELETE ON base_data
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete base_data: student has application in CLOSED round')
+    WHERE EXISTS (
+        SELECT 1 FROM applications ap
+        JOIN rounds r ON r.id = ap.round_id
+        WHERE ap.student_id = OLD.student_id
+          AND r.status = 'CLOSED'
+    );
+END;
+
 -- ================================================================
 -- RESULTS
 -- total_score: INTEGER (×100000)

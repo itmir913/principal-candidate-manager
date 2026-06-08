@@ -1033,3 +1033,124 @@ async fn base_data_import_multi_value_upsert_replaces_student_values() {
     .bind(aid).bind("S002").fetch_one(&pool).await.unwrap();
     assert_eq!(s002_count, 1, "S002는 파일에 없으므로 기존 데이터 보존");
 }
+
+// ── CLOSED 라운드 지원자 기초데이터 삭제 차단 (DELETE 트리거) ──────
+// INSERT OR REPLACE(UPSERT)는 내부 DELETE에 BEFORE DELETE 트리거를 발동시키지 않으므로
+// 수정은 자유롭게 허용되고, 명시적 DELETE만 차단된다.
+
+async fn setup_closed_round_application(pool: &sqlx::SqlitePool, student_id: i64) {
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('서울대학교') RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    let track_id: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴퓨터공학과') RETURNING id",
+    )
+    .bind(univ_id).fetch_one(pool).await.unwrap();
+    let round_id: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', '2026-01-01', '2026-01-02') RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
+         VALUES (?, ?, ?, 1, 0, '컴퓨터공학과')",
+    )
+    .bind(student_id).bind(track_id).bind(round_id)
+    .execute(pool).await.unwrap();
+}
+
+async fn setup_finalized_round_application(pool: &sqlx::SqlitePool, student_id: i64) {
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('연세대학교') RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    let track_id: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '전기전자공학과') RETURNING id",
+    )
+    .bind(univ_id).fetch_one(pool).await.unwrap();
+    let round_id: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at, finalized_at) VALUES ('FINALIZED', '2026-01-01', '2026-01-02', '2026-01-03') RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
+         VALUES (?, ?, ?, 1, 0, '전기전자공학과')",
+    )
+    .bind(student_id).bind(track_id).bind(round_id)
+    .execute(pool).await.unwrap();
+}
+
+#[tokio::test]
+async fn base_data_delete_blocked_for_closed_round_student() {
+    // CLOSED 라운드 지원자의 base_data 명시적 DELETE → 트리거로 차단
+    let pool = common::create_test_pool_shared().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+
+    // base_data 먼저 삽입 (INSERT 트리거 없음 — UPSERT는 허용)
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '8500000', 0)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    // CLOSED 라운드 지원 이력 추가
+    setup_closed_round_application(&pool, sid).await;
+
+    // DELETE 시도 → 트리거 차단
+    let result = sqlx::query("DELETE FROM base_data WHERE student_id = ? AND area_id = ?")
+        .bind(sid).bind(aid).execute(&pool).await;
+    assert!(result.is_err(), "CLOSED 라운드 지원자의 base_data 삭제는 차단되어야 함");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE student_id = ?")
+        .bind(sid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1, "삭제 차단으로 데이터 보존");
+}
+
+#[tokio::test]
+async fn base_data_delete_allowed_for_finalized_round_student() {
+    // FINALIZED 라운드 지원자의 base_data는 삭제 가능 (새 라운드 갱신 허용)
+    let pool = common::create_test_pool_shared().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '8500000', 0)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    setup_finalized_round_application(&pool, sid).await;
+
+    // DELETE → 허용
+    sqlx::query("DELETE FROM base_data WHERE student_id = ? AND area_id = ?")
+        .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE student_id = ?")
+        .bind(sid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 0, "FINALIZED 라운드는 삭제 허용");
+}
+
+#[tokio::test]
+async fn base_data_upsert_allowed_for_closed_round_student() {
+    // CLOSED 라운드 지원자도 UPSERT(INSERT OR REPLACE)는 허용됨
+    // INSERT OR REPLACE는 BEFORE DELETE 트리거를 발동시키지 않으므로 수정은 자유롭게 가능
+    let pool = common::create_test_pool_shared().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '8500000', 0)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    setup_closed_round_application(&pool, sid).await;
+
+    // UPSERT → 허용 (트리거 미발동)
+    sqlx::query(
+        "INSERT OR REPLACE INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '9000000', 0)",
+    )
+    .bind(sid).bind(aid).execute(&pool).await.unwrap();
+
+    let value: String = sqlx::query_scalar("SELECT value FROM base_data WHERE student_id = ? AND area_id = ?")
+        .bind(sid).bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(value, "9000000", "UPSERT로 값이 갱신되어야 함");
+}
