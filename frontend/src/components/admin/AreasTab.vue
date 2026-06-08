@@ -97,7 +97,7 @@
       <div class="flex-1 min-w-0">
 
         <!-- 전형요소 추가 폼 -->
-        <div v-if="showAddForm" class="rounded-xl"
+        <div v-if="showAddForm" class="rounded-xl @container"
              style="padding: 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
           <h3 class="text-base font-semibold mb-4" style="color: #1e293b;">새 전형요소 추가</h3>
 
@@ -106,7 +106,7 @@
           <p class="text-base mb-3" style="color: #94a3b8;">
             템플릿을 선택하면 아래 항목이 자동으로 채워집니다. 매뉴얼을 참고하여 적절한 전형요소 설정을 입력하세요.
           </p>
-          <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+          <div class="grid grid-cols-1 @3xl:grid-cols-3 gap-3 mb-6">
             <div
               v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
               class="template-btn rounded-xl text-left flex flex-col"
