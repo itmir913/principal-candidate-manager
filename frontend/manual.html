@@ -68,6 +68,18 @@
             }
 
             h3 { break-before: auto; }
+
+            .print-thead-repeat {
+                break-inside: auto;
+                page-break-inside: auto;
+            }
+            .print-thead-repeat thead {
+                display: table-header-group;
+            }
+            .print-thead-repeat tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
         }
     </style>
 </head>

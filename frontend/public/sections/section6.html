@@ -11,12 +11,18 @@
 
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">전체 지원자 목록 다운로드</p>
-                <p class="text-slate-600 leading-relaxed">점수 계산 완료 후 활성화. 전체 지원자의 점수·순위·추천 여부를 포함한 <strong>전체결과</strong>
+                <p class="mb-2">
+                    <span class="inline-block text-base font-semibold text-white rounded-lg px-4 py-1.5 print-keep-bg"
+                          style="background: #16a34a;">전체 지원자 결과 다운로드</span>
+                </p>
+                <p class="text-slate-600 leading-relaxed">점수 계산 완료 후 활성화. 전체 지원자의 점수·순위·추천 여부를 포함한 <strong>전체 결과</strong>
                     시트를 내려받습니다.</p>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">라운드 결과 다운로드</p>
+                <p class="mb-2">
+                    <span class="inline-block text-base font-semibold text-white rounded-lg px-4 py-1.5 print-keep-bg"
+                          style="background: #2563eb;">라운드 요약 다운로드</span>
+                </p>
                 <p class="text-slate-600 leading-relaxed">
                     <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
                     상태에서만 활성화. <strong>라운드결과</strong>(모집단위·대학별 정원·잔여석 요약)와 <strong>지원자결과</strong>(지원자별 점수·추천·포기) 2개 시트를 내려받습니다.
@@ -24,8 +30,12 @@
             </div>
         </div>
 
-        <p class="text-lg font-bold text-slate-700 mb-2">전체결과 시트 열 구성</p>
-        <table class="w-full text-lg border-collapse mb-2">
+        <p class="text-lg font-bold text-slate-700 mb-2">전체 지원자 결과 시트 열 구성</p>
+        <table class="w-full text-lg border-collapse mb-2 print-thead-repeat" style="table-layout: fixed;">
+            <colgroup>
+                <col style="width: 30%;">
+                <col style="width: 70%;">
+            </colgroup>
             <thead>
             <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
                 <th class="border border-slate-200 px-4 py-2 text-left">열 이름</th>
@@ -93,16 +103,63 @@
         </table>
         <p class="text-base text-slate-400 mb-4">* 열 순서는 위 표의 순서와 동일합니다. 전형요소 열은 학교별 설정에 따라 달라집니다.</p>
 
-        <div>
-            <!-- <img src="../assets/export-result.png" alt="결과 내보내기 화면" class="w-full rounded-xl my-4"> -->
-            <div class="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400 text-lg my-4 print-keep-bg">
-                📷 스크린샷: 라운드 관리 탭 → 결과 탭의 다운로드 버튼 영역
-            </div>
-        </div>
+        <p class="text-lg font-bold text-slate-700 mb-2">라운드 요약 시트 열 구성</p>
+        <table class="w-full text-lg border-collapse mb-2 print-thead-repeat" style="table-layout: fixed;">
+            <colgroup>
+                <col style="width: 42%;">
+                <col style="width: 58%;">
+            </colgroup>
+            <thead>
+            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                <th class="border border-slate-200 px-4 py-2 text-left">열 이름</th>
+                <th class="border border-slate-200 px-4 py-2 text-left">설명</th>
+            </tr>
+            </thead>
+            <tbody class="text-slate-600">
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">대학</td>
+                <td class="border border-slate-200 px-4 py-2">지원 대학명</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">모집단위</td>
+                <td class="border border-slate-200 px-4 py-2">지원 모집단위명 (트랙)</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">모집단위 정원</td>
+                <td class="border border-slate-200 px-4 py-2">해당 모집단위의 전체 모집 정원</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">모집단위 라운드 전 잔여석</td>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드 시작 시점의 모집단위 잔여석 (이전 라운드까지 추천된 인원 제외)</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드 추천 인원</td>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드에서 추천 확정된 지원자 수</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">모집단위 남은 잔여석</td>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드 이후 남은 모집단위 잔여석</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">대학 전체 정원</td>
+                <td class="border border-slate-200 px-4 py-2">해당 대학 전체 모집단위 정원 합계</td>
+            </tr>
+            <tr class="bg-slate-50 print-keep-bg">
+                <td class="border border-slate-200 px-4 py-2">대학 라운드 전 잔여석</td>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드 시작 시점의 대학 전체 잔여석 합계</td>
+            </tr>
+            <tr>
+                <td class="border border-slate-200 px-4 py-2">대학 남은 잔여석</td>
+                <td class="border border-slate-200 px-4 py-2">이번 라운드 이후 남은 대학 전체 잔여석 합계</td>
+            </tr>
+            </tbody>
+        </table>
+        <p class="text-base text-slate-400 mb-4">* 행은 모집단위(트랙) 단위로 구성됩니다.</p>
+
     </div>
 
     <!-- DB 백업 -->
-    <div class="space-y-6">
+    <div class="space-y-6 break-before-page">
         <h3 class="text-lg font-bold text-slate-700 mb-3">데이터베이스 백업</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
             모든 데이터는 실행 파일과 같은 폴더의
