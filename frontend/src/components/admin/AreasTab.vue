@@ -1095,7 +1095,7 @@ const ExcelPanel = defineComponent({
       ]),
       h('p', { style: 'font-size: 16px; color: #92400e;' },
         props.panel === 'base'
-          ? `※ 가져오기 시 기존 ${props.studentType === 'enrolled' ? '재학생' : '졸업생'}의 기초 데이터가 모두 교체됩니다.`
+          ? `※ 파일에 포함된 학생의 기초 데이터만 업데이트됩니다. 파일에 없는 학생의 데이터는 유지됩니다.`
           : '※ 가져오기 시 기존 점수 기준이 모두 교체됩니다.'),
       err.value ? h('p', { style: 'font-size: 16px; color: #ef4444;' }, err.value) : null,
     ])

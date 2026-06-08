@@ -825,13 +825,6 @@ pub async fn base_data_import(
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    // 재학생/졸업생 데이터를 각각 독립적으로 교체 — 반대 student_type 데이터는 보존
-    let is_enrolled_val = if enrolled { 1i64 } else { 0i64 };
-    sqlx::query(
-        "DELETE FROM base_data WHERE area_id = ? AND student_id IN (SELECT id FROM students WHERE is_enrolled = ?)"
-    )
-    .bind(id).bind(is_enrolled_val).execute(&mut *tx).await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
@@ -839,6 +832,7 @@ pub async fn base_data_import(
     // multi_value=0 전형요소: (student_id, track_id) 중복 추적 — 첫 번째 행 우선
     let single_value = !area.multi_value;
     let mut seen: HashSet<(i64, Option<i64>)> = HashSet::new();
+    let mut multi_records: Vec<(i64, Option<i64>, String)> = Vec::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
         let row_num = i + 2;
@@ -960,19 +954,48 @@ pub async fn base_data_import(
             continue;
         }
 
-        match sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(student_id).bind(id).bind(track_id).bind(&db_value).bind(area.multi_value)
-        .execute(&mut *tx).await {
-            Ok(_) => rows += 1,
-            Err(e) => errors.push(format!("{}행: {}", row_num, e)),
+        if single_value {
+            match sqlx::query(
+                "INSERT OR REPLACE INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(student_id).bind(id).bind(track_id).bind(&db_value).bind(area.multi_value)
+            .execute(&mut *tx).await {
+                Ok(_) => rows += 1,
+                Err(e) => errors.push(format!("{}행: {}", row_num, e)),
+            }
+        } else {
+            multi_records.push((student_id, track_id, db_value));
         }
     }
 
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
+
+    if !single_value {
+        // 파일에 등장한 (student, track) 조합만 삭제 후 재삽입 — 파일에 없는 학생 데이터는 보존
+        let affected: HashSet<(i64, Option<i64>)> = multi_records.iter()
+            .map(|(s, t, _)| (*s, *t))
+            .collect();
+        for (sid, tid) in &affected {
+            sqlx::query(
+                "DELETE FROM base_data WHERE area_id = ? AND student_id = ? AND COALESCE(track_id, 0) = COALESCE(?, 0)",
+            )
+            .bind(id).bind(sid).bind(tid)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+        for (sid, tid, val) in &multi_records {
+            sqlx::query(
+                "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(sid).bind(id).bind(tid).bind(val).bind(area.multi_value)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            rows += 1;
+        }
+    }
+
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }

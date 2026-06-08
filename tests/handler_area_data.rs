@@ -926,3 +926,110 @@ async fn base_data_import_enrolled_empty_name_rejects() {
         .unwrap();
     assert_eq!(count, 0);
 }
+
+// ── base_data_import UPSERT 동작 ─────────────────────────────────
+
+#[tokio::test]
+async fn base_data_import_upsert_updates_existing_row() {
+    // 같은 학생을 두 번 import하면 두 번째 값으로 업데이트되고 행 수는 1 유지
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv1 = "학생코드,이름,값\nS001,테스트,85.0\n";
+    let (status, _) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv1).await)
+            .await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    let state2 = common::make_state(pool.clone());
+    let csv2 = "학생코드,이름,값\nS001,테스트,90.0\n";
+    let (status2, axum::Json(result)) =
+        base_data_import(State(state2), Path(aid), graduated_query(), build_multipart(csv2).await)
+            .await.unwrap();
+    assert_eq!(status2, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1, "중복 행이 생기지 않고 업데이트되어야 함");
+
+    let value: String = sqlx::query_scalar("SELECT value FROM base_data WHERE area_id = ?")
+        .bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(value, "9000000", "두 번째 값(90.0 × 100000)으로 갱신되어야 함");
+}
+
+#[tokio::test]
+async fn base_data_import_partial_preserves_other_students() {
+    // S001+S002 import 후, S001만 재import → S001 값 갱신, S002 데이터 유지
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    insert_student(&pool, "S002").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state1 = common::make_state(pool.clone());
+
+    let csv1 = "학생코드,이름,값\nS001,테스트,85.0\nS002,테스트,70.0\n";
+    let (status, _) =
+        base_data_import(State(state1), Path(aid), graduated_query(), build_multipart(csv1).await)
+            .await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    let state2 = common::make_state(pool.clone());
+    let csv2 = "학생코드,이름,값\nS001,테스트,95.0\n";
+    let (status2, axum::Json(result)) =
+        base_data_import(State(state2), Path(aid), graduated_query(), build_multipart(csv2).await)
+            .await.unwrap();
+    assert_eq!(status2, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 2, "S001+S002 두 행이 남아있어야 함");
+
+    let s002_val: String = sqlx::query_scalar(
+        "SELECT bd.value FROM base_data bd JOIN students s ON bd.student_id = s.id \
+         WHERE bd.area_id = ? AND s.student_code = ?",
+    )
+    .bind(aid).bind("S002").fetch_one(&pool).await.unwrap();
+    assert_eq!(s002_val, "7000000", "S002 데이터는 원래 값(70.0)이 보존되어야 함");
+}
+
+#[tokio::test]
+async fn base_data_import_multi_value_upsert_replaces_student_values() {
+    // multi_value=1: 같은 학생 재import 시 기존 값 집합 교체 — 파일에 없는 값은 삭제됨
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    insert_student(&pool, "S002").await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+    let state1 = common::make_state(pool.clone());
+
+    let csv1 = "학생코드,이름,값\nS001,테스트,회장\nS001,테스트,부회장\nS002,테스트,학생회\n";
+    let (status, _) =
+        base_data_import(State(state1), Path(aid), graduated_query(), build_multipart(csv1).await)
+            .await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    // S001을 "부회장"만으로 재import (회장 제거), S002 제외
+    let state2 = common::make_state(pool.clone());
+    let csv2 = "학생코드,이름,값\nS001,테스트,부회장\n";
+    let (status2, axum::Json(result)) =
+        base_data_import(State(state2), Path(aid), graduated_query(), build_multipart(csv2).await)
+            .await.unwrap();
+    assert_eq!(status2, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+
+    let s001_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM base_data bd JOIN students s ON bd.student_id = s.id \
+         WHERE bd.area_id = ? AND s.student_code = ?",
+    )
+    .bind(aid).bind("S001").fetch_one(&pool).await.unwrap();
+    assert_eq!(s001_count, 1, "S001은 '부회장' 1행만 남아야 함 (회장 제거됨)");
+
+    let s002_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM base_data bd JOIN students s ON bd.student_id = s.id \
+         WHERE bd.area_id = ? AND s.student_code = ?",
+    )
+    .bind(aid).bind("S002").fetch_one(&pool).await.unwrap();
+    assert_eq!(s002_count, 1, "S002는 파일에 없으므로 기존 데이터 보존");
+}

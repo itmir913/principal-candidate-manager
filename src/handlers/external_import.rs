@@ -212,13 +212,6 @@ async fn do_import(
         warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", univ_name, track_name));
     }
 
-    // 해당 모집단위 기초 데이터만 교체 (다른 모집단위 데이터 보존)
-    sqlx::query("DELETE FROM base_data WHERE area_id = ? AND track_id = ?")
-        .bind(area_id)
-        .bind(track_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
@@ -300,7 +293,7 @@ async fn do_import(
         };
 
         match sqlx::query(
-            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value)
+            "INSERT OR REPLACE INTO base_data (student_id, area_id, track_id, value, multi_value)
              VALUES (?, ?, ?, ?, ?)",
         )
         .bind(student_id)
