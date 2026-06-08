@@ -596,7 +596,7 @@ pub async fn export_results(
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let filename = format!("results_round_{}_{}.xlsx", round_id, excel::now_tag());
+    let filename = format!("round_{}_results_{}.xlsx", round_id, excel::now_tag());
     Ok(excel::xlsx_response(buf, &filename))
 }
 

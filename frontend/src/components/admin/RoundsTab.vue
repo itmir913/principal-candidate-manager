@@ -244,13 +244,13 @@
                 style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
                 :disabled="results.length === 0 || downloading"
                 @click="downloadExcel"
-              >전체 지원자 목록 다운로드</button>
+              >전체 지원자 결과 다운로드</button>
               <button
                 class="text-base font-medium rounded-lg disabled:opacity-40"
                 style="padding: 9px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
                 :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
                 @click="downloadSummary"
-              >라운드 결과 다운로드</button>
+              >라운드 요약 다운로드</button>
             </div>
 
             <div v-if="results.length === 0" class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
@@ -646,7 +646,7 @@ async function downloadExcel() {
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
-    a.download = `results_round_${selected.value.id}.xlsx`
+    a.download = `round_${selected.value.id}_results.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
