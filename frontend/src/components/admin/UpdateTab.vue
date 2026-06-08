@@ -114,12 +114,15 @@
           <ExternalLink :size="13" /> GitHub
         </a>
       </div>
-      <div class="px-6 py-5">
-        <pre
-          class="text-base whitespace-pre-wrap"
-          style="color:#374151;font-family:inherit;margin:0;line-height:1.7;"
-        >{{ releaseNotes }}</pre>
-      </div>
+      <div
+        class="px-6 py-5 prose prose-slate max-w-none
+               prose-headings:font-semibold
+               prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+               prose-p:text-base prose-li:text-base prose-li:my-0
+               prose-ul:my-2 prose-ol:my-2
+               prose-hr:my-4"
+        v-html="renderedNotes"
+      />
     </div>
 
     <!-- 업데이트 방법 (업데이트가 있을 때) -->
@@ -303,8 +306,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { marked } from 'marked'
 import {
   RefreshCw, CheckCircle2, AlertCircle, AlertTriangle,
   Download, Database, ExternalLink,
@@ -320,6 +324,8 @@ const releaseNotes   = ref('')
 const releaseUrl     = ref('')
 const isLatest       = ref(true)
 const downloading    = ref(false)
+
+const renderedNotes = computed(() => marked.parse(releaseNotes.value || ''))
 
 function stripV(v) {
   return (v ?? '').replace(/^v/i, '').trim()
