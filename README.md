@@ -75,7 +75,7 @@
 1. [Releases](https://github.com/itmir913/principal-candidate-manager/releases/latest) 페이지에서 최신 `.zip` 파일을 내려받습니다.
 2. 원하는 폴더에 압축을 풉니다.
 3. `principal-candidate-manager.exe`를 실행합니다.
-4. 브라우저가 자동으로 열립니다. 열리지 않으면 `http://localhost:8080`로 직접 접속합니다.
+4. 시스템 트레이(화면 오른쪽 아래)에 생긴 아이콘을 클릭한 후 **열기**를 선택합니다. 브라우저가 열리지 않으면 `http://localhost:8080`으로 직접 접속합니다.
 
 > **데이터 경로**: 실행 파일 옆 `pcm\data.db` 에 모든 데이터가 저장됩니다.
 
