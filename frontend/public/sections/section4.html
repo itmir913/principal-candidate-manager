@@ -66,24 +66,6 @@
                 <td class="border border-slate-200 px-4 py-2"></td>
                 <td class="border border-slate-200 px-4 py-2"></td>
             </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">1.03</td>
-                <td class="border border-slate-200 px-4 py-2">79.7</td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">1.04</td>
-                <td class="border border-slate-200 px-4 py-2">79.6</td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">1.05</td>
-                <td class="border border-slate-200 px-4 py-2">79.5</td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-                <td class="border border-slate-200 px-4 py-2"></td>
-            </tr>
             <tr>
                 <td class="border border-slate-200 px-4 py-2 text-slate-400" colspan="4">… (중략, 소수점 단위로 계속) …</td>
             </tr>
@@ -125,81 +107,86 @@
         <p class="text-lg font-bold text-slate-700 mb-2">점수 기준 예시</p>
         <p class="text-lg text-slate-600 leading-relaxed mb-3">
             입력값을 초과하지 않는 기준값 중 가장 큰 값에 해당하는 점수를 부여합니다. 기준값을 오름차순으로 작성하십시오.
+            기준값은 등간격이 아니어도 됩니다.
         </p>
-        <table class="w-full text-lg border-collapse mb-6">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">0</td>
-                <td class="border border-slate-200 px-4 py-2">10</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">1</td>
-                <td class="border border-slate-200 px-4 py-2">9</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">2</td>
-                <td class="border border-slate-200 px-4 py-2">8</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">3</td>
-                <td class="border border-slate-200 px-4 py-2">7</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">4</td>
-                <td class="border border-slate-200 px-4 py-2">6</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">5</td>
-                <td class="border border-slate-200 px-4 py-2">5</td>
-            </tr>
-            </tbody>
-        </table>
-
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            기준값을 등간격으로 설정하지 않아도 됩니다. 다음은 구간 폭이 다른 예시입니다.
-        </p>
-        <table class="w-full text-lg border-collapse mb-4">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">0</td>
-                <td class="border border-slate-200 px-4 py-2">10</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">2</td>
-                <td class="border border-slate-200 px-4 py-2">9</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">4</td>
-                <td class="border border-slate-200 px-4 py-2">8</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">7</td>
-                <td class="border border-slate-200 px-4 py-2">7</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">11</td>
-                <td class="border border-slate-200 px-4 py-2">6</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">15</td>
-                <td class="border border-slate-200 px-4 py-2">5</td>
-            </tr>
-            </tbody>
-        </table>
+        <div class="grid grid-cols-2 gap-6 mb-4">
+            <div>
+                <p class="text-lg text-slate-500 mb-2">등간격 예시</p>
+                <table class="w-full text-lg border-collapse">
+                    <thead>
+                    <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                        <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
+                        <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
+                    </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                        <td class="border border-slate-200 px-4 py-2">10</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">1</td>
+                        <td class="border border-slate-200 px-4 py-2">9</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">2</td>
+                        <td class="border border-slate-200 px-4 py-2">8</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">3</td>
+                        <td class="border border-slate-200 px-4 py-2">7</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">4</td>
+                        <td class="border border-slate-200 px-4 py-2">6</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">5</td>
+                        <td class="border border-slate-200 px-4 py-2">5</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <p class="text-lg text-slate-500 mb-2">구간 폭 가변 예시</p>
+                <table class="w-full text-lg border-collapse">
+                    <thead>
+                    <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                        <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
+                        <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
+                    </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                        <td class="border border-slate-200 px-4 py-2">10</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">2</td>
+                        <td class="border border-slate-200 px-4 py-2">9</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">4</td>
+                        <td class="border border-slate-200 px-4 py-2">8</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">7</td>
+                        <td class="border border-slate-200 px-4 py-2">7</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">11</td>
+                        <td class="border border-slate-200 px-4 py-2">6</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">15</td>
+                        <td class="border border-slate-200 px-4 py-2">5</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            미인정 출결이 5일인 학생이 5를 입력하면, 기준값을 오름차순으로 읽어 기준값 4 이상~7 미만 구간에 해당하므로 <strong class="text-slate-700">8점</strong>을 부여합니다.
+            오른쪽 점수기준 예시에서 어떤 학생의 미인정 출결이 5일이라 담임교사가 5를 입력하면 기준값 4 이상~7 미만 구간에 해당하므로 <strong class="text-slate-700">8점</strong>,
             13일을 입력하면 기준값 11 이상~15 미만 구간에 해당하므로 <strong class="text-slate-700">6점</strong>을 부여합니다.
         </p>
     </div>
@@ -224,53 +211,59 @@
 
         <!-- 점수 기준 예시 -->
         <p class="text-lg font-bold text-slate-700 mb-2">점수 기준 예시</p>
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            입력값이 기준값 이상인 행 중 기준값이 가장 큰 행의 점수를 부여합니다. 기준값을 내림차순으로 작성하십시오.
-        </p>
-        <table class="w-full text-lg border-collapse mb-4">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">40</td>
-                <td class="border border-slate-200 px-4 py-2">5</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">30</td>
-                <td class="border border-slate-200 px-4 py-2">4</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">25</td>
-                <td class="border border-slate-200 px-4 py-2">3</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">15</td>
-                <td class="border border-slate-200 px-4 py-2">2</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">5</td>
-                <td class="border border-slate-200 px-4 py-2">1</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">0</td>
-                <td class="border border-slate-200 px-4 py-2">0</td>
-            </tr>
-            </tbody>
-        </table>
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            45시간을 입력하면 기준값 40 이상 구간에 해당하므로 <strong class="text-slate-700">5점</strong>,
-            37시간은 기준값 30 이상~40 미만이므로 <strong class="text-slate-700">4점</strong>,
-            13시간은 기준값 5 이상~15 미만이므로 <strong class="text-slate-700">1점</strong>,
-            3시간은 기준값 0 이상~5 미만이므로 <strong class="text-slate-700">0점</strong>을 부여합니다.
-        </p>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            점수 기준에 기준값 <code class="bg-slate-100 px-1 rounded">0</code>이 없으면 최솟값 미만 입력 시 점수 산출에 실패합니다.
-            반드시 기준값 <code class="bg-slate-100 px-1 rounded">0</code>을 마지막 행에 추가하여 하한을 지정하십시오.
-        </p>
+        <div class="grid grid-cols-5 gap-6 mb-4">
+            <div class="col-span-2">
+                <table class="w-full text-lg border-collapse">
+                    <thead>
+                    <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                        <th class="border border-slate-200 px-4 py-2 text-left">기준값</th>
+                        <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
+                    </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">40</td>
+                        <td class="border border-slate-200 px-4 py-2">5</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">30</td>
+                        <td class="border border-slate-200 px-4 py-2">4</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">25</td>
+                        <td class="border border-slate-200 px-4 py-2">3</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">15</td>
+                        <td class="border border-slate-200 px-4 py-2">2</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">5</td>
+                        <td class="border border-slate-200 px-4 py-2">1</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-span-3 text-slate-600">
+                <p class="text-lg leading-relaxed mb-3">
+                    입력값이 기준값 이상인 행 중 기준값이 가장 큰 행의 점수를 부여합니다. 기준값을 내림차순으로 작성하십시오.
+                </p>
+                <p class="text-lg leading-relaxed mb-3">
+                    45시간을 입력하면 기준값 40 이상 구간에 해당하므로 <strong class="text-slate-700">5점</strong>,
+                    37시간은 기준값 30 이상~40 미만이므로 <strong class="text-slate-700">4점</strong>,
+                    13시간은 기준값 5 이상~15 미만이므로 <strong class="text-slate-700">1점</strong>,
+                    3시간은 기준값 0 이상~5 미만이므로 <strong class="text-slate-700">0점</strong>을 부여합니다.
+                </p>
+                <p class="text-lg leading-relaxed">
+                    점수 기준에 기준값 <code class="bg-slate-100 px-1 rounded">0</code>이 없으면 최솟값 미만 입력 시 점수 산출에 실패합니다.
+                    반드시 기준값 <code class="bg-slate-100 px-1 rounded">0</code>을 마지막 행에 추가하여 하한을 지정하십시오.
+                </p>
+            </div>
+        </div>
     </div>
 
     <!-- ── 4-4 수상 실적 ── -->
@@ -293,47 +286,57 @@
 
         <!-- 점수 기준 예시 -->
         <p class="text-lg font-bold text-slate-700 mb-2">점수 기준 예시</p>
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            담임 교사가 범주 목록에서 하나를 선택하면, 해당 범주의 점수가 전형요소 점수가 됩니다.
-            최우수상을 선택하면 3점, 장려상을 선택하면 1점입니다.
-        </p>
-        <table class="w-full text-lg border-collapse mb-4">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">최우수상</td>
-                <td class="border border-slate-200 px-4 py-2">3</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">우수상</td>
-                <td class="border border-slate-200 px-4 py-2">2</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">장려상</td>
-                <td class="border border-slate-200 px-4 py-2">1</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">해당없음</td>
-                <td class="border border-slate-200 px-4 py-2">0</td>
-            </tr>
-            </tbody>
-        </table>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            선택형 입력에서는 어떤 범주에도 해당하지 않는 경우를 반드시 고려해야 합니다.
-            점수가 0점인 <strong class="text-slate-700">해당없음</strong> 범주를 반드시 추가하십시오.
-        </p>
+        <div class="grid grid-cols-5 gap-6 mb-4">
+            <div class="col-span-2">
+                <table class="w-full text-lg border-collapse">
+                    <thead>
+                    <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                        <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
+                        <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
+                    </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">최우수상</td>
+                        <td class="border border-slate-200 px-4 py-2">3</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">우수상</td>
+                        <td class="border border-slate-200 px-4 py-2">2</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">장려상</td>
+                        <td class="border border-slate-200 px-4 py-2">1</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">해당없음</td>
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-span-3 text-slate-600">
+                <p class="text-lg leading-relaxed mb-3">
+                    담임 교사가 범주 목록에서 하나를 선택하면, 해당 범주의 점수가 전형요소 점수가 됩니다.
+                    최우수상을 선택하면 3점, 장려상을 선택하면 1점입니다.
+                </p>
+                <p class="text-lg leading-relaxed">
+                    선택형 입력에서는 어떤 범주에도 해당하지 않는 경우를 반드시 고려해야 합니다.
+                    점수가 0점인 <strong class="text-slate-700">해당없음</strong> 범주를 반드시 추가하십시오.
+                </p>
+            </div>
+        </div>
     </div>
 
     <!-- ── 4-5 교내 활동 ── -->
     <div class="mb-10">
         <h3 class="text-lg font-bold text-slate-700 mb-3">4-5. 교내 활동</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            교내 활동 실적을 등록하고 해당하는 모든 항목의 점수를 합산하여 반영합니다. 합산 결과는 전형요소 만점을 초과할 수 없습니다.
+            교내 활동 실적을 등록하고 해당하는 모든 항목의 점수를 합산하여 반영합니다.
+        </p>
+
+        <p class="text-lg text-slate-600 leading-relaxed mb-4">
+            합산 점수는 전형요소 만점을 초과할 수 없습니다. 가산점 효과를 주고 싶다면 전형요소 만점을 충분히 큰 수(예: <code class="bg-slate-100 px-1 rounded">1000</code>)로 설정하십시오.
         </p>
 
         <!-- 설정 정보 -->
@@ -353,7 +356,7 @@
             담임 교사가 범주 목록에서 여러 개를 중복 선택할 수 있고, 선택한 범주의 점수가 모두 합산됩니다.
             합산 결과가 전형요소 만점을 초과하면 만점으로 처리됩니다.
         </p>
-        <table class="w-full text-lg border-collapse mb-4">
+        <table class="w-full text-lg border-collapse mb-3">
             <thead>
             <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
                 <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
@@ -391,7 +394,7 @@
             동일 활동을 여러 해 수행한 경우 횟수별로 별도 범주를 만들어 운용할 수 있습니다.
             담임 교사가 해당하는 범주를 중복 선택하도록 안내하십시오.
         </p>
-        <table class="w-full text-lg border-collapse mb-4">
+        <table class="w-full text-lg border-collapse mb-3">
             <thead>
             <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
                 <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
@@ -429,9 +432,6 @@
             </tr>
             </tbody>
         </table>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            합산 점수는 전형요소 만점을 초과할 수 없습니다. 가산점 효과를 주고 싶다면 전형요소 만점을 충분히 큰 수(예: <code class="bg-slate-100 px-1 rounded">1000</code>)로 설정하십시오.
-        </p>
     </div>
 
     <!-- ── 4-6 생활태도 ── -->
@@ -455,38 +455,44 @@
 
         <!-- 점수 기준 예시 -->
         <p class="text-lg font-bold text-slate-700 mb-2">점수 기준 예시</p>
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            해당하는 모든 범주의 점수가 합산됩니다. 감점 사유가 없으면 해당없음을 선택하여 0점을 부여합니다.
-        </p>
-        <table class="w-full text-lg border-collapse mb-4">
-            <thead>
-            <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
-                <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
-                <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
-            </tr>
-            </thead>
-            <tbody class="text-slate-600">
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">해당없음</td>
-                <td class="border border-slate-200 px-4 py-2">0</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">교내봉사</td>
-                <td class="border border-slate-200 px-4 py-2">-2</td>
-            </tr>
-            <tr>
-                <td class="border border-slate-200 px-4 py-2">학교폭력</td>
-                <td class="border border-slate-200 px-4 py-2">-5</td>
-            </tr>
-            <tr class="bg-slate-50 print-keep-bg">
-                <td class="border border-slate-200 px-4 py-2">선도처분미이수</td>
-                <td class="border border-slate-200 px-4 py-2">-3</td>
-            </tr>
-            </tbody>
-        </table>
-        <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            예를 들어 학교폭력과 선도처분미이수를 모두 선택하면 −5+(−3)=<strong class="text-slate-700">−8점</strong>입니다.
-        </p>
+        <div class="grid grid-cols-5 gap-6 mb-4">
+            <div class="col-span-2">
+                <table class="w-full text-lg border-collapse">
+                    <thead>
+                    <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                        <th class="border border-slate-200 px-4 py-2 text-left">범주</th>
+                        <th class="border border-slate-200 px-4 py-2 text-left">점수</th>
+                    </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">해당없음</td>
+                        <td class="border border-slate-200 px-4 py-2">0</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">교내봉사</td>
+                        <td class="border border-slate-200 px-4 py-2">-2</td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-200 px-4 py-2">학교폭력</td>
+                        <td class="border border-slate-200 px-4 py-2">-5</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-200 px-4 py-2">선도처분미이수</td>
+                        <td class="border border-slate-200 px-4 py-2">-3</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-span-3 text-slate-600">
+                <p class="text-lg leading-relaxed mb-3">
+                    해당하는 모든 범주의 점수가 합산됩니다. 감점 사유가 없으면 해당없음을 선택하여 0점을 부여합니다.
+                </p>
+                <p class="text-lg leading-relaxed">
+                    예를 들어 학교폭력과 선도처분미이수를 모두 선택하면 −5+(−3)=<strong class="text-slate-700">−8점</strong>입니다.
+                </p>
+            </div>
+        </div>
     </div>
 
 </section>
