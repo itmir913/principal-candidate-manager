@@ -165,7 +165,7 @@ PolyForm Noncommercial 1.0.0은 'educational institution'의 사용을 허용하
 
 - **위반 사례 제보:** 학원, 유료 입시 컨설팅, 기업 등 영리 목적의 무단 사용이나 재배포 사례를 발견하시면 아래 메일로 제보해 주시기 바랍니다.
 - **제보 방법:** 라이선스 위반 사실을 확인할 수 있는 **캡처 이미지, 영상 또는 해당 서비스의 URL**을 함께 첨부해 주세요.
-- **이메일:** [itmir913@gmail.com](mailto:itmir913@gmail.com)
+- **이메일:** [hello@luminousky.com](mailto:hello@luminousky.com)
 - **대응 방침:** 제보된 위반 사례에 대해서는 저작권 보호를 위해 **법률 대리인을 통한 민·형사상 대응 및 라이선스 종료 조치**를 취할 수 있습니다.
 
 © 2026 luminousky
