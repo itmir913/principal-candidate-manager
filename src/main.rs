@@ -174,21 +174,29 @@ async fn get_autostart(db: &sqlx::SqlitePool) -> Result<bool, sqlx::Error> {
 #[cfg(not(feature = "dev"))]
 async fn save_autostart(db: &sqlx::SqlitePool, enabled: bool) {
     let value = if enabled { "1" } else { "0" };
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "INSERT OR REPLACE INTO app_configs (key, value) VALUES (?, ?)",
     )
     .bind(AUTOSTART_KEY)
     .bind(value)
     .execute(db)
-    .await;
+    .await
+    {
+        tracing::warn!("자동 실행 설정 저장 실패 (재시작 시 이전 값으로 복원됨): {}", e);
+    }
 }
 
 #[cfg(all(target_os = "windows", not(feature = "dev")))]
 fn autostart_registry_set(exe_path: &str) {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok(key) = hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
-        let _ = key.set_value(AUTOSTART_REG_NAME, &exe_path);
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+        Ok(key) => {
+            if let Err(e) = key.set_value(AUTOSTART_REG_NAME, &exe_path) {
+                tracing::warn!("자동 실행 레지스트리 등록 실패: {}", e);
+            }
+        }
+        Err(e) => tracing::warn!("자동 실행 레지스트리 키 열기 실패: {}", e),
     }
 }
 
@@ -196,8 +204,16 @@ fn autostart_registry_set(exe_path: &str) {
 fn autostart_registry_remove() {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok(key) = hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
-        let _ = key.delete_value(AUTOSTART_REG_NAME);
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+        Ok(key) => {
+            if let Err(e) = key.delete_value(AUTOSTART_REG_NAME) {
+                // 값이 원래 없던 경우(NotFound)는 정상 — 이미 해제된 상태
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    tracing::warn!("자동 실행 레지스트리 해제 실패: {}", e);
+                }
+            }
+        }
+        Err(e) => tracing::warn!("자동 실행 레지스트리 키 열기 실패: {}", e),
     }
 }
 
