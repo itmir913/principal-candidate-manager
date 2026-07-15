@@ -6,11 +6,13 @@
 |--------|---------------|------|
 | `close_round` | 기초데이터 누락 검증 + rounds 상태 변경 + 점수 계산·results 저장 + 순위 계산 전체 | `BEGIN IMMEDIATE` 단일 커넥션·트랜잭션. 점수 계산 실패 시 ROLLBACK으로 상태 변경까지 취소됨 |
 | `reopen_round` | rounds 상태 변경 + results 추천·순위 초기화 | 두 UPDATE를 원자적으로 처리 |
-| `run_calculate_scores` | results 저장 전체 + 순위 계산 전체 | `BEGIN IMMEDIATE` 래퍼. 읽기·쓰기 모두 동일 커넥션에서 순차 처리 |
+| `calculate_scores` | 라운드 상태 확인 + results 저장 전체 + 순위 계산 전체 | `BEGIN IMMEDIATE`. 상태 확인이 tx 안에 있어 reopen과의 TOCTOU 없음 |
 | `recommend_result` | 상태 조회 + 정원 조회 + recommended 갱신 | `BEGIN IMMEDIATE`. 정원 체크(SELECT COUNT)~UPDATE 사이 TOCTOU 방지 |
 | `unrecommend_result` | 상태 조회 + recommended 갱신 | 일반 트랜잭션. recommended 갱신 원자화 |
 | `finalize_round` | 상태 확인 + 정원 검증 + rounds UPDATE | `BEGIN IMMEDIATE`. 상태 확인~FINALIZED 변경까지 원자적 처리. UPDATE에 `AND status='CLOSED'` 이중 가드 |
-| `teacher_create_application` | base_data 저장 + applications upsert + 점수 계산 + results 저장 | 4단계 원자적 처리 |
+| `teacher_create_application` | 라운드 OPEN 재확인 + base_data 저장 + applications upsert + 점수 계산 + results 저장 | `BEGIN IMMEDIATE`. 시작 시점 쓰기 잠금으로 재확인이 확정적 — close_round와 race 시 깨끗한 400 |
+
+**`BEGIN IMMEDIATE` 구현 방식**: `Pool::begin_with("BEGIN IMMEDIATE")` (sqlx 0.8) 사용. sqlx가 트랜잭션 상태를 추적하므로 오류 경로에서 tx drop 시 자동 ROLLBACK되고, COMMIT/ROLLBACK 실패 시에도 커넥션이 열린 tx 상태로 풀에 반환되지 않는다. 과거의 수동 `sqlx::query("BEGIN IMMEDIATE")` + `COMMIT`/`ROLLBACK` 문자열 실행 패턴은 sqlx가 tx를 인지하지 못해 커넥션 오염 위험이 있어 2026-07-15에 전면 교체했다. **신규 코드에서 수동 BEGIN 문자열 실행 금지.**
 | `teacher_delete_application` | results 삭제 + applications 삭제 | FK 제약 순서(results 먼저 삭제) 보장. 졸업생 담당 분기 포함(is_enrolled=0 검증). |
 | `numeric_table_import` | 전체 삭제 + 행 삽입 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `category_map_import` | 전체 삭제 + 행 삽입 반복 + 0점 검증 | 오류 시 tx drop으로 자동 롤백 |
