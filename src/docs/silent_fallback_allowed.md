@@ -116,9 +116,8 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 백업 응답 생성 후 임시 파일 삭제 실패는 디스크에 잔존 파일만 남길 뿐 다운로드 결과·점수·추천에 영향 없음.  
 **조건**: `download_db_backup`의 임시 파일 정리 경로에서만.
 
-### 27. `src/main.rs` — `create_dir_all(...).ok()` (`data_dir`)
-데이터 디렉토리 생성 실패 시 직후 DB 오픈(`init_pool`)이 명시적 오류로 실패해 dev는 기동 중단, release는 Degraded 모드 진입. 지연된 명시적 오류.  
-**조건**: `data_dir` 함수 내부에서만. init_pool의 오류 처리(Degraded 분기)가 제거되면 위반.
+### 27. (해소됨) `src/main.rs` — `create_dir_all(...).ok()` (`data_dir`)
+2026-07-15 수정으로 `data_dir`가 `anyhow::Result`를 반환하며 경로 취득·디렉토리 생성 실패를 즉시 전파한다 (dev: 기동 중단, release: 오류 대화상자 후 종료). 더 이상 fallback 아님 — 번호 유지를 위해 항목만 남긴다.
 
 ### 28. `src/main.rs` — `.unwrap_or(true)` (`get_autostart` 행 없음 기본값)
 `app_configs`에 autostart 행이 없는 것은 오류가 아니라 "최초 실행 미설정" 상태 — 기본값 활성화가 올바른 값. DB 조회 **오류**는 별도로 `Err`로 전파되어 호출자가 레지스트리를 변경하지 않는다 (#1 admin_status와 동일 패턴).  

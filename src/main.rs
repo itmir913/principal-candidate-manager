@@ -96,26 +96,26 @@ impl Default for Config {
     }
 }
 
-/// exe 위치 기준으로 파일 경로를 반환한다. 경로 취득 실패 시 파일명만 반환.
-fn exe_relative(filename: &str) -> std::path::PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(filename)))
-        .unwrap_or_else(|| std::path::PathBuf::from(filename))
+/// exe 옆 pcm/ 서브폴더를 데이터 디렉토리로 준비한다 (없으면 생성).
+/// 경로 취득·생성 실패 시 Err — CWD 상대 경로로 폴백하면 자동시작 시
+/// 데이터가 엉뚱한 위치(System32 등)에 조용히 생성되므로 즉시 실패한다.
+fn data_dir() -> anyhow::Result<std::path::PathBuf> {
+    let exe = std::env::current_exe()?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| {
+            anyhow::anyhow!("실행 파일 경로에 상위 디렉토리가 없습니다: {}", exe.display())
+        })?
+        .join("pcm");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
 }
 
-/// exe 옆 pcm/ 서브폴더를 데이터 디렉토리로 사용한다. 없으면 자동 생성.
-fn data_dir() -> std::path::PathBuf {
-    let dir = exe_relative("pcm");
-    std::fs::create_dir_all(&dir).ok();
-    dir
-}
-
-/// exe 위치 기준으로 config.json을 읽는다.
+/// 데이터 디렉토리의 config.json을 읽는다.
 /// 파일이 없으면 기본값으로 생성한다.
 /// 파싱에 실패하면 경고 로그 후 기본값을 반환한다.
-fn load_config() -> Config {
-    let config_path = data_dir().join(CONFIG_FILENAME);
+fn load_config(data_dir: &std::path::Path) -> Config {
+    let config_path = data_dir.join(CONFIG_FILENAME);
 
     match std::fs::read_to_string(&config_path) {
         Ok(contents) => match serde_json::from_str::<Config>(&contents) {
@@ -216,8 +216,9 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = load_config();
-    let db_path = data_dir().join("data.db");
+    let data_dir = data_dir()?;
+    let config = load_config(&data_dir);
+    let db_path = data_dir.join("data.db");
 
     // 경로가 UTF-8이 아니면 CWD 상대 "data.db"로 폴백하지 않고 즉시 중단 —
     // 조용히 다른 위치에 새 DB가 생기면 데이터가 두 파일로 갈라진다.
@@ -258,9 +259,20 @@ fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = load_config();
+    let data_dir = match data_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!("데이터 디렉토리 준비 실패: {}", e);
+            show_error_dialog(
+                "학교장추천 관리 시스템 — 시작 실패",
+                &format!("데이터 디렉토리를 준비할 수 없습니다:\n{}", e),
+            );
+            std::process::exit(1);
+        }
+    };
+    let config = load_config(&data_dir);
     let port = config.port;
-    let db_path = data_dir().join("data.db");
+    let db_path = data_dir.join("data.db");
 
     // tokio 런타임을 수동 생성 (메인 스레드를 tokio에 넘기지 않기 위해)
     let rt = tokio::runtime::Builder::new_multi_thread()
