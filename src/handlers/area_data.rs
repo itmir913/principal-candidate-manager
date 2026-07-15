@@ -1214,7 +1214,7 @@ pub async fn base_data_list(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         format!("base_data 값 '{}' 을 정수로 파싱할 수 없습니다 (area_id={})", raw, id),
                     ))?;
-                    format!("{}", v as f64 / 100_000.0)
+                    fmt_score(v)
                 }
                 CalcType::Category => raw,
             };
