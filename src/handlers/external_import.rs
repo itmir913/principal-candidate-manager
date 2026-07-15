@@ -245,6 +245,8 @@ async fn do_import(
             }
         };
 
+        // tx 커넥션으로 조회 — pool 조회는 tx 보유 중 별도 커넥션을 점유하고
+        // 행마다 다른 스냅샷을 볼 수 있다
         let student: Option<(i64, String)> = sqlx::query_as(
             "SELECT id, name FROM students
              WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
@@ -252,7 +254,7 @@ async fn do_import(
         .bind(grade)
         .bind(class_no)
         .bind(seq_no)
-        .fetch_optional(db)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

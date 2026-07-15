@@ -875,11 +875,13 @@ pub async fn base_data_import(
                 Ok(v) => v,
                 Err(_) => { errors.push(format!("{}행: 번호 '{}' 숫자 변환 실패", row_num, seq_s)); continue; }
             };
+            // tx 커넥션으로 조회 — pool 조회는 tx 보유 중 별도 커넥션을 점유하고
+            // 행마다 다른 스냅샷을 볼 수 있다
             let sid: Option<i64> = sqlx::query_scalar(
                 "SELECT id FROM students WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
             )
             .bind(grade).bind(class_no).bind(seq_no)
-            .fetch_optional(&state.db).await
+            .fetch_optional(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             match sid {
                 Some(v) => {
@@ -906,7 +908,7 @@ pub async fn base_data_import(
                 "SELECT id FROM students WHERE student_code = ?",
             )
             .bind(student_code)
-            .fetch_optional(&state.db).await
+            .fetch_optional(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             match sid {
                 Some(v) => {
