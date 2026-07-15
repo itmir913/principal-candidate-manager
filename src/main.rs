@@ -219,7 +219,12 @@ async fn main() -> anyhow::Result<()> {
     let config = load_config();
     let db_path = data_dir().join("data.db");
 
-    let db = db::init_pool(db_path.to_str().unwrap_or("data.db")).await?;
+    // 경로가 UTF-8이 아니면 CWD 상대 "data.db"로 폴백하지 않고 즉시 중단 —
+    // 조용히 다른 위치에 새 DB가 생기면 데이터가 두 파일로 갈라진다.
+    let db_path_str = db_path.to_str().ok_or_else(|| {
+        anyhow::anyhow!("데이터 디렉토리 경로가 UTF-8이 아닙니다: {}", db_path.display())
+    })?;
+    let db = db::init_pool(db_path_str).await?;
     tracing::info!("database ready");
 
     let mut secret_bytes = [0u8; 32];
@@ -270,7 +275,23 @@ fn main() {
         Degraded(String), // 브라우저로 전달할 에러 JSON
     }
 
-    let outcome = match rt.block_on(db::init_pool(db_path.to_str().unwrap_or("data.db"))) {
+    // 경로가 UTF-8이 아니면 CWD 상대 "data.db"로 폴백하지 않고 Degraded 모드로 —
+    // 자동시작 시 CWD는 System32라서 조용히 엉뚱한 위치에 새 DB가 생긴다.
+    let outcome = match db_path.to_str() {
+        None => {
+            tracing::error!("데이터 디렉토리 경로가 UTF-8이 아닙니다: {}", db_path.display());
+            DbOutcome::Degraded(
+                serde_json::json!({
+                    "code": "SERVER_ERROR",
+                    "message": format!(
+                        "데이터 디렉토리 경로를 처리할 수 없습니다 (UTF-8 아님): {}",
+                        db_path.display()
+                    ),
+                })
+                .to_string(),
+            )
+        }
+        Some(db_path_str) => match rt.block_on(db::init_pool(db_path_str)) {
         Ok(pool) => {
             tracing::info!("database ready");
             DbOutcome::Normal(pool)
@@ -294,6 +315,7 @@ fn main() {
             };
             DbOutcome::Degraded(error_json)
         }
+        },
     };
 
     let rt_handle = rt.handle().clone();
