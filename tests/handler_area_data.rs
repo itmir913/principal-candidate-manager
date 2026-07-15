@@ -296,6 +296,85 @@ async fn manual_base_data_import_negative_value_allowed() {
     assert_eq!(value, "-500000", "-5.0 × 100000 = -500000");
 }
 
+// ── 비유한·초과 크기 값 거부 (Fail-Fast) ─────────────────────────
+// Rust f64 파서는 "nan"/"inf"를 허용하고 `as i64` 캐스트는 NaN→0,
+// ±∞→i64::MAX로 포화시킨다. 과거에는 이 값들이 오류 없이 저장되어
+// NUMERIC UPPER 매칭에서 최상위 점수를 조용히 획득할 수 있었다.
+
+#[tokio::test]
+async fn base_data_import_nan_value_rejected() {
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+
+    let csv = "학생코드,이름,값\nS001,테스트,nan\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await.unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "'nan'이 0으로 저장되면 안 됨");
+    assert_eq!(result.rows, 0);
+    assert!(!result.errors.is_empty());
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn base_data_import_infinity_value_rejected() {
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+
+    let csv = "학생코드,이름,값\nS001,테스트,inf\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(common::make_state(pool.clone())), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await.unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "'inf'가 i64::MAX로 포화되면 안 됨");
+    assert_eq!(result.rows, 0);
+}
+
+#[tokio::test]
+async fn numeric_table_import_huge_threshold_rejected() {
+    // 1e300은 ×100000 시 i64::MAX로 포화 — 기준값 오염 방지
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+
+    let csv = "기준값,점수\n1e300,50.0\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(common::make_state(pool.clone())), Path(aid), build_multipart(csv).await)
+            .await.unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors.iter().any(|e| e.contains("초과") || e.contains("유한")));
+}
+
+#[tokio::test]
+async fn base_data_import_magnitude_boundary() {
+    // 경계값: ±10억까지 허용, 초과 시 거부 (f64 정밀도 보장 한계)
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    insert_student(&pool, "S002").await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nS001,테스트,1000000000\n";
+    let (status, _) =
+        base_data_import(State(state.clone()), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await.unwrap();
+    assert_eq!(status, StatusCode::OK, "10억(경계값)은 허용");
+
+    let csv = "학생코드,이름,값\nS002,테스트,1000000001\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await.unwrap();
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "10억 초과는 거부");
+    assert!(result.errors.iter().any(|e| e.contains("초과")));
+}
+
 #[tokio::test]
 async fn numeric_table_import_negative_threshold_allowed() {
     // numeric_table 음수 기준값 → 정상 저장

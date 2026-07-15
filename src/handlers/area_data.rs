@@ -73,6 +73,16 @@ pub(crate) fn parse_display_value(s: &str) -> Result<i64, String> {
     let f: f64 = trimmed
         .parse()
         .map_err(|_| format!("'{}' 숫자 변환 실패", trimmed))?;
+    // Rust f64 파서는 "nan"/"inf" 문자열을 허용하고, `as i64` 캐스트는
+    // NaN→0, ±∞→i64::MIN/MAX로 포화시켜 잘못된 값이 조용히 저장된다 → 즉시 거부
+    if !f.is_finite() {
+        return Err(format!("'{}' 유한한 숫자가 아닙니다", trimmed));
+    }
+    // |값| > 10억이면 ×100000 결과가 f64 정밀도 한계(ULP > 0.5)에 걸려
+    // round()가 정확한 정수를 보장하지 못한다. 도메인상 초과 값은 입력 오류.
+    if f.abs() > 1_000_000_000.0 {
+        return Err(format!("'{}' 허용 범위(±10억)를 초과합니다", trimmed));
+    }
     // 소수점 자릿수 확인 (부호 제거 후 검사)
     let abs_str = trimmed.trim_start_matches('-');
     if let Some(dot_pos) = abs_str.find('.') {
