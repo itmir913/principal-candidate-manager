@@ -208,6 +208,8 @@ pub async fn import_students(
     let mut inserted = 0usize;
     let mut updated = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    // 파일 내 동일 학생코드 중복 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -221,6 +223,13 @@ pub async fn import_students(
                 continue;
             }
         };
+        if !rec.student_code.is_empty() && !seen.insert(rec.student_code.clone()) {
+            errors.push(format!(
+                "{}행: 학생코드 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                row_num, rec.student_code
+            ));
+            continue;
+        }
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", row_num, e));
         }
@@ -433,8 +442,19 @@ pub async fn import_enrolled(
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 파일 내 동일 (학년, 반, 번호) 중복 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
+    let mut seen: std::collections::HashSet<(i64, i64, i64)> = std::collections::HashSet::new();
     for (idx, cols) in file_rows.iter().enumerate() {
         let rec = row_to_enrolled_record(cols, &col);
+        if let (Some(g), Some(c), Some(s)) = (rec.grade, rec.class_no, rec.seq_no) {
+            if !seen.insert((g, c, s)) {
+                errors.push(format!(
+                    "{}행: {}학년 {}반 {}번 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                    idx + 2, g, c, s
+                ));
+                continue;
+            }
+        }
         if let Err(e) = upsert_enrolled_by_position(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", idx + 2, e));
         }
@@ -493,8 +513,17 @@ pub async fn import_graduated(
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 파일 내 동일 학생코드 중복 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (idx, cols) in file_rows.iter().enumerate() {
         let rec = row_to_graduated_record(cols, &col);
+        if !rec.student_code.is_empty() && !seen.insert(rec.student_code.clone()) {
+            errors.push(format!(
+                "{}행: 학생코드 '{}' 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                idx + 2, rec.student_code
+            ));
+            continue;
+        }
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", idx + 2, e));
         }

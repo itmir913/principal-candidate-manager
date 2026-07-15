@@ -94,6 +94,8 @@ pub async fn import_classes(
     let mut inserted = 0usize;
     let mut updated = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    // 파일 내 동일 (학년, 반) 중복 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
+    let mut seen: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::new();
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -109,6 +111,13 @@ pub async fn import_classes(
             Some(c) if c > 0 => c,
             _ => { errors.push(format!("{}행: 반 값이 올바르지 않습니다", line)); continue; }
         };
+        if !seen.insert((grade, class_no)) {
+            errors.push(format!(
+                "{}행: {}학년 {}반 중복 — 파일에 같은 반이 두 번 이상 존재합니다",
+                line, grade, class_no
+            ));
+            continue;
+        }
         let teacher_name_str = excel::get_col(row, &col, "담임명").to_string();
         if teacher_name_str.is_empty() {
             errors.push(format!("{}행: 담임명 누락", line));
@@ -159,10 +168,15 @@ pub async fn import_classes(
             }
             updated += 1;
         } else {
+            // 신규 학급은 password_hash NOT NULL — 누락 시 SQL 제약 500이 아니라 행 오류로 처리
+            let Some(ref hash) = password_hash else {
+                errors.push(format!("{}행: 신규 학급은 비밀번호가 필요합니다", line));
+                continue;
+            };
             sqlx::query(
                 "INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (?, ?, ?, ?)",
             )
-            .bind(grade).bind(class_no).bind(teacher_name).bind(password_hash)
+            .bind(grade).bind(class_no).bind(teacher_name).bind(hash)
             .execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             inserted += 1;
@@ -249,6 +263,10 @@ pub async fn upsert_class(
 ) -> Result<StatusCode, ApiError> {
     if grade == 0 && class_no == 0 {
         return Err((StatusCode::BAD_REQUEST, "학년=0, 반=0은 졸업생 전용 예약값으로 사용할 수 없습니다".into()));
+    }
+    // import 경로(g > 0 검사)와 동일 기준 — 0/음수 학년·반 생성 차단
+    if grade <= 0 || class_no <= 0 {
+        return Err((StatusCode::BAD_REQUEST, "학년과 반은 1 이상이어야 합니다".into()));
     }
 
     // 비밀번호 최소 길이 검증

@@ -127,3 +127,28 @@ async fn delete_class_with_students_blocked() {
     let res = delete_class(State(common::make_state(pool)), Path((1i64, 1i64))).await;
     assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
 }
+
+// ── 세션 3 감사 후속: 학년/반 범위 검증 ──
+
+#[tokio::test]
+async fn upsert_class_grade_zero_with_nonzero_class_rejected() {
+    // (0,0)만이 아니라 grade=0/class_no≠0, 음수 조합도 차단 (import 경로와 동일 기준)
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+    for (g, c) in [(0i64, 5i64), (3, 0), (-1, 1), (1, -2)] {
+        let err = upsert_class(
+            State(state.clone()),
+            Path((g, c)),
+            Json(UpsertClassBody { teacher_name: None, password: Some("pass1234".into()) }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST, "grade={g}, class_no={c}");
+    }
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}

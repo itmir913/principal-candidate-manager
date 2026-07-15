@@ -553,3 +553,142 @@ async fn import_classes_xls_format_returns_bad_request() {
     let res = import_classes(State(state), mp).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
+
+// ── 세션 3 감사 후속: 파일 내 중복 행 = error / 신규 학급 비밀번호 필수 ──
+
+#[tokio::test]
+async fn import_students_duplicate_code_in_file_rejects_all() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    // 같은 학생코드가 두 행 — 마지막 행이 조용히 이기면 안 됨
+    let csv = "학생코드,이름,재학여부,학년,반,번호,졸업연도\n\
+               S001,홍길동,재학,1,1,1,\n\
+               S001,홍길순,졸업,,,,2024\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("중복"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback — 1행도 저장되면 안 됨");
+}
+
+#[tokio::test]
+async fn import_enrolled_duplicate_position_in_file_rejects_all() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,번호,이름\n1,1,1,홍길동\n1,1,1,이순신\n";
+    let (status, axum::Json(result)) =
+        import_enrolled(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("중복"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn import_graduated_duplicate_code_in_file_rejects_all() {
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,졸업연도\nG001,김철수,2024\nG001,김영희,2023\n";
+    let (status, axum::Json(result)) =
+        import_graduated(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("중복"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn import_classes_duplicate_class_in_file_rejects_all() {
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+
+    // 같은 (학년, 반)이 두 행 — 두 번째 비밀번호가 조용히 채택되면 안 됨
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n1,1,이순신,pass5678\n";
+    let (status, axum::Json(result)) =
+        import_classes(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result["errors"][0].as_str().unwrap().contains("중복"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn import_classes_new_class_without_password_rejects_all() {
+    // 신규 학급 + 비밀번호 누락 → NOT NULL 500이 아니라 행 오류 422
+    let pool = common::create_test_pool().await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,담임명,비밀번호\n1,1,홍길동,\n";
+    let (status, axum::Json(result)) =
+        import_classes(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result["errors"][0].as_str().unwrap().contains("비밀번호"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn import_classes_existing_class_without_password_updates_name_only() {
+    // 기존 학급은 비밀번호 없이 담임명만 갱신 가능 (기존 동작 보존)
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,담임명,비밀번호\n1,1,새담임,\n";
+    let (status, axum::Json(result)) =
+        import_classes(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result["updated"], 1);
+
+    let name: String = sqlx::query_scalar(
+        "SELECT teacher_name FROM classes WHERE grade = 1 AND class_no = 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(name, "새담임");
+}
