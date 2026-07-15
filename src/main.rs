@@ -157,18 +157,18 @@ const AUTOSTART_REG_NAME: &str = "PCM";
 #[cfg(all(target_os = "windows", not(feature = "dev")))]
 const AUTOSTART_REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
+/// DB에서 자동 실행 설정을 읽는다. 행 없음 = 최초 실행 → 기본값 true(활성화).
+/// DB 오류는 Err로 전파 — 호출자는 이 경우 레지스트리를 변경하지 않는다.
 #[cfg(not(feature = "dev"))]
-async fn get_autostart(db: &sqlx::SqlitePool) -> bool {
-    sqlx::query_scalar::<_, String>(
+async fn get_autostart(db: &sqlx::SqlitePool) -> Result<bool, sqlx::Error> {
+    Ok(sqlx::query_scalar::<_, String>(
         "SELECT value FROM app_configs WHERE key = ?",
     )
     .bind(AUTOSTART_KEY)
     .fetch_optional(db)
-    .await
-    .ok()
-    .flatten()
+    .await?
     .map(|v| v == "1")
-    .unwrap_or(true) // 기본값: 활성화
+    .unwrap_or(true)) // 행 없음(미설정)만 기본값: 활성화
 }
 
 #[cfg(not(feature = "dev"))]
@@ -409,12 +409,21 @@ fn main() {
     // 자동 실행 토글은 DB가 있는 정상 모드에서만 표시
     let autostart_state: Option<(CheckMenuItem, sqlx::SqlitePool)> =
         if let Some(ref pool) = opt_db {
-            let autostart_on = rt_handle.block_on(get_autostart(pool));
-            if autostart_on {
-                autostart_registry_set(&exe_path);
-            } else {
-                autostart_registry_remove();
-            }
+            let autostart_on = match rt_handle.block_on(get_autostart(pool)) {
+                Ok(on) => {
+                    if on {
+                        autostart_registry_set(&exe_path);
+                    } else {
+                        autostart_registry_remove();
+                    }
+                    on
+                }
+                Err(e) => {
+                    // 설정을 모르는 상태에서 레지스트리를 건드리지 않는다
+                    tracing::warn!("자동 실행 설정 조회 실패 — 레지스트리 미변경: {}", e);
+                    true
+                }
+            };
             let item = CheckMenuItem::new("시작 시 자동 실행", true, autostart_on, None);
             menu.append(&item).expect("메뉴 항목 추가 실패");
             menu.append(&PredefinedMenuItem::separator()).expect("메뉴 항목 추가 실패");
