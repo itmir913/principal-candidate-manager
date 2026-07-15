@@ -405,41 +405,26 @@ pub async fn run_calculate_scores_on_conn(
     Ok(count)
 }
 
-/// CLOSED 라운드 점수 재계산 전용 래퍼 (관리자 엔드포인트).
+/// CLOSED 라운드 점수 재계산 (관리자 엔드포인트).
 /// BEGIN IMMEDIATE 로 계산 구간 동안 다른 커넥션의 쓰기(base_data 수정 등)를 차단한다.
-pub async fn run_calculate_scores(db: &sqlx::SqlitePool, round_id: i64) -> Result<usize, String> {
-    let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
-    let now = chrono::Utc::now().to_rfc3339();
-
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    match run_calculate_scores_on_conn(&mut *conn, round_id, &now).await {
-        Ok(count) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(count)
-        }
-        Err(e) => {
-            sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
-            Err(e)
-        }
-    }
-}
-
+/// 상태 확인도 같은 tx 안에서 수행 — tx 밖 확인은 reopen_round와의 race로
+/// OPEN 라운드에 점수·순위가 기록될 수 있다.
 pub async fn calculate_scores(
     State(state): State<AppState>,
     Path(round_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    // sqlx 관리 트랜잭션: 오류 경로에서 tx drop 시 자동 ROLLBACK — 커넥션 오염 없음
+    let mut tx = state
+        .db
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let round_status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(round_id)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -449,9 +434,14 @@ pub async fn calculate_scores(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
-    let count = run_calculate_scores(&state.db, round_id)
+    let now = chrono::Utc::now().to_rfc3339();
+    let count = run_calculate_scores_on_conn(&mut *tx, round_id, &now)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "calculated": count })))
 }
