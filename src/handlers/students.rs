@@ -214,7 +214,13 @@ pub async fn import_students(
 
     for (idx, cols) in file_rows.iter().enumerate() {
         let row_num = idx + 2;
-        let rec = row_to_record(cols, &col);
+        let rec = match row_to_record(cols, &col) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{}행: {}", row_num, e));
+                continue;
+            }
+        };
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", row_num, e));
         }
@@ -750,21 +756,34 @@ fn build_graduated_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 
 // ── 파싱 ─────────────────────────────────────────────────────────
 
+/// 재학여부 셀 → is_enrolled. 인식 불가 값은 Err — 재학/졸업 분류는
+/// 재학생 우선 순위·기초데이터 범위를 좌우하므로 silent default 금지.
+fn parse_is_enrolled(s: &str) -> Result<bool, String> {
+    match s {
+        "1" | "재학" => Ok(true),
+        "0" | "졸업" => Ok(false),
+        _ => Err(format!(
+            "재학여부 '{}' 인식 불가 — '1'/'재학' 또는 '0'/'졸업'만 허용됩니다",
+            s
+        )),
+    }
+}
+
 fn row_to_record(
     cols: &[String],
     col: &std::collections::HashMap<String, usize>,
-) -> StudentRecord {
+) -> Result<StudentRecord, String> {
     let get = |name| excel::get_col(cols, col, name);
     let parse_i64 = |name| get(name).parse::<i64>().ok();
-    StudentRecord {
+    Ok(StudentRecord {
         student_code: get("학생코드").to_string(),
         name:         get("이름").to_string(),
-        is_enrolled:  parse_i64("재학여부").map_or(true, |v| v != 0),
+        is_enrolled:  parse_is_enrolled(get("재학여부"))?,
         grade:        parse_i64("학년"),
         class_no:     parse_i64("반"),
         seq_no:       parse_i64("번호"),
         grad_year:    parse_i64("졸업연도"),
-    }
+    })
 }
 
 fn row_to_enrolled_record(

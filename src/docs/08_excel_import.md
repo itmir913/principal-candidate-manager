@@ -40,7 +40,7 @@
 #### 2a. 전체 학생 import — `/api/students/import`
 - **필수 헤더**: `학생코드`, `이름`, `학년`, `반`, `번호`, `재학여부`
 - **동작**: upsert (student_code 기준 `ON CONFLICT DO UPDATE`) — DELETE 없음
-- **재학여부**: `1` 또는 `재학` → is_enrolled=1, 그 외 → 0
+- **재학여부**: `1` 또는 `재학` → is_enrolled=1, `0` 또는 `졸업` → is_enrolled=0, 그 외(빈 값 포함) → 해당 행 오류 (silent default 금지 — 재학/졸업 분류는 우선순위·기초데이터 범위에 영향)
 
 #### 2b. 재학생 import — `/api/students/enrolled/import`
 - **필수 헤더**: `학년`, `반`, `번호`, `이름`

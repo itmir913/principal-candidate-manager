@@ -82,6 +82,121 @@ async fn import_students_error_rejects_all() {
     assert_eq!(count, 0, "rollback — S001도 저장되면 안 됨");
 }
 
+/// 재학여부 인식 불가 값("휴학" 등)은 silent default(재학생 처리) 없이 전체 거부되어야 한다.
+#[tokio::test]
+async fn import_students_invalid_enrolled_flag_rejects_all() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호\n\
+               S001,홍길동,1,1,1,1\n\
+               S002,이순신,휴학,1,1,2\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.inserted, 0);
+    assert!(result.errors.iter().any(|e| e.contains("재학여부")));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback — S001도 저장되면 안 됨");
+}
+
+/// 재학여부 빈 값도 오류 — 과거에는 무조건 재학생으로 처리되던 silent fallback 경로.
+#[tokio::test]
+async fn import_students_empty_enrolled_flag_rejects_all() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호\n\
+               S001,홍길동,,1,1,1\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.inserted, 0);
+    assert!(result.errors.iter().any(|e| e.contains("재학여부")));
+}
+
+/// '재학'/'졸업' 한글 키워드가 명세대로 매핑되는지 검증.
+/// 과거 버그: '졸업'이 숫자 파싱 실패 → 무조건 재학생(true)으로 뒤집혔다.
+#[tokio::test]
+async fn import_students_korean_keywords_map_correctly() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호,졸업연도\n\
+               S001,홍길동,재학,1,1,1,\n\
+               S002,이순신,졸업,,,,2024\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+    assert_eq!(result.inserted, 2);
+
+    let enrolled: i64 = sqlx::query_scalar(
+        "SELECT is_enrolled FROM students WHERE student_code = 'S001'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(enrolled, 1, "'재학' → is_enrolled=1");
+
+    let graduated: i64 = sqlx::query_scalar(
+        "SELECT is_enrolled FROM students WHERE student_code = 'S002'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(graduated, 0, "'졸업' → is_enrolled=0");
+}
+
+/// 기존 졸업생이 '졸업' 행 재업로드로 재학생으로 뒤집히지 않아야 한다 (grad_year 보존).
+#[tokio::test]
+async fn import_students_reupload_keeps_graduate_classification() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    sqlx::query(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES ('G001', '김졸업', 0, 2023)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // 졸업생 행에 학년/반/번호가 채워져 있어도 '졸업' 표기가 우선한다
+    let csv = "학생코드,이름,재학여부,학년,반,번호,졸업연도\n\
+               G001,김졸업,졸업,3,1,5,2023\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+
+    let (is_enrolled, grad_year): (i64, Option<i64>) = sqlx::query_as(
+        "SELECT is_enrolled, grad_year FROM students WHERE student_code = 'G001'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(is_enrolled, 0, "졸업생 분류 유지");
+    assert_eq!(grad_year, Some(2023), "grad_year 소실 금지");
+}
+
 #[tokio::test]
 async fn import_students_success_commits() {
     let pool = common::create_test_pool().await;
