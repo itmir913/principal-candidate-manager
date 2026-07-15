@@ -108,9 +108,8 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 `db_path.parent()`가 None인 경우(루트 경로) 현재 디렉토리 fallback. 백업 다운로드 기능에만 영향. 실패 시 사용자에게 파일 다운로드 오류 표시됨. 점수·추천과 무관.  
 **조건**: `download_db_backup`의 임시 파일 경로 생성에서만.
 
-### 25. `src/handlers/rounds.rs` / `src/handlers/scoring.rs` — `ROLLBACK ... .ok()`
-수동 트랜잭션 오류 경로에서 `sqlx::query("ROLLBACK").execute(...).await.ok()`. ROLLBACK 명령 자체가 실패해도 직후 커넥션이 drop되면서 SQLite가 미커밋 트랜잭션을 자동 롤백하므로 데이터 무결성에 영향 없음. 원래 오류가 이미 Err로 전파되는 중.  
-**조건**: `BEGIN IMMEDIATE` 수동 트랜잭션의 오류 반환 직전 ROLLBACK에서만.
+### 25. (해소됨) `src/handlers/rounds.rs` / `src/handlers/scoring.rs` — `ROLLBACK ... .ok()`
+2026-07-15 수정으로 수동 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` 패턴을 sqlx 관리 트랜잭션(`Pool::begin_with("BEGIN IMMEDIATE")`)으로 전환. 오류 경로는 tx drop 시 sqlx가 롤백을 관리하며, 실패한 커넥션이 열린 tx를 문 채 풀로 반환되는 경로가 사라짐. 더 이상 `.ok()` 호출 없음 — 번호 유지를 위해 항목만 남긴다.
 
 ### 26. `src/handlers/system.rs` — `remove_file(...).ok()` (백업 임시 파일 정리)
 백업 응답 생성 후 임시 파일 삭제 실패는 디스크에 잔존 파일만 남길 뿐 다운로드 결과·점수·추천에 영향 없음.  
