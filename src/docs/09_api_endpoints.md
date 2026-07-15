@@ -244,8 +244,8 @@ Body:
 5. teacher_editable 아닌 전형요소에 값 입력 시 403
 6. teacher_editable인 전형요소 전부 값 있어야 함 (누락 시 422)
 7. 값 인코딩 (×100000, Category: 그대로)
-8. **트랜잭션 시작**
-9. tx 안에서 라운드 OPEN 재확인 (TOCTOU 방지)
+8. **트랜잭션 시작 (`BEGIN IMMEDIATE` — 시작 시점 쓰기 잠금)**
+9. tx 안에서 라운드 OPEN 재확인 (TOCTOU 방지 — IMMEDIATE 잠금으로 재확인이 확정적)
 10. base_data 저장 (multi_value=1: DELETE+INSERT, single: INSERT OR REPLACE)
 11. applications UPSERT (department_name 업데이트 허용)
 12. 전형요소 전체 점수 계산 (calc_area_score)

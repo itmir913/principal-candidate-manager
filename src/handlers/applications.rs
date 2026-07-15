@@ -534,9 +534,11 @@ pub async fn teacher_create_application(
 
     // 5. 트랜잭션: 기초데이터 저장 → 지원 upsert → 점수 계산 → results 저장
     //    base_data를 먼저 저장해야 calc_area_score가 새로 입력한 값을 읽을 수 있다.
+    //    BEGIN IMMEDIATE: 시작 시점에 쓰기 잠금을 획득해 아래 상태 재확인이 확정적이 된다.
+    //    (DEFERRED면 재확인 후 close_round가 커밋해 첫 쓰기가 BUSY_SNAPSHOT 500으로 실패)
     let mut tx = state
         .db
-        .begin()
+        .begin_with("BEGIN IMMEDIATE")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
