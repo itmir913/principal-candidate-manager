@@ -16,12 +16,35 @@ fn is_xlsx_false() {
 #[test]
 fn decode_bytes_strips_utf8_bom() {
     let bytes: Vec<u8> = b"\xef\xbb\xbfhello".to_vec();
-    assert_eq!(decode_bytes(&bytes), "hello");
+    assert_eq!(decode_bytes(&bytes).unwrap(), "hello");
 }
 
 #[test]
 fn decode_bytes_plain_utf8() {
-    assert_eq!(decode_bytes(b"hello world"), "hello world");
+    assert_eq!(decode_bytes(b"hello world").unwrap(), "hello world");
+}
+
+#[test]
+fn decode_bytes_euc_kr() {
+    // "한글" in EUC-KR: C7 D1 B1 DB
+    let bytes: Vec<u8> = vec![0xC7, 0xD1, 0xB1, 0xDB];
+    assert_eq!(decode_bytes(&bytes).unwrap(), "한글");
+}
+
+#[test]
+fn decode_bytes_unknown_encoding_rejected() {
+    // UTF-8도 EUC-KR도 아닌 바이트열 → 과거에는 �로 조용히 손상된 채 통과
+    let bytes: Vec<u8> = vec![0xFF, 0xFF, 0xFF];
+    let err = decode_bytes(&bytes);
+    assert!(err.is_err(), "인식 불가 인코딩은 거부되어야 함");
+    assert!(err.unwrap_err().to_string().contains("인코딩"));
+}
+
+#[test]
+fn decode_bytes_bom_with_invalid_utf8_rejected() {
+    // BOM 뒤에 깨진 UTF-8 → 과거에는 lossy 변환으로 조용히 통과
+    let bytes: Vec<u8> = vec![0xEF, 0xBB, 0xBF, 0xFF, 0xFE];
+    assert!(decode_bytes(&bytes).is_err());
 }
 
 #[test]

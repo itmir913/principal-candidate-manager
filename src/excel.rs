@@ -184,7 +184,7 @@ fn parse_xlsx_all_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
 
 /// CSV 전체 행 (헤더 포함)
 fn parse_csv_all_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
-    let content = decode_bytes(bytes);
+    let content = decode_bytes(bytes)?;
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_reader(content.as_bytes());
@@ -197,15 +197,25 @@ fn parse_csv_all_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
 }
 
 /// 인코딩 감지: UTF-8 BOM → UTF-8 → EUC-KR(CP949)
-pub fn decode_bytes(bytes: &[u8]) -> String {
+/// 어느 인코딩으로도 깨끗하게 해석되지 않으면 Err — lossy 변환으로
+/// 학생 이름 등이 �로 조용히 손상된 채 저장되는 것을 막는다.
+pub fn decode_bytes(bytes: &[u8]) -> anyhow::Result<String> {
     if bytes.starts_with(b"\xef\xbb\xbf") {
-        return String::from_utf8_lossy(&bytes[3..]).into_owned();
+        return match std::str::from_utf8(&bytes[3..]) {
+            Ok(s) => Ok(s.to_string()),
+            Err(_) => anyhow::bail!("UTF-8 BOM이 있으나 내용이 올바른 UTF-8이 아닙니다"),
+        };
     }
     if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
+        return Ok(s.to_string());
     }
-    let (cow, _, _) = encoding_rs::EUC_KR.decode(bytes);
-    cow.into_owned()
+    let (cow, _, had_errors) = encoding_rs::EUC_KR.decode(bytes);
+    if had_errors {
+        anyhow::bail!(
+            "파일 인코딩을 인식할 수 없습니다 (UTF-8 또는 EUC-KR CSV만 지원). Excel에서 'CSV UTF-8'로 다시 저장해 주세요"
+        );
+    }
+    Ok(cow.into_owned())
 }
 
 fn cell_to_str(cell: &DataType) -> String {
