@@ -406,6 +406,26 @@ async fn abandon_application_sets_abandoned_flag() {
     assert_eq!(abandoned, 1);
 }
 
+#[tokio::test]
+async fn abandon_nonexistent_application_returns_not_found() {
+    // 존재하지 않는 지원에 대한 포기는 silent no-op(204)이 아니라 404여야 한다
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup(&pool).await;
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 지원 행을 삽입하지 않음
+    let res = abandon_application(State(common::make_state(pool.clone())), Path((sid, tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM applications WHERE abandoned = 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
 // ── teacher_abandon_application ───────────────────────────────────
 
 #[tokio::test]
@@ -471,6 +491,26 @@ async fn teacher_abandon_wrong_class_returns_forbidden() {
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn teacher_abandon_nonexistent_application_returns_not_found() {
+    // 담당 학생이지만 지원 행이 없으면 silent no-op(204)이 아니라 404여야 한다
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup(&pool).await;
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 지원 행을 삽입하지 않음
+    let res = teacher_abandon_application(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+        Path((sid, tid, rid)),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

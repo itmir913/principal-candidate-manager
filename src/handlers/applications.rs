@@ -173,7 +173,7 @@ pub async fn abandon_application(
         return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
     }
 
-    sqlx::query(
+    let affected = sqlx::query(
         "UPDATE applications SET abandoned = 1
          WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
@@ -182,7 +182,13 @@ pub async fn abandon_application(
     .bind(rid)
     .execute(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
+    // silent no-op 방지: 존재하지 않는 지원에 204를 반환하면 포기 처리된 것으로 오인한다
+    if affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -226,7 +232,7 @@ pub async fn teacher_abandon_application(
         return Err((StatusCode::FORBIDDEN, "해당 학생이 이 반 소속이 아닙니다".into()));
     }
 
-    sqlx::query(
+    let affected = sqlx::query(
         "UPDATE applications SET abandoned = 1
          WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
@@ -235,7 +241,13 @@ pub async fn teacher_abandon_application(
     .bind(rid)
     .execute(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
+    // silent no-op 방지: 존재하지 않는 지원에 204를 반환하면 포기 처리된 것으로 오인한다
+    if affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
