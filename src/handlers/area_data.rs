@@ -33,10 +33,11 @@ pub struct ImportResult {
 
 #[derive(Deserialize)]
 pub struct StudentTypeQuery {
-    #[serde(default = "student_type_graduated")]
+    // 기본값은 BaseDataPageQuery와 동일하게 enrolled — 파라미터 누락 시
+    // 목록은 재학생인데 import는 졸업생으로 동작하는 비대칭을 막는다
+    #[serde(default = "student_type_enrolled")]
     pub student_type: String,
 }
-fn student_type_graduated() -> String { "graduated".to_string() }
 
 #[derive(Deserialize)]
 pub struct PageQuery {
@@ -326,6 +327,10 @@ pub async fn numeric_table_import(
     let col = excel::col_map(&headers);
     excel::require_cols(&col, &["기준값", "점수"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    // 헤더만 있는 파일이 기준표 전체를 조용히 비우는 것을 차단
+    if file_rows.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "파일에 데이터 행이 없습니다".into()));
+    }
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -553,6 +558,10 @@ pub async fn category_map_import(
     let col = excel::col_map(&headers);
     excel::require_cols(&col, &["범주", "점수"])
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    // 헤더만 있는 파일이 범주표 전체를 조용히 비우는 것을 차단
+    if file_rows.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "파일에 데이터 행이 없습니다".into()));
+    }
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -904,8 +913,10 @@ pub async fn base_data_import(
                 errors.push(format!("{}행: 이름 누락", row_num));
                 continue;
             }
+            // is_enrolled=0 필터 필수 — 재학생 student_code가 섞인 파일이
+            // 재학생 base_data를 조용히 덮어쓰는 것을 차단 (student_type 정책)
             let sid: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM students WHERE student_code = ?",
+                "SELECT id FROM students WHERE student_code = ? AND is_enrolled = 0",
             )
             .bind(student_code)
             .fetch_optional(&mut *tx).await
@@ -916,7 +927,7 @@ pub async fn base_data_import(
                     student_label = format!("학생코드 '{}'", student_code);
                 }
                 None => {
-                    errors.push(format!("{}행: 학생코드 '{}' 없음 (학생을 먼저 등록하세요)", row_num, student_code));
+                    errors.push(format!("{}행: 학생코드 '{}'에 해당하는 졸업생이 없습니다 (졸업생을 먼저 등록하세요)", row_num, student_code));
                     continue;
                 }
             }

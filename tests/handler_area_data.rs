@@ -1233,3 +1233,102 @@ async fn base_data_upsert_allowed_for_closed_round_student() {
         .bind(sid).bind(aid).fetch_one(&pool).await.unwrap();
     assert_eq!(value, "9000000", "UPSERT로 값이 갱신되어야 함");
 }
+
+// ── 세션 3 감사 후속: graduated is_enrolled 필터 / 빈 파일 wipe 차단 ──
+
+#[tokio::test]
+async fn base_data_import_graduated_rejects_enrolled_student_code() {
+    // graduated 업로드에 재학생 student_code가 섞이면 행 오류 — 재학생 데이터 침범 금지
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('E001', '재학생', 3, 1, 5, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nE001,재학생,85\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("졸업생"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "재학생 base_data가 생성되면 안 됨");
+}
+
+#[tokio::test]
+async fn base_data_import_graduated_accepts_graduated_student_code() {
+    // 동일 경로 유효값: 졸업생 코드는 정상 저장
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "G001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nG001,테스트,85\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+}
+
+#[tokio::test]
+async fn numeric_table_import_empty_file_rejected_and_table_preserved() {
+    // 헤더만 있는 파일이 기준표 전체를 조용히 비우면 안 됨
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    sqlx::query("INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 0, 100000)")
+        .bind(aid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let state = common::make_state(pool.clone());
+
+    let result = numeric_table_import(State(state), Path(aid), build_multipart("기준값,점수\n").await).await;
+    let Err(err) = result else { panic!("오류가 반환되어야 함") };
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM numeric_table WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "기존 기준표가 보존되어야 함");
+}
+
+#[tokio::test]
+async fn category_map_import_empty_file_rejected_and_table_preserved() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), 0).await;
+    sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '해당없음', 0)")
+        .bind(aid)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let state = common::make_state(pool.clone());
+
+    let result = category_map_import(State(state), Path(aid), build_multipart("범주,점수\n").await).await;
+    let Err(err) = result else { panic!("오류가 반환되어야 함") };
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM category_map WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "기존 범주표가 보존되어야 함");
+}
