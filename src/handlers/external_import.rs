@@ -24,7 +24,7 @@ pub struct ExternalPreview {
 struct ParsedFile {
     univ_name: String,
     value_header: String,
-    records: Vec<Vec<String>>, // [학년, 반, 번호, 이름, 값]
+    records: Vec<(usize, Vec<String>)>, // (엑셀 행 번호 1-based, [학년, 반, 번호, 이름, 값])
 }
 
 // ── 파싱 ─────────────────────────────────────────────────────────
@@ -49,26 +49,27 @@ fn parse_daegyo(bytes: &[u8]) -> Result<ParsedFile, String> {
         }
     }
 
-    // 3행~: 데이터
+    // 3행~: 데이터. 행 번호는 원본 엑셀 기준(1-based) — 오류 메시지에서 사용자가 찾을 수 있어야 함
     // 내점수(환산)가 "미제공"이면 환산등급을 제공하지 않는 모집단위 → 일반등급 사용
     let records = rows
         .iter()
+        .enumerate()
         .skip(2)
-        .filter(|row| !row.iter().all(|c| c.is_empty()))
-        .map(|row| {
+        .filter(|(_, row)| !row.iter().all(|c| c.is_empty()))
+        .map(|(idx, row)| {
             let jum = excel::get_col(row, &col, "내점수(환산)");
             let val = if jum == "미제공" {
                 excel::get_col(row, &col, "일반등급")
             } else {
                 excel::get_col(row, &col, "내등급(환산)")
             };
-            vec![
+            (idx + 1, vec![
                 excel::get_col(row, &col, "학년").to_string(),
                 excel::get_col(row, &col, "반").to_string(),
                 excel::get_col(row, &col, "번호").to_string(),
                 excel::get_col(row, &col, "이름").to_string(),
                 val.to_string(),
-            ]
+            ])
         })
         .collect();
 
@@ -97,19 +98,20 @@ fn parse_univ(bytes: &[u8]) -> Result<ParsedFile, String> {
         }
     }
 
-    // 7행(index 6)~: 데이터
+    // 7행(index 6)~: 데이터. 행 번호는 원본 엑셀 기준(1-based)
     let records = rows
         .iter()
+        .enumerate()
         .skip(6)
-        .filter(|row| !row.iter().all(|c| c.is_empty()))
-        .map(|row| {
-            vec![
+        .filter(|(_, row)| !row.iter().all(|c| c.is_empty()))
+        .map(|(idx, row)| {
+            (idx + 1, vec![
                 excel::get_col(row, &col, "학년").to_string(),
                 excel::get_col(row, &col, "반").to_string(),
                 excel::get_col(row, &col, "번호").to_string(),
                 excel::get_col(row, &col, "이름").to_string(),
                 excel::get_col(row, &col, "등급").to_string(),
-            ]
+            ])
         })
         .collect();
 
@@ -198,6 +200,18 @@ async fn do_import(
             "외부 가져오기는 대학별 환산점수 조회 전형요소에서만 사용할 수 있습니다".into(),
         ));
     }
+    // 복수값(CATEGORY SUM) 전형요소 차단: 석차연명부는 학생당 단일 값인데
+    // INSERT OR REPLACE의 유니크 인덱스가 value를 포함해 값 변경 재업로드 시
+    // 기존 행이 남아 SUM이 이중 합산된다
+    if area.multi_value {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "복수값(합산) 전형요소에는 외부 가져오기를 사용할 수 없습니다. 기초 데이터 업로드를 사용해 주세요".into(),
+        ));
+    }
+    if parsed.records.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "파일에 데이터 행이 없습니다".into()));
+    }
 
     let mut warnings: Vec<String> = Vec::new();
 
@@ -215,9 +229,11 @@ async fn do_import(
 
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    // 파일 내 동일 학생 중복 행 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
+    let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
-    for (i, record) in parsed.records.iter().enumerate() {
-        let row_num = i + 1;
+    for (row_num, record) in parsed.records.iter() {
+        let row_num = *row_num;
         let (grade_s, class_s, seq_s, name, val_s) = match record.as_slice() {
             [g, c, s, n, v, ..] => (g.as_str(), c.as_str(), s.as_str(), n.as_str(), v.as_str()),
             _ => continue,
@@ -268,6 +284,14 @@ async fn do_import(
                 continue;
             }
         };
+
+        if !seen.insert(student_id) {
+            errors.push(format!(
+                "{}행: {}학년 {}반 {}번 중복 — 파일에 같은 학생이 두 번 이상 존재합니다",
+                row_num, grade, class_no, seq_no
+            ));
+            continue;
+        }
 
         if db_name.trim() != name.trim() {
             warnings.push(format!(
@@ -334,7 +358,7 @@ pub async fn daegyo_preview(
     let bytes = read_file_only(multipart).await?;
     let parsed = parse_daegyo(&bytes).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let total = parsed.records.len();
-    let preview = parsed.records.into_iter().take(5).collect();
+    let preview = parsed.records.into_iter().take(5).map(|(_, r)| r).collect();
     Ok(Json(ExternalPreview {
         univ_name: parsed.univ_name,
         value_header: parsed.value_header,
@@ -362,7 +386,7 @@ pub async fn univ_preview(
     let bytes = read_file_only(multipart).await?;
     let parsed = parse_univ(&bytes).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let total = parsed.records.len();
-    let preview = parsed.records.into_iter().take(5).collect();
+    let preview = parsed.records.into_iter().take(5).map(|(_, r)| r).collect();
     Ok(Json(ExternalPreview {
         univ_name: parsed.univ_name,
         value_header: parsed.value_header,
