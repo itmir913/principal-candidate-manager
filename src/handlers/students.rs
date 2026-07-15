@@ -347,14 +347,14 @@ fn build_template_xlsx() -> anyhow::Result<Vec<u8>> {
     // 샘플 재학생
     ws.write_string(1, 0, "20250001")?;
     ws.write_string(1, 1, "홍길동")?;
-    ws.write_number(1, 2, 1.0)?;
+    ws.write_string(1, 2, "재학")?;
     ws.write_number(1, 3, 1.0)?;
     ws.write_number(1, 4, 1.0)?;
     ws.write_number(1, 5, 1.0)?;
     // 샘플 졸업생
     ws.write_string(2, 0, "20240001")?;
     ws.write_string(2, 1, "김철수")?;
-    ws.write_number(2, 2, 0.0)?;
+    ws.write_string(2, 2, "졸업")?;
     ws.write_number(2, 6, 2024.0)?;
     Ok(wb.save_to_buffer()?)
 }
@@ -369,7 +369,7 @@ fn build_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
         let r = r as u32 + 1;
         ws.write_string(r, 0, &row.student_code)?;
         ws.write_string(r, 1, &row.name)?;
-        ws.write_number(r, 2, if row.is_enrolled { 1.0 } else { 0.0 })?;
+        ws.write_string(r, 2, if row.is_enrolled { "재학" } else { "졸업" })?;
         if let Some(v) = row.grade     { ws.write_number(r, 3, v as f64)?; }
         if let Some(v) = row.class_no  { ws.write_number(r, 4, v as f64)?; }
         if let Some(v) = row.seq_no    { ws.write_number(r, 5, v as f64)?; }
@@ -758,12 +758,13 @@ fn build_graduated_export_xlsx(rows: &[StudentRow]) -> anyhow::Result<Vec<u8>> {
 
 /// 재학여부 셀 → is_enrolled. 인식 불가 값은 Err — 재학/졸업 분류는
 /// 재학생 우선 순위·기초데이터 범위를 좌우하므로 silent default 금지.
+/// 숫자 0/1은 의미가 모호해 배제하고 한글 키워드만 허용한다.
 fn parse_is_enrolled(s: &str) -> Result<bool, String> {
     match s {
-        "1" | "재학" => Ok(true),
-        "0" | "졸업" => Ok(false),
+        "재학" | "재학생" => Ok(true),
+        "졸업" | "졸업생" => Ok(false),
         _ => Err(format!(
-            "재학여부 '{}' 인식 불가 — '1'/'재학' 또는 '0'/'졸업'만 허용됩니다",
+            "재학여부 '{}' 인식 불가 — '재학'/'재학생' 또는 '졸업'/'졸업생'만 허용됩니다",
             s
         )),
     }

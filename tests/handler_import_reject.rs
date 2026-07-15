@@ -64,8 +64,8 @@ async fn import_students_error_rejects_all() {
 
     // S001: 정상, S002: 재학생인데 학년 누락 → 오류
     let csv = "학생코드,이름,재학여부,학년,반,번호\n\
-               S001,홍길동,1,1,1,1\n\
-               S002,이순신,1,,1,2\n";
+               S001,홍길동,재학,1,1,1\n\
+               S002,이순신,재학,,1,2\n";
     let (status, axum::Json(result)) =
         import_students(State(state), common::csv_multipart(csv).await)
             .await
@@ -90,7 +90,7 @@ async fn import_students_invalid_enrolled_flag_rejects_all() {
     let state = common::make_state(pool.clone());
 
     let csv = "학생코드,이름,재학여부,학년,반,번호\n\
-               S001,홍길동,1,1,1,1\n\
+               S001,홍길동,재학,1,1,1\n\
                S002,이순신,휴학,1,1,2\n";
     let (status, axum::Json(result)) =
         import_students(State(state), common::csv_multipart(csv).await)
@@ -127,7 +127,33 @@ async fn import_students_empty_enrolled_flag_rejects_all() {
     assert!(result.errors.iter().any(|e| e.contains("재학여부")));
 }
 
-/// '재학'/'졸업' 한글 키워드가 명세대로 매핑되는지 검증.
+/// 숫자 0/1은 의미가 모호하므로 배제 — 한글 키워드만 허용한다.
+#[tokio::test]
+async fn import_students_numeric_enrolled_flag_rejects_all() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호,졸업연도\n\
+               S001,홍길동,1,1,1,1,\n\
+               S002,이순신,0,,,,2024\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.inserted, 0);
+    assert!(result.errors.iter().any(|e| e.contains("재학여부")));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback — 숫자 표기 행은 전체 거부");
+}
+
+/// '재학'/'재학생'/'졸업'/'졸업생' 한글 키워드가 명세대로 매핑되는지 검증.
 /// 과거 버그: '졸업'이 숫자 파싱 실패 → 무조건 재학생(true)으로 뒤집혔다.
 #[tokio::test]
 async fn import_students_korean_keywords_map_correctly() {
@@ -137,30 +163,27 @@ async fn import_students_korean_keywords_map_correctly() {
 
     let csv = "학생코드,이름,재학여부,학년,반,번호,졸업연도\n\
                S001,홍길동,재학,1,1,1,\n\
-               S002,이순신,졸업,,,,2024\n";
+               S002,이순신,졸업,,,,2024\n\
+               S003,박재적,재학생,1,1,2,\n\
+               S004,최동문,졸업생,,,,2023\n";
     let (status, axum::Json(result)) =
         import_students(State(state), common::csv_multipart(csv).await)
             .await
             .unwrap();
 
     assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
-    assert_eq!(result.inserted, 2);
+    assert_eq!(result.inserted, 4);
 
-    let enrolled: i64 = sqlx::query_scalar(
-        "SELECT is_enrolled FROM students WHERE student_code = 'S001'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(enrolled, 1, "'재학' → is_enrolled=1");
-
-    let graduated: i64 = sqlx::query_scalar(
-        "SELECT is_enrolled FROM students WHERE student_code = 'S002'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(graduated, 0, "'졸업' → is_enrolled=0");
+    for (code, expected) in [("S001", 1i64), ("S002", 0), ("S003", 1), ("S004", 0)] {
+        let is_enrolled: i64 = sqlx::query_scalar(
+            "SELECT is_enrolled FROM students WHERE student_code = ?",
+        )
+        .bind(code)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(is_enrolled, expected, "{} 분류 불일치", code);
+    }
 }
 
 /// 기존 졸업생이 '졸업' 행 재업로드로 재학생으로 뒤집히지 않아야 한다 (grad_year 보존).
@@ -204,8 +227,8 @@ async fn import_students_success_commits() {
     let state = common::make_state(pool.clone());
 
     let csv = "학생코드,이름,재학여부,학년,반,번호\n\
-               S001,홍길동,1,1,1,1\n\
-               S002,이순신,1,1,1,2\n";
+               S001,홍길동,재학,1,1,1\n\
+               S002,이순신,재학,1,1,2\n";
     let (status, axum::Json(result)) =
         import_students(State(state), common::csv_multipart(csv).await)
             .await
