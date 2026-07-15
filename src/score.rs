@@ -21,7 +21,17 @@ impl Serialize for Score {
 
 impl<'de> Deserialize<'de> for Score {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
         let f = f64::deserialize(d)?;
+        // `as i64` 캐스트는 NaN→0, ±∞·초과값→i64::MIN/MAX로 조용히 포화된다.
+        // 1e300 같은 유한 거대값도 JSON으로 들어올 수 있으므로 즉시 거부
+        // (parse_display_value와 동일 기준: 유한 + |값| ≤ 10억).
+        if !f.is_finite() {
+            return Err(D::Error::custom(format!("점수 '{}'는 유한한 숫자가 아닙니다", f)));
+        }
+        if f.abs() > 1_000_000_000.0 {
+            return Err(D::Error::custom(format!("점수 '{}'가 허용 범위(±10억)를 초과합니다", f)));
+        }
         Ok(Score((f * 100_000.0).round() as i64))
     }
 }
