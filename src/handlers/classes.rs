@@ -58,12 +58,12 @@ pub async fn classes_template() -> Result<Response, ApiError> {
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for (i, h) in ["학년", "반", "담임명", "비밀번호"].iter().enumerate() {
-        ws.write_string(0, i as u16, *h).ok();
+        ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
     }
-    ws.write_number(1, 0, 3.0).ok();
-    ws.write_number(1, 1, 1.0).ok();
-    ws.write_string(1, 2, "홍길동").ok();
-    ws.write_string(1, 3, "pass1234").ok();
+    ws.write_number(1, 0, 3.0).map_err(excel::xlsx_err)?;
+    ws.write_number(1, 1, 1.0).map_err(excel::xlsx_err)?;
+    ws.write_string(1, 2, "홍길동").map_err(excel::xlsx_err)?;
+    ws.write_string(1, 3, "pass1234").map_err(excel::xlsx_err)?;
 
     let buf = wb
         .save_to_buffer()
@@ -194,13 +194,13 @@ pub async fn export_classes(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for (i, h) in ["학년", "반", "담임명"].iter().enumerate() {
-        ws.write_string(0, i as u16, *h).ok();
+        ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
     }
     for (row_i, r) in rows.iter().enumerate() {
         let ri = (row_i + 1) as u32;
-        ws.write_number(ri, 0, r.grade as f64).ok();
-        ws.write_number(ri, 1, r.class_no as f64).ok();
-        ws.write_string(ri, 2, r.teacher_name.as_deref().unwrap_or("")).ok();
+        ws.write_number(ri, 0, r.grade as f64).map_err(excel::xlsx_err)?;
+        ws.write_number(ri, 1, r.class_no as f64).map_err(excel::xlsx_err)?;
+        ws.write_string(ri, 2, r.teacher_name.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb

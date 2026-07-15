@@ -537,16 +537,16 @@ pub async fn export_results(
     let fixed_headers = ["순위", "대학", "모집단위", "지원학과", "학생명", "학생코드", "학년", "반", "번호", "재학구분"];
     let mut col = 0u16;
     for h in &fixed_headers {
-        ws.write_string(0, col, *h).ok();
+        ws.write_string(0, col, *h).map_err(excel::xlsx_err)?;
         col += 1;
     }
     for area in &areas {
-        ws.write_string(0, col, &area.name).ok();
+        ws.write_string(0, col, &area.name).map_err(excel::xlsx_err)?;
         col += 1;
     }
-    ws.write_string(0, col, "총점").ok(); col += 1;
-    ws.write_string(0, col, "추천").ok(); col += 1;
-    ws.write_string(0, col, "포기").ok();
+    ws.write_string(0, col, "총점").map_err(excel::xlsx_err)?; col += 1;
+    ws.write_string(0, col, "추천").map_err(excel::xlsx_err)?; col += 1;
+    ws.write_string(0, col, "포기").map_err(excel::xlsx_err)?;
 
     // 데이터 행
     for (i, r) in all_results.iter().enumerate() {
@@ -554,24 +554,24 @@ pub async fn export_results(
         let mut col = 0u16;
 
         if let Some(rank) = r.ranking {
-            ws.write_number(row, col, rank as f64).ok();
+            ws.write_number(row, col, rank as f64).map_err(excel::xlsx_err)?;
         }
         col += 1;
 
-        ws.write_string(row, col, &r.univ_name).ok(); col += 1;
-        ws.write_string(row, col, &r.track_name).ok(); col += 1;
-        ws.write_string(row, col, &r.department_name).ok(); col += 1;
-        ws.write_string(row, col, &r.name).ok(); col += 1;
-        ws.write_string(row, col, &r.student_code).ok(); col += 1;
+        ws.write_string(row, col, &r.univ_name).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, &r.track_name).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, &r.department_name).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, &r.name).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, &r.student_code).map_err(excel::xlsx_err)?; col += 1;
 
-        if let Some(g) = r.grade { ws.write_number(row, col, g as f64).ok(); }
+        if let Some(g) = r.grade { ws.write_number(row, col, g as f64).map_err(excel::xlsx_err)?; }
         col += 1;
-        if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).ok(); }
+        if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).map_err(excel::xlsx_err)?; }
         col += 1;
-        if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).ok(); }
+        if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).map_err(excel::xlsx_err)?; }
         col += 1;
 
-        ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).ok();
+        ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).map_err(excel::xlsx_err)?;
         col += 1;
 
         let detail: HashMap<String, i64> = serde_json::from_str(&r.score_detail)
@@ -584,13 +584,13 @@ pub async fn export_results(
                     "학생 id={} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
                     r.student_id, area.id
                 )))?;
-            ws.write_number(row, col, sc as f64 / 100_000.0).ok();
+            ws.write_number(row, col, sc as f64 / 100_000.0).map_err(excel::xlsx_err)?;
             col += 1;
         }
 
-        ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).ok(); col += 1;
-        ws.write_string(row, col, if r.recommended { "추천" } else { "" }).ok(); col += 1;
-        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).ok();
+        ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.recommended { "추천" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb
@@ -696,27 +696,27 @@ pub async fn export_round_summary(
         "대학 전체 정원", "대학 라운드 전 잔여석", "대학 남은 잔여석",
     ];
     for (col, h) in headers.iter().enumerate() {
-        ws.write_string(0, col as u16, *h).ok();
+        ws.write_string(0, col as u16, *h).map_err(excel::xlsx_err)?;
     }
 
     for (i, row) in rows.iter().enumerate() {
         let r = (i + 1) as u32;
-        ws.write_string(r, 0, &row.univ_name).ok();
-        ws.write_string(r, 1, &row.track_name).ok();
+        ws.write_string(r, 0, &row.univ_name).map_err(excel::xlsx_err)?;
+        ws.write_string(r, 1, &row.track_name).map_err(excel::xlsx_err)?;
         match row.unit_quota {
             Some(q) => {
                 let before_remaining = (q - row.before_count).max(0);
                 let after_remaining = (q - row.before_count - row.this_count).max(0);
-                ws.write_number(r, 2, q as f64).ok();
-                ws.write_number(r, 3, before_remaining as f64).ok();
-                ws.write_number(r, 4, row.this_count as f64).ok();
-                ws.write_number(r, 5, after_remaining as f64).ok();
+                ws.write_number(r, 2, q as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 3, before_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 4, row.this_count as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 5, after_remaining as f64).map_err(excel::xlsx_err)?;
             }
             None => {
-                ws.write_string(r, 2, "무제한").ok();
-                ws.write_string(r, 3, "무제한").ok();
-                ws.write_number(r, 4, row.this_count as f64).ok();
-                ws.write_string(r, 5, "무제한").ok();
+                ws.write_string(r, 2, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 3, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_number(r, 4, row.this_count as f64).map_err(excel::xlsx_err)?;
+                ws.write_string(r, 5, "무제한").map_err(excel::xlsx_err)?;
             }
         }
         match row.total_quota {
@@ -724,14 +724,14 @@ pub async fn export_round_summary(
                 let univ_before_remaining = (tq - row.univ_before_count).max(0);
                 let univ_after_remaining =
                     (tq - row.univ_before_count - row.univ_this_count).max(0);
-                ws.write_number(r, 6, tq as f64).ok();
-                ws.write_number(r, 7, univ_before_remaining as f64).ok();
-                ws.write_number(r, 8, univ_after_remaining as f64).ok();
+                ws.write_number(r, 6, tq as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 7, univ_before_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 8, univ_after_remaining as f64).map_err(excel::xlsx_err)?;
             }
             None => {
-                ws.write_string(r, 6, "무제한").ok();
-                ws.write_string(r, 7, "무제한").ok();
-                ws.write_string(r, 8, "무제한").ok();
+                ws.write_string(r, 6, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 7, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 8, "무제한").map_err(excel::xlsx_err)?;
             }
         }
     }
@@ -766,42 +766,42 @@ pub async fn export_round_summary(
         "지원대학", "모집단위", "지원학과명", "총점", "순위", "추천대상", "포기여부",
     ];
     for (col, h) in headers2.iter().enumerate() {
-        ws2.write_string(0, col as u16, *h).ok();
+        ws2.write_string(0, col as u16, *h).map_err(excel::xlsx_err)?;
     }
 
     for (i, row) in applicants.iter().enumerate() {
         let r = (i + 1) as u32;
-        ws2.write_string(r, 0, &row.student_code).ok();
-        ws2.write_string(r, 1, if row.is_enrolled == 1 { "재학생" } else { "졸업생" }).ok();
+        ws2.write_string(r, 0, &row.student_code).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 1, if row.is_enrolled == 1 { "재학생" } else { "졸업생" }).map_err(excel::xlsx_err)?;
         match row.grade {
-            Some(v) => { ws2.write_number(r, 2, v as f64).ok(); }
-            None    => { ws2.write_string(r, 2, "").ok(); }
+            Some(v) => { ws2.write_number(r, 2, v as f64).map_err(excel::xlsx_err)?; }
+            None    => { ws2.write_string(r, 2, "").map_err(excel::xlsx_err)?; }
         }
         match row.class_no {
-            Some(v) => { ws2.write_number(r, 3, v as f64).ok(); }
-            None    => { ws2.write_string(r, 3, "").ok(); }
+            Some(v) => { ws2.write_number(r, 3, v as f64).map_err(excel::xlsx_err)?; }
+            None    => { ws2.write_string(r, 3, "").map_err(excel::xlsx_err)?; }
         }
         match row.seq_no {
-            Some(v) => { ws2.write_number(r, 4, v as f64).ok(); }
-            None    => { ws2.write_string(r, 4, "").ok(); }
+            Some(v) => { ws2.write_number(r, 4, v as f64).map_err(excel::xlsx_err)?; }
+            None    => { ws2.write_string(r, 4, "").map_err(excel::xlsx_err)?; }
         }
-        ws2.write_string(r, 5, &row.name).ok();
-        ws2.write_string(r, 6, &row.univ_name).ok();
-        ws2.write_string(r, 7, &row.track_name).ok();
-        ws2.write_string(r, 8, &row.department_name).ok();
+        ws2.write_string(r, 5, &row.name).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 6, &row.univ_name).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 7, &row.track_name).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 8, &row.department_name).map_err(excel::xlsx_err)?;
         match row.total_score {
-            Some(s) => { ws2.write_number(r, 9, s as f64 / 100_000.0).ok(); }
-            None    => { ws2.write_string(r, 9, "미계산").ok(); }
+            Some(s) => { ws2.write_number(r, 9, s as f64 / 100_000.0).map_err(excel::xlsx_err)?; }
+            None    => { ws2.write_string(r, 9, "미계산").map_err(excel::xlsx_err)?; }
         }
         match row.ranking {
-            Some(rk) => { ws2.write_number(r, 10, rk as f64).ok(); }
-            None     => { ws2.write_string(r, 10, "").ok(); }
+            Some(rk) => { ws2.write_number(r, 10, rk as f64).map_err(excel::xlsx_err)?; }
+            None     => { ws2.write_string(r, 10, "").map_err(excel::xlsx_err)?; }
         }
         ws2.write_string(r, 11, match row.recommended {
             Some(1) => "O",
             _       => "X",
-        }).ok();
-        ws2.write_string(r, 12, if row.abandoned == 1 { "O" } else { "X" }).ok();
+        }).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 12, if row.abandoned == 1 { "O" } else { "X" }).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb

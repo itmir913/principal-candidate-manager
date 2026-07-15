@@ -470,37 +470,37 @@ pub async fn export_quota_stats(
     let fixed = ["대학명", "모집단위", "모집단위 정원", "추천인원", "잔여인원",
                  "대학 전체 정원", "대학 추천인원", "대학 잔여인원"];
     let mut col = 0u16;
-    for h in &fixed { ws.write_string(0, col, *h).ok(); col += 1; }
-    for label in &round_labels { ws.write_string(0, col, label).ok(); col += 1; }
+    for h in &fixed { ws.write_string(0, col, *h).map_err(excel::xlsx_err)?; col += 1; }
+    for label in &round_labels { ws.write_string(0, col, label).map_err(excel::xlsx_err)?; col += 1; }
 
     let mut row = 1u32;
     for u in &filtered {
         for t in &u.tracks {
             let mut col = 0u16;
-            ws.write_string(row, col, &u.univ_name).ok(); col += 1;
-            ws.write_string(row, col, &t.track_name).ok(); col += 1;
+            ws.write_string(row, col, &u.univ_name).map_err(excel::xlsx_err)?; col += 1;
+            ws.write_string(row, col, &t.track_name).map_err(excel::xlsx_err)?; col += 1;
 
             match t.unit_quota {
-                Some(q) => { ws.write_number(row, col, q as f64).ok(); }
-                None    => { ws.write_string(row, col, "무제한").ok(); }
+                Some(q) => { ws.write_number(row, col, q as f64).map_err(excel::xlsx_err)?; }
+                None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }
             }
             col += 1;
-            ws.write_number(row, col, t.unit_used as f64).ok(); col += 1;
+            ws.write_number(row, col, t.unit_used as f64).map_err(excel::xlsx_err)?; col += 1;
             match t.unit_quota {
-                Some(q) => { ws.write_number(row, col, (q - t.unit_used).max(0) as f64).ok(); }
-                None    => { ws.write_string(row, col, "무제한").ok(); }
+                Some(q) => { ws.write_number(row, col, (q - t.unit_used).max(0) as f64).map_err(excel::xlsx_err)?; }
+                None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }
             }
             col += 1;
 
             match u.total_quota {
-                Some(q) => { ws.write_number(row, col, q as f64).ok(); }
-                None    => { ws.write_string(row, col, "무제한").ok(); }
+                Some(q) => { ws.write_number(row, col, q as f64).map_err(excel::xlsx_err)?; }
+                None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }
             }
             col += 1;
-            ws.write_number(row, col, u.total_used as f64).ok(); col += 1;
+            ws.write_number(row, col, u.total_used as f64).map_err(excel::xlsx_err)?; col += 1;
             match u.total_quota {
-                Some(q) => { ws.write_number(row, col, (q - u.total_used).max(0) as f64).ok(); }
-                None    => { ws.write_string(row, col, "무제한").ok(); }
+                Some(q) => { ws.write_number(row, col, (q - u.total_used).max(0) as f64).map_err(excel::xlsx_err)?; }
+                None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }
             }
             col += 1;
 
@@ -508,7 +508,7 @@ pub async fn export_quota_stats(
                 .map(|r| (r.round_id, r.count)).collect();
             for rid in &stats.all_round_ids {
                 let cnt = by_round_lookup.get(rid).copied().unwrap_or(0);
-                ws.write_number(row, col, cnt as f64).ok();
+                ws.write_number(row, col, cnt as f64).map_err(excel::xlsx_err)?;
                 col += 1;
             }
 

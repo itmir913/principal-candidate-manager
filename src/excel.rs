@@ -131,6 +131,13 @@ pub fn parse_xls_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> 
     Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
 }
 
+/// rust_xlsxwriter 셀 쓰기 오류 → 500 ApiError.
+/// `.ok()`로 무시하면 해당 셀만 조용히 비어 내보내기 파일에 점수·데이터가
+/// 누락된다 (Fail-Fast 정책 위반) — 반드시 이 헬퍼로 전파할 것.
+pub fn xlsx_err(e: rust_xlsxwriter::XlsxError) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, format!("xlsx 생성 오류: {}", e))
+}
+
 /// 현재 로컬 시각을 `YYYYMMDD_HHMMSS` 형식으로 반환
 pub fn now_tag() -> String {
     chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()

@@ -261,7 +261,7 @@ pub async fn numeric_table_export(
     let ws = wb.add_worksheet();
     if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["기준값", "점수", "대학명", "모집단위명"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT rt.threshold, rt.score,
@@ -279,14 +279,14 @@ pub async fn numeric_table_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).ok();
-            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
-            ws.write_string(r, 2, row.get::<&str, _>("univ_name")).ok();
-            ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
+            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 2, row.get::<&str, _>("univ_name")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 3, row.get::<&str, _>("track_name")).map_err(excel::xlsx_err)?;
         }
     } else {
         for (i, h) in ["기준값", "점수"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT threshold, score FROM numeric_table
@@ -298,8 +298,8 @@ pub async fn numeric_table_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).ok();
-            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
+            ws.write_number(r, 0, row.get::<i64, _>("threshold") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
         }
     }
 
@@ -488,7 +488,7 @@ pub async fn category_map_export(
 
     if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["범주", "점수", "대학명", "모집단위명"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT cm.category, cm.score,
@@ -506,14 +506,14 @@ pub async fn category_map_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("category")).ok();
-            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
-            ws.write_string(r, 2, row.get::<&str, _>("univ_name")).ok();
-            ws.write_string(r, 3, row.get::<&str, _>("track_name")).ok();
+            ws.write_string(r, 0, row.get::<&str, _>("category")).map_err(excel::xlsx_err)?;
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 2, row.get::<&str, _>("univ_name")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 3, row.get::<&str, _>("track_name")).map_err(excel::xlsx_err)?;
         }
     } else {
         for (i, h) in ["범주", "점수"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT category, score FROM category_map
@@ -525,8 +525,8 @@ pub async fn category_map_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("category")).ok();
-            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).ok();
+            ws.write_string(r, 0, row.get::<&str, _>("category")).map_err(excel::xlsx_err)?;
+            ws.write_number(r, 1, row.get::<i64, _>("score") as f64 / 100_000.0).map_err(excel::xlsx_err)?;
         }
     }
 
@@ -704,7 +704,7 @@ pub async fn base_data_template(
 
     if composite {
         for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
 
         let tracks = sqlx::query(
@@ -724,22 +724,22 @@ pub async fn base_data_template(
             for t in &tracks {
                 let univ: &str = t.get("univ_name");
                 let track: &str = t.get("track_name");
-                ws.write_string(row_i, 0, code).ok();
-                ws.write_string(row_i, 1, name).ok();
+                ws.write_string(row_i, 0, code).map_err(excel::xlsx_err)?;
+                ws.write_string(row_i, 1, name).map_err(excel::xlsx_err)?;
                 // 값 열(2)은 공백
-                ws.write_string(row_i, 3, univ).ok();
-                ws.write_string(row_i, 4, track).ok();
+                ws.write_string(row_i, 3, univ).map_err(excel::xlsx_err)?;
+                ws.write_string(row_i, 4, track).map_err(excel::xlsx_err)?;
                 row_i += 1;
             }
         }
     } else {
         for (i, h) in ["학생코드", "이름", "값"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         for (i, g) in graduates.iter().enumerate() {
             let r = i as u32 + 1;
-            ws.write_string(r, 0, g.get::<&str, _>("student_code")).ok();
-            ws.write_string(r, 1, g.get::<&str, _>("name")).ok();
+            ws.write_string(r, 0, g.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 1, g.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
             // 값 열(2)은 공백
         }
     }
@@ -760,7 +760,7 @@ pub async fn base_data_export(
 
     if area.lookup_scope == LookupScope::Composite {
         for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT s.student_code, s.name, bd.value, u.univ_name, ut.track_name
@@ -777,15 +777,15 @@ pub async fn base_data_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("student_code")).ok();
-            ws.write_string(r, 1, row.get::<&str, _>("name")).ok();
-            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type);
-            ws.write_string(r, 3, row.get::<&str, _>("univ_name")).ok();
-            ws.write_string(r, 4, row.get::<&str, _>("track_name")).ok();
+            ws.write_string(r, 0, row.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 1, row.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
+            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type)?;
+            ws.write_string(r, 3, row.get::<&str, _>("univ_name")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 4, row.get::<&str, _>("track_name")).map_err(excel::xlsx_err)?;
         }
     } else {
         for (i, h) in ["학생코드", "이름", "값"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).ok();
+            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
         }
         let rows = sqlx::query(
             "SELECT s.student_code, s.name, bd.value
@@ -800,9 +800,9 @@ pub async fn base_data_export(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         for (r, row) in rows.iter().enumerate() {
             let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("student_code")).ok();
-            ws.write_string(r, 1, row.get::<&str, _>("name")).ok();
-            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type);
+            ws.write_string(r, 0, row.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
+            ws.write_string(r, 1, row.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
+            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type)?;
         }
     }
 
@@ -1234,17 +1234,24 @@ pub async fn base_data_list(
 // ── xlsx 쓰기 헬퍼 ───────────────────────────────────────────────
 
 /// DB value 문자열 → xlsx 셀 (NUMERIC/MANUAL: ÷100000 숫자, CATEGORY: 문자열)
-fn write_value(ws: &mut rust_xlsxwriter::Worksheet, row: u32, col: u16, value: &str, calc_type: CalcType) {
+fn write_value(
+    ws: &mut rust_xlsxwriter::Worksheet,
+    row: u32,
+    col: u16,
+    value: &str,
+    calc_type: CalcType,
+) -> Result<(), ApiError> {
     match calc_type {
         CalcType::Numeric | CalcType::Manual => {
             if let Ok(v) = value.parse::<i64>() {
-                ws.write_number(row, col, v as f64 / 100_000.0).ok();
+                ws.write_number(row, col, v as f64 / 100_000.0).map_err(excel::xlsx_err)?;
             } else {
-                ws.write_string(row, col, value).ok();
+                ws.write_string(row, col, value).map_err(excel::xlsx_err)?;
             }
         }
         CalcType::Category => {
-            ws.write_string(row, col, value).ok();
+            ws.write_string(row, col, value).map_err(excel::xlsx_err)?;
         }
     }
+    Ok(())
 }
