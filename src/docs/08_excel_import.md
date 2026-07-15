@@ -10,9 +10,9 @@
 | 규칙 | 설명 |
 |---|---|
 | All-or-Nothing | 오류 1건이라도 발생 시 rollback + 422, 부분 저장 없음 |
-| 중복 = error | warning/skip 처리 금지 |
+| 중복 = error | warning/skip 처리 금지. **파일 내 동일 키 중복 행도 error** (마지막 행 silent win 금지) — 모든 import에 적용 |
 | 헤더 중복 | 동일 열 이름이 2개 이상이면 즉시 400 |
-| 빈 파일 | 헤더 없으면 빈 결과 반환 (오류 아님) |
+| 빈 파일 | 헤더 없으면 필수 열 누락으로 400. 점수 기준(numeric/category)·외부 import는 **데이터 0행도 400** (빈 파일이 기존 데이터를 조용히 비우는 것 방지) |
 | 인코딩 | UTF-8 BOM → UTF-8 → EUC-KR(CP949) 자동 감지 |
 | .xls 차단 | `.xls` 업로드 시 즉시 400 (사용자에게 `.xlsx` 변환 안내) |
 | 빈 행 | 모든 셀이 비어 있는 행은 무시 |
@@ -29,9 +29,10 @@
 - **필수 헤더**: `학년`, `반`, `비밀번호`
 - **동작**: `INSERT OR REPLACE` (upsert) — DELETE 없음, 다른 반에 영향 없음
 - **검증**:
-  - 학년/반 숫자 파싱 실패 → 해당 행 오류
+  - 학년/반은 1 이상 숫자 (0·음수·파싱 실패 → 해당 행 오류; 특수계정 0/0 생성 불가). 단건 upsert(`PUT /classes/:g/:c`)도 동일하게 1 이상 강제
+  - 파일 내 동일 (학년, 반) 중복 행 → 오류
+  - 신규 학급 행에 비밀번호 누락 → 행 오류 (기존 학급은 비밀번호 없이 담임명만 갱신 가능)
   - 비밀번호 bcrypt 해싱 후 저장
-  - grade=0, class_no=0 (특수계정) import 금지 여부: 코드상 차단 없음 — 관리자 주의 필요
 
 ---
 
@@ -53,6 +54,7 @@
 - **is_enrolled**: 항상 0으로 고정
 
 > students import는 모두 upsert — DELETE+INSERT 금지.
+> 파일 내 동일 키(2a·2c: 학생코드, 2b: 학년+반+번호) 중복 행은 error — 전체 422.
 
 ---
 
@@ -68,7 +70,7 @@
 **검증 순서**:
 1. area의 calc_type이 Numeric인지 확인 (아니면 400)
 2. CLOSED 라운드 존재 시 import 차단 (`guard_no_closed_round`)
-3. 헤더 파싱 + `require_cols`
+3. 헤더 파싱 + `require_cols` + 데이터 0행이면 400 (빈 파일이 기준표를 비우는 것 방지)
 4. 각 행: 기준값·점수 숫자 변환
 5. 점수 > max_score → 오류
 6. (track_id, threshold) 중복 → 오류
@@ -92,7 +94,7 @@
 **검증 순서**:
 1. calc_type이 Category인지 확인
 2. CLOSED 라운드 존재 시 차단
-3. 각 행: 범주 비어 있으면 오류, 점수 변환
+3. 데이터 0행이면 400. 각 행: 범주 비어 있으면 오류, 점수 변환
 4. 점수 > max_score → 오류
 5. (track_id, category) 중복 → 오류
 6. **0점 항목 필수 검증**: (area_id, track_id) 그룹별로 양수 점수가 1개 이상이면 score=0인 범주 행 필수
@@ -113,7 +115,7 @@
 **졸업생 (graduated)**:
 - **필수 헤더**: `학생코드`, `이름`, `값`
 - COMPOSITE: 추가로 `대학명`, `모집단위명`
-- 학생 조회: `student_code`
+- 학생 조회: `student_code + is_enrolled=0` — 재학생 코드가 섞이면 행 오류 (재학생 데이터 침범 금지)
 
 **동작 분기**:
 - `multi_value=0` (단일값): (student_id, track_id) 중복 행 → 오류. 오류 없으면 `INSERT OR REPLACE`
@@ -135,12 +137,14 @@
 **엔드포인트**: `POST /api/areas/:id/base-data/external/daegyo/import`
 
 - **파일 형식**: xlsx 전용 (xls 차단)
-- **area 제약**: lookup_scope=COMPOSITE인 전형요소만 허용
+- **area 제약**: lookup_scope=COMPOSITE인 전형요소만 허용. **multi_value=1(CATEGORY SUM) 전형요소는 400 거부** — 석차연명부는 학생당 단일 값이고, 값 변경 재업로드 시 유니크 인덱스(value 포함) 때문에 기존 행이 남아 SUM 이중 합산이 발생하기 때문. 복수값 데이터는 기초 데이터 업로드 사용
 - **파싱 구조**:
   - 1행: `지역-대학명(캠퍼스)-전형유형-...` 형식에서 대학명 추출 (index 1)
   - 2행: 헤더 (`학년`, `반`, `번호`, `이름`, `일반등급`, `내점수(환산)`, `내등급(환산)` 필수)
   - 3행~: 데이터. `내점수(환산)` = "미제공" 이면 `일반등급` 사용, 아니면 `내등급(환산)` 사용
 - **학생 조회**: grade+class_no+seq_no, is_enrolled=1 (재학생만)
+- **파일 내 동일 학생 중복 행**: 오류 (전체 422). 오류 행 번호는 원본 엑셀 기준(1-based)
+- **데이터 0행**: 400 (트랙만 생성되는 no-op 방지)
 - **이름 불일치**: warning (import 계속)
 - **값 변환**: area.calc_type에 따라 (NUMERIC/MANUAL: ×100000, CATEGORY: 그대로)
 - **동작**: `INSERT OR REPLACE` (student_type 필터 없이 track_id 기반으로 구분됨)
