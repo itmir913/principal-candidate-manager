@@ -678,3 +678,46 @@ async fn finalize_round_exceeds_univ_quota_returns_unprocessable() {
         .bind(rid).fetch_one(&pool).await.unwrap();
     assert_eq!(status, "CLOSED", "대학 정원 초과 검증 실패 후 상태는 CLOSED 유지");
 }
+
+// ── 세션 4 감사 후속: 비-FINALIZED 라운드 단일성 DB 방어선 ────────
+
+#[tokio::test]
+async fn db_rejects_second_active_round() {
+    let pool = common::create_test_pool().await;
+
+    sqlx::query("INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', 'now', 'now')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // CLOSED가 남아있는 상태에서 새 OPEN 라운드 직접 삽입 → 인덱스가 차단
+    let res = sqlx::query("INSERT INTO rounds (status, opened_at) VALUES ('OPEN', 'now')")
+        .execute(&pool)
+        .await;
+    assert!(res.is_err(), "비-FINALIZED 라운드는 동시에 1개만 존재해야 함");
+    assert!(res.unwrap_err().to_string().contains("UNIQUE"));
+}
+
+#[tokio::test]
+async fn db_allows_new_round_after_finalize() {
+    let pool = common::create_test_pool().await;
+
+    sqlx::query(
+        "INSERT INTO rounds (status, opened_at, closed_at, finalized_at) VALUES ('FINALIZED', 'now', 'now', 'now')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // FINALIZED 라운드가 있어도 새 라운드는 열 수 있어야 함
+    sqlx::query("INSERT INTO rounds (status, opened_at) VALUES ('OPEN', 'now')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rounds")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 2);
+}

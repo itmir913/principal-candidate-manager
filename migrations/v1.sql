@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS rounds (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_open_round
     ON rounds(status) WHERE status = 'OPEN';
+-- 진행 중(비-FINALIZED) 라운드는 전체에서 최대 1개 — open_round의
+-- 앱 레벨 원자적 검사(INSERT ... WHERE NOT EXISTS)에 대한 DB 방어선
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_round
+    ON rounds((1)) WHERE status != 'FINALIZED';
 
 -- ================================================================
 -- AREAS
