@@ -17,7 +17,7 @@ use principal_candidate_manager::handlers::{
         teacher_delete_application, CreateApplicationBody,
     },
     rounds::{close_round, finalize_round, open_round, reopen_round},
-    scoring::{calculate_scores, recommend_result, unrecommend_result},
+    scoring::{auto_recommend_results, calculate_scores, recommend_result, unrecommend_result},
 };
 use sqlx::SqlitePool;
 
@@ -188,6 +188,7 @@ enum Ep {
     TeacherCreate,
     TeacherDelete,
     TeacherAbandon,
+    AutoRecommend,
 }
 
 async fn call(ep: Ep, pool: &SqlitePool, fx: &Fx) -> StatusCode {
@@ -272,6 +273,10 @@ async fn call(ep: Ep, pool: &SqlitePool, fx: &Fx) -> StatusCode {
                 Err((s, _)) => s,
             }
         }
+        Ep::AutoRecommend => match auto_recommend_results(State(st), Path(fx.rid)).await {
+            Ok(_) => StatusCode::OK,
+            Err((s, _)) => s,
+        },
     }
 }
 
@@ -397,6 +402,12 @@ async fn matrix_teacher_abandon() {
         [S::NOT_FOUND, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
     )
     .await;
+}
+
+#[tokio::test]
+async fn matrix_auto_recommend() {
+    use StatusCode as S;
+    assert_matrix_row(Ep::AutoRecommend, [S::NOT_FOUND, S::BAD_REQUEST, S::OK, S::BAD_REQUEST]).await;
 }
 
 // ── DB 방어선: FINALIZED results UPDATE 차단 트리거 ───────────────

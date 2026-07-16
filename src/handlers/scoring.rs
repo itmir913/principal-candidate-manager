@@ -7,7 +7,7 @@ use axum::{
 use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::{FromRow, Row};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     auth::TeacherClaims,
@@ -1110,4 +1110,255 @@ pub async fn unrecommend_result(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ── Auto-recommend ────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct AutoRecommendItem {
+    pub track_id: i64,
+    pub univ_name: String,
+    pub track_name: String,
+    pub count: i64,
+}
+
+#[derive(Serialize)]
+pub struct AutoRecommendManualItem {
+    pub track_id: i64,
+    pub univ_name: String,
+    pub track_name: String,
+    pub reason: String,
+}
+
+#[derive(Serialize)]
+pub struct AutoRecommendResponse {
+    pub confirmed: Vec<AutoRecommendItem>,
+    pub manual: Vec<AutoRecommendManualItem>,
+}
+
+/// CLOSED 라운드의 전 모집단위에 대해 순위순으로 잔여 정원까지 자동 추천 확정한다.
+/// 커트라인 동점·대학 정원 초과 등 자동 판단 불가능한 모집단위는 manual 목록으로 반환한다.
+/// 전 모집단위가 manual이어도 200 — 부분 성공이 이 기능의 정상 동작이다.
+pub async fn auto_recommend_results(
+    State(state): State<AppState>,
+    Path(round_id): Path<i64>,
+) -> Result<Json<AutoRecommendResponse>, ApiError> {
+    // BEGIN IMMEDIATE: 정원 카운트와 UPDATE 사이 TOCTOU 방지 — recommend_result와 동일 이유
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 1. 라운드 상태 확인
+    let round_status: Option<RoundStatus> = sqlx::query_scalar(
+        "SELECT status FROM rounds WHERE id = ?",
+    )
+    .bind(round_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match round_status {
+        Some(RoundStatus::Closed) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 자동 추천 확정이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
+    }
+
+    // 2. 이 라운드에 results가 있는 모집단위 목록 로드
+    #[derive(sqlx::FromRow)]
+    struct TrackRow {
+        track_id: i64,
+        univ_id: i64,
+        univ_name: String,
+        track_name: String,
+        unit_quota: Option<i64>,
+        total_quota: Option<i64>,
+    }
+
+    let tracks: Vec<TrackRow> = sqlx::query_as(
+        "SELECT ut.id AS track_id, ut.univ_id, u.univ_name, ut.track_name, ut.unit_quota, u.total_quota
+         FROM univ_tracks ut
+         JOIN universities u ON u.id = ut.univ_id
+         WHERE ut.id IN (SELECT DISTINCT track_id FROM results WHERE round_id = ?)
+         ORDER BY ut.id",
+    )
+    .bind(round_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    #[derive(sqlx::FromRow)]
+    struct CandidateRow {
+        student_id: i64,
+        ranking: Option<i64>,
+    }
+
+    enum TrackDecision {
+        Confirmed { student_ids: Vec<i64> },
+        Manual { reason: String },
+        Skip,
+    }
+
+    // 3. 모집단위별 판정 (쓰기는 아직 하지 않고 전부 계산만)
+    let mut decisions: Vec<(TrackRow, TrackDecision)> = Vec::new();
+
+    for track in tracks {
+        // 3a. used = 전 라운드 누적, recommended=1 AND abandoned=0 (recommend_result 동일 기준)
+        let used: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM results r
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
+             WHERE r.track_id = ? AND r.recommended = 1 AND a.abandoned = 0",
+        )
+        .bind(track.track_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // 3b. remaining = unit_quota - used. unit_quota NULL = 무제한
+        let remaining: Option<i64> = track.unit_quota.map(|q| q - used);
+
+        // 3c. 후보 = 이 라운드 이 모집단위 results 중 recommended=0 행, ranking ASC 정렬
+        let candidates: Vec<CandidateRow> = sqlx::query_as(
+            "SELECT r.student_id, r.ranking FROM results r
+             WHERE r.round_id = ? AND r.track_id = ? AND r.recommended = 0
+             ORDER BY r.ranking ASC, r.total_score DESC",
+        )
+        .bind(round_id)
+        .bind(track.track_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // 3d. ranking IS NULL → manual (Fail-Fast: silent 스킵 금지)
+        if candidates.iter().any(|c| c.ranking.is_none()) {
+            decisions.push((track, TrackDecision::Manual { reason: "순위 미계산 — 점수 재계산 필요".into() }));
+            continue;
+        }
+
+        // 3e. 후보 0명 또는 유한 정원이고 remaining <= 0 → 조용히 스킵 (정원 소진·후보 없음은 오류 아님)
+        if candidates.is_empty() || matches!(remaining, Some(r) if r <= 0) {
+            decisions.push((track, TrackDecision::Skip));
+            continue;
+        }
+
+        // 3f/3g. 무제한 또는 유한 정원 선발 결정
+        let decision = match remaining {
+            None => TrackDecision::Confirmed {
+                student_ids: candidates.iter().map(|c| c.student_id).collect(),
+            },
+            Some(rem) => {
+                let rem = rem as usize;
+                if candidates.len() <= rem {
+                    // 전원이 정원 안에 들어옴
+                    TrackDecision::Confirmed {
+                        student_ids: candidates.iter().map(|c| c.student_id).collect(),
+                    }
+                } else {
+                    // 커트라인 동점 검사: rem번째와 rem+1번째 ranking 비교
+                    let cutline_rank = candidates[rem - 1].ranking.unwrap();
+                    let next_rank    = candidates[rem].ranking.unwrap();
+                    if cutline_rank == next_rank {
+                        TrackDecision::Manual {
+                            reason: format!("동점자 정원 초과 — {}위 동점", cutline_rank),
+                        }
+                    } else {
+                        TrackDecision::Confirmed {
+                            student_ids: candidates[..rem].iter().map(|c| c.student_id).collect(),
+                        }
+                    }
+                }
+            }
+        };
+        decisions.push((track, decision));
+    }
+
+    // 4. 대학 전체 정원 검증
+    // 4a. 이번 자동 선발 확정 합계를 대학별로 집계
+    let mut univ_confirmed_count: HashMap<i64, i64> = HashMap::new();
+    let mut univ_total_quota: HashMap<i64, i64> = HashMap::new();
+
+    for (track, decision) in &decisions {
+        if let TrackDecision::Confirmed { student_ids } = decision {
+            *univ_confirmed_count.entry(track.univ_id).or_insert(0) += student_ids.len() as i64;
+        }
+        if let Some(tq) = track.total_quota {
+            univ_total_quota.insert(track.univ_id, tq);
+        }
+    }
+
+    // 4b. total_quota가 있는 대학 중 univ_used + auto_count > total_quota 이면 downgrade
+    let mut univ_to_downgrade: HashSet<i64> = HashSet::new();
+    for (&univ_id, &auto_count) in &univ_confirmed_count {
+        if let Some(&tq) = univ_total_quota.get(&univ_id) {
+            let univ_used: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM results r
+                 JOIN applications a ON a.student_id = r.student_id
+                                     AND a.track_id  = r.track_id
+                                     AND a.round_id  = r.round_id
+                 JOIN univ_tracks ut ON ut.id = r.track_id
+                 WHERE ut.univ_id = ? AND r.recommended = 1 AND a.abandoned = 0",
+            )
+            .bind(univ_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            if univ_used + auto_count > tq {
+                univ_to_downgrade.insert(univ_id);
+            }
+        }
+    }
+
+    // 4c. 해당 대학 소속 자동 선발 모집단위 전부를 manual로 전환
+    for (track, decision) in &mut decisions {
+        if univ_to_downgrade.contains(&track.univ_id) {
+            if matches!(decision, TrackDecision::Confirmed { .. }) {
+                *decision = TrackDecision::Manual {
+                    reason: "대학 전체 정원 초과 — 모집단위 간 배분 판단 필요".into(),
+                };
+            }
+        }
+    }
+
+    // 5. 확정된 선발 대상만 UPDATE results SET recommended = 1 (기존 recommended=1 행은 변경 안 함)
+    let mut confirmed_items: Vec<AutoRecommendItem> = Vec::new();
+    let mut manual_items: Vec<AutoRecommendManualItem> = Vec::new();
+
+    for (track, decision) in &decisions {
+        match decision {
+            TrackDecision::Confirmed { student_ids } => {
+                for &sid in student_ids {
+                    sqlx::query(
+                        "UPDATE results SET recommended = 1
+                         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+                    )
+                    .bind(sid).bind(track.track_id).bind(round_id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                }
+                confirmed_items.push(AutoRecommendItem {
+                    track_id: track.track_id,
+                    univ_name: track.univ_name.clone(),
+                    track_name: track.track_name.clone(),
+                    count: student_ids.len() as i64,
+                });
+            }
+            TrackDecision::Manual { reason } => {
+                manual_items.push(AutoRecommendManualItem {
+                    track_id: track.track_id,
+                    univ_name: track.univ_name.clone(),
+                    track_name: track.track_name.clone(),
+                    reason: reason.clone(),
+                });
+            }
+            TrackDecision::Skip => {}
+        }
+    }
+
+    // 6. COMMIT 후 200 JSON
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AutoRecommendResponse { confirmed: confirmed_items, manual: manual_items }))
 }
