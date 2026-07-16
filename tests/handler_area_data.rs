@@ -1332,3 +1332,60 @@ async fn category_map_import_empty_file_rejected_and_table_preserved() {
         .unwrap();
     assert_eq!(count, 1, "기존 범주표가 보존되어야 함");
 }
+
+// ── 세션 4 감사 후속: student_type 검증 (silent fallback 제거) ────
+
+#[tokio::test]
+async fn base_data_import_invalid_student_type_returns_400() {
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nS001,테스트,30.5\n";
+    let q = Query(StudentTypeQuery { student_type: "Enrolled".to_string() }); // 대문자 오타
+    let err = base_data_import(State(state), Path(aid), q, build_multipart(csv).await)
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(err.1.contains("student_type"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn base_data_list_invalid_student_type_returns_400() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let q = Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "all".to_string() });
+    let err = base_data_list(State(state), Path(aid), q).await.unwrap_err();
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(err.1.contains("student_type"));
+}
+
+#[tokio::test]
+async fn base_data_import_valid_student_types_still_accepted() {
+    // 유효값 회귀 확인: graduated는 기존대로 동작
+    let pool = common::create_test_pool_shared().await;
+    insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nS001,테스트,30.5\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+}

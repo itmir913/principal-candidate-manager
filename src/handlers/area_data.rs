@@ -53,6 +53,18 @@ pub struct BaseDataPageQuery {
 }
 fn student_type_enrolled() -> String { "enrolled".to_string() }
 
+/// student_type 검증 — enrolled=true / graduated=false, 그 외 값은 silent fallback 없이 400
+pub(crate) fn parse_student_type(s: &str) -> Result<bool, ApiError> {
+    match s {
+        "enrolled" => Ok(true),
+        "graduated" => Ok(false),
+        other => Err((
+            StatusCode::BAD_REQUEST,
+            format!("student_type은 'enrolled' 또는 'graduated'만 허용됩니다 (입력값: '{}')", other),
+        )),
+    }
+}
+
 fn default_page() -> i64 { 1 }
 fn default_per_page() -> i64 { 50 }
 
@@ -687,9 +699,10 @@ pub async fn base_data_template(
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
+    let enrolled = parse_student_type(&q.student_type)?;
 
     // 재학생: 빈 양식만 반환
-    if q.student_type == "enrolled" {
+    if enrolled {
         let headers: Vec<&str> = if composite {
             vec!["학년", "반", "번호", "이름", "값", "대학명", "모집단위명"]
         } else {
@@ -829,7 +842,7 @@ pub async fn base_data_import(
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(&state.db, id).await?;
-    let enrolled = q.student_type == "enrolled";
+    let enrolled = parse_student_type(&q.student_type)?;
     let bytes = read_file(multipart).await?;
     let (headers, file_rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -1180,7 +1193,7 @@ pub async fn base_data_list(
 ) -> Result<Json<BaseDataPage>, ApiError> {
     let area = get_area(&state.db, id).await?;
     let composite = area.lookup_scope == LookupScope::Composite;
-    let is_enrolled_val = if q.student_type != "graduated" { 1i64 } else { 0i64 };
+    let is_enrolled_val = if parse_student_type(&q.student_type)? { 1i64 } else { 0i64 };
 
     let per_page = q.per_page.max(1);
     let page = q.page.max(1);
