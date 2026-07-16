@@ -985,8 +985,10 @@ pub async fn recommend_result(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if status != Some(RoundStatus::Closed) {
-        return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 확정이 가능합니다".into()));
+    match status {
+        Some(RoundStatus::Closed) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 확정이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     // 2. 모집단위 정원 정보 조회
@@ -1090,8 +1092,10 @@ pub async fn unrecommend_result(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if status != Some(RoundStatus::Closed) {
-        return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 취소가 가능합니다".into()));
+    match status {
+        Some(RoundStatus::Closed) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "CLOSED 라운드에서만 추천 취소가 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     sqlx::query(

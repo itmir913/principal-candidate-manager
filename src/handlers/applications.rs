@@ -169,8 +169,10 @@ pub async fn abandon_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if status != Some(RoundStatus::Finalized) {
-        return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
+    match status {
+        Some(RoundStatus::Finalized) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     let affected = sqlx::query(
@@ -205,8 +207,10 @@ pub async fn teacher_abandon_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if status != Some(RoundStatus::Finalized) {
-        return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into()));
+    match status {
+        Some(RoundStatus::Finalized) => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "FINALIZED 라운드에서만 포기 입력이 가능합니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     let in_class: Option<i64> = if is_grad_teacher(&claims) {
@@ -720,11 +724,15 @@ pub async fn teacher_delete_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if round_status != Some(RoundStatus::Open) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "OPEN 라운드의 지원만 취소할 수 있습니다".into(),
-        ));
+    match round_status {
+        Some(RoundStatus::Open) => {}
+        Some(_) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "OPEN 라운드의 지원만 취소할 수 있습니다".into(),
+            ))
+        }
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
     let ok: bool = if is_grad_teacher(&claims) {

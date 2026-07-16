@@ -342,7 +342,7 @@ async fn matrix_recommend() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::Recommend,
-        [S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT, S::BAD_REQUEST],
+        [S::NOT_FOUND, S::BAD_REQUEST, S::NO_CONTENT, S::BAD_REQUEST],
     )
     .await;
 }
@@ -352,7 +352,7 @@ async fn matrix_unrecommend() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::Unrecommend,
-        [S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT, S::BAD_REQUEST],
+        [S::NOT_FOUND, S::BAD_REQUEST, S::NO_CONTENT, S::BAD_REQUEST],
     )
     .await;
 }
@@ -362,7 +362,7 @@ async fn matrix_admin_abandon() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::AdminAbandon,
-        [S::BAD_REQUEST, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
+        [S::NOT_FOUND, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
     )
     .await;
 }
@@ -384,7 +384,7 @@ async fn matrix_teacher_delete() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::TeacherDelete,
-        [S::BAD_REQUEST, S::NO_CONTENT, S::BAD_REQUEST, S::BAD_REQUEST],
+        [S::NOT_FOUND, S::NO_CONTENT, S::BAD_REQUEST, S::BAD_REQUEST],
     )
     .await;
 }
@@ -394,7 +394,7 @@ async fn matrix_teacher_abandon() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::TeacherAbandon,
-        [S::BAD_REQUEST, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
+        [S::NOT_FOUND, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
     )
     .await;
 }
