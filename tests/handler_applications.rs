@@ -115,14 +115,13 @@ async fn create_application_duplicate_upserts_department_name() {
 #[tokio::test]
 async fn create_application_closed_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
-    let (sid, tid, _) = setup(&pool).await;
-    let rid: i64 = sqlx::query_scalar(
-        "INSERT INTO rounds (status, opened_at, closed_at) \
-         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (sid, tid, rid) = setup(&pool).await;
+    // idx_one_active_round: 비-FINALIZED 라운드는 1개만 — 기존 라운드를 CLOSED로 전환
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
     let res = teacher_create_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
@@ -244,14 +243,7 @@ async fn delete_application_open_round_ok() {
 #[tokio::test]
 async fn delete_application_closed_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
-    let (sid, tid, _) = setup(&pool).await;
-    let rid: i64 = sqlx::query_scalar(
-        "INSERT INTO rounds (status, opened_at, closed_at) \
-         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
         "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
          VALUES (?, ?, ?, 1, 0)",
@@ -262,6 +254,12 @@ async fn delete_application_closed_round_returns_bad_request() {
     .execute(&pool)
     .await
     .unwrap();
+    // idx_one_active_round: 비-FINALIZED 라운드는 1개만 — 기존 라운드를 CLOSED로 전환
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
     let res = teacher_delete_application(
         State(common::make_state(pool)),
         Extension(common::teacher_claims(1, 1)),
@@ -357,15 +355,14 @@ async fn abandon_on_open_round_returns_bad_request() {
 async fn abandon_on_closed_round_returns_bad_request() {
     // CLOSED 상태에서도 포기 불가 (FINALIZED에서만 허용)
     let pool = common::create_test_pool().await;
-    let (sid, tid, _) = setup(&pool).await;
-    let rid: i64 = sqlx::query_scalar(
-        "INSERT INTO rounds (status, opened_at, closed_at) \
-         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let (sid, tid, rid) = setup(&pool).await;
     insert_application(&pool, sid, tid, rid).await;
+    // idx_one_active_round: 비-FINALIZED 라운드는 1개만 — 기존 라운드를 CLOSED로 전환
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
     let res = abandon_application(State(common::make_state(pool)), Path((sid, tid, rid))).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
