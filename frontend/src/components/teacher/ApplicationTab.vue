@@ -8,8 +8,18 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
     </div>
 
+    <!-- 진행 중 라운드 없음 — currentRound 접근 전에 차단 (렌더 오류 방지) -->
+    <div v-if="!currentRound" class="px-4 sm:px-10 pb-8">
+      <div
+        class="rounded-xl flex items-center justify-center"
+        style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
+      >
+        <p class="text-base" style="color: #94a3b8;">진행 중인 라운드가 없습니다. 관리자가 라운드를 열면 지원자를 등록할 수 있습니다.</p>
+      </div>
+    </div>
+
     <!-- 두 열 레이아웃 (남은 높이 전체 차지) -->
-    <div class="flex flex-col lg:flex-row gap-6 px-4 sm:px-10 pb-8">
+    <div v-else class="flex flex-col lg:flex-row gap-6 px-4 sm:px-10 pb-8">
 
       <!-- ── 좌측: 학생 목록 ── -->
       <div
