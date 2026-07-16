@@ -39,3 +39,4 @@ winres = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+proptest = "1"

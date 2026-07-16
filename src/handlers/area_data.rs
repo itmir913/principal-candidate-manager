@@ -81,7 +81,8 @@ pub(crate) struct AreaInfo {
 
 /// 표시값 문자열 → DB 저장값 (×100000). 소수점 5자리 초과 시 Err 반환.
 /// 음수 허용: 감점 전형요소(특정 범주 해당 학생 감점)를 지원하기 위해 음수 점수가 가능.
-pub(crate) fn parse_display_value(s: &str) -> Result<i64, String> {
+/// pub: tests/invariants.rs의 왕복 불변식 테스트에서 사용 (pub(crate)는 tests/에서 접근 불가)
+pub fn parse_display_value(s: &str) -> Result<i64, String> {
     let trimmed = s.trim();
     let f: f64 = trimmed
         .parse()
@@ -116,7 +117,8 @@ fn simple_template(headers: &[&str]) -> anyhow::Result<Vec<u8>> {
     Ok(wb.save_to_buffer()?)
 }
 
-pub(crate) fn fmt_score(v: i64) -> String {
+/// pub: tests/invariants.rs의 왕복 불변식 테스트에서 사용
+pub fn fmt_score(v: i64) -> String {
     let s = format!("{:.5}", v as f64 / 100_000.0);
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
