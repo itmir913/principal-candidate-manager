@@ -773,60 +773,84 @@ pub async fn base_data_template(
     Ok(excel::xlsx_response(buf, "base_data_template.xlsx"))
 }
 
-/// GET /api/areas/:id/base-data/export
+/// GET /api/areas/:id/base-data/export?student_type=enrolled|graduated
+///
+/// import와 대칭인 student_type별 헤더로 내보낸다 — 산출물을 그대로 같은
+/// student_type으로 재import(내려받아 수정 후 재업로드)할 수 있어야 한다:
+/// - 재학생: 학년/반/번호/이름/값 (import require_cols와 동일)
+/// - 졸업생: 학생코드/이름/값
+/// COMPOSITE 전형요소는 대학명/모집단위명 열 추가. 공통 테이블 행(track_id NULL)도
+/// 빈 대학명/모집단위명으로 포함한다 (INNER JOIN으로 누락시키면 왕복 시 데이터 유실).
 pub async fn base_data_export(
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    Query(q): Query<StudentTypeQuery>,
 ) -> Result<Response, ApiError> {
     let area = get_area(&state.db, id).await?;
+    let enrolled = parse_student_type(&q.student_type)?;
+    let composite = area.lookup_scope == LookupScope::Composite;
+
     let mut wb = Workbook::new();
     let ws = wb.add_worksheet();
 
-    if area.lookup_scope == LookupScope::Composite {
-        for (i, h) in ["학생코드", "이름", "값", "대학명", "모집단위명"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
-        }
-        let rows = sqlx::query(
-            "SELECT s.student_code, s.name, bd.value, u.univ_name, ut.track_name
-             FROM base_data bd
-             JOIN students s ON bd.student_id = s.id
-             JOIN univ_tracks ut ON bd.track_id = ut.id
-             JOIN universities u ON ut.univ_id = u.id
-             WHERE bd.area_id = ?
-             ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no",
-        )
-        .bind(id)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        for (r, row) in rows.iter().enumerate() {
-            let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
-            ws.write_string(r, 1, row.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
-            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type)?;
-            ws.write_string(r, 3, row.get::<&str, _>("univ_name")).map_err(excel::xlsx_err)?;
-            ws.write_string(r, 4, row.get::<&str, _>("track_name")).map_err(excel::xlsx_err)?;
-        }
+    let mut headers: Vec<&str> = if enrolled {
+        vec!["학년", "반", "번호", "이름", "값"]
     } else {
-        for (i, h) in ["학생코드", "이름", "값"].iter().enumerate() {
-            ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
+        vec!["학생코드", "이름", "값"]
+    };
+    if composite {
+        headers.extend_from_slice(&["대학명", "모집단위명"]);
+    }
+    for (i, h) in headers.iter().enumerate() {
+        ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
+    }
+
+    let rows = sqlx::query(
+        "SELECT s.student_code, s.name, s.grade, s.class_no, s.seq_no, bd.value,
+                COALESCE(u.univ_name, '') AS univ_name,
+                COALESCE(ut.track_name, '') AS track_name
+         FROM base_data bd
+         JOIN students s ON bd.student_id = s.id
+         LEFT JOIN univ_tracks ut ON bd.track_id = ut.id
+         LEFT JOIN universities u ON ut.univ_id = u.id
+         WHERE bd.area_id = ? AND s.is_enrolled = ?
+           AND (? OR bd.track_id IS NULL)
+         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no, s.student_code",
+    )
+    .bind(id)
+    .bind(enrolled as i64)
+    // SIMPLE 전형요소는 공통 테이블(track_id NULL)만 내보낸다 — import도 track 열이 없음
+    .bind(composite)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    for (r, row) in rows.iter().enumerate() {
+        let r = r as u32 + 1;
+        let mut col: u16 = 0;
+        if enrolled {
+            // 재학생 CHECK 제약상 학년/반/번호는 NOT NULL — 없으면 데이터 손상이므로 500
+            for key in ["grade", "class_no", "seq_no"] {
+                let v: Option<i64> = row.get(key);
+                let v = v.ok_or_else(|| (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("재학생 위치({}) 누락: 학생코드 '{}'", key, row.get::<&str, _>("student_code")),
+                ))?;
+                ws.write_number(r, col, v as f64).map_err(excel::xlsx_err)?;
+                col += 1;
+            }
+        } else {
+            ws.write_string(r, col, row.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
+            col += 1;
         }
-        let rows = sqlx::query(
-            "SELECT s.student_code, s.name, bd.value
-             FROM base_data bd
-             JOIN students s ON bd.student_id = s.id
-             WHERE bd.area_id = ? AND bd.track_id IS NULL
-             ORDER BY s.grade, s.class_no, s.seq_no",
-        )
-        .bind(id)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        for (r, row) in rows.iter().enumerate() {
-            let r = r as u32 + 1;
-            ws.write_string(r, 0, row.get::<&str, _>("student_code")).map_err(excel::xlsx_err)?;
-            ws.write_string(r, 1, row.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
-            write_value(ws, r, 2, row.get::<&str, _>("value"), area.calc_type)?;
+        ws.write_string(r, col, row.get::<&str, _>("name")).map_err(excel::xlsx_err)?;
+        col += 1;
+        write_value(ws, r, col, row.get::<&str, _>("value"), area.calc_type)?;
+        col += 1;
+        if composite {
+            ws.write_string(r, col, row.get::<&str, _>("univ_name")).map_err(excel::xlsx_err)?;
+            col += 1;
+            ws.write_string(r, col, row.get::<&str, _>("track_name")).map_err(excel::xlsx_err)?;
         }
     }
 

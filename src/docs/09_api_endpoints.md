@@ -99,7 +99,7 @@
 |---|---|---|
 | GET | `/areas/:id/base-data/list` | 페이지네이션. `?page=&per_page=&student_type=enrolled\|graduated` |
 | GET | `/areas/:id/base-data/template` | xlsx 양식. `?student_type=enrolled\|graduated` |
-| GET | `/areas/:id/base-data/export` | 내보내기 |
+| GET | `/areas/:id/base-data/export` | 내보내기. `?student_type=enrolled\|graduated` — import와 동일 헤더(왕복 가능) |
 | POST | `/areas/:id/base-data/import` | import. `?student_type=enrolled\|graduated` |
 
 `student_type`은 `enrolled`/`graduated` 외의 값이면 400 (silent fallback 없음). 복수값 전형요소 import에서 CLOSED 라운드 지원자의 데이터 교체 시도는 422 + 학생코드 안내.

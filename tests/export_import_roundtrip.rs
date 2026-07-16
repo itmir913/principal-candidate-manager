@@ -346,7 +346,7 @@ async fn base_data_graduated_roundtrip() {
     .await
     .unwrap();
 
-    let resp = base_data_export(st(&pool), Path(aid)).await.unwrap();
+    let resp = base_data_export(st(&pool), Path(aid), graduated_q()).await.unwrap();
     let xlsx = response_bytes(resp).await;
     let (status, axum::Json(result)) =
         base_data_import(st(&pool), Path(aid), graduated_q(), xlsx_multipart(&xlsx).await)
@@ -364,13 +364,11 @@ async fn base_data_graduated_roundtrip() {
     assert_eq!(before, after, "왕복 후 기초데이터가 동일해야 함");
 }
 
-/// [감사 발견 — 현재 동작 고정] base_data export는 학생코드/이름/값 헤더로 내보내는데,
-/// 재학생 import는 학년/반/번호/이름/값 헤더를 요구하므로 export 산출물을
-/// student_type=enrolled로 재import할 수 없다 (400 헤더 누락).
-/// export는 확인·백업용이고 import 양식은 별도 template 엔드포인트가 제공하므로
-/// 정보 유실은 없으나, 재import를 지원하려면 export에 학년/반/번호 열 추가가 필요하다.
+/// 재학생 base_data 왕복: export가 import와 동일한 학년/반/번호/이름/값 헤더로
+/// 내보내므로 "내려받아 수정 후 재업로드" 흐름이 성립한다.
+/// (과거에는 학생코드 헤더로 내보내 재import가 400이었다 — 세션 5 후속에서 대칭화)
 #[tokio::test]
-async fn base_data_export_not_reimportable_for_enrolled() {
+async fn base_data_enrolled_roundtrip() {
     let pool = common::create_test_pool_shared().await;
     common::insert_class(&pool, 3, 1).await;
     sqlx::query(
@@ -395,21 +393,177 @@ async fn base_data_export_not_reimportable_for_enrolled() {
             .unwrap();
     assert_eq!(status, StatusCode::OK);
 
-    let resp = base_data_export(st(&pool), Path(aid)).await.unwrap();
+    let before: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT student_id, value FROM base_data WHERE area_id = ? ORDER BY student_id",
+    )
+    .bind(aid)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    let resp = base_data_export(st(&pool), Path(aid), enrolled_q()).await.unwrap();
     let xlsx = response_bytes(resp).await;
-    let res = base_data_import(st(&pool), Path(aid), enrolled_q(), xlsx_multipart(&xlsx).await).await;
+    let (status, axum::Json(result)) =
+        base_data_import(st(&pool), Path(aid), enrolled_q(), xlsx_multipart(&xlsx).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "재import 실패: {:?}", result.errors);
 
-    let Err(err) = res else { panic!("현재 동작: 헤더 비호환으로 400이어야 함") };
-    assert_eq!(err.0, StatusCode::BAD_REQUEST);
-    assert!(err.1.contains("학년"), "누락 열 안내: {}", err.1);
+    let after: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT student_id, value FROM base_data WHERE area_id = ? ORDER BY student_id",
+    )
+    .bind(aid)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before, after, "왕복 후 기초데이터가 동일해야 함");
+}
 
-    // 거부 시 기존 데이터 보존
-    let value: String = sqlx::query_scalar("SELECT value FROM base_data WHERE area_id = ?")
+/// COMPOSITE 재학생 왕복: 모집단위별 행 + 공통 테이블 행(track NULL)이 모두 내보내지고
+/// (과거 INNER JOIN은 공통 행을 누락) 기존 트랙 재사용으로 그대로 재import된다.
+#[tokio::test]
+async fn base_data_enrolled_composite_roundtrip() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('E001', '홍길동', 3, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, lookup_scope) \
+         VALUES ('환산내신', 10000000, 'NUMERIC', 'UPPER', 'COMPOSITE') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // 모집단위 행(한국대/컴공 자동 생성) + 공통 행(대학명·모집단위명 공란)
+    let csv = "학년,반,번호,이름,값,대학명,모집단위명\n\
+               3,1,1,홍길동,4.2,한국대,컴공\n\
+               3,1,1,홍길동,3.5,,\n";
+    let (status, _) =
+        base_data_import(st(&pool), Path(aid), enrolled_q(), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    let before: Vec<(i64, Option<i64>, String)> = sqlx::query_as(
+        "SELECT student_id, track_id, value FROM base_data WHERE area_id = ? \
+         ORDER BY COALESCE(track_id, 0), student_id",
+    )
+    .bind(aid)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before.len(), 2, "모집단위 행 + 공통 행");
+
+    let resp = base_data_export(st(&pool), Path(aid), enrolled_q()).await.unwrap();
+    let xlsx = response_bytes(resp).await;
+    let (status, axum::Json(result)) =
+        base_data_import(st(&pool), Path(aid), enrolled_q(), xlsx_multipart(&xlsx).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "재import 실패: {:?}", result.errors);
+    assert!(result.warnings.is_empty(), "기존 트랙 재사용 — 자동 추가 경고가 없어야 함: {:?}", result.warnings);
+
+    let after: Vec<(i64, Option<i64>, String)> = sqlx::query_as(
+        "SELECT student_id, track_id, value FROM base_data WHERE area_id = ? \
+         ORDER BY COALESCE(track_id, 0), student_id",
+    )
+    .bind(aid)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before, after, "공통 행 포함 왕복 후 기초데이터가 동일해야 함");
+}
+
+/// 혼합 DB: export는 student_type별로 분리되어 각자 자기 타입 헤더·행만 담고,
+/// 각각 자기 타입으로 재import해도 상대 타입 데이터를 건드리지 않는다.
+#[tokio::test]
+async fn base_data_export_separates_student_types() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('E001', '홍길동', 3, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES ('G001', '김졸업', 0, 2024)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, lookup_scope) \
+         VALUES ('내신', 10000000, 'NUMERIC', 'UPPER', 'SIMPLE') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let (status, _) = base_data_import(
+        st(&pool), Path(aid), enrolled_q(),
+        common::csv_multipart("학년,반,번호,이름,값\n3,1,1,홍길동,4.2\n").await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = base_data_import(
+        st(&pool), Path(aid), graduated_q(),
+        common::csv_multipart("학생코드,이름,값\nG001,김졸업,3.75\n").await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    let snapshot = |pool: SqlitePool, aid: i64| async move {
+        sqlx::query_as::<_, (i64, String)>(
+            "SELECT student_id, value FROM base_data WHERE area_id = ? ORDER BY student_id",
+        )
         .bind(aid)
-        .fetch_one(&pool)
+        .fetch_all(&pool)
         .await
-        .unwrap();
-    assert_eq!(value, "420000");
+        .unwrap()
+    };
+    let before = snapshot(pool.clone(), aid).await;
+    assert_eq!(before.len(), 2);
+
+    // 재학생 export: 재학생 행 1개만, 재학생 헤더
+    let resp = base_data_export(st(&pool), Path(aid), enrolled_q()).await.unwrap();
+    let enrolled_xlsx = response_bytes(resp).await;
+    let rows = principal_candidate_manager::excel::parse_xlsx_all_rows_raw(&enrolled_xlsx).unwrap();
+    assert_eq!(rows.len(), 2, "헤더 + 재학생 1행: {:?}", rows);
+    assert!(rows[0].iter().any(|c| c == "학년"), "재학생 헤더: {:?}", rows[0]);
+    assert!(rows[1].iter().any(|c| c == "홍길동"));
+
+    // 졸업생 export: 졸업생 행 1개만, 졸업생 헤더
+    let resp = base_data_export(st(&pool), Path(aid), graduated_q()).await.unwrap();
+    let graduated_xlsx = response_bytes(resp).await;
+    let rows = principal_candidate_manager::excel::parse_xlsx_all_rows_raw(&graduated_xlsx).unwrap();
+    assert_eq!(rows.len(), 2, "헤더 + 졸업생 1행: {:?}", rows);
+    assert!(rows[0].iter().any(|c| c == "학생코드"), "졸업생 헤더: {:?}", rows[0]);
+    assert!(rows[1].iter().any(|c| c == "G001"));
+
+    // 각자 재import — 상대 타입 데이터 불변
+    let (status, _) =
+        base_data_import(st(&pool), Path(aid), enrolled_q(), xlsx_multipart(&enrolled_xlsx).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) =
+        base_data_import(st(&pool), Path(aid), graduated_q(), xlsx_multipart(&graduated_xlsx).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK);
+
+    assert_eq!(before, snapshot(pool.clone(), aid).await, "타입별 왕복 후 전체 기초데이터 동일");
 }
 
 // ── 손상 파일 내성 ───────────────────────────────────────────────
