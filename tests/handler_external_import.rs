@@ -7,7 +7,7 @@ use axum::{
     extract::{FromRequest, Multipart, Path, State},
     http::{Request, StatusCode},
 };
-use principal_candidate_manager::handlers::external_import::daegyo_import;
+use principal_candidate_manager::handlers::external_import::{daegyo_import, univ_import};
 use rust_xlsxwriter::Workbook;
 
 /// 대교협 양식 xlsx 생성: 1행 대학 정보, 2행 헤더, 3행~ 데이터
@@ -245,4 +245,225 @@ async fn daegyo_import_reupload_replaces_single_value() {
             .unwrap();
     assert_eq!(rows.len(), 1, "재업로드 시 행이 누적되면 안 됨");
     assert_eq!(rows[0], "200000", "마지막 업로드 값으로 교체되어야 함");
+}
+
+// ── 세션 5: 거부 경로 보충 ────────────────────────────────────────
+// 공통 단언 3종: ① 상태코드 ② 테이블 불변(rollback) ③ 행 번호+원인 메시지
+
+/// 셀을 문자열 그대로 쓰는 대교협 xlsx 빌더 — 학년/반/번호 파싱 실패 케이스용
+fn build_daegyo_xlsx_str(data_rows: &[[&str; 5]]) -> Vec<u8> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write_string(0, 0, "서울-테스트대(본교)-학교장추천-2026").unwrap();
+    let headers = ["학년", "반", "번호", "이름", "일반등급", "내점수(환산)", "내등급(환산)"];
+    for (i, h) in headers.iter().enumerate() {
+        ws.write_string(1, i as u16, *h).unwrap();
+    }
+    for (r, [grade, class_no, seq_no, name, value]) in data_rows.iter().enumerate() {
+        let row = r as u32 + 2;
+        ws.write_string(row, 0, *grade).unwrap();
+        ws.write_string(row, 1, *class_no).unwrap();
+        ws.write_string(row, 2, *seq_no).unwrap();
+        ws.write_string(row, 3, *name).unwrap();
+        ws.write_string(row, 4, "2.0").unwrap();
+        ws.write_string(row, 5, "제공").unwrap();
+        ws.write_string(row, 6, *value).unwrap();
+    }
+    wb.save_to_buffer().unwrap()
+}
+
+async fn assert_no_side_effects(pool: &sqlx::SqlitePool, aid: i64) {
+    let base_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(base_count, 0, "rollback — 부분 저장 없음");
+    let univ_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM universities")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(univ_count, 0, "자동 생성 대학도 rollback 되어야 함");
+}
+
+#[tokio::test]
+async fn daegyo_import_unregistered_student_rejects_all() {
+    // DB에 없는 학생 → 422 + 위치·이름 안내, 전체 rollback
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    // 3반 9번은 미등록 — 등록된 1번 행이 있어도 전체 거부
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5"), (3, 3, 9, "미등록", "2.0")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors[0].starts_with("4행"), "실제 오류: {}", result.errors[0]);
+    assert!(
+        result.errors[0].contains("등록된 재학생을 찾을 수 없습니다"),
+        "실제 오류: {}",
+        result.errors[0]
+    );
+    assert!(result.errors[0].contains("3학년 3반 9번"), "실제 오류: {}", result.errors[0]);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_import_missing_header_returns_bad_request() {
+    // 헤더에서 '이름' 열 제거 → 400 + 어느 열이 없는지 안내
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write_string(0, 0, "서울-테스트대(본교)-학교장추천-2026").unwrap();
+    for (i, h) in ["학년", "반", "번호", "일반등급", "내점수(환산)", "내등급(환산)"].iter().enumerate() {
+        ws.write_string(1, i as u16, *h).unwrap();
+    }
+    let xlsx = wb.save_to_buffer().unwrap();
+
+    let res = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await;
+    let Err(err) = res else { panic!("헤더 누락 시 거부되어야 함") };
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(err.1.contains("'이름'"), "실제 오류: {}", err.1);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_import_value_parse_error_rejects_all() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "등급아님")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors[0].starts_with("3행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("숫자 변환 실패"), "실제 오류: {}", result.errors[0]);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_import_missing_value_rejects_all() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("3행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("값 누락"), "실제 오류: {}", result.errors[0]);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_import_non_numeric_grade_rejects_all() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx_str(&[["삼", "1", "1", "홍길동", "1.5"]]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("3행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("학년"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("숫자 변환 실패"), "실제 오류: {}", result.errors[0]);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_import_simple_area_rejected() {
+    // 외부 가져오기는 COMPOSITE(대학별 환산) 전형요소 전용 — SIMPLE은 400
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, match_mode, lookup_scope, multi_value) \
+         VALUES ('내신', 10000000, 'NUMERIC', 'UPPER', 'SIMPLE', 0) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5")]);
+    let res = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await;
+    let Err(err) = res else { panic!("SIMPLE 전형요소는 거부되어야 함") };
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(err.1.contains("대학별 환산점수"), "실제 오류: {}", err.1);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn univ_import_non_xls_file_returns_bad_request() {
+    // 유니브 양식은 .xls (BIFF) — xlsx 바이트를 올리면 400
+    // (정상 .xls 파싱 경로는 테스트에서 BIFF 파일을 생성할 수 없어 미커버 — do_import
+    //  공통 로직은 daegyo 테스트가 커버한다)
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5")]);
+    let res = univ_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await;
+    let Err(err) = res else { panic!(".xls가 아닌 파일은 거부되어야 함") };
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert!(err.1.contains(".xls"), "실제 오류: {}", err.1);
+    assert_no_side_effects(&pool, aid).await;
 }

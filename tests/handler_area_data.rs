@@ -1451,3 +1451,206 @@ async fn multi_import_closed_round_applicant_returns_422_not_500() {
     .unwrap();
     assert_eq!(value, "회장");
 }
+
+// ── 세션 5: import 거부 경로 보충 ─────────────────────────────────
+// 공통 단언 3종: ① 상태코드 ② 대상 테이블 불변(기존 행 보존) ③ 행 번호+원인 메시지
+
+/// 기존 기준표 행을 미리 넣어 두면 거부 시 DELETE+INSERT 전체가 롤백됐는지 확인할 수 있다
+async fn seed_numeric_row(pool: &sqlx::SqlitePool, aid: i64) {
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 0, 100000)",
+    )
+    .bind(aid)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn assert_numeric_table_preserved(pool: &sqlx::SqlitePool, aid: i64) {
+    let rows: Vec<(i64, i64)> =
+        sqlx::query_as("SELECT threshold, score FROM numeric_table WHERE area_id = ?")
+            .bind(aid)
+            .fetch_all(pool)
+            .await
+            .unwrap();
+    assert_eq!(rows, vec![(0, 100000)], "거부 시 기존 기준표는 그대로 보존되어야 함");
+}
+
+#[tokio::test]
+async fn numeric_table_import_score_exceeds_max_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    seed_numeric_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    // 전형요소 만점 100 (max_score=10000000) 인데 점수 200 → 422
+    let csv = "기준값,점수\n1.0,200\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(result.rows, 0);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("만점"), "실제 오류: {}", result.errors[0]);
+    assert_numeric_table_preserved(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn numeric_table_import_non_numeric_score_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    seed_numeric_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n1.0,abc\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("숫자 변환 실패"), "실제 오류: {}", result.errors[0]);
+    assert_numeric_table_preserved(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn numeric_table_import_empty_score_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    seed_numeric_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n1.0,\n";
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("점수 누락"), "실제 오류: {}", result.errors[0]);
+    assert_numeric_table_preserved(&pool, aid).await;
+}
+
+async fn seed_category_row(pool: &sqlx::SqlitePool, aid: i64) {
+    sqlx::query(
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '기존', 0)",
+    )
+    .bind(aid)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn assert_category_map_preserved(pool: &sqlx::SqlitePool, aid: i64) {
+    let rows: Vec<(String, i64)> =
+        sqlx::query_as("SELECT category, score FROM category_map WHERE area_id = ?")
+            .bind(aid)
+            .fetch_all(pool)
+            .await
+            .unwrap();
+    assert_eq!(rows, vec![("기존".to_string(), 0)], "거부 시 기존 범주표는 그대로 보존되어야 함");
+}
+
+#[tokio::test]
+async fn category_map_import_empty_category_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), 0).await;
+    seed_category_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "범주,점수\n,5\n";
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("범주 누락"), "실제 오류: {}", result.errors[0]);
+    assert_category_map_preserved(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn category_map_import_non_numeric_score_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), 0).await;
+    seed_category_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "범주,점수\n수상,abc\n";
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("숫자 변환 실패"), "실제 오류: {}", result.errors[0]);
+    assert_category_map_preserved(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn category_map_import_score_exceeds_max_rejects() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), 0).await;
+    seed_category_row(&pool, aid).await;
+    let state = common::make_state(pool.clone());
+
+    // 전형요소 만점 100 (max_score=10000000) 인데 점수 200 → 422
+    let csv = "범주,점수\n수상,200\n";
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].starts_with("2행"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("만점"), "실제 오류: {}", result.errors[0]);
+    assert_category_map_preserved(&pool, aid).await;
+}
+
+// ── 세션 5: CLOSED/FINALIZED 라운드 존재 시 점수 기준 import 차단 (guard_no_closed_round) ──
+
+#[tokio::test]
+async fn numeric_table_import_blocked_when_closed_round_exists() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    seed_numeric_row(&pool, aid).await;
+    sqlx::query("INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', 'now', 'now')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let state = common::make_state(pool.clone());
+
+    let csv = "기준값,점수\n1.0,50\n";
+    let res = numeric_table_import(State(state), Path(aid), build_multipart(csv).await).await;
+    let Err(err) = res else { panic!("CLOSED 라운드 존재 시 거부되어야 함") };
+
+    assert_eq!(err.0, StatusCode::CONFLICT);
+    assert!(err.1.contains("라운드"), "실제 오류: {}", err.1);
+    assert_numeric_table_preserved(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn category_map_import_blocked_when_closed_round_exists() {
+    let pool = common::create_test_pool_shared().await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), 0).await;
+    seed_category_row(&pool, aid).await;
+    sqlx::query("INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', 'now', 'now')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let state = common::make_state(pool.clone());
+
+    let csv = "범주,점수\n수상,5\n";
+    let res = category_map_import(State(state), Path(aid), build_multipart(csv).await).await;
+    let Err(err) = res else { panic!("CLOSED 라운드 존재 시 거부되어야 함") };
+
+    assert_eq!(err.0, StatusCode::CONFLICT);
+    assert!(err.1.contains("라운드"), "실제 오류: {}", err.1);
+    assert_category_map_preserved(&pool, aid).await;
+}
