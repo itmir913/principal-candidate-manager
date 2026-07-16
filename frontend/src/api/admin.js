@@ -74,8 +74,8 @@ export const getBaseDataList = (id, page = 1, perPage = 50, studentType = 'enrol
 // ── 기초 데이터 Excel ──────────────────────────────────────────
 export const downloadBaseDataTemplate = (id, studentType) =>
   axios.get(`/api/areas/${id}/base-data/template`, { responseType: 'blob', params: { student_type: studentType } })
-export const exportBaseData = (id) =>
-  axios.get(`/api/areas/${id}/base-data/export`, { responseType: 'blob' })
+export const exportBaseData = (id, studentType) =>
+  axios.get(`/api/areas/${id}/base-data/export`, { responseType: 'blob', params: { student_type: studentType } })
 export const importBaseData = (id, file, studentType) => {
   const fd = new FormData(); fd.append('file', file)
   return axios.post(`/api/areas/${id}/base-data/import`, fd, { params: { student_type: studentType } }).then(r => r.data)

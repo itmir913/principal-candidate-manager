@@ -1007,8 +1007,9 @@ const ExcelPanel = defineComponent({
             ? `${props.areaName}_category_map.xlsx`
             : `${props.areaName}_numeric_table.xlsx`)
         } else {
-          const res = await exportBaseData(props.areaId)
-          saveBlob(res, `${props.areaName}_base_data.xlsx`)
+          // 선택된 재학생/졸업생 탭 기준으로 import와 동일 헤더로 내보낸다 (수정 후 재업로드 가능)
+          const res = await exportBaseData(props.areaId, props.studentType)
+          saveBlob(res, `${props.areaName}_base_data_${props.studentType}.xlsx`)
         }
       } catch (e) { err.value = await blobErrMsg(e) }
       finally { downloading.value = false }
