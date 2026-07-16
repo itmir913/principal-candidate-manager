@@ -19,6 +19,7 @@
 | `PUT /rounds/:id/reopen` | 404 | 404 | **204** | 404 |
 | `PUT /rounds/:id/finalize` | 404 | 404 | **204**¹ | 404 |
 | `POST /rounds/:id/calculate` | 404 | 400 | **200** | 400 |
+| `POST /rounds/:id/auto-recommend` | 404 | 400 | **200** | 400 |
 | `PUT /results/:sid/:tid/:rid/recommend` | 404 | 400 | **204**³ | 400 |
 | `PUT /results/:sid/:tid/:rid/unrecommend` | 404 | 400 | **204** | 400 |
 | `PUT /applications/:sid/:tid/:rid/abandon` | 404 | 400 | 400 | **204**⁴ |
@@ -40,7 +41,7 @@
 ## 상태별 허용 행위 요약 (02_round_lifecycle.md와 일치)
 
 - **OPEN**: 담임 지원 등록·취소만 가능. 점수 계산·추천·포기 전부 거부.
-- **CLOSED**: 관리자 재계산·추천·추천취소·reopen·finalize만 가능. 담임 쓰기 전부 거부.
+- **CLOSED**: 관리자 재계산·추천·추천취소·자동 추천 확정(auto-recommend)·reopen·finalize만 가능. 담임 쓰기 전부 거부.
 - **FINALIZED**: 관리자·담임 포기 처리만 가능. 그 외 쓰기 전부 거부.
   FINALIZED 라운드 존재는 새 라운드 open을 막지 않는다.
 
