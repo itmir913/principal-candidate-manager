@@ -255,7 +255,7 @@ id, status, opened_at, closed_at (null 가능), finalized_at (null 가능)
 
 4. **졸업생 담임 (grade=0, class_no=0)**: 비밀번호 변경 불가 (403). 학생 목록: `is_enrolled=0` 전체.
 
-5. **정원 초과 확정 오류 (422)**: 일반 문자열이 아닌 JSON 바디. 프론트에서 JSON 파싱 필요:
+5. **정원 초과 확정 오류 (422)**: 일반 문자열이 아닌 JSON 바디. axios가 text/plain이어도 JSON 문자열을 자동 파싱해 객체로 만들므로, 문자열 가정 시 `[object Object]`가 표시된다. RoundsTab의 `finalizeErrMsg` 헬퍼가 위반 목록을 사람이 읽을 수 있는 줄 단위 텍스트로 펼친다:
    ```json
    {"error": "...", "track_violations": [...], "univ_violations": [...]}
    ```

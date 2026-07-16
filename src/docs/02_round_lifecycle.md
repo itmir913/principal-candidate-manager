@@ -21,6 +21,10 @@
 - `RETURNING id`가 `None`이면 이미 진행 중 라운드가 있다는 뜻이므로 409 반환.
 - 별도 SELECT → INSERT 분리 시 발생하는 TOCTOU race condition을 방지하기 위한 설계이다.
 
+**DB 방어선**
+- `idx_one_active_round` 부분 유니크 인덱스(`ON rounds((1)) WHERE status != 'FINALIZED'`)가 비-FINALIZED 라운드 다중 존재를 DB 레벨에서도 차단한다. 앱 레벨 원자적 검사가 우회되더라도(직접 SQL 등) OPEN·CLOSED 라운드는 전체에서 최대 1개만 존재할 수 있다.
+- `idx_one_open_round`(OPEN 단일성)는 그 부분집합으로 계속 유지된다.
+
 **생성**
 - 위 조건을 통과하면 상태 `OPEN`, `opened_at = 현재 시각`으로 삽입.
 - 201 Created + `{ "id": <새 라운드 id> }` 반환.
@@ -171,10 +175,16 @@ CLOSED만을 조건으로 함으로써 다중 라운드 시나리오에서도 �
 
 | 위치 | 경로 | 트리거 발동 여부 |
 |------|------|-----------------|
-| `area_data.rs:982` | 관리자 Excel 복수값 import — `DELETE FROM base_data WHERE student_id=? AND area_id=?` | CLOSED 지원자면 ABORT |
-| `applications.rs:559` | 담임 복수값 재제출 DELETE | OPEN 라운드 활성 = CLOSED 없음 = 미발동 (항상 안전) |
+| `area_data.rs` (base_data_import 복수값 분기) | 관리자 Excel 복수값 import — `DELETE FROM base_data WHERE student_id=? AND area_id=?` | CLOSED 지원자면 ABORT → 핸들러가 422 + 학생코드 안내로 번역 |
+| `applications.rs` (teacher_create_application) | 담임 복수값 재제출 DELETE | OPEN 라운드 활성 = CLOSED 없음 = 미발동 (항상 안전) |
 
-**핸들러 레벨 체크를 별도로 추가하지 말 것.** 이 트리거가 단일 진실 원천이다.
+**핸들러 레벨 체크를 별도로 추가하지 말 것.** 이 트리거가 단일 진실 원천이다. 핸들러에서 허용되는 것은 트리거 ABORT 오류를 사용자 친화적 응답(500 → 422)으로 **번역**하는 것뿐이며, 보호 여부 판단 로직을 중복 구현해서는 안 된다.
+
+### results 삭제 보호 (대칭 트리거)
+
+`trg_prevent_delete_closed_result`: CLOSED/FINALIZED 라운드의 `results` 행 DELETE를 차단한다.
+- 기존 `trg_prevent_update_finalized_result`(FINALIZED UPDATE 차단)와 대칭을 이뤄 박제 보호를 완성한다.
+- OPEN 라운드는 담임 지원 취소(`teacher_delete_application`)가 results를 동반 삭제해야 하므로 허용한다.
 
 ---
 

@@ -42,6 +42,7 @@
 - **필수 헤더**: `학생코드`, `이름`, `학년`, `반`, `번호`, `재학여부`
 - **동작**: upsert (student_code 기준 `ON CONFLICT DO UPDATE`) — DELETE 없음
 - **재학여부**: `재학`/`재학생` → is_enrolled=1, `졸업`/`졸업생` → is_enrolled=0, 그 외(숫자 0/1·빈 값 포함) → 해당 행 오류 (silent default 금지 — 재학/졸업 분류는 우선순위·기초데이터 범위에 영향. 숫자 0/1은 의미가 모호해 배제)
+- **위치 유일성**: 재학생 위치(학년+반+번호)는 학생코드가 달라도 유일해야 함. 파일 내 위치 중복 행 → 오류. DB에 이미 다른 학생코드가 점유한 위치로 upsert 시도 → 행 오류. DB 최후 방어선은 `idx_students_position` 부분 유니크 인덱스 (기초데이터 import의 위치 기반 학생 조회가 임의 학생에게 점수를 귀속시키는 것을 방지)
 
 #### 2b. 재학생 import — `/api/students/enrolled/import`
 - **필수 헤더**: `학년`, `반`, `번호`, `이름`
@@ -120,8 +121,9 @@
 **동작 분기**:
 - `multi_value=0` (단일값): (student_id, track_id) 중복 행 → 오류. 오류 없으면 `INSERT OR REPLACE`
 - `multi_value=1` (복수값, CATEGORY SUM): 중복 행 허용. 오류 없으면 파일에 등장한 (student, track) 조합만 DELETE 후 INSERT
+  - DELETE가 CLOSED 라운드 지원자 보호 트리거에 걸리면 500이 아닌 **422 + 학생코드 안내**로 번역 (보호 로직은 트리거가 단일 진실 원천, 핸들러는 오류 매핑만)
 
-**student_type 필터 필수**: `enrolled` 업로드 → `is_enrolled=1` 학생만, `graduated` → `is_enrolled=0` 학생만. 반대편 데이터 건드리지 않음.
+**student_type 필터 필수**: `enrolled` 업로드 → `is_enrolled=1` 학생만, `graduated` → `is_enrolled=0` 학생만. 반대편 데이터 건드리지 않음. `enrolled`/`graduated` 외의 값은 silent fallback 없이 **400** (list·template·import 공통, `parse_student_type`).
 
 **값 변환**:
 - NUMERIC / MANUAL: `parse_display_value` (×100000)
