@@ -18,6 +18,15 @@
       <p class="text-base" style="color: #94a3b8;">불러오는 중...</p>
     </div>
 
+    <!-- 로드 오류 — 서버 오류를 "라운드 없음" 빈 상태로 위장하지 않는다 -->
+    <div
+      v-else-if="loadError"
+      class="rounded-xl flex items-center justify-center"
+      style="background: #fef2f2; box-shadow: 0 0 0 1px #fca5a5; height: 240px;"
+    >
+      <p class="text-base" style="color: #991b1b;">결과를 불러오지 못했습니다: {{ loadError }}</p>
+    </div>
+
     <!-- 빈 상태 -->
     <div
       v-else-if="rounds.length === 0"
@@ -135,9 +144,10 @@ import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.
 
 const auth = useAuthStore()
 
-const rounds  = ref([])
-const results = ref([])
-const loading = ref(false)
+const rounds    = ref([])
+const results   = ref([])
+const loading   = ref(false)
+const loadError = ref('')
 
 // round_id → { student_id → { ...student, results[] } } 구조
 const studentsByRound = computed(() => {
@@ -170,13 +180,15 @@ const studentsByRound = computed(() => {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const data = await teacherGetResults()
     rounds.value  = data.rounds
     results.value = data.results
-  } catch {
+  } catch (e) {
     rounds.value  = []
     results.value = []
+    loadError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
   } finally {
     loading.value = false
   }
