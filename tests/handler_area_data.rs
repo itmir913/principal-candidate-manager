@@ -1389,3 +1389,61 @@ async fn base_data_import_valid_student_types_still_accepted() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.rows, 1);
 }
+
+// ── 세션 4 감사 후속: multi-value import의 CLOSED 지원자 사전 차단 ─
+
+#[tokio::test]
+async fn multi_import_closed_round_applicant_returns_422_not_500() {
+    use principal_candidate_manager::enums::CategoryAgg;
+
+    let pool = common::create_test_pool_shared().await;
+    let sid = insert_student(&pool, "S001").await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 1).await;
+    let state = common::make_state(pool.clone());
+
+    // 기존 base_data (multi)
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value)
+         VALUES (?, ?, NULL, '회장', 1)",
+    )
+    .bind(sid).bind(aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // CLOSED 라운드 + 해당 학생 지원
+    sqlx::query("INSERT INTO universities (univ_name) VALUES ('대학')")
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO univ_tracks (univ_id, track_name) VALUES (1, '트랙')")
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', 'now', 'now')")
+        .execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, confirmed) VALUES (?, 1, 1, 1)",
+    )
+    .bind(sid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // 트리거 ABORT가 500으로 새지 않고 422 + 학생코드 안내여야 함
+    let csv = "학생코드,이름,값\nS001,테스트,부회장\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("CLOSED"));
+    assert!(result.errors[0].contains("S001"));
+
+    // 기존 데이터 보존 확인 (rollback)
+    let value: String = sqlx::query_scalar(
+        "SELECT value FROM base_data WHERE student_id = ? AND area_id = ?",
+    )
+    .bind(sid).bind(aid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(value, "회장");
+}

@@ -1013,6 +1013,39 @@ pub async fn base_data_import(
         let affected: HashSet<(i64, Option<i64>)> = multi_records.iter()
             .map(|(s, t, _)| (*s, *t))
             .collect();
+
+        // CLOSED 라운드 지원자의 base_data DELETE는 트리거가 ABORT시킨다(박제 보호) —
+        // 트리거 오류가 500으로 새지 않도록 사전 검증해 422 + 읽을 수 있는 메시지로 반환
+        let affected_students: HashSet<i64> = affected.iter().map(|(s, _)| *s).collect();
+        let mut blocked: Vec<String> = Vec::new();
+        for sid in &affected_students {
+            let code: Option<String> = sqlx::query_scalar(
+                "SELECT s.student_code FROM students s
+                 WHERE s.id = ? AND EXISTS (
+                     SELECT 1 FROM applications ap
+                     JOIN rounds r ON r.id = ap.round_id
+                     WHERE ap.student_id = s.id AND r.status = 'CLOSED')",
+            )
+            .bind(sid)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if let Some(c) = code {
+                blocked.push(c);
+            }
+        }
+        if !blocked.is_empty() {
+            blocked.sort();
+            return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult {
+                rows: 0,
+                errors: vec![format!(
+                    "종료(CLOSED)된 라운드 지원자의 기초데이터는 교체할 수 없습니다 (학생코드: {}). 라운드를 다시 열거나 해당 학생을 파일에서 제외하세요",
+                    blocked.join(", ")
+                )],
+                warnings: vec![],
+            })));
+        }
+
         for (sid, tid) in &affected {
             sqlx::query(
                 "DELETE FROM base_data WHERE area_id = ? AND student_id = ? AND COALESCE(track_id, 0) = COALESCE(?, 0)",
