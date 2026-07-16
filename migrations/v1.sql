@@ -286,3 +286,12 @@ BEGIN
     SELECT RAISE(ABORT, 'Cannot update result: round is FINALIZED')
     WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'FINALIZED';
 END;
+
+-- CLOSED/FINALIZED 라운드의 results 행 삭제 차단 (박제·집계 보호, UPDATE 차단과 대칭)
+-- OPEN 라운드는 담임 지원 취소 시 results 동반 삭제를 위해 허용
+CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_closed_result
+BEFORE DELETE ON results
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete result: round is CLOSED or FINALIZED')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) IN ('CLOSED', 'FINALIZED');
+END;

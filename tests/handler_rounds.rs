@@ -721,3 +721,40 @@ async fn db_allows_new_round_after_finalize() {
         .unwrap();
     assert_eq!(count, 2);
 }
+
+// ── 세션 4 감사 후속: CLOSED/FINALIZED results 삭제 차단 트리거 ───
+
+#[tokio::test]
+async fn db_rejects_result_delete_in_closed_round() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_closed_with_result(&pool).await;
+
+    let res = sqlx::query("DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?")
+        .bind(sid).bind(tid).bind(rid)
+        .execute(&pool)
+        .await;
+    assert!(res.is_err(), "CLOSED 라운드 results 삭제는 차단되어야 함");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM results WHERE round_id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn db_allows_result_delete_in_open_round() {
+    // OPEN 라운드는 담임 지원 취소 경로에서 results 동반 삭제가 필요 — 허용 유지
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_closed_with_result(&pool).await;
+    sqlx::query("UPDATE rounds SET status = 'OPEN', closed_at = NULL WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+
+    sqlx::query("DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?")
+        .bind(sid).bind(tid).bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM results WHERE round_id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 0);
+}
