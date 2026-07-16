@@ -224,3 +224,6 @@ export const exportQuotaStats = (univId) =>
 
 export const getTrackRecommendedList = (trackId) =>
   axios.get(`/api/univ-tracks/${trackId}/recommended-list`).then(r => r.data)
+
+export const autoRecommend = (roundId) =>
+  axios.post(`/api/rounds/${roundId}/auto-recommend`).then(r => r.data)
