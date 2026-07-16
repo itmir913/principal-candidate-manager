@@ -692,3 +692,94 @@ async fn import_classes_existing_class_without_password_updates_name_only() {
     .unwrap();
     assert_eq!(name, "새담임");
 }
+
+// ── 세션 4 감사 후속: 재학생 위치(학년·반·번호) 유일성 ────────────
+
+#[tokio::test]
+async fn import_students_duplicate_position_in_file_rejects_all() {
+    // 학생코드가 달라도 같은 위치면 중복=error (위치는 재학생 식별자)
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호\n\
+               S001,홍길동,재학,1,1,1\n\
+               S002,이순신,재학,1,1,1\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("중복"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "rollback — 1행도 저장되면 안 됨");
+}
+
+#[tokio::test]
+async fn import_students_position_occupied_by_other_code_rejects_all() {
+    // DB에 이미 다른 학생코드가 점유한 위치로 upsert 시도 → 거부
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)
+         VALUES ('S001', '홍길동', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호\n\
+               S002,이순신,재학,1,1,1\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(result.errors[0].contains("이미 다른 학생"));
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1, "기존 학생만 남아야 함");
+}
+
+#[tokio::test]
+async fn import_students_same_code_same_position_reupload_updates() {
+    // 유효값: 같은 학생코드의 재업로드(이름 수정)는 정상 upsert
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let state = common::make_state(pool.clone());
+
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)
+         VALUES ('S001', '홍길동', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let csv = "학생코드,이름,재학여부,학년,반,번호\n\
+               S001,홍길동수정,재학,1,1,1\n";
+    let (status, axum::Json(result)) =
+        import_students(State(state), common::csv_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.updated, 1);
+
+    let name: String = sqlx::query_scalar("SELECT name FROM students WHERE student_code = 'S001'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(name, "홍길동수정");
+}

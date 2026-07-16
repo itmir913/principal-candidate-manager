@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS students (
             AND grad_year IS NOT NULL)
     )
 );
+-- 재학생 위치(학년·반·번호) 유일성 — 위치 기반 학생 조회·upsert(기초데이터 import 등)의 무결성 전제
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_position
+    ON students(grade, class_no, seq_no)
+    WHERE is_enrolled = 1;
 
 -- ================================================================
 -- ROUNDS

@@ -210,6 +210,8 @@ pub async fn import_students(
     let mut errors: Vec<String> = Vec::new();
     // 파일 내 동일 학생코드 중복 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // 파일 내 동일 위치(학년·반·번호) 중복 감지 — 위치는 재학생 식별자이므로 코드가 달라도 중복=error
+    let mut seen_pos: std::collections::HashSet<(i64, i64, i64)> = std::collections::HashSet::new();
 
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -229,6 +231,17 @@ pub async fn import_students(
                 row_num, rec.student_code
             ));
             continue;
+        }
+        if rec.is_enrolled {
+            if let (Some(g), Some(c), Some(s)) = (rec.grade, rec.class_no, rec.seq_no) {
+                if !seen_pos.insert((g, c, s)) {
+                    errors.push(format!(
+                        "{}행: {}학년 {}반 {}번 중복 — 파일에 같은 위치의 학생이 두 번 이상 존재합니다",
+                        row_num, g, c, s
+                    ));
+                    continue;
+                }
+            }
         }
         if let Err(e) = upsert_student(&mut *tx, &rec, &mut inserted, &mut updated).await {
             errors.push(format!("{}행: {}", row_num, e));
@@ -275,6 +288,24 @@ pub async fn upsert_student(
 
         if class_ok == 0 {
             return Err(format!("{}학년 {}반이 학급 목록에 없습니다", grade, class_no));
+        }
+
+        // 위치(학년·반·번호)는 재학생 식별자 — 다른 학생코드가 이미 점유한 위치면 거부
+        // (idx_students_position 유니크 인덱스의 백스톱을 사람이 읽을 수 있는 오류로 선점)
+        let occupied: Option<String> = sqlx::query_scalar(
+            "SELECT student_code FROM students
+             WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1
+               AND student_code != ?",
+        )
+        .bind(grade).bind(class_no).bind(seq_no).bind(&rec.student_code)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+        if let Some(other) = occupied {
+            return Err(format!(
+                "{}학년 {}반 {}번에 이미 다른 학생(학생코드 '{}')이 등록되어 있습니다",
+                grade, class_no, seq_no, other
+            ));
         }
 
         let exists: i64 =

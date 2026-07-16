@@ -507,3 +507,53 @@ async fn delete_student_with_application_returns_conflict() {
     let res = delete_student(State(common::make_state(pool)), Path(sid)).await;
     assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
 }
+
+// ── 세션 4 감사 후속: idx_students_position (재학생 위치 유일성) ──
+
+#[tokio::test]
+async fn db_rejects_duplicate_enrolled_position() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)
+         VALUES ('S001', '홍길동', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // 같은 위치의 다른 재학생 — DB 유니크 인덱스가 최후 방어선
+    let res = sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)
+         VALUES ('S002', '이순신', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await;
+    assert!(res.is_err(), "동일 위치 재학생 중복 삽입은 거부되어야 함");
+    assert!(res.unwrap_err().to_string().contains("UNIQUE"));
+}
+
+#[tokio::test]
+async fn db_allows_multiple_graduated_students() {
+    // 졸업생은 위치가 전부 NULL — 부분 인덱스(is_enrolled=1)에 걸리지 않아야 함
+    let pool = common::create_test_pool().await;
+
+    for (code, name) in [("G001", "김철수"), ("G002", "김영희")] {
+        sqlx::query(
+            "INSERT INTO students (student_code, name, is_enrolled, grad_year)
+             VALUES (?, ?, 0, 2024)",
+        )
+        .bind(code)
+        .bind(name)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE is_enrolled = 0")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 2);
+}
