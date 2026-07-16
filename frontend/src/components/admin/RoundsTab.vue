@@ -221,7 +221,7 @@
 
           <!-- ── 결과 탭 ──────────────────────────────────── -->
           <div v-if="view === 'results'">
-            <div class="flex items-center gap-3 mb-5 flex-wrap">
+            <div class="flex items-center gap-3 mb-4 flex-wrap">
               <select
                 v-model="selectedTrackId"
                 class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -240,6 +240,13 @@
               >새로고침</button>
               <span style="color: #cbd5e1; user-select: none;">|</span>
               <button
+                v-if="selected.status === 'CLOSED'"
+                class="text-base font-semibold rounded-lg disabled:opacity-40"
+                style="padding: 9px 16px; border: none; background: #d97706; color: white; cursor: pointer;"
+                :disabled="autoRecommendActing"
+                @click="handleAutoRecommend"
+              >자동 추천 확정</button>
+              <button
                 class="text-base font-medium rounded-lg disabled:opacity-40"
                 style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
                 :disabled="results.length === 0 || downloading"
@@ -251,6 +258,22 @@
                 :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
                 @click="downloadSummary"
               >라운드 요약 다운로드</button>
+            </div>
+
+            <!-- 자동 추천 확정 결과 표시 -->
+            <div v-if="autoRecommendResult" class="mb-5 rounded-xl" style="padding: 16px 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+              <div v-if="autoRecommendResult.confirmed.length > 0" class="text-base font-semibold mb-2" style="color: #15803d;">
+                {{ autoRecommendResult.confirmed.length }}개 모집단위 {{ autoRecommendResult.confirmed.reduce((s, c) => s + c.count, 0) }}명 추천 확정
+              </div>
+              <div v-if="autoRecommendResult.confirmed.length === 0 && autoRecommendResult.manual.length === 0" class="text-base" style="color: #94a3b8;">
+                자동 확정 대상 없음 (정원 소진 또는 후보 없음)
+              </div>
+              <div v-if="autoRecommendResult.manual.length > 0" class="rounded-lg mt-2" style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d;">
+                <p class="text-base font-semibold mb-2" style="color: #92400e;">수동 확인 필요 모집단위</p>
+                <div v-for="m in autoRecommendResult.manual" :key="m.track_id" class="text-base" style="color: #78350f;">
+                  {{ m.univ_name }} {{ m.track_name }} — {{ m.reason }}
+                </div>
+              </div>
             </div>
 
             <div v-if="results.length === 0" class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
@@ -387,6 +410,7 @@ import {
   exportResultsExcel,
   exportRoundSummary,
   getQuotaStats,
+  autoRecommend,
   blobErrMsg,
 } from '../../api/admin.js'
 
@@ -415,6 +439,8 @@ const downloading        = ref(false)
 const downloadingSummary = ref(false)
 const expandedRows       = ref({})
 const quotaStats         = ref(null)
+const autoRecommendActing = ref(false)
+const autoRecommendResult = ref(null)
 
 const selectedTrackId = ref('')
 
@@ -510,6 +536,7 @@ async function loadRounds() {
 async function selectRound(r) {
   selected.value = r
   calcMsg.value = null
+  autoRecommendResult.value = null
   await Promise.all([loadApps(), loadResults(), loadAreas()])
 }
 
@@ -539,6 +566,7 @@ async function loadAreas() {
 }
 
 async function handleOpenRound() {
+  if (!window.confirm('새 라운드를 열겠습니까?\n라운드를 열면 담임교사의 지원 입력이 시작됩니다.')) return
   loading.value = true
   try {
     await openRound()
@@ -687,6 +715,22 @@ async function downloadSummary() {
     alert(await blobErrMsg(e))
   } finally {
     downloadingSummary.value = false
+  }
+}
+
+async function handleAutoRecommend() {
+  if (!selected.value) return
+  if (!window.confirm('모든 모집단위에 대해 순위순으로 잔여 정원까지 추천을 자동 확정할까요?\n동점 등으로 자동 확정할 수 없는 모집단위는 건너뛰고 알려드립니다.')) return
+  autoRecommendActing.value = true
+  autoRecommendResult.value = null
+  try {
+    const res = await autoRecommend(selected.value.id)
+    autoRecommendResult.value = res
+    await loadResults()
+  } catch (e) {
+    alert(e.response?.data || e.message)
+  } finally {
+    autoRecommendActing.value = false
   }
 }
 
