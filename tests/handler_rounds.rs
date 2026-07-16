@@ -614,12 +614,12 @@ async fn finalize_round_exceeds_track_quota_returns_unprocessable() {
          VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
     )
     .fetch_one(&pool).await.unwrap();
-    for (code, name) in [("S001", "홍길동"), ("S002", "김철수")] {
+    for (code, name, seq) in [("S001", "홍길동", 1), ("S002", "김철수", 2)] {
         let sid: i64 = sqlx::query_scalar(
             "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
-             VALUES (?, ?, 1, 1, 1, 1) RETURNING id",
+             VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
         )
-        .bind(code).bind(name).fetch_one(&pool).await.unwrap();
+        .bind(code).bind(name).bind(seq).fetch_one(&pool).await.unwrap();
         sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
             .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
         sqlx::query(
@@ -652,16 +652,16 @@ async fn finalize_round_exceeds_univ_quota_returns_unprocessable() {
          VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
     )
     .fetch_one(&pool).await.unwrap();
-    for (track_name, code, name) in [("컴공", "S001", "홍길동"), ("기계", "S002", "김철수")] {
+    for (track_name, code, name, seq) in [("컴공", "S001", "홍길동", 1), ("기계", "S002", "김철수", 2)] {
         let tid: i64 = sqlx::query_scalar(
             "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, ?) RETURNING id",
         )
         .bind(univ_id).bind(track_name).fetch_one(&pool).await.unwrap();
         let sid: i64 = sqlx::query_scalar(
             "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
-             VALUES (?, ?, 1, 1, 1, 1) RETURNING id",
+             VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
         )
-        .bind(code).bind(name).fetch_one(&pool).await.unwrap();
+        .bind(code).bind(name).bind(seq).fetch_one(&pool).await.unwrap();
         sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
             .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
         sqlx::query(
