@@ -387,6 +387,7 @@ import {
   getUniversities, createUniversity, updateUniversity, deleteUniversity,
   getUnivTracks, createTrack, updateTrack, deleteTrack,
   getQuotaStats, exportQuotaStats, getTrackRecommendedList,
+  blobErrMsg,
 } from '../../api/admin.js'
 
 // ── 정원 입력 서브컴포넌트 ────────────────────────────────────
@@ -504,7 +505,8 @@ async function doExportQuotaStats() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    error.value = e.response?.data ?? e.message
+    // blob 요청 오류 — response.data가 Blob이므로 blobErrMsg로 문자열화
+    error.value = await blobErrMsg(e)
   } finally {
     downloading.value = false
   }
