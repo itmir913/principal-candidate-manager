@@ -605,10 +605,26 @@ async function handleFinalizeRound(id) {
     }
     await refreshSidebarRound()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    alert(finalizeErrMsg(e))
   } finally {
     roundActing.value = false
   }
+}
+
+// finalize 422는 JSON 바디 {error, track_violations, univ_violations} — 위반 목록을 사람이 읽을 수 있게 펼친다
+function finalizeErrMsg(e) {
+  const d = e.response?.data
+  if (d != null && typeof d === 'object' && (Array.isArray(d.track_violations) || Array.isArray(d.univ_violations))) {
+    const lines = [d.error ?? '정원 초과로 라운드를 확정할 수 없습니다']
+    for (const v of d.track_violations ?? []) {
+      lines.push(`- ${v.univ_name} ${v.track_name}: 모집단위 정원 ${v.unit_quota}명, 추천 확정 ${v.total_recommended}명`)
+    }
+    for (const v of d.univ_violations ?? []) {
+      lines.push(`- ${v.univ_name} (대학 전체): 정원 ${v.total_quota}명, 추천 확정 ${v.total_recommended}명`)
+    }
+    return lines.join('\n')
+  }
+  return typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
 }
 
 async function handleCalculate() {
