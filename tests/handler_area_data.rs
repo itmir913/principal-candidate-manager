@@ -1344,9 +1344,10 @@ async fn base_data_import_invalid_student_type_returns_400() {
 
     let csv = "학생코드,이름,값\nS001,테스트,30.5\n";
     let q = Query(StudentTypeQuery { student_type: "Enrolled".to_string() }); // 대문자 오타
-    let err = base_data_import(State(state), Path(aid), q, build_multipart(csv).await)
-        .await
-        .unwrap_err();
+    let err = match base_data_import(State(state), Path(aid), q, build_multipart(csv).await).await {
+        Err(e) => e,
+        Ok((status, _)) => panic!("400이어야 하는데 {status}가 반환됨"),
+    };
 
     assert_eq!(err.0, StatusCode::BAD_REQUEST);
     assert!(err.1.contains("student_type"));
@@ -1366,7 +1367,10 @@ async fn base_data_list_invalid_student_type_returns_400() {
     let state = common::make_state(pool.clone());
 
     let q = Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "all".to_string() });
-    let err = base_data_list(State(state), Path(aid), q).await.unwrap_err();
+    let err = match base_data_list(State(state), Path(aid), q).await {
+        Err(e) => e,
+        Ok(_) => panic!("400이어야 하는데 200이 반환됨"),
+    };
 
     assert_eq!(err.0, StatusCode::BAD_REQUEST);
     assert!(err.1.contains("student_type"));
