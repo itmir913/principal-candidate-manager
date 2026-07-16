@@ -155,26 +155,6 @@ pub async fn delete_area(
 ) -> Result<StatusCode, ApiError> {
     guard_no_closed_round(&state.db).await?;
 
-    // FINALIZED 라운드 결과(score_detail)가 참조하는 전형요소는 삭제 금지 —
-    // 삭제 시 base_data가 CASCADE로 소실되고 과거 라운드의 점수 근거를 해명할 수 없게 된다 (감사 추적성)
-    let referenced: bool = sqlx::query_scalar(
-        "SELECT EXISTS(
-            SELECT 1 FROM results r
-            JOIN rounds rd ON rd.id = r.round_id
-            WHERE rd.status = 'FINALIZED'
-              AND json_extract(r.score_detail, '$.\"' || ? || '\"') IS NOT NULL)",
-    )
-    .bind(id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    if referenced {
-        return Err((
-            StatusCode::CONFLICT,
-            "마감(FINALIZED)된 라운드 결과에 포함된 전형요소는 삭제할 수 없습니다".into(),
-        ));
-    }
-
     sqlx::query("DELETE FROM areas WHERE id = ?")
         .bind(id)
         .execute(&state.db)
