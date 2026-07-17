@@ -825,6 +825,14 @@ async function onModalDeleted() {
 }
 
 async function onModalEdit(app) {
+  // 열려 있는 폼에 입력 중인 데이터가 있으면 덮어쓰기 전 확인
+  if (isDirty.value && !(await dialog.confirm({
+    title: '지원 수정',
+    message: '입력 중인 데이터가 있습니다. 저장하지 않고 이 지원의 수정으로 전환하시겠습니까?',
+    confirmText: '전환',
+    level: 'warn',
+  }))) return
+
   // 수정 모드: 기존 지원 정보로 폼 초기화
   editingPrevTrackId.value = app.track_id
   editingUnivName.value    = app.univ_name

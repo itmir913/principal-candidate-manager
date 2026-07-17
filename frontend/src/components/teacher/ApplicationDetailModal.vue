@@ -88,7 +88,7 @@
                   </td>
                   <td class="text-base text-right" style="padding: 10px 14px; white-space: nowrap;">
                     <span v-if="scorePreviews[area.area_id] === undefined" style="color: #94a3b8;">—</span>
-                    <span v-else-if="scorePreviews[area.area_id]?.error" style="color: #ef4444; font-size: 0.875rem;">
+                    <span v-else-if="scorePreviews[area.area_id]?.error" class="text-base" style="color: #ef4444;">
                       {{ scorePreviews[area.area_id].error }}
                     </span>
                     <span
