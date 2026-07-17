@@ -495,8 +495,8 @@ async fn delete_student_with_application_returns_conflict() {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)

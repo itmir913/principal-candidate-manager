@@ -1131,8 +1131,8 @@ async fn setup_closed_round_application(pool: &sqlx::SqlitePool, student_id: i64
     )
     .fetch_one(pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
-         VALUES (?, ?, ?, 1, 0, '컴퓨터공학과')",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, department_name) \
+         VALUES (?, ?, ?, 0, '컴퓨터공학과')",
     )
     .bind(student_id).bind(track_id).bind(round_id)
     .execute(pool).await.unwrap();
@@ -1152,8 +1152,8 @@ async fn setup_finalized_round_application(pool: &sqlx::SqlitePool, student_id: 
     )
     .fetch_one(pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
-         VALUES (?, ?, ?, 1, 0, '전기전자공학과')",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, department_name) \
+         VALUES (?, ?, ?, 0, '전기전자공학과')",
     )
     .bind(student_id).bind(track_id).bind(round_id)
     .execute(pool).await.unwrap();
@@ -1423,7 +1423,7 @@ async fn multi_import_closed_round_applicant_returns_422_not_500() {
     sqlx::query("INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', 'now', 'now')")
         .execute(&pool).await.unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed) VALUES (?, 1, 1, 1)",
+        "INSERT INTO applications (student_id, track_id, round_id) VALUES (?, 1, 1)",
     )
     .bind(sid)
     .execute(&pool)

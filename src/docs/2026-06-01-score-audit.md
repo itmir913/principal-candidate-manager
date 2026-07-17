@@ -67,7 +67,7 @@
 
 | 항목 | 결과 | 근거 |
 |------|------|------|
-| B-1 confirmed=1 필터·abandoned 미필터 | ✅ | 포기 지원자도 점수 계산 대상. 설계 의도. |
+| B-1 abandoned 미필터 | ✅ | 포기 지원자도 점수 계산 대상. 설계 의도. |
 | B-2 total 합산 checked_add | ✅ | scoring.rs:311. |
 | B-3 score_detail HashMap 키 형식 | ✅ | `area.id.to_string()` — `"1"`, `"2"` 형태. |
 | B-4 ON CONFLICT recommended 보존 | ✅ | DO UPDATE에 `recommended` 미포함 — 기존 추천 상태 유지. |

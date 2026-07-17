@@ -289,7 +289,7 @@ pub async fn run_calculate_scores_on_conn(
          JOIN students s ON s.id = a.student_id
          JOIN univ_tracks ut ON ut.id = a.track_id
          JOIN universities u ON u.id = ut.univ_id
-         WHERE a.round_id = ? AND a.confirmed = 1",
+         WHERE a.round_id = ?",
     )
     .bind(round_id)
     .fetch_all(&mut *conn)

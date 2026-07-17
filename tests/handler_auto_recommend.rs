@@ -68,8 +68,8 @@ async fn new_finalized_round(pool: &SqlitePool) -> i64 {
 
 async fn new_application(pool: &SqlitePool, sid: i64, tid: i64, rid: i64, abandoned: bool) {
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
-         VALUES (?, ?, ?, 1, ?, '학과')",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, department_name) \
+         VALUES (?, ?, ?, ?, '학과')",
     )
     .bind(sid)
     .bind(tid)

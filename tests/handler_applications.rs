@@ -217,8 +217,8 @@ async fn delete_application_open_round_ok() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -245,8 +245,8 @@ async fn delete_application_closed_round_returns_bad_request() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -274,8 +274,8 @@ async fn delete_application_wrong_class_returns_forbidden() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup(&pool).await;
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -330,8 +330,8 @@ async fn grad_teacher_can_delete_graduated_student_application() {
 /// 테스트용 지원 행 삽입 헬퍼 (setup에서 생성된 sid, tid, rid 사용)
 async fn insert_application(pool: &sqlx::SqlitePool, sid: i64, tid: i64, rid: i64) {
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -378,8 +378,8 @@ async fn abandon_application_sets_abandoned_flag() {
         .await
         .unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)

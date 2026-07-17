@@ -16,7 +16,7 @@
 `run_calculate_scores` 함수가 읽어오는 테이블:
 
 1. **`areas`**: 전형요소 목록 전체. `id, name, calc_type, max_score, match_mode, category_agg, lookup_scope` 컬럼.
-2. **`applications`**: 해당 라운드에서 `confirmed=1`인 지원 신청. 학생 정보(`students` JOIN), 모집단위 정보(`univ_tracks`, `universities` JOIN)를 함께 조회.
+2. **`applications`**: 해당 라운드의 지원 신청. 학생 정보(`students` JOIN), 모집단위 정보(`univ_tracks`, `universities` JOIN)를 함께 조회.
 3. **`base_data`**: 각 학생·전형요소·(모집단위)별 원시 데이터. `calc_area_score` 함수 내부에서 개별 조회.
 4. **`numeric_table`**: NUMERIC 전형요소의 구간별 점수 기준표. `calc_area_score` 내부에서 조회.
 5. **`category_map`**: CATEGORY 전형요소의 범주별 점수 맵. `calc_area_score` 내부에서 조회.

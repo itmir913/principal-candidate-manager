@@ -68,7 +68,6 @@
 **② 지원 등록** (`applications` 테이블)
 - `INSERT INTO applications ... ON CONFLICT(student_id, track_id, round_id) DO UPDATE SET department_name = excluded.department_name`
 - 즉, 동일 (student, track, round) 조합이 이미 있으면 `department_name`만 업데이트한다. **INSERT OR IGNORE가 아닌 ON CONFLICT DO UPDATE 패턴**.
-- `confirmed=1, abandoned=0`으로 고정 삽입.
 
 **③ 점수 계산** (트랜잭션 내에서 실행)
 - 방금 저장한 기초데이터를 읽어 모든 전형요소에 대한 점수를 계산한다.

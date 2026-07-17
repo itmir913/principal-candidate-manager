@@ -208,7 +208,6 @@ univ_name, track_name, department_name
 ### ApplicationRow (백엔드 → 프론트)
 ```
 student_id, track_id, round_id
-confirmed       // bool
 abandoned       // bool
 department_name // string
 student_code, name, grade, class_no, seq_no, is_enrolled

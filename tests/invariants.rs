@@ -242,8 +242,8 @@ async fn run_ranking_case(students: &[(i64, bool)], prioritize: bool) -> Vec<i64
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-             VALUES (?, ?, ?, 1, 0)",
+            "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+             VALUES (?, ?, ?, 0)",
         )
         .bind(sid)
         .bind(tid)

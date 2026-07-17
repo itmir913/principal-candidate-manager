@@ -115,8 +115,8 @@ async fn setup(pool: &SqlitePool, state: RState) -> Fx {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name) \
-         VALUES (?, ?, ?, 1, 0, '컴퓨터공학과')",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, department_name) \
+         VALUES (?, ?, ?, 0, '컴퓨터공학과')",
     )
     .bind(sid)
     .bind(tid)
@@ -146,7 +146,7 @@ async fn setup(pool: &SqlitePool, state: RState) -> Fx {
 // ── 스냅샷 (거부 셀 불변 단언용) ──────────────────────────────────
 
 type RoundsSnap = Vec<(i64, String, String, Option<String>, Option<String>)>;
-type AppsSnap = Vec<(i64, i64, i64, i64, i64, String)>;
+type AppsSnap = Vec<(i64, i64, i64, i64, String)>;
 type ResultsSnap = Vec<(i64, i64, i64, String, i64, Option<i64>, i64)>;
 
 async fn snapshot(pool: &SqlitePool) -> (RoundsSnap, AppsSnap, ResultsSnap) {
@@ -157,7 +157,7 @@ async fn snapshot(pool: &SqlitePool) -> (RoundsSnap, AppsSnap, ResultsSnap) {
     .await
     .unwrap();
     let apps: AppsSnap = sqlx::query_as(
-        "SELECT student_id, track_id, round_id, confirmed, abandoned, department_name \
+        "SELECT student_id, track_id, round_id, abandoned, department_name \
          FROM applications ORDER BY student_id, track_id, round_id",
     )
     .fetch_all(pool)

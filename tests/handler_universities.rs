@@ -58,8 +58,8 @@ async fn insert_application(
     round_id: i64,
 ) {
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(student_id)
     .bind(track_id)

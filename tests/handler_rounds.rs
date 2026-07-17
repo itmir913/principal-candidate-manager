@@ -183,8 +183,8 @@ async fn setup_closed_with_result(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -444,8 +444,8 @@ async fn close_round_with_missing_base_data_returns_unprocessable_and_keeps_open
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let rid = body["id"].as_i64().unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 0, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -515,8 +515,8 @@ async fn close_round_with_complete_base_data_succeeds_atomically() {
         open_round(State(common::make_state(pool.clone()))).await.unwrap();
     let rid = body["id"].as_i64().unwrap();
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 0, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -583,7 +583,7 @@ async fn finalize_round_within_track_quota_succeeds() {
          VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
     )
     .fetch_one(&pool).await.unwrap();
-    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
         .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
     sqlx::query(
         "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
@@ -620,7 +620,7 @@ async fn finalize_round_exceeds_track_quota_returns_unprocessable() {
              VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
         )
         .bind(code).bind(name).bind(seq).fetch_one(&pool).await.unwrap();
-        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
             .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, recommended, calculated_at) \
@@ -662,7 +662,7 @@ async fn finalize_round_exceeds_univ_quota_returns_unprocessable() {
              VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
         )
         .bind(code).bind(name).bind(seq).fetch_one(&pool).await.unwrap();
-        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) VALUES (?, ?, ?, 0, 0)")
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
             .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
         sqlx::query(
             "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, recommended, calculated_at) \

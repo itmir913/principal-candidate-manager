@@ -1,15 +1,10 @@
 -- ================================================================
 -- APPLICATIONS
--- confirmed + abandoned: 독립 생명주기, 동시 1 허용
--- confirmed: 원래는 "담임이 자기 반 학생 전원 입력을 완료했음을 확정"하는 용도로 설계됐으나,
---            현재 시스템은 제출 행위 자체가 곧 확정이므로 항상 1로 삽입됨.
---            임시저장→확정 제출 흐름이 추가될 경우 이 필드를 활성화할 것.
 -- ================================================================
 CREATE TABLE IF NOT EXISTS applications (
     student_id      INTEGER NOT NULL REFERENCES students(id),
     track_id        INTEGER NOT NULL REFERENCES univ_tracks(id),
     round_id        INTEGER NOT NULL REFERENCES rounds(id),
-    confirmed       INTEGER NOT NULL DEFAULT 0 CHECK(confirmed IN (0, 1)),
     abandoned       INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
     department_name TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (student_id, track_id, round_id)
@@ -38,7 +33,6 @@ BEGIN
           OLD.student_id      != NEW.student_id
           OR OLD.track_id         != NEW.track_id
           OR OLD.round_id         != NEW.round_id
-          OR OLD.confirmed        != NEW.confirmed
           OR OLD.department_name  != NEW.department_name
           OR (OLD.abandoned = 1 AND NEW.abandoned = 0)
       );

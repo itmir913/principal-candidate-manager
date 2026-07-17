@@ -70,7 +70,6 @@ pub struct ApplicationRow {
     pub student_id: i64,
     pub track_id: i64,
     pub round_id: i64,
-    pub confirmed: bool,
     pub abandoned: bool,
     pub department_name: String,
     pub student_code: String,
@@ -133,7 +132,7 @@ pub async fn admin_list_applications(
     Query(q): Query<ApplicationListQuery>,
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = sqlx::query_as::<_, ApplicationRow>(
-        "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
+        "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
          FROM applications a
@@ -346,7 +345,7 @@ pub async fn teacher_list_applications(
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = if is_grad_teacher(&claims) {
         sqlx::query_as::<_, ApplicationRow>(
-            "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
+            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
@@ -365,7 +364,7 @@ pub async fn teacher_list_applications(
         .await
     } else {
         sqlx::query_as::<_, ApplicationRow>(
-            "SELECT a.student_id, a.track_id, a.round_id, a.confirmed, a.abandoned, a.department_name,
+            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
@@ -667,10 +666,9 @@ pub async fn teacher_create_application(
         }
     }
 
-    // confirmed=1 고정: 제출 행위 자체가 확정. 임시저장→확정 흐름 추가 시 수정 필요.
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned, department_name)
-         VALUES (?, ?, ?, 1, 0, ?)
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, department_name)
+         VALUES (?, ?, ?, 0, ?)
          ON CONFLICT(student_id, track_id, round_id)
          DO UPDATE SET department_name = excluded.department_name",
     )

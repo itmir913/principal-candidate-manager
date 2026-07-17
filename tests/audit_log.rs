@@ -72,8 +72,8 @@ async fn setup_full(pool: &sqlx::SqlitePool) -> (i64, i64, i64, i64) {
     let rid = body["id"].as_i64().unwrap();
 
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 1, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)
@@ -353,8 +353,8 @@ async fn close_round_failure_writes_no_audit_log() {
     let rid = body["id"].as_i64().unwrap();
 
     sqlx::query(
-        "INSERT INTO applications (student_id, track_id, round_id, confirmed, abandoned) \
-         VALUES (?, ?, ?, 0, 0)",
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned) \
+         VALUES (?, ?, ?, 0)",
     )
     .bind(sid)
     .bind(tid)

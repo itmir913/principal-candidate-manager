@@ -1,17 +1,5 @@
 # 06. 추천자 확정 로직 명세
 
-## applications.confirmed 필드
-
-**현재 동작 (확인된 내용)**: `teacher_create_application`에서 지원 등록 시 `confirmed=1`을 하드코딩으로 삽입한다. 별도의 확정 단계가 없다.
-
-**설계 부채**: 담임이 지원을 등록하면 즉시 confirmed=1이 된다. "담임이 제출(확정)한다"는 별도 행위가 없으며, 저장 = 확정이다. 추후 확정 로직을 별도로 구현할 경우 이 필드를 활용할 수 있도록 컬럼을 남겨둔 것으로 보인다. `project_confirmed_field.md` 메모리에 "추천 자동확정 로직 미구현, 추후 수정 필수"로 기록되어 있다.
-
-`confirmed`는 "담임이 해당 라운드에서 자기 반 학생 입력을 모두 완료했음을 확정했는가"에 대한 플래그였다. 그런데, `임시저장→확정 흐름 필요성 낮아 구현 불필요로 판단`하여 구현을 건너뛴 것으로 보임.
-
-**score 계산 시 확인**: `run_calculate_scores`에서 `confirmed=1`인 지원만 처리한다. 현재는 모든 지원이 confirmed=1이므로 사실상 전수 계산.
-
----
-
 ## recommend_result — 추천 확정 검증 절차
 
 `PUT /results/:sid/:tid/:rid/recommend` (관리자 전용)
