@@ -6,7 +6,8 @@ use axum::{
 use serde::Serialize;
 use sqlx::FromRow;
 
-use crate::enums::RoundStatus;
+use crate::audit::{Actor, AuditEntry};
+use crate::enums::{AuditAction, RoundStatus};
 use crate::handlers::scoring::run_calculate_scores_on_conn;
 use crate::state::AppState;
 
@@ -49,6 +50,12 @@ pub async fn open_round(
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let now = chrono::Utc::now().to_rfc3339();
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // SELECT 후 INSERT 분리 시 TOCTOU race condition 발생 가능 —
     // INSERT ... SELECT ... WHERE NOT EXISTS 로 검사+삽입을 원자적으로 처리한다.
     let id: Option<i64> = sqlx::query_scalar(
@@ -58,7 +65,7 @@ pub async fn open_round(
          RETURNING id",
     )
     .bind(&now)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -68,6 +75,22 @@ pub async fn open_round(
             "진행 중인 라운드가 있습니다. 모든 라운드가 마감된 후에만 새 라운드를 열 수 있습니다".to_string(),
         )
     })?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RoundOpened,
+            round_id: Some(id),
+            student_id: None,
+            detail: serde_json::json!({}),
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
@@ -143,6 +166,18 @@ pub async fn close_round(
         .await
         .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
 
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RoundClosed,
+            round_id: Some(id),
+            student_id: None,
+            detail: serde_json::json!({ "calculated": count }),
+        },
+    )
+    .await?;
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -181,6 +216,18 @@ pub async fn reopen_round(
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RoundReopened,
+            round_id: Some(id),
+            student_id: None,
+            detail: serde_json::json!({}),
+        },
+    )
+    .await?;
 
     tx.commit()
         .await
@@ -282,6 +329,18 @@ pub async fn finalize_round(
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RoundFinalized,
+            round_id: Some(id),
+            student_id: None,
+            detail: serde_json::json!({}),
+        },
+    )
+    .await?;
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

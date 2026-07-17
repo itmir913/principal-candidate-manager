@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 use crate::{
+    audit::{Actor, AuditEntry},
     auth::TeacherClaims,
-    enums::{CalcType, CategoryAgg, LookupScope, RoundStatus},
+    enums::{AuditAction, CalcType, CategoryAgg, LookupScope, RoundStatus},
     handlers::area_data::parse_display_value,
     handlers::scoring::{calc_area_score, AreaRow, StudentTrackCtx},
     state::AppState,
@@ -160,12 +161,18 @@ pub async fn abandon_application(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // FINALIZED 라운드에서만 포기 입력 허용
     let status: Option<RoundStatus> = sqlx::query_scalar(
         "SELECT status FROM rounds WHERE id = ?",
     )
     .bind(rid)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -175,6 +182,8 @@ pub async fn abandon_application(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+
     let affected = sqlx::query(
         "UPDATE applications SET abandoned = 1
          WHERE student_id = ? AND track_id = ? AND round_id = ?",
@@ -182,7 +191,7 @@ pub async fn abandon_application(
     .bind(sid)
     .bind(tid)
     .bind(rid)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .rows_affected();
@@ -191,6 +200,23 @@ pub async fn abandon_application(
     if affected == 0 {
         return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
     }
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::ApplicationAbandoned,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -236,6 +262,14 @@ pub async fn teacher_abandon_application(
         return Err((StatusCode::FORBIDDEN, "해당 학생이 이 반 소속이 아닙니다".into()));
     }
 
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+
     let affected = sqlx::query(
         "UPDATE applications SET abandoned = 1
          WHERE student_id = ? AND track_id = ? AND round_id = ?",
@@ -243,7 +277,7 @@ pub async fn teacher_abandon_application(
     .bind(sid)
     .bind(tid)
     .bind(rid)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .rows_affected();
@@ -252,6 +286,22 @@ pub async fn teacher_abandon_application(
     if affected == 0 {
         return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
     }
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+            action: AuditAction::ApplicationAbandoned,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -703,6 +753,26 @@ pub async fn teacher_create_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    let mut app_detail =
+        crate::audit::application_detail(&mut *tx, body.student_id, body.track_id).await?;
+    if let serde_json::Value::Object(ref mut map) = app_detail {
+        map.insert(
+            "department_name".to_string(),
+            serde_json::Value::String(body.department_name.clone()),
+        );
+    }
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+            action: AuditAction::ApplicationSaved,
+            round_id: Some(body.round_id),
+            student_id: Some(body.student_id),
+            detail: app_detail,
+        },
+    )
+    .await?;
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -765,6 +835,9 @@ pub async fn teacher_delete_application(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 삭제 전 스냅샷 조회 (students·univ_tracks는 삭제되지 않지만 일관성을 위해 먼저 조회)
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+
     // results를 먼저 삭제해야 FK 제약 위반 없음 (results → applications 참조)
     sqlx::query(
         "DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
@@ -785,6 +858,18 @@ pub async fn teacher_delete_application(
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+            action: AuditAction::ApplicationDeleted,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
 
     tx.commit()
         .await

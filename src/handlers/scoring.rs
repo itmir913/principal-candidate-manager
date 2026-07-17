@@ -10,8 +10,9 @@ use sqlx::{FromRow, Row};
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    audit::{Actor, AuditEntry},
     auth::TeacherClaims,
-    enums::{CalcType, CategoryAgg, LookupScope, MatchMode, RoundStatus},
+    enums::{AuditAction, CalcType, CategoryAgg, LookupScope, MatchMode, RoundStatus},
     excel, score::Score, state::AppState,
 };
 
@@ -438,6 +439,18 @@ pub async fn calculate_scores(
     let count = run_calculate_scores_on_conn(&mut *tx, round_id, &now)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::ScoresRecalculated,
+            round_id: Some(round_id),
+            student_id: None,
+            detail: serde_json::json!({ "calculated": count }),
+        },
+    )
+    .await?;
 
     tx.commit()
         .await
@@ -1070,6 +1083,19 @@ pub async fn recommend_result(
         return Err((StatusCode::NOT_FOUND, "결과 행을 찾을 수 없습니다 (점수 계산 후 시도하세요)".into()));
     }
 
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RecommendConfirmed,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
+
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -1105,6 +1131,19 @@ pub async fn unrecommend_result(
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::RecommendCanceled,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1356,7 +1395,26 @@ pub async fn auto_recommend_results(
         }
     }
 
-    // 6. COMMIT 후 200 JSON
+    // 6. 감사 로그 후 COMMIT
+    let confirmed_tracks = confirmed_items.len() as i64;
+    let confirmed_students: i64 = confirmed_items.iter().map(|i| i.count).sum();
+    let manual_tracks = manual_items.len() as i64;
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::AutoRecommendRun,
+            round_id: Some(round_id),
+            student_id: None,
+            detail: serde_json::json!({
+                "confirmed_tracks": confirmed_tracks,
+                "confirmed_students": confirmed_students,
+                "manual_tracks": manual_tracks,
+            }),
+        },
+    )
+    .await?;
+
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

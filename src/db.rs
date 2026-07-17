@@ -40,6 +40,7 @@ const V1_FRAGMENTS: &[&str] = &[
     include_str!("../migrations/v1/007-base-data.sql"),
     include_str!("../migrations/v1/008-applications.sql"),
     include_str!("../migrations/v1/009-results.sql"),
+    include_str!("../migrations/v1/010-audit-log.sql"),
 ];
 
 // 버전별 마이그레이션: index i → v(i+1). 각 항목은 해당 버전을 구성하는 조각 목록.
