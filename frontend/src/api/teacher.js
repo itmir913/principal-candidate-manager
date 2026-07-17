@@ -31,7 +31,8 @@ export const teacherGetAllTracks = () => axios.get('/api/teacher/univ-tracks').t
 export const teacherGetApplications = (roundId) =>
   axios.get('/api/teacher/applications', { params: { round_id: roundId } }).then(r => r.data)
 
-// body: { student_id, track_id, round_id, department_name, base_data_entries: [{area_id, values}] }
+// body: { student_id, track_id, round_id, department_name, base_data_entries: [{area_id, values}], prev_track_id? }
+// prev_track_id: 수정 모드에서 기존 지원의 track_id. 현재 track_id와 다르면 모집단위 변경.
 export const teacherCreateApplication = (body) =>
   axios.post('/api/teacher/applications', body)
 

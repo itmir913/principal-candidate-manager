@@ -98,17 +98,21 @@
               등록된 지원이 없습니다.
             </div>
 
-            <div v-for="app in studentApps" :key="`${app.track_id}`" class="flex items-center gap-2 mb-2">
+            <div
+              v-for="app in studentApps"
+              :key="`${app.track_id}`"
+              class="flex items-center justify-between gap-2 mb-2 rounded-lg cursor-pointer"
+              style="padding: 8px 12px; border: 1px solid #e2e8f0; transition: background 0.1s;"
+              :style="{ background: detailApp?.track_id === app.track_id ? '#eff6ff' : '#fafafa' }"
+              @click="openDetail(app)"
+              @mouseenter="e => e.currentTarget.style.background = '#eff6ff'"
+              @mouseleave="e => e.currentTarget.style.background = detailApp?.track_id === app.track_id ? '#eff6ff' : '#fafafa'"
+            >
               <span class="text-base" style="color: #1e293b;">
                 {{ app.univ_name }} — {{ app.track_name }}
                 <span v-if="app.department_name" style="color: #64748b;"> ({{ app.department_name }})</span>
               </span>
-              <button
-                class="text-base"
-                style="padding: 4px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
-                :disabled="deletingApp === app.track_id"
-                @click="deleteApp(app)"
-              >취소</button>
+              <span class="text-base" style="color: #94a3b8;">›</span>
             </div>
           </div>
 
@@ -119,7 +123,12 @@
             style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); padding: 1.5rem;"
           >
             <div class="flex items-center justify-between mb-5">
-              <h3 class="text-base font-semibold" style="color: #1e293b; margin: 0;">새 지원 등록</h3>
+              <h3 class="text-base font-semibold" style="color: #1e293b; margin: 0;">
+                <template v-if="editingPrevTrackId">
+                  지원 수정 — {{ editingUnivName }} {{ editingTrackName }}
+                </template>
+                <template v-else>새 지원 등록</template>
+              </h3>
               <button
                 class="text-base"
                 style="background: none; border: none; cursor: pointer; color: #94a3b8;"
@@ -363,7 +372,7 @@
                 style="padding: 10px 24px; border: none; background: #2563eb; color: white; border-radius: 8px; cursor: pointer;"
                 :disabled="!canSave || saving"
                 @click="saveApplication"
-              >{{ saving ? '등록 중...' : '저장' }}</button>
+              >{{ saving ? (editingPrevTrackId ? '수정 중...' : '등록 중...') : '저장' }}</button>
               <button
                 class="text-base"
                 style="padding: 10px 20px; border: 1px solid #e2e8f0; background: white; color: #475569; border-radius: 8px; cursor: pointer;"
@@ -376,6 +385,16 @@
       </div>
     </div>
   </div>
+
+  <!-- 지원 상세 모달 -->
+  <ApplicationDetailModal
+    v-if="detailApp"
+    :app="detailApp"
+    :student-name="selectedStudent?.name ?? ''"
+    @close="detailApp = null"
+    @edit="onModalEdit"
+    @deleted="onModalDeleted"
+  />
 </template>
 
 <script setup>
@@ -392,10 +411,10 @@ import {
   teacherGetAreaContext,
   teacherAreaScorePreview,
   teacherCreateApplication,
-  teacherDeleteApplication,
   teacherGetResults,
 } from '../../api/teacher.js'
 import HelpBox from '../common/HelpBox.vue'
+import ApplicationDetailModal from './ApplicationDetailModal.vue'
 
 const auth = useAuthStore()
 
@@ -411,7 +430,12 @@ const selectedStudent = ref(null)
 const showForm        = ref(false)
 const saving          = ref(false)
 const saveError       = ref('')
-const deletingApp     = ref(null)
+const detailApp       = ref(null)
+
+// 수정 모드: null이면 신규, 값이 있으면 기존 track_id
+const editingPrevTrackId = ref(null)
+const editingUnivName    = ref('')
+const editingTrackName   = ref('')
 
 // ── 폼 상태 ───────────────────────────────────────────────────────
 const form = reactive({
@@ -545,7 +569,7 @@ const helpBox = computed(() => {
         '① 왼쪽 목록에서 학생을 선택하고 ② "+ 새 지원 추가"를 누른 뒤 ③ 대학·모집단위·학과명을 입력하세요.',
         '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. "관리자 입력 고정" 항목은 관리자가 이미 입력해 둔 값이라 수정할 수 없습니다.',
         '모든 항목을 입력해야 "저장" 버튼이 활성화됩니다. 저장 전에 예상 점수가 맞는지 확인하세요.',
-        '저장한 지원은 학생 이름 옆 파란 숫자로 표시됩니다. 같은 대학·모집단위로 다시 저장하면 기존 내용이 수정되고, "취소"를 누르면 지원이 삭제됩니다.',
+        '저장한 지원은 학생 이름 옆 파란 숫자로 표시됩니다. 지원을 클릭하면 상세 정보를 확인하고 수정하거나 취소할 수 있습니다. 수정 시 대학·모집단위도 변경할 수 있습니다.',
       ],
     }
   }
@@ -610,8 +634,11 @@ function openNewForm() {
 }
 
 function closeForm() {
-  showForm.value  = false
-  saveError.value = ''
+  showForm.value           = false
+  saveError.value          = ''
+  editingPrevTrackId.value = null
+  editingUnivName.value    = ''
+  editingTrackName.value   = ''
 }
 
 // ── 대학 선택 → 모집단위 로드 ─────────────────────────────────────
@@ -767,13 +794,17 @@ async function saveApplication() {
     .filter(e => e.values.length > 0)
 
   try {
-    await teacherCreateApplication({
+    const body = {
       student_id:        selectedStudent.value.id,
       track_id:          Number(form.trackId),
       round_id:          currentRound.value.id,
       department_name:   form.departmentName,
       base_data_entries: baseDataEntries,
-    })
+    }
+    if (editingPrevTrackId.value !== null) {
+      body.prev_track_id = editingPrevTrackId.value
+    }
+    await teacherCreateApplication(body)
     applications.value = await teacherGetApplications(currentRound.value.id)
     closeForm()
   } catch (e) {
@@ -783,22 +814,53 @@ async function saveApplication() {
   }
 }
 
-// ── 삭제 ──────────────────────────────────────────────────────────
-async function deleteApp(app) {
-  if (!(await dialog.confirm({
-    title: '지원 취소',
-    message: `${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?\n라운드가 진행 중인 동안에는 다시 등록할 수 있습니다.`,
-    confirmText: '지원 취소',
-    level: 'warn',
-  }))) return
-  deletingApp.value = app.track_id
+// ── 모달 ──────────────────────────────────────────────────────────
+function openDetail(app) {
+  detailApp.value = app
+}
+
+async function onModalDeleted() {
+  detailApp.value = null
+  applications.value = await teacherGetApplications(currentRound.value.id)
+}
+
+async function onModalEdit(app) {
+  // 수정 모드: 기존 지원 정보로 폼 초기화
+  editingPrevTrackId.value = app.track_id
+  editingUnivName.value    = app.univ_name
+  editingTrackName.value   = app.track_name
+
+  showForm.value           = true
+  form.univId              = app.univ_id
+  form.tracks              = []
+  form.trackId             = ''
+  form.departmentName      = app.department_name
+  areaContext.value        = []
+  areaValues.value         = {}
+  areaMultiValues.value    = {}
+  scorePreview.value       = {}
+  saveError.value          = ''
+
+  // 해당 대학의 모집단위 로드 후 기존 track 선택
+  tracksLoading.value = true
   try {
-    await teacherDeleteApplication(app.student_id, app.track_id, app.round_id)
-    applications.value = await teacherGetApplications(currentRound.value.id)
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    form.tracks  = await teacherGetUnivTracks(app.univ_id)
+    form.trackId = app.track_id
+    // area-context 로드 (onTrackChange 로직 직접 수행 — 폼 값 초기화 없이)
+    const seq = ++_trackCtxSeq
+    contextLoading.value = true
+    try {
+      const ctx = await teacherGetAreaContext(selectedStudent.value.id, app.track_id)
+      if (seq !== _trackCtxSeq) return
+      areaContext.value    = ctx
+      initAreaValues(ctx)
+      contextLoading.value = false
+      await triggerInitialPreviews(ctx)
+    } finally {
+      if (seq === _trackCtxSeq) contextLoading.value = false
+    }
   } finally {
-    deletingApp.value = null
+    tracksLoading.value = false
   }
 }
 
