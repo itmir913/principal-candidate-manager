@@ -304,6 +304,7 @@ async function refreshRound() {
 }
 
 provide('refreshRound', refreshRound)
+provide('setActiveTab', (key) => { active.value = key })
 
 function stripV(v) {
   return (v ?? '').replace(/^v/i, '').trim()
