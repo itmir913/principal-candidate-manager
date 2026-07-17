@@ -2,9 +2,17 @@
   <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
-    <div class="mb-5">
-      <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
-      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
+    <div class="flex items-start justify-between mb-5">
+      <div>
+        <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
+        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
+      </div>
+      <button
+        class="text-base font-medium rounded-lg disabled:opacity-40"
+        style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
+        :disabled="downloading"
+        @click="doExportQuotaStats(true)"
+      >전체 목록 다운로드</button>
     </div>
 
     <HelpBox class="mb-5" storage-key="univs" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
@@ -167,8 +175,8 @@
                 class="text-base font-medium rounded-lg disabled:opacity-40"
                 style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
                 :disabled="downloading"
-                @click="doExportQuotaStats"
-              >전체 목록 다운로드</button>
+                @click="doExportQuotaStats(false)"
+              >이 대학 목록 다운로드</button>
               <button
                 class="text-base font-medium rounded-lg disabled:opacity-40"
                 style="padding: 8px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
@@ -508,16 +516,18 @@ async function loadQuotaStats() {
 }
 
 // ── 내보내기 ──────────────────────────────────────────────────
-async function doExportQuotaStats() {
+async function doExportQuotaStats(all = false) {
   if (downloading.value) return
   downloading.value = true
   try {
-    const res = await exportQuotaStats(selectedUnivId.value)
+    const res = await exportQuotaStats(all ? null : selectedUnivId.value)
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    a.download = `${selectedUniv.value?.univ_name ?? '대학'}_추천현황_${date}.xlsx`
+    a.download = all
+      ? `전체_추천현황_${date}.xlsx`
+      : `${selectedUniv.value?.univ_name ?? '대학'}_추천현황_${date}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
