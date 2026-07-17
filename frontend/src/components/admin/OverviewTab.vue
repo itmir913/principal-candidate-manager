@@ -21,67 +21,6 @@
     <!-- 본문 -->
     <div v-else-if="data" class="flex flex-col gap-4">
 
-      <HelpBox
-        v-if="helpBox"
-        :key="helpBox.key"
-        :storage-key="helpBox.key"
-        :title="helpBox.title"
-        :intro="helpBox.intro"
-        :items="helpBox.items"
-      />
-
-      <!-- 라운드 시작 전 준비 체크리스트 -->
-      <div v-if="!data.round && checklist" class="rounded-xl"
-        style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-        <SectionLabel title="라운드 시작 전 준비 체크리스트" />
-
-        <div class="flex flex-col gap-2">
-          <div
-            v-for="item in checklist"
-            :key="item.key"
-            class="flex items-center gap-3 rounded-lg flex-wrap"
-            style="padding: 12px 16px;"
-            :style="{ background: item.count > 0 ? '#f0fdf4' : '#fef2f2' }"
-          >
-            <CheckCircle2 v-if="item.count > 0" :size="20" style="color: #16a34a;" class="flex-shrink-0" />
-            <XCircle v-else :size="20" style="color: #ef4444;" class="flex-shrink-0" />
-            <div class="min-w-0">
-              <p class="text-base font-semibold" style="margin: 0;"
-                :style="{ color: item.count > 0 ? '#15803d' : '#b91c1c' }">
-                {{ item.label }}
-                <span class="font-normal">— {{ item.count > 0 ? `${item.count}${item.unit} 등록됨` : '아직 등록되지 않음' }}</span>
-              </p>
-              <p class="text-base" style="margin: 2px 0 0; color: #94a3b8;">{{ item.desc }}</p>
-            </div>
-            <button
-              v-if="item.count === 0"
-              class="flex items-center gap-1 text-base font-medium rounded-lg ml-auto flex-shrink-0"
-              style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-              @click="setActiveTab(item.tab)"
-            >설정하러 가기 <ArrowRight :size="15" /></button>
-            <button
-              v-else
-              class="flex items-center gap-1 text-base rounded-lg ml-auto flex-shrink-0"
-              style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-              @click="setActiveTab(item.tab)"
-            >보기 <ArrowRight :size="15" /></button>
-          </div>
-        </div>
-
-        <!-- 전부 완료 시 -->
-        <div v-if="allReady" class="flex items-center gap-3 rounded-lg mt-3 flex-wrap"
-          style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe;">
-          <p class="text-base font-semibold" style="margin: 0; color: #1d4ed8;">
-            모든 준비가 끝났습니다. 이제 라운드를 열어 담임교사의 입력을 시작할 수 있습니다.
-          </p>
-          <button
-            class="flex items-center gap-1 text-base font-semibold rounded-lg ml-auto flex-shrink-0"
-            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-            @click="setActiveTab('rounds')"
-          >라운드 관리로 이동 <ArrowRight :size="15" /></button>
-        </div>
-      </div>
-
       <!-- ① 앱 정보 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -125,6 +64,67 @@
           교사들이 이 주소로 접속합니다. 같은 네트워크에 연결되어 있어야 합니다.
         </p>
       </div>
+
+      <!-- 라운드 시작 전 준비 체크리스트 -->
+      <div v-if="!data.round && checklist" class="rounded-xl"
+           style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        <SectionLabel title="첫 번째 라운드 시작 전 준비 체크리스트" />
+
+        <div class="flex flex-col gap-2">
+          <div
+              v-for="item in checklist"
+              :key="item.key"
+              class="flex items-center gap-3 rounded-lg flex-wrap"
+              style="padding: 12px 16px;"
+              :style="{ background: item.count > 0 ? '#f0fdf4' : '#fef2f2' }"
+          >
+            <CheckCircle2 v-if="item.count > 0" :size="20" style="color: #16a34a;" class="flex-shrink-0" />
+            <XCircle v-else :size="20" style="color: #ef4444;" class="flex-shrink-0" />
+            <div class="min-w-0">
+              <p class="text-base font-semibold" style="margin: 0;"
+                 :style="{ color: item.count > 0 ? '#15803d' : '#b91c1c' }">
+                {{ item.label }}
+                <span class="font-normal">— {{ item.count > 0 ? `${item.count}${item.unit} 등록됨` : '아직 등록되지 않음' }}</span>
+              </p>
+              <p class="text-base" style="margin: 2px 0 0; color: #94a3b8;">{{ item.desc }}</p>
+            </div>
+            <button
+                v-if="item.count === 0"
+                class="flex items-center gap-1 text-base font-medium rounded-lg ml-auto flex-shrink-0"
+                style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                @click="setActiveTab(item.tab)"
+            >설정하러 가기 <ArrowRight :size="15" /></button>
+            <button
+                v-else
+                class="flex items-center gap-1 text-base rounded-lg ml-auto flex-shrink-0"
+                style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                @click="setActiveTab(item.tab)"
+            >보기 <ArrowRight :size="15" /></button>
+          </div>
+        </div>
+
+        <!-- 전부 완료 시 -->
+        <div v-if="allReady" class="flex items-center gap-3 rounded-lg mt-3 flex-wrap"
+             style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe;">
+          <p class="text-base font-semibold" style="margin: 0; color: #1d4ed8;">
+            모든 준비가 끝났습니다. 이제 첫 번째 라운드를 열어 담임교사의 입력을 시작할 수 있습니다.
+          </p>
+          <button
+              class="flex items-center gap-1 text-base font-semibold rounded-lg ml-auto flex-shrink-0"
+              style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+              @click="setActiveTab('rounds')"
+          >라운드 관리로 이동 <ArrowRight :size="15" /></button>
+        </div>
+      </div>
+
+      <HelpBox
+          v-if="helpBox"
+          :key="helpBox.key"
+          :storage-key="helpBox.key"
+          :title="helpBox.title"
+          :intro="helpBox.intro"
+          :items="helpBox.items"
+      />
 
       <!-- ③ 현재 라운드 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
@@ -387,9 +387,9 @@ const checklist = computed(() => {
   if (!readiness.value) return null
   const r = readiness.value
   return [
-    { key: 'classes',  label: '학급 등록',     desc: '담임교사 계정이 만들어집니다',            count: r.classes,  unit: '개 학급', tab: 'classes' },
-    { key: 'students', label: '학생 명단 등록', desc: '추천 대상 재학생·졸업생 명단입니다',      count: r.students, unit: '명',     tab: 'students' },
-    { key: 'areas',    label: '전형요소 설정',  desc: '점수 항목과 기준을 정합니다',             count: r.areas,    unit: '개 항목', tab: 'areas' },
+    { key: 'classes',  label: '학급 등록',     desc: '담임교사 계정을 생성합니다',            count: r.classes,  unit: '개 학급', tab: 'classes' },
+    { key: 'students', label: '학생 명단 등록', desc: '추천 대상 재학생·졸업생 명단을 입력합니다',      count: r.students, unit: '명',     tab: 'students' },
+    { key: 'areas',    label: '전형요소 설정',  desc: '학교장추천 선발을 위한 영역과 배점을 정합니다',             count: r.areas,    unit: '개 항목', tab: 'areas' },
     { key: 'univs',    label: '대학 설정',      desc: '지원할 대학·모집단위와 정원을 정합니다',  count: r.univs,    unit: '개 대학', tab: 'univs' },
   ]
 })

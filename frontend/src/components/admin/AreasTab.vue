@@ -118,7 +118,7 @@
           <p class="text-base mb-3" style="color: #94a3b8;">
             템플릿을 선택하면 아래 항목이 자동으로 채워집니다. 매뉴얼을 참고하여 적절한 전형요소 설정을 입력하세요.
           </p>
-          <div class="grid grid-cols-1 @3xl:grid-cols-3 gap-3 mb-6">
+          <div class="grid grid-cols-1 @2xl:grid-cols-3 gap-3 mb-6">
             <div
               v-for="tpl in AREA_TEMPLATES" :key="tpl.id"
               class="template-btn rounded-xl text-left flex flex-col"
@@ -521,7 +521,7 @@
       <div class="bg-white flex flex-col"
         style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 540px; max-height: 90vh; overflow-y: auto; padding: 1.75rem;">
         <h3 class="text-lg font-semibold mb-1" style="color: #1e293b;">{{ extModal.title }}</h3>
-        <p class="text-base mb-5" style="color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ extModal.file?.name }}</p>
+        <p class="text-base mb-5" style="color: #475569;">{{ extModal.fileName }}</p>
 
         <div class="space-y-4 mb-5">
           <div>
@@ -610,8 +610,8 @@ const HELP_MAIN = {
   items: [
     '"+ 전형요소 추가"를 누르고 템플릿에서 골라 시작하는 것이 가장 쉽습니다.',
     '왼쪽 목록에서 전형요소를 클릭하면 오른쪽에서 점수 기준과 기초 데이터를 등록할 수 있습니다.',
-    '목록 아래 총점이 학교 규정의 추천 전형 총점과 일치하는지 확인하세요.',
-    { text: '전형요소 추가·수정·삭제는 라운드가 종료된 뒤에는 차단됩니다. 반드시 첫 라운드를 열기 전에 설정을 끝내세요.', warn: true },
+    '목록 아래 총점이 학교 규정의 학교장 추천 전형 총점과 일치하는지 확인하세요.',
+    { text: '라운드 종료 이후에는 전형요소 추가·수정·삭제가 차단됩니다. 반드시 첫 라운드를 열기 전에 전형요소 설정을 끝내세요. 첫 라운드 마감 이후에 전형요소는 수정할 수 없습니다.', warn: true },
   ],
 }
 
@@ -966,7 +966,7 @@ async function dlScoreTemplate(tpl) {
 
 // ── 외부 가져오기 모달 ────────────────────────────────────────────
 const extModal = ref({
-  open: false, format: '', title: '', file: null,
+  open: false, format: '', title: '', file: null, fileName: '',
   univName: '', trackName: '', valueHeader: '',
   preview: [], total: 0, importing: false, error: '',
 })
@@ -984,6 +984,7 @@ async function onExternalFile(format, evt) {
       format,
       title: format === 'daegyo' ? '대교협 석차연명부 가져오기' : '유니브 석차연명부 가져오기',
       file,
+      fileName: file.name,
       univName: data.univ_name,
       trackName: '',
       valueHeader: data.value_header,
