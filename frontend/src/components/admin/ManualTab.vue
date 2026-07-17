@@ -112,6 +112,15 @@
           </li>
         </ul>
       </div>
+
+      <div class="rounded-xl mt-4" style="padding: 18px 22px; background: #f0f9ff; border: 1px solid #bae6fd;">
+        <h3 class="text-base font-semibold" style="color: #0c4a6e;">감사 기록 탭</h3>
+        <p class="text-base mt-2" style="color: #0369a1; line-height: 1.7;">
+          관리자 사이드바의 <strong>감사 기록</strong> 탭에서 추천 확정·라운드 마감·지원 등록·명단 가져오기 등 주요 작업이 누가·언제 수행됐는지 자동으로 기록됩니다.
+          담임교사의 행위는 학급(예: 3학년 2반)과 당시 담임명으로 표시됩니다.
+          기록은 수정·삭제할 수 없으며, 라운드·작업 종류로 필터링하거나 엑셀로 내려받을 수 있습니다.
+        </p>
+      </div>
     </div>
 
     <!-- ── 사전 설정 ─────────────────────────────────────────────── -->
