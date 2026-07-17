@@ -137,6 +137,10 @@ pub async fn update_area(
     Json(body): Json<UpdateAreaBody>,
 ) -> Result<StatusCode, ApiError> {
     guard_no_closed_round(&state.db).await?;
+    // 변경 필드가 하나도 없는 요청은 거부 — 아무것도 바꾸지 않는 AREA_UPDATED 감사 로그를 남기지 않는다
+    if body.name.is_none() && body.teacher_editable.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "수정할 내용이 없습니다".into()));
+    }
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

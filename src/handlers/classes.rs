@@ -350,6 +350,11 @@ pub async fn upsert_class(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     } else {
+        // 무변경 저장 — 프론트가 변경 사항 없이 저장하면 빈 body를 보낸다 (ClassesTab saveEdit).
+        // 쓰기가 없으므로 감사 로그도 남기지 않고 성공으로 조기 종료한다 (400을 주면 정상 UI 조작이 오류가 됨).
+        if body.teacher_name.is_none() && password_hash.is_none() {
+            return Ok(StatusCode::NO_CONTENT);
+        }
         if let Some(ref name) = body.teacher_name {
             sqlx::query("UPDATE classes SET teacher_name = ? WHERE grade = ? AND class_no = ?")
                 .bind(name)

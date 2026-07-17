@@ -152,6 +152,10 @@ pub async fn update_university(
     Path(id): Path<i64>,
     Json(body): Json<UpdateUnivBody>,
 ) -> Result<StatusCode, ApiError> {
+    // 변경 필드가 하나도 없는 요청은 거부 — 아무것도 바꾸지 않는 UNIVERSITY_UPDATED 감사 로그를 남기지 않는다
+    if body.univ_name.is_none() && body.total_quota.is_none() && body.prioritize_enrolled.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "수정할 내용이 없습니다".into()));
+    }
     if let Some(v) = &body.univ_name {
         if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
@@ -327,6 +331,10 @@ pub async fn update_track(
     Path(id): Path<i64>,
     Json(body): Json<UpdateTrackBody>,
 ) -> Result<StatusCode, ApiError> {
+    // 변경 필드가 하나도 없는 요청은 거부 — 아무것도 바꾸지 않는 TRACK_UPDATED 감사 로그를 남기지 않는다
+    if body.track_name.is_none() && body.unit_quota.is_none() && body.prioritize_enrolled.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "수정할 내용이 없습니다".into()));
+    }
     if let Some(v) = &body.track_name {
         if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));

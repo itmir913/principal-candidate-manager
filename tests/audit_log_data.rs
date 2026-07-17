@@ -596,3 +596,68 @@ async fn track_deleted_detail_has_pre_delete_names() {
     assert_eq!(detail["univ_name"], "삭제대");
     assert_eq!(detail["track_name"], "삭제트랙");
 }
+
+// ═══════════════════════════════════════════════════════
+// 무변경 요청 — 수정형 3종은 400 + 무기록, upsert_class 빈 body는 성공 no-op + 무기록
+// ═══════════════════════════════════════════════════════
+
+#[tokio::test]
+async fn update_area_with_no_fields_rejected_and_unlogged() {
+    let pool = common::create_test_pool().await;
+    let aid = insert_area_numeric(&pool).await;
+    let err = update_area(
+        State(common::make_state(pool.clone())),
+        Path(aid),
+        Json(UpdateAreaBody { name: None, teacher_editable: None }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert_eq!(total_audit_count(&pool).await, 0);
+}
+
+#[tokio::test]
+async fn update_university_with_no_fields_rejected_and_unlogged() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    let err = update_university(
+        State(common::make_state(pool.clone())),
+        Path(uid),
+        Json(UpdateUnivBody { univ_name: None, total_quota: None, prioritize_enrolled: None }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert_eq!(total_audit_count(&pool).await, 0);
+}
+
+#[tokio::test]
+async fn update_track_with_no_fields_rejected_and_unlogged() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track_row(&pool, uid, "컴공").await;
+    let err = update_track(
+        State(common::make_state(pool.clone())),
+        Path(tid),
+        Json(UpdateTrackBody { track_name: None, unit_quota: None, prioritize_enrolled: None }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert_eq!(total_audit_count(&pool).await, 0);
+}
+
+#[tokio::test]
+async fn upsert_class_noop_save_succeeds_without_log() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let status = upsert_class(
+        State(common::make_state(pool.clone())),
+        Path((1i64, 1i64)),
+        Json(UpsertClassBody { teacher_name: None, password: None }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(total_audit_count(&pool).await, 0);
+}
