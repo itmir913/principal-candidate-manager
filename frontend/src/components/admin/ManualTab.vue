@@ -43,6 +43,8 @@
       <p class="text-base mb-6" style="color: #475569; line-height: 1.7;">
         학교장추천 선발은 크게 <strong>사전 설정 → 라운드 운영 → 선발 완료</strong> 순서로 진행됩니다.
         처음 시스템을 사용할 때는 사전 설정을 먼저 완료해 주세요. 이후 매 선발마다 라운드 운영만 반복하면 됩니다.
+        관리자·담임교사의 주요 화면 상단에는 파란색 <strong>도움말</strong> 박스가 표시되어, 현재 화면에서 해야 할 일과 주의사항을
+        라운드 상태(없음·진행중·종료·마감)에 맞추어 안내합니다. 제목 줄을 클릭하면 접고 펼 수 있으며, 접은 상태는 브라우저에 기억됩니다.
       </p>
 
       <div class="rounded-xl mb-5" style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); overflow: hidden;">
