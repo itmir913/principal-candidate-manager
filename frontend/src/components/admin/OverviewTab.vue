@@ -466,6 +466,7 @@ const allTimeStats = computed(() => {
 
 // ── 데이터 로드 ───────────────────────────────────────────────
 onMounted(async () => {
+  loadReadiness() // 개요 로드와 병렬 실행 — 실패해도 체크리스트 카드만 숨겨진다
   try {
     data.value = await getOverview()
   } catch (e) {
@@ -473,7 +474,6 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  loadReadiness()
 })
 
 // ── 클립보드 복사 ─────────────────────────────────────────────
