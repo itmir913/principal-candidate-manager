@@ -21,6 +21,15 @@
     <!-- 본문 -->
     <div v-else-if="data" class="flex flex-col gap-4">
 
+      <HelpBox
+        v-if="helpBox"
+        :key="helpBox.key"
+        :storage-key="helpBox.key"
+        :title="helpBox.title"
+        :intro="helpBox.intro"
+        :items="helpBox.items"
+      />
+
       <!-- ① 앱 정보 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -278,6 +287,7 @@ import { ref, computed, onMounted, h } from 'vue'
 import { Copy, Check, AlertTriangle } from 'lucide-vue-next'
 import { getOverview } from '../../api/admin.js'
 import MiniPie from './MiniPie.vue'
+import HelpBox from '../common/HelpBox.vue'
 
 // ── 섹션 레이블 헬퍼 컴포넌트 (인라인) ─────────────────────────
 const SectionLabel = {
@@ -303,6 +313,56 @@ const totalApplicants = computed(() =>
 const zeroClassCount = computed(() =>
   data.value?.classes.filter(c => c.submitted === 0).length ?? 0
 )
+const helpBox = computed(() => {
+  if (!data.value) return null
+  const round = data.value.round
+  if (!round) {
+    if (data.value.all_time.total_rounds === 0) {
+      return {
+        key: 'overview-first',
+        title: '도움말 — 처음 시작하기',
+        intro: '이 화면은 시스템의 전체 현황을 한눈에 보여줍니다. 아직 진행 중인 라운드가 없습니다.',
+        items: [
+          '처음 사용하신다면 왼쪽 메뉴에서 [학급 관리] → [학생 관리] → [전형요소 설정] → [대학 설정] 순서로 기초 정보를 먼저 입력하세요.',
+          '준비가 끝나면 [라운드 관리]에서 "+ 라운드 열기"를 눌러 담임교사의 입력을 시작할 수 있습니다.',
+          '자세한 사용 방법은 왼쪽 아래 [매뉴얼] 메뉴에서 볼 수 있습니다.',
+        ],
+      }
+    }
+    return {
+      key: 'overview-idle',
+      title: '도움말 — 진행 중인 라운드 없음',
+      intro: '이전 라운드는 모두 마감되었고, 지금은 진행 중인 라운드가 없습니다.',
+      items: [
+        '추가 추천이 필요하면 [라운드 관리]에서 "+ 라운드 열기"로 다음 차수를 시작하세요.',
+        '이전 라운드의 결과는 [라운드 관리]에서 해당 라운드를 선택해 다시 확인하거나 내려받을 수 있습니다.',
+      ],
+    }
+  }
+  if (round.status === 'OPEN') {
+    return {
+      key: 'overview-open',
+      title: '도움말 — 라운드 진행 중',
+      intro: '지금은 담임교사들이 지원자를 등록하는 기간입니다.',
+      items: [
+        '아래 "학급별 지원자 현황"에서 학급별 입력 상황을 확인하세요. 빨간색으로 표시된 학급은 아직 지원자를 한 명도 등록하지 않은 학급입니다.',
+        '위의 "서버 접속 정보" 주소를 담임교사들에게 알려주세요. 담임교사는 이 주소로 접속해 로그인합니다.',
+        '모든 담임교사의 입력이 끝나면 [라운드 관리]에서 "종료하기"를 눌러 입력을 마감하세요.',
+      ],
+    }
+  }
+  return {
+    key: 'overview-closed',
+    title: '도움말 — 입력 종료, 추천 확정 단계',
+    intro: '담임교사 입력이 종료되었습니다. 이제 관리자가 추천자를 확정할 차례입니다.',
+    items: [
+      '[라운드 관리]에서 이 라운드를 선택한 뒤 [결과] 탭에서 "자동 추천 확정"을 누르거나 학생별로 "추천 확정"을 누르세요.',
+      '추천 확정이 모두 끝나면 "마감하기"를 눌러 결과를 담임교사에게 공개하세요.',
+      '입력을 다시 받아야 하면 "다시 열기"를 누르면 됩니다.',
+    ],
+  }
+})
+
 const allTimeStats = computed(() => {
   if (!data.value) return []
   const t = data.value.all_time

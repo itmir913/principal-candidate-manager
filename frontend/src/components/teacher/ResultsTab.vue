@@ -9,6 +9,16 @@
       </div>
     </div>
 
+    <HelpBox
+      v-if="!loading && !loadError"
+      :key="helpBox.key"
+      class="mb-5"
+      :storage-key="helpBox.key"
+      :title="helpBox.title"
+      :intro="helpBox.intro"
+      :items="helpBox.items"
+    />
+
     <!-- 로딩 -->
     <div
       v-if="loading"
@@ -141,6 +151,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
+import HelpBox from '../common/HelpBox.vue'
 
 const auth = useAuthStore()
 
@@ -148,6 +159,33 @@ const rounds    = ref([])
 const results   = ref([])
 const loading   = ref(false)
 const loadError = ref('')
+
+const hasFinalized = computed(() => rounds.value.some(r => r.status === 'FINALIZED'))
+
+const helpBox = computed(() => {
+  if (hasFinalized.value) {
+    return {
+      key: 'results-final',
+      title: '도움말 — 결과 보는 방법',
+      intro: '마감된 라운드의 우리 반 학생 결과입니다.',
+      items: [
+        '초록색 배경의 "추천 확정"은 학교장추천 대상으로 확정된 것이고, 붉은색 배경의 "추천 제외"는 이번 라운드에서 추천되지 않은 것입니다.',
+        '추천이 확정된 학생이 추천을 포기하려면 "추천 포기"를 누르세요.',
+        { text: '포기는 되돌릴 수 없습니다. 반드시 학생·학부모와 확인한 뒤 처리하세요. 다시 추천받으려면 다음 라운드에서 재지원해야 합니다.', warn: true },
+        '"추천 제외"된 학생은 다음 라운드가 열리면 다시 지원할 수 있습니다.',
+      ],
+    }
+  }
+  return {
+    key: 'results-waiting',
+    title: '도움말 — 결과는 마감 후 공개됩니다',
+    intro: '라운드 결과는 관리자가 라운드를 "마감"한 뒤에만 표시됩니다.',
+    items: [
+      '"진행중" 또는 "집계중"으로 표시된 라운드는 아직 결과가 공개되지 않은 것입니다.',
+      '마감되면 이 화면에 우리 반 학생들의 순위·총점·추천 여부가 표시됩니다.',
+    ],
+  }
+})
 
 // round_id → { student_id → { ...student, results[] } } 구조
 const studentsByRound = computed(() => {

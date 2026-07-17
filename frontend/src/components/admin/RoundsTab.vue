@@ -7,6 +7,15 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">라운드 관리</h1>
     </div>
 
+    <HelpBox
+      v-if="rounds.length === 0"
+      class="mb-5"
+      storage-key="rounds-empty"
+      :title="HELP_EMPTY.title"
+      :intro="HELP_EMPTY.intro"
+      :items="HELP_EMPTY.items"
+    />
+
     <div class="flex flex-col lg:flex-row lg:items-start gap-6">
 
       <!-- ── 좌측: 라운드 목록 ────────────────────────────────── -->
@@ -118,6 +127,16 @@
               </div>
             </div>
           </div>
+
+          <HelpBox
+            v-if="helpBox"
+            :key="helpBox.key"
+            class="mb-5"
+            :storage-key="helpBox.key"
+            :title="helpBox.title"
+            :intro="helpBox.intro"
+            :items="helpBox.items"
+          />
 
           <!-- 서브탭 -->
           <div class="flex mb-5" style="border-bottom: 1px solid #e2e8f0;">
@@ -413,6 +432,17 @@ import {
   autoRecommend,
   blobErrMsg,
 } from '../../api/admin.js'
+import HelpBox from '../common/HelpBox.vue'
+
+const HELP_EMPTY = {
+  title: '도움말 — 첫 라운드 열기 전 확인하세요',
+  intro: '라운드는 한 번의 추천 진행 단위입니다. 라운드를 열면 담임교사가 지원자를 등록할 수 있게 됩니다.',
+  items: [
+    '라운드를 열기 전에 학급, 학생 명단, 전형요소, 대학 설정이 모두 끝났는지 확인하세요.',
+    { text: '특히 전형요소는 라운드가 종료된 뒤에는 수정할 수 없으니 반드시 먼저 완성하세요.', warn: true },
+    '준비가 끝났으면 "+ 라운드 열기"를 누르세요.',
+  ],
+}
 
 function fmtDt(s) {
   if (!s) return ''
@@ -450,6 +480,58 @@ const subTabs = [
 ]
 
 const hasOpenRound = computed(() => rounds.value.some(r => r.status === 'OPEN' || r.status === 'CLOSED'))
+
+const helpBox = computed(() => {
+  if (!selected.value) return null
+  const s = selected.value.status
+  if (s === 'OPEN') {
+    return {
+      key: 'rounds-open',
+      title: '도움말 — 라운드 진행 중',
+      intro: '담임교사들이 지원자를 등록하고 있는 단계입니다.',
+      items: [
+        '[개요] 화면에서 학급별 입력 현황을 확인할 수 있습니다.',
+        '모든 담임의 입력이 끝나면 "종료하기"를 누르세요. 종료하면 담임 입력이 차단되고 모든 지원자의 점수가 자동 계산됩니다.',
+        '종료할 때 기초 데이터가 빠진 학생이 있으면 오류 목록이 표시되고 종료되지 않습니다. 해당 학생의 데이터를 채운 뒤 다시 시도하세요.',
+      ],
+    }
+  }
+  if (s === 'CLOSED') {
+    if (view.value === 'apps') {
+      return {
+        key: 'rounds-closed-apps',
+        title: '도움말 — 지원 현황 확인',
+        intro: '라운드 종료 시 모든 지원자의 점수가 자동 계산되어 있습니다.',
+        items: [
+          '총점이 비어 있거나("-") 이상하면 "점수 전체 재계산"을 눌러 다시 계산하세요.',
+          '종료 후에 기초 데이터를 수정했다면 반드시 "점수 전체 재계산"을 눌러 변경 내용을 반영하세요.',
+          '점수 확인이 끝나면 [결과] 탭으로 이동해 추천을 확정하세요.',
+        ],
+      }
+    }
+    return {
+      key: 'rounds-closed-results',
+      title: '도움말 — 추천 확정',
+      intro: '순위를 확인하고 추천자를 확정하는 단계입니다.',
+      items: [
+        '"자동 추천 확정"을 누르면 모든 모집단위에서 순위 순으로 잔여 정원까지 자동 확정됩니다.',
+        '동점 등으로 자동 확정하지 못한 모집단위는 노란색 "수동 확인 필요" 목록에 표시됩니다. 해당 모집단위에서 학생을 직접 골라 "추천 확정"을 누르세요.',
+        '잘못 확정했으면 "추천 취소"로 되돌릴 수 있습니다.',
+        { text: '확정이 모두 끝나면 위의 "마감하기"를 누르세요. 마감은 되돌릴 수 없으며, 마감하면 결과가 담임교사에게 공개됩니다.', warn: true },
+      ],
+    }
+  }
+  return {
+    key: 'rounds-finalized',
+    title: '도움말 — 마감된 라운드',
+    intro: '이 라운드는 마감되어 결과가 확정되었고 담임교사에게 공개되었습니다.',
+    items: [
+      '[결과] 탭에서 "전체 지원자 결과 다운로드"와 "라운드 요약 다운로드"로 엑셀 파일을 내려받을 수 있습니다.',
+      { text: '추천 확정 학생이 추천을 포기하면 "포기하기"를 눌러 처리하세요. 포기는 되돌릴 수 없습니다.', warn: true },
+      '포기 등으로 빈자리가 생겨 추가 추천이 필요하면 "+ 라운드 열기"로 다음 차수를 시작하세요.',
+    ],
+  }
+})
 
 const appsByUniv = computed(() => {
   const map = {}

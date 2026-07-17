@@ -7,6 +7,8 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
     </div>
 
+    <HelpBox class="mb-5" storage-key="univs" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
+
     <div class="flex flex-col lg:flex-row lg:items-start gap-6" style="min-height: 480px;">
 
       <!-- ── 좌측: 대학 목록 ─────────────────────────────────── -->
@@ -389,6 +391,18 @@ import {
   getQuotaStats, exportQuotaStats, getTrackRecommendedList,
   blobErrMsg,
 } from '../../api/admin.js'
+import HelpBox from '../common/HelpBox.vue'
+
+const HELP = {
+  title: '도움말 — 대학 설정',
+  intro: '학생이 지원할 대학과 모집단위(예: 인문계열, 자연계열)를 등록하고, 학교장추천 가능 인원(정원)을 정하는 곳입니다.',
+  items: [
+    '"+ 대학 추가"로 대학을 만들고, 그 대학을 클릭한 뒤 "+ 모집단위 추가"로 모집단위를 등록하세요.',
+    '정원 설정: 대학 전체 인원만 제한하는 대학이면 대학 정원만 입력하고 모집단위는 무제한으로 두세요. 모집단위별 인원 제한이 있으면 모집단위 정원을 입력하세요.',
+    '"재학생 우선"을 켜면 추천 순위에서 재학생이 졸업생보다 항상 앞섭니다.',
+    '표의 추천인원 숫자를 누르면 지금까지 그 모집단위로 추천 확정된 학생 목록을 볼 수 있습니다.',
+  ],
+}
 
 // ── 정원 입력 서브컴포넌트 ────────────────────────────────────
 const QuotaInput = defineComponent({

@@ -7,6 +7,18 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">전형요소 설정</h1>
     </div>
 
+    <HelpBox class="mb-5" storage-key="areas-main" :title="HELP_MAIN.title" :intro="HELP_MAIN.intro" :items="HELP_MAIN.items" />
+
+    <HelpBox
+      v-if="hasLockedRound"
+      class="mb-5"
+      storage-key="areas-locked"
+      variant="warning"
+      :title="HELP_LOCKED.title"
+      :intro="HELP_LOCKED.intro"
+      :items="HELP_LOCKED.items"
+    />
+
     <div class="flex flex-col lg:flex-row lg:items-start gap-6">
 
       <!-- ── 좌측: 전형요소 목록 ────────────────────────────────── -->
@@ -286,6 +298,7 @@
 
           <!-- ── 점수 기준 탭 ──────────────────────────────── -->
           <div v-if="activeTab === 'score'">
+            <HelpBox class="mb-4" storage-key="areas-score" :title="HELP_SCORE.title" :intro="HELP_SCORE.intro" :items="HELP_SCORE.items" />
             <!-- 양식 예시 -->
             <div class="rounded-xl mb-4"
               style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
@@ -380,6 +393,7 @@
 
           <!-- ── 기초 데이터 탭 ──────────────────────────────── -->
           <div v-if="activeTab === 'base'">
+            <HelpBox class="mb-4" storage-key="areas-base" :title="HELP_BASE.title" :intro="HELP_BASE.intro" :items="HELP_BASE.items" />
             <!-- 양식 예시 -->
             <div class="rounded-xl mb-4"
               style="padding: 16px 18px; background: #eff6ff; border: 1px solid #bfdbfe;">
@@ -576,7 +590,7 @@
 <script setup>
 import { ref, watch, onMounted, defineComponent, h, computed } from 'vue'
 import {
-  getAreas, createArea, updateArea, deleteArea,
+  getAreas, createArea, updateArea, deleteArea, getRounds,
   downloadAreaScoreTemplate,
   downloadNumericTableTemplate, exportNumericTable, importNumericTable,
   downloadCategoryMapTemplate, exportCategoryMap, importCategoryMap,
@@ -586,6 +600,58 @@ import {
   blobErrMsg,
 } from '../../api/admin.js'
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
+import HelpBox from '../common/HelpBox.vue'
+
+// ── 도움말 문구 ────────────────────────────────────────────────
+const HELP_MAIN = {
+  title: '도움말 — 전형요소 설정',
+  intro: '전형요소는 학생 점수를 이루는 항목(예: 교과 내신, 출결, 봉사 활동)입니다. 여기서 각 항목의 만점과 점수 계산 방식을 정합니다.',
+  items: [
+    '"+ 전형요소 추가"를 누르고 템플릿에서 골라 시작하는 것이 가장 쉽습니다.',
+    '왼쪽 목록에서 전형요소를 클릭하면 오른쪽에서 점수 기준과 기초 데이터를 등록할 수 있습니다.',
+    '목록 아래 총점이 학교 규정의 추천 전형 총점과 일치하는지 확인하세요.',
+    { text: '전형요소 추가·수정·삭제는 라운드가 종료된 뒤에는 차단됩니다. 반드시 첫 라운드를 열기 전에 설정을 끝내세요.', warn: true },
+  ],
+}
+
+const HELP_LOCKED = {
+  title: '지금은 전형요소를 수정할 수 없습니다',
+  intro: '종료(입력 마감) 또는 마감된 라운드가 있어 전형요소 추가·수정·삭제와 점수 기준 업로드가 차단된 상태입니다. 이미 계산된 점수와 설정이 달라지는 것을 막기 위한 보호 장치입니다.',
+  items: [
+    '전형요소 목록과 등록된 점수 기준은 계속 볼 수 있습니다.',
+    '학생별 기초 데이터의 등록·수정(가져오기)은 지금도 가능합니다.',
+  ],
+}
+
+const HELP_SCORE = {
+  title: '도움말 — 점수 기준',
+  intro: '점수 기준은 "어떤 값이면 몇 점"을 정하는 표입니다. 아래 양식 예시와 같은 모양의 엑셀 파일을 올리면 됩니다.',
+  items: [
+    '"양식 다운로드"로 빈 양식을 받아 기준값(또는 범주)과 점수를 채운 뒤 "가져오기"로 업로드하세요.',
+    { text: '가져오기를 하면 이 전형요소의 기존 점수 기준이 전부 새 파일 내용으로 교체됩니다.', warn: true },
+  ],
+}
+
+const HELP_BASE = {
+  title: '도움말 — 기초 데이터',
+  intro: '기초 데이터는 학생별 실제 값(예: 결석 횟수, 봉사 시간)입니다. 점수는 이 값을 점수 기준과 대조해 자동으로 계산됩니다.',
+  items: [
+    '재학생/졸업생을 선택하고 양식을 받아 학생별 값을 채워 업로드하세요.',
+    '"담임교사 입력 허용"으로 설정된 전형요소는 담임교사가 지원자 등록 화면에서 직접 입력할 수도 있습니다. 관리자가 일괄 업로드해 두면 담임 화면에 미리 채워집니다.',
+    '파일에 포함된 학생만 업데이트되고, 파일에 없는 학생의 기존 데이터는 그대로 유지됩니다.',
+  ],
+}
+
+const hasLockedRound = ref(false)
+
+async function loadRoundLockState() {
+  try {
+    const rounds = await getRounds()
+    hasLockedRound.value = rounds.some(r => r.status === 'CLOSED' || r.status === 'FINALIZED')
+  } catch {
+    hasLockedRound.value = false // 조회 실패 시 경고 미표시 (백엔드 guard가 최종 방어선)
+  }
+}
 
 // ── 전형요소 유형 안내 데이터 ────────────────────────────────────
 const CALC_TYPE_DESCS = [
@@ -951,7 +1017,7 @@ async function doExtImport() {
   }
 }
 
-onMounted(load)
+onMounted(() => { load(); loadRoundLockState() })
 
 // ── 다운로드 헬퍼 ─────────────────────────────────────────────
 function saveBlob(response, filename) {

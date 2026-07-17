@@ -55,16 +55,7 @@
       </div>
     </div>
 
-    <!-- 가져오기 안내 -->
-    <div class="mb-4 rounded-lg flex items-start gap-2 text-base"
-      style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;">
-      <template v-if="studentType === 'enrolled'">
-        재학생 가져오기: 같은 학년·반·번호가 있으면 이름을 업데이트하고, 없으면 새로 추가합니다.
-      </template>
-      <template v-else>
-        졸업생 가져오기: 같은 학생코드가 있으면 이름과 졸업연도를 업데이트하고, 없으면 새로 추가합니다.
-      </template>
-    </div>
+    <HelpBox class="mb-4" storage-key="students" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
 
     <!-- 학생 추가 폼 -->
     <div v-if="showAddForm" class="mb-5 rounded-xl"
@@ -308,6 +299,18 @@ import {
   deleteStudent,
   blobErrMsg,
 } from '../../api/admin.js'
+import HelpBox from '../common/HelpBox.vue'
+
+const HELP = {
+  title: '도움말 — 학생 명단 관리',
+  intro: '추천 대상이 될 학생 명단을 등록하는 곳입니다. 재학생과 졸업생은 각각 별도 파일로 관리합니다.',
+  items: [
+    '먼저 위에서 재학생/졸업생을 선택한 뒤, "양식 다운로드"로 받은 파일에 명단을 채워 "가져오기"로 업로드하세요.',
+    '재학생은 학년·반·번호·이름, 졸업생은 학생코드·졸업연도·이름이 필요합니다.',
+    '한두 명만 추가할 때는 "+ 추가" 버튼으로 직접 입력할 수 있습니다.',
+    '가져오기는 기존 명단을 지우지 않습니다. 같은 학생이 있으면 이름 등 정보만 업데이트되고, 없으면 새로 추가됩니다.',
+  ],
+}
 
 const studentPage = ref({ rows: [], total: 0, page: 1, per_page: 100 })
 const error = ref('')

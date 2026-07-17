@@ -39,6 +39,8 @@
       </div>
     </div>
 
+    <HelpBox class="mb-5" storage-key="classes" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
+
     <!-- 업로드 결과 -->
     <div v-if="importResult" class="mb-5 rounded-xl text-base"
       :style="{
@@ -192,6 +194,18 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getClasses, upsertClass, deleteClass, downloadClassTemplate, exportClasses, importClasses, blobErrMsg } from '../../api/admin.js'
+import HelpBox from '../common/HelpBox.vue'
+
+const HELP = {
+  title: '도움말 — 학급 관리',
+  intro: '담임교사 계정을 만드는 곳입니다. 학급을 등록하면 그 학급의 담임교사가 로그인할 수 있는 계정이 자동으로 만들어집니다.',
+  items: [
+    '"양식 다운로드"로 엑셀 양식을 받아 학년·반·담임명·비밀번호를 채운 뒤 "가져오기"로 업로드하세요.',
+    '학급이 몇 개 없다면 "+ 추가" 버튼으로 하나씩 직접 입력해도 됩니다.',
+    '담임교사는 로그인 화면에서 자기 학급을 선택하고 여기서 정한 비밀번호를 입력해 접속합니다.',
+    { text: '가져오기는 같은 학년·반이 이미 있으면 정보를 덮어씁니다. 비밀번호를 바꿨다면 담임교사에게 새 비밀번호를 알려주세요.', warn: true },
+  ],
+}
 
 const classes = ref([])
 const error = ref('')

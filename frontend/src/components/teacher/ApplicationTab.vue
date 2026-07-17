@@ -8,6 +8,16 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
     </div>
 
+    <div v-if="loaded" class="px-4 sm:px-10 pb-5">
+      <HelpBox
+        :key="helpBox.key"
+        :storage-key="helpBox.key"
+        :title="helpBox.title"
+        :intro="helpBox.intro"
+        :items="helpBox.items"
+      />
+    </div>
+
     <!-- 진행 중 라운드 없음 — currentRound 접근 전에 차단 (렌더 오류 방지) -->
     <div v-if="!currentRound" class="px-4 sm:px-10 pb-8">
       <div
@@ -382,7 +392,9 @@ import {
   teacherAreaScorePreview,
   teacherCreateApplication,
   teacherDeleteApplication,
+  teacherGetResults,
 } from '../../api/teacher.js'
+import HelpBox from '../common/HelpBox.vue'
 
 const auth = useAuthStore()
 
@@ -391,6 +403,8 @@ const currentRound  = ref(null)
 const students      = ref([])
 const applications  = ref([])
 const universities  = ref([])
+const allRounds     = ref([])
+const loaded        = ref(false)
 
 const selectedStudent = ref(null)
 const showForm        = ref(false)
@@ -491,19 +505,77 @@ onBeforeRouteLeave(() => {
 
 // ── 초기 로드 ─────────────────────────────────────────────────────
 async function loadAll() {
-  const [round, sts, univs] = await Promise.all([
+  const [round, sts, univs, resultsData] = await Promise.all([
     getCurrentRound(),
     teacherGetStudents(),
     teacherGetUniversities(),
+    teacherGetResults(),
   ])
   currentRound.value = round
   students.value     = sts
   universities.value = univs
+  allRounds.value    = resultsData.rounds
 
   if (round) {
     applications.value = await teacherGetApplications(round.id)
   }
+  loaded.value = true
 }
+
+const latestRoundStatus = computed(() => {
+  if (currentRound.value) return 'OPEN'
+  if (allRounds.value.length === 0) return 'NONE'
+  const latest = [...allRounds.value].sort((a, b) => b.id - a.id)[0]
+  return latest.status // 'CLOSED' | 'FINALIZED'
+})
+
+const helpBox = computed(() => {
+  const s = latestRoundStatus.value
+  if (s === 'OPEN') {
+    return {
+      key: 'app-open',
+      title: '도움말 — 지원자 등록 방법',
+      intro: '우리 반 학생의 지원 대학과 전형요소 값을 입력하는 화면입니다.',
+      items: [
+        '① 왼쪽 목록에서 학생을 선택하고 ② "+ 새 지원 추가"를 누른 뒤 ③ 대학·모집단위·학과명을 입력하세요.',
+        '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. "관리자 입력 고정" 항목은 관리자가 이미 입력해 둔 값이라 수정할 수 없습니다.',
+        '모든 항목을 입력해야 "저장" 버튼이 활성화됩니다. 저장 전에 예상 점수가 맞는지 확인하세요.',
+        '저장한 지원은 학생 이름 옆 파란 숫자로 표시됩니다. 같은 대학·모집단위로 다시 저장하면 기존 내용이 수정되고, "취소"를 누르면 지원이 삭제됩니다.',
+      ],
+    }
+  }
+  if (s === 'NONE') {
+    return {
+      key: 'app-none',
+      title: '도움말 — 아직 라운드가 열리지 않았습니다',
+      intro: '지원자 등록은 관리자(업무 담당 교사)가 라운드를 열어야 시작할 수 있습니다.',
+      items: [
+        '라운드가 열리면 이 화면에서 학생을 선택해 지원을 등록할 수 있습니다.',
+        '그동안 [학급 관리] 화면에서 우리 반 학생 명단이 맞는지 확인해 두세요.',
+      ],
+    }
+  }
+  if (s === 'CLOSED') {
+    return {
+      key: 'app-closed',
+      title: '도움말 — 입력이 마감되었습니다',
+      intro: '이번 라운드의 입력 기간이 끝나 지금은 등록·수정할 수 없습니다.',
+      items: [
+        '관리자가 추천자를 확정하고 있습니다. 라운드가 마감되면 [라운드 결과] 화면에서 결과를 볼 수 있습니다.',
+        '수정할 내용이 있으면 관리자에게 라운드를 다시 열어 달라고 요청하세요.',
+      ],
+    }
+  }
+  return {
+    key: 'app-finalized',
+    title: '도움말 — 라운드가 마감되었습니다',
+    intro: '이번 라운드의 결과가 확정되었습니다.',
+    items: [
+      '[라운드 결과] 화면에서 우리 반 학생들의 추천 결과를 확인하세요.',
+      '다음 라운드가 열리면 이 화면에서 다시 지원자를 등록할 수 있습니다.',
+    ],
+  }
+})
 
 // ── 학생 선택 ─────────────────────────────────────────────────────
 function selectStudent(s) {
