@@ -185,8 +185,10 @@ function fmtActor(row) {
   const g = row.actor_grade
   const c = row.actor_class_no
   const n = row.actor_name
-  if (g && c && n) return `${g}학년 ${c}반 ${n}`
-  if (g && c) return `${g}학년 ${c}반`
+  // grade=0/class_no=0은 졸업생 담당 특수 계정 — 0은 falsy이므로 != null로 검사해야 한다
+  if (g === 0 && c === 0) return '졸업생 담당'
+  if (g != null && c != null && n) return `${g}학년 ${c}반 ${n}`
+  if (g != null && c != null) return `${g}학년 ${c}반`
   return row.actor_type
 }
 

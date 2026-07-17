@@ -148,6 +148,8 @@ pub async fn export_audit_logs(
             let class_no: Option<i64> = row.get("actor_class_no");
             let name: Option<String> = row.get("actor_name");
             match (grade, class_no, name) {
+                // grade=0/class_no=0은 졸업생 담당 특수 계정 — "0학년 0반"으로 표기하지 않는다
+                (Some(0), Some(0), _) => "졸업생 담당".to_string(),
                 (Some(g), Some(c), Some(n)) => format!("{}학년 {}반 {}", g, c, n),
                 (Some(g), Some(c), None) => format!("{}학년 {}반", g, c),
                 _ => actor_type,
