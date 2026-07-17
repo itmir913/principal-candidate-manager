@@ -1,10 +1,12 @@
 mod common;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
-use principal_candidate_manager::handlers::universities::{delete_track, delete_university};
+use principal_candidate_manager::handlers::universities::{
+    delete_track, delete_university, export_quota_stats, ExportQuotaQuery,
+};
 
 // ── 공통 픽스처 ────────────────────────────────────────────────────
 
@@ -177,4 +179,97 @@ async fn delete_university_cascades_track_numeric_category() {
     let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM numeric_table").fetch_one(&pool).await.unwrap();
     assert_eq!(t, 0, "트랙이 CASCADE 삭제되어야 함");
     assert_eq!(n, 0, "numeric_table 행이 CASCADE 삭제되어야 함");
+}
+
+// ── export_quota_stats ─────────────────────────────────────────────
+
+async fn export_bytes(pool: &sqlx::SqlitePool, univ_id: Option<i64>) -> (Vec<u8>, String) {
+    let q = Query(ExportQuotaQuery { univ_id });
+    let resp = export_quota_stats(State(common::make_state(pool.clone())), q)
+        .await
+        .unwrap();
+    let cd = String::from_utf8(
+        resp.headers()
+            .get("content-disposition")
+            .unwrap()
+            .as_bytes()
+            .to_vec(),
+    )
+    .unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .to_vec();
+    (bytes, cd)
+}
+
+fn parse_rows(bytes: &[u8]) -> Vec<Vec<String>> {
+    principal_candidate_manager::excel::parse_xlsx_all_rows_raw(bytes).unwrap()
+}
+
+#[tokio::test]
+async fn export_quota_stats_all_returns_all_tracks() {
+    let pool = common::create_test_pool().await;
+    let uid1 = insert_univ(&pool, "한국대").await;
+    let uid2 = insert_univ(&pool, "서울대").await;
+    insert_track(&pool, uid1, "컴공").await;
+    insert_track(&pool, uid1, "전자").await;
+    insert_track(&pool, uid2, "경제").await;
+
+    let (bytes, cd) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    // 헤더 1행 + 모집단위 3행
+    assert_eq!(rows.len(), 4, "헤더+3개 모집단위");
+    let body: Vec<&Vec<String>> = rows.iter().skip(1).collect();
+    let univ_names: Vec<&str> = body.iter().map(|r| r[0].as_str()).collect();
+    assert!(univ_names.contains(&"한국대"), "한국대 포함");
+    assert!(univ_names.contains(&"서울대"), "서울대 포함");
+    assert!(cd.contains("전체_추천현황"), "파일명에 '전체_추천현황' 포함: {cd}");
+}
+
+#[tokio::test]
+async fn export_quota_stats_filtered_returns_one_univ() {
+    let pool = common::create_test_pool().await;
+    let uid1 = insert_univ(&pool, "한국대").await;
+    let uid2 = insert_univ(&pool, "서울대").await;
+    insert_track(&pool, uid1, "컴공").await;
+    insert_track(&pool, uid2, "경제").await;
+    insert_track(&pool, uid2, "법학").await;
+
+    let (bytes, cd) = export_bytes(&pool, Some(uid2)).await;
+    let rows = parse_rows(&bytes);
+    // 헤더 1행 + 서울대 모집단위 2행
+    assert_eq!(rows.len(), 3, "헤더+서울대 2개 모집단위");
+    let univ_names: Vec<&str> = rows.iter().skip(1).map(|r| r[0].as_str()).collect();
+    assert!(univ_names.iter().all(|&n| n == "서울대"), "서울대 행만 존재");
+    let flat = rows.iter().skip(1).flat_map(|r| r.iter().map(String::as_str)).collect::<Vec<_>>();
+    assert!(!flat.contains(&"한국대"), "한국대 미포함");
+    assert!(cd.contains("서울대"), "파일명에 대학명 포함: {cd}");
+    assert!(cd.contains("_추천현황_"), "파일명 패턴: {cd}");
+}
+
+#[tokio::test]
+async fn export_quota_stats_content_disposition_all_vs_filtered() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "고려대").await;
+    insert_track(&pool, uid, "의대").await;
+
+    let (_, cd_all) = export_bytes(&pool, None).await;
+    let (_, cd_filtered) = export_bytes(&pool, Some(uid)).await;
+
+    assert!(cd_all.contains("전체_추천현황"), "전체 경로 파일명: {cd_all}");
+    assert!(cd_filtered.contains("고려대"), "필터 경로 파일명에 대학명: {cd_filtered}");
+    assert!(cd_filtered.contains("_추천현황_"), "필터 경로 파일명 패턴: {cd_filtered}");
+}
+
+#[tokio::test]
+async fn export_quota_stats_empty_db_returns_header_only() {
+    let pool = common::create_test_pool().await;
+
+    let (bytes, cd) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    // 헤더 행만 존재
+    assert_eq!(rows.len(), 1, "빈 DB → 헤더 행만");
+    assert_eq!(rows[0][0], "대학명", "첫 번째 헤더 열");
+    assert!(cd.contains("전체_추천현황"), "빈 DB 파일명: {cd}");
 }
