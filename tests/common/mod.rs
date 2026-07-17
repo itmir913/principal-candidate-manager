@@ -32,7 +32,7 @@ pub async fn create_test_pool() -> SqlitePool {
         .connect_with(opts)
         .await
         .unwrap();
-    sqlx::raw_sql(include_str!("../../migrations/v1.sql")).execute(&pool).await.unwrap();
+    sqlx::raw_sql(&principal_candidate_manager::db::full_schema_sql()).execute(&pool).await.unwrap();
     pool
 }
 
@@ -50,7 +50,7 @@ pub async fn create_test_pool_shared() -> SqlitePool {
         .connect_with(opts)
         .await
         .unwrap();
-    sqlx::raw_sql(include_str!("../../migrations/v1.sql")).execute(&pool).await.unwrap();
+    sqlx::raw_sql(&principal_candidate_manager::db::full_schema_sql()).execute(&pool).await.unwrap();
     pool
 }
 

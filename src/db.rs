@@ -25,17 +25,44 @@ impl std::fmt::Display for SchemaTooNewError {
 
 impl std::error::Error for SchemaTooNewError {}
 
-// 마이그레이션 배열: index i → v(i+1) 적용 SQL
-// 릴리즈 전까지는 v1.sql에 직접 반영. 마이그레이션 파일 추가 금지.
-const MIGRATIONS: &[&str] = &[
-    include_str!("../migrations/v1.sql"), // v0 → v1
+// ── v1 스키마 조각 ─────────────────────────────────────────────
+// migrations/v1/ 의 파일들. 이 배열의 순서가 실행 순서다 — 파일명의 번호는
+// 사람이 순서를 읽기 위한 표기일 뿐, 로더는 파일명을 정렬하지 않는다.
+// 릴리즈 전까지는 이 조각 파일들에 직접 반영. 새 버전(v2) 추가 금지.
+const V1_FRAGMENTS: &[&str] = &[
+    include_str!("../migrations/v1/000-init.sql"),
+    include_str!("../migrations/v1/001-classes.sql"),
+    include_str!("../migrations/v1/002-students.sql"),
+    include_str!("../migrations/v1/003-rounds.sql"),
+    include_str!("../migrations/v1/004-areas.sql"),
+    include_str!("../migrations/v1/005-universities.sql"),
+    include_str!("../migrations/v1/006-score-tables.sql"),
+    include_str!("../migrations/v1/007-base-data.sql"),
+    include_str!("../migrations/v1/008-applications.sql"),
+    include_str!("../migrations/v1/009-results.sql"),
 ];
 
-// SCHEMA_VERSION과 MIGRATIONS 길이가 일치하지 않으면 컴파일 타임에 오류
+// 버전별 마이그레이션: index i → v(i+1). 각 항목은 해당 버전을 구성하는 조각 목록.
+const MIGRATION_FRAGMENTS: &[&[&str]] = &[V1_FRAGMENTS];
+
+// SCHEMA_VERSION과 MIGRATION_FRAGMENTS 길이가 일치하지 않으면 컴파일 타임에 오류
 const _: () = assert!(
-    SCHEMA_VERSION as usize == MIGRATIONS.len(),
-    "SCHEMA_VERSION must equal MIGRATIONS.len()"
+    SCHEMA_VERSION as usize == MIGRATION_FRAGMENTS.len(),
+    "SCHEMA_VERSION must equal MIGRATION_FRAGMENTS.len()"
 );
+
+/// 버전별 마이그레이션 SQL 전문 — 조각들을 결합해 run_migrations_with 입력 형태로 만든다.
+pub fn migration_sqls() -> Vec<String> {
+    MIGRATION_FRAGMENTS
+        .iter()
+        .map(|frags| frags.join("\n"))
+        .collect()
+}
+
+/// 전체 스키마 SQL 전문 (새 DB 기준). 테스트 헬퍼가 in-memory DB를 만들 때 사용한다.
+pub fn full_schema_sql() -> String {
+    migration_sqls().join("\n")
+}
 
 pub async fn init_pool(db_path: &str) -> Result<SqlitePool> {
     let opts = SqliteConnectOptions::new()
@@ -49,7 +76,9 @@ pub async fn init_pool(db_path: &str) -> Result<SqlitePool> {
         .connect_with(opts)
         .await?;
 
-    run_migrations_with(&pool, MIGRATIONS).await?;
+    let sqls = migration_sqls();
+    let refs: Vec<&str> = sqls.iter().map(String::as_str).collect();
+    run_migrations_with(&pool, &refs).await?;
 
     Ok(pool)
 }
