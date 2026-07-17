@@ -94,15 +94,15 @@
               >+ 새 지원 추가</button>
             </div>
 
-            <div v-if="studentApps.length === 0 && !showForm" class="text-base" style="color: #94a3b8; margin-top: 4px;">
+            <div v-if="studentApps.length === 0 && !showForm" class="text-base" style="color: #94a3b8; margin-top: 12px;">
               등록된 지원이 없습니다.
             </div>
 
             <div
               v-for="app in studentApps"
               :key="`${app.track_id}`"
-              class="flex items-center justify-between gap-2 mb-2 rounded-lg cursor-pointer"
-              style="padding: 8px 12px; border: 1px solid #e2e8f0; transition: background 0.1s;"
+              class="flex items-center justify-between gap-2 rounded-lg cursor-pointer"
+              style="padding: 8px 12px; border: 1px solid #e2e8f0; transition: background 0.1s; margin-top: 10px;"
               :style="{ background: detailApp?.track_id === app.track_id ? '#eff6ff' : '#fafafa' }"
               @click="openDetail(app)"
               @mouseenter="e => e.currentTarget.style.background = '#eff6ff'"
