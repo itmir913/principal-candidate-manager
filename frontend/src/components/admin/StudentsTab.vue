@@ -300,6 +300,7 @@ import {
   blobErrMsg,
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
+import { dialog } from '../common/dialog.js'
 
 const HELP = {
   title: '도움말 — 학생 명단 관리',
@@ -441,7 +442,14 @@ async function runImport(apiFn, label, evt) {
 
 async function remove(s) {
   const label = `${s.name}(${s.student_code})`
-  if (!window.confirm(`${label} 학생을 삭제하시겠습니까?`)) return
+  if (!(await dialog.confirm({
+    title: '학생 삭제',
+    message: `${label} 학생을 삭제하시겠습니까?`,
+    confirmText: '삭제',
+    level: 'danger',
+    dangerNotice: '삭제된 학생 정보는 복구할 수 없습니다.',
+    finalConfirmText: '영구 삭제',
+  }))) return
   error.value = ''
   try {
     await deleteStudent(s.id)

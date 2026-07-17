@@ -392,6 +392,7 @@ import {
   blobErrMsg,
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
+import { dialog } from '../common/dialog.js'
 
 const HELP = {
   title: '도움말 — 대학 설정',
@@ -599,7 +600,14 @@ async function saveEditUniv(id) {
 }
 
 async function removeUniv(id) {
-  if (!confirm('이 대학과 모든 모집단위를 삭제하시겠습니까?')) return
+  if (!(await dialog.confirm({
+    title: '대학 삭제',
+    message: '이 대학과 모든 모집단위를 삭제하시겠습니까?',
+    confirmText: '삭제',
+    level: 'danger',
+    dangerNotice: '삭제된 대학·모집단위 정보는 복구할 수 없습니다.',
+    finalConfirmText: '영구 삭제',
+  }))) return
   saving.value = true; error.value = ''
   try {
     await deleteUniversity(id)
@@ -630,7 +638,14 @@ async function saveEditTrack(id) {
 }
 
 async function removeTrack(id) {
-  if (!confirm('이 모집단위를 삭제하시겠습니까?')) return
+  if (!(await dialog.confirm({
+    title: '모집단위 삭제',
+    message: '이 모집단위를 삭제하시겠습니까?',
+    confirmText: '삭제',
+    level: 'danger',
+    dangerNotice: '삭제된 모집단위 정보는 복구할 수 없습니다.',
+    finalConfirmText: '영구 삭제',
+  }))) return
   saving.value = true; error.value = ''
   try { await deleteTrack(id); await loadTracks(selectedUnivId.value) }
   catch (e) { error.value = e.response?.data ?? e.message }

@@ -433,6 +433,7 @@ import {
   blobErrMsg,
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
+import { dialog } from '../common/dialog.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
@@ -648,7 +649,11 @@ async function loadAreas() {
 }
 
 async function handleOpenRound() {
-  if (!window.confirm('새 라운드를 열겠습니까?\n라운드를 열면 담임교사의 지원 입력이 시작됩니다.')) return
+  if (!(await dialog.confirm({
+    title: '라운드 열기',
+    message: '새 라운드를 열겠습니까?\n라운드를 열면 담임교사의 지원 입력이 시작됩니다.',
+    confirmText: '라운드 열기',
+  }))) return
   loading.value = true
   try {
     await openRound()
@@ -657,7 +662,7 @@ async function handleOpenRound() {
     if (open) await selectRound(open)
     await refreshSidebarRound()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   } finally {
     loading.value = false
   }
@@ -665,7 +670,12 @@ async function handleOpenRound() {
 
 async function handleCloseRound(id) {
   if (roundActing.value) return
-  if (!confirm('라운드를 종료하시겠습니까? (담임 입력이 차단됩니다)')) return
+  if (!(await dialog.confirm({
+    title: '라운드 종료',
+    message: '라운드를 종료하시겠습니까?\n담임교사의 입력이 차단되고, 모든 지원자의 점수가 계산됩니다.\n필요하면 "다시 열기"로 되돌릴 수 있습니다.',
+    confirmText: '종료하기',
+    level: 'warn',
+  }))) return
   roundActing.value = true
   try {
     await closeRound(id)
@@ -677,7 +687,7 @@ async function handleCloseRound(id) {
     }
     await refreshSidebarRound()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   } finally {
     roundActing.value = false
   }
@@ -685,7 +695,12 @@ async function handleCloseRound(id) {
 
 async function handleReopenRound(id) {
   if (roundActing.value) return
-  if (!confirm('라운드를 다시 열시겠습니까? (추천 플래그가 초기화됩니다)')) return
+  if (!(await dialog.confirm({
+    title: '라운드 다시 열기',
+    message: '라운드를 다시 여시겠습니까?\n지금까지 확정한 추천 표시가 모두 초기화됩니다.',
+    confirmText: '다시 열기',
+    level: 'warn',
+  }))) return
   roundActing.value = true
   try {
     await reopenRound(id)
@@ -696,7 +711,7 @@ async function handleReopenRound(id) {
     }
     await refreshSidebarRound()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   } finally {
     roundActing.value = false
   }
@@ -704,7 +719,14 @@ async function handleReopenRound(id) {
 
 async function handleFinalizeRound(id) {
   if (roundActing.value) return
-  if (!confirm('라운드를 마감하시겠습니까? 한번 마감된 라운드는 절대로 취소할 수 없습니다. (추천 확정이 박제되고 결과가 담임교사에게 공개됩니다)')) return
+  if (!(await dialog.confirm({
+    title: '라운드 마감',
+    message: '라운드를 마감하시겠습니까?\n추천 확정이 고정되고, 결과가 담임교사에게 공개됩니다.',
+    confirmText: '마감하기',
+    level: 'danger',
+    dangerNotice: '한번 마감된 라운드는 절대로 되돌릴 수 없습니다.',
+    finalConfirmText: '마감 확정',
+  }))) return
   roundActing.value = true
   try {
     await finalizeRound(id)
@@ -715,7 +737,7 @@ async function handleFinalizeRound(id) {
     }
     await refreshSidebarRound()
   } catch (e) {
-    alert(finalizeErrMsg(e))
+    await dialog.alert({ title: '마감할 수 없습니다', message: finalizeErrMsg(e), level: 'error' })
   } finally {
     roundActing.value = false
   }
@@ -755,12 +777,19 @@ async function handleCalculate() {
 }
 
 async function handleAbandon(app) {
-  if (!confirm(`${app.name} 학생의 지원을 포기 처리하시겠습니까? 한 번 포기하면 다시 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 재지원해야 합니다.`)) return
+  if (!(await dialog.confirm({
+    title: '지원 포기 처리',
+    message: `${app.name} 학생의 지원을 포기 처리하시겠습니까?`,
+    confirmText: '포기 처리',
+    level: 'danger',
+    dangerNotice: '한 번 포기하면 다시 되돌릴 수 없습니다. 재추천을 희망하면 다음 라운드에서 재지원해야 합니다.',
+    finalConfirmText: '포기 확정',
+  }))) return
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
     await Promise.all([loadApps(), loadResults()])
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }
 }
 
@@ -776,7 +805,7 @@ async function downloadExcel() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    alert(await blobErrMsg(e))
+    await dialog.alert({ title: '다운로드 실패', message: await blobErrMsg(e), level: 'error' })
   } finally {
     downloading.value = false
   }
@@ -794,7 +823,7 @@ async function downloadSummary() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    alert(await blobErrMsg(e))
+    await dialog.alert({ title: '다운로드 실패', message: await blobErrMsg(e), level: 'error' })
   } finally {
     downloadingSummary.value = false
   }
@@ -802,7 +831,11 @@ async function downloadSummary() {
 
 async function handleAutoRecommend() {
   if (!selected.value) return
-  if (!window.confirm('모든 모집단위에 대해 순위순으로 잔여 정원까지 추천을 자동 확정할까요?\n동점 등으로 자동 확정할 수 없는 모집단위는 건너뛰고 알려드립니다.')) return
+  if (!(await dialog.confirm({
+    title: '자동 추천 확정',
+    message: '모든 모집단위에 대해 순위순으로 잔여 정원까지 추천을 자동 확정할까요?\n동점 등으로 자동 확정할 수 없는 모집단위는 건너뛰고 알려드립니다.',
+    confirmText: '자동 확정',
+  }))) return
   autoRecommendActing.value = true
   autoRecommendResult.value = null
   try {
@@ -810,7 +843,7 @@ async function handleAutoRecommend() {
     autoRecommendResult.value = res
     await loadResults()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   } finally {
     autoRecommendActing.value = false
   }
@@ -821,17 +854,22 @@ async function handleRecommend(r) {
     await recommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }
 }
 
 async function handleUnrecommend(r) {
-  if (!confirm(`${r.name} 학생의 추천을 취소하시겠습니까?`)) return
+  if (!(await dialog.confirm({
+    title: '추천 취소',
+    message: `${r.name} 학생의 추천을 취소하시겠습니까?`,
+    confirmText: '추천 취소',
+    level: 'warn',
+  }))) return
   try {
     await unrecommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }
 }
 

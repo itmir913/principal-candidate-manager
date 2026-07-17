@@ -601,6 +601,7 @@ import {
 } from '../../api/admin.js'
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 import HelpBox from '../common/HelpBox.vue'
+import { dialog } from '../common/dialog.js'
 
 // ── 도움말 문구 ────────────────────────────────────────────────
 const HELP_MAIN = {
@@ -890,7 +891,14 @@ async function addArea() {
 }
 
 async function removeArea(id) {
-  if (!confirm('전형요소를 삭제하면 등록된 점수 기준과 기초 데이터도 함께 삭제됩니다. 계속할까요?')) return
+  if (!(await dialog.confirm({
+    title: '전형요소 삭제',
+    message: '전형요소를 삭제하면 등록된 점수 기준과 기초 데이터도 함께 삭제됩니다. 계속할까요?',
+    confirmText: '삭제',
+    level: 'danger',
+    dangerNotice: '삭제된 점수 기준과 기초 데이터는 복구할 수 없습니다.',
+    finalConfirmText: '영구 삭제',
+  }))) return
   try {
     await deleteArea(id)
     if (selected.value?.id === id) selected.value = null
@@ -950,7 +958,7 @@ async function dlScoreTemplate(tpl) {
     a.click()
     URL.revokeObjectURL(url)
   } catch {
-    alert('샘플 파일을 불러오지 못했습니다. 아직 파일이 준비되지 않았을 수 있습니다.')
+    await dialog.alert({ title: '다운로드 실패', message: '샘플 파일을 불러오지 못했습니다. 아직 파일이 준비되지 않았을 수 있습니다.', level: 'error' })
   } finally {
     dlTemplateId.value = null
   }
@@ -985,7 +993,7 @@ async function onExternalFile(format, evt) {
       error: '',
     }
   } catch (e) {
-    alert(e.response?.data ?? e.message ?? '파일 파싱 오류')
+    await dialog.alert({ title: '가져오기 실패', message: e.response?.data ?? e.message ?? '파일 파싱 오류', level: 'error' })
   }
 }
 

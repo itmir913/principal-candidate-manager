@@ -310,6 +310,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { marked } from 'marked'
 import { blobErrMsg } from '../../api/admin.js'
+import { dialog } from '../common/dialog.js'
 import {
   RefreshCw, CheckCircle2, AlertCircle, AlertTriangle,
   Download, Database, ExternalLink,
@@ -368,7 +369,7 @@ async function downloadBackup() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    alert('백업 다운로드 실패: ' + await blobErrMsg(e))
+    await dialog.alert({ title: '백업 다운로드 실패', message: await blobErrMsg(e), level: 'error' })
   } finally {
     downloading.value = false
   }

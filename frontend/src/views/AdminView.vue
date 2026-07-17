@@ -234,6 +234,7 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { changeAdminPassword, getCurrentRound } from '../api/admin.js'
+import { dialog } from '../components/common/dialog.js'
 import {
   Home, Trophy, LayoutGrid, Users, SlidersHorizontal,
   Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu,
@@ -359,7 +360,7 @@ async function changePw() {
   try {
     await changeAdminPassword(currentPw.value, newPw.value)
     closePwModal()
-    alert('비밀번호가 변경되었습니다.')
+    await dialog.alert({ title: '완료', message: '비밀번호가 변경되었습니다.' })
   } catch (e) {
     pwError.value = e.response?.data || e.message
   } finally {

@@ -195,6 +195,7 @@
 import { ref, onMounted } from 'vue'
 import { getClasses, upsertClass, deleteClass, downloadClassTemplate, exportClasses, importClasses, blobErrMsg } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
+import { dialog } from '../common/dialog.js'
 
 const HELP = {
   title: '도움말 — 학급 관리',
@@ -274,7 +275,14 @@ async function addRow() {
 }
 
 async function remove(row) {
-  if (!confirm(`${row.grade}학년 ${row.class_no}반을 삭제하시겠습니까?`)) return
+  if (!(await dialog.confirm({
+    title: '학급 삭제',
+    message: `${row.grade}학년 ${row.class_no}반을 삭제하시겠습니까?\n해당 학급의 담임교사 로그인 계정도 함께 삭제됩니다.`,
+    confirmText: '삭제',
+    level: 'danger',
+    dangerNotice: '삭제된 학급과 계정 정보는 복구할 수 없습니다.',
+    finalConfirmText: '영구 삭제',
+  }))) return
   saving.value = true
   error.value = ''
   try {
