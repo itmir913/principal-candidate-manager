@@ -29,7 +29,8 @@ pub async fn log(conn: &mut SqliteConnection, entry: AuditEntry) -> Result<(), A
     };
 
     // TEACHER: 행위 시점 담임명 스냅샷.
-    // grade=0, class_no=0은 졸업생 담당 가상 계정 — classes 행이 없으므로 고정값 사용.
+    // grade=0, class_no=0은 졸업생 담당 특수 계정 — classes 행은 존재하지만 UI에서 숨겨져
+    // teacher_name을 관리하지 않으므로, 로그 가독성을 위해 고정 라벨을 쓴다.
     // 일반 학급 계정이 없으면 fail-fast.
     let actor_name: Option<String> = match (grade, class_no) {
         (Some(0), Some(0)) => Some("졸업생".to_string()),
