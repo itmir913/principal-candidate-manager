@@ -382,6 +382,7 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
+import { dialog } from '../common/dialog.js'
 import {
   getCurrentRound,
   teacherGetStudents,
@@ -497,10 +498,14 @@ const isDirty = computed(() => {
   )
 })
 
-onBeforeRouteLeave(() => {
-  if (isDirty.value) {
-    return confirm('입력 중인 데이터가 있습니다. 페이지를 떠나시겠습니까?')
-  }
+onBeforeRouteLeave(async () => {
+  if (!isDirty.value) return true
+  return await dialog.confirm({
+    title: '페이지 이동',
+    message: '입력 중인 데이터가 있습니다. 저장하지 않고 페이지를 떠나시겠습니까?',
+    confirmText: '나가기',
+    level: 'warn',
+  })
 })
 
 // ── 초기 로드 ─────────────────────────────────────────────────────
@@ -578,9 +583,14 @@ const helpBox = computed(() => {
 })
 
 // ── 학생 선택 ─────────────────────────────────────────────────────
-function selectStudent(s) {
+async function selectStudent(s) {
   if (s.id === selectedStudent.value?.id) return
-  if (isDirty.value && !confirm('입력 중인 데이터가 있습니다. 저장하지 않고 이동하시겠습니까?')) return
+  if (isDirty.value && !(await dialog.confirm({
+    title: '학생 이동',
+    message: '입력 중인 데이터가 있습니다. 저장하지 않고 다른 학생으로 이동하시겠습니까?',
+    confirmText: '이동',
+    level: 'warn',
+  }))) return
   selectedStudent.value = s
   closeForm()
 }
@@ -775,13 +785,18 @@ async function saveApplication() {
 
 // ── 삭제 ──────────────────────────────────────────────────────────
 async function deleteApp(app) {
-  if (!confirm(`${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?`)) return
+  if (!(await dialog.confirm({
+    title: '지원 취소',
+    message: `${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?\n라운드가 진행 중인 동안에는 다시 등록할 수 있습니다.`,
+    confirmText: '지원 취소',
+    level: 'warn',
+  }))) return
   deletingApp.value = app.track_id
   try {
     await teacherDeleteApplication(app.student_id, app.track_id, app.round_id)
     applications.value = await teacherGetApplications(currentRound.value.id)
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   } finally {
     deletingApp.value = null
   }

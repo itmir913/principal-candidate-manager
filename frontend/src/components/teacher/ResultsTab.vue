@@ -151,6 +151,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
+import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'
 
 const auth = useAuthStore()
@@ -243,12 +244,19 @@ async function load() {
 }
 
 async function handleAbandon(r) {
-  if (!confirm(`${r.name} 학생의 ${r.univ_name} ${r.track_name} 지원을 포기 처리하시겠습니까? 한 번 포기하면 다시 되돌릴 수 없으며, 재추천 희망할 경우 다음 라운드에서 재지원해야 합니다.`)) return
+  if (!(await dialog.confirm({
+    title: '추천 포기',
+    message: `${r.name} 학생의 ${r.univ_name} ${r.track_name} 지원을 포기 처리하시겠습니까?`,
+    confirmText: '포기 처리',
+    level: 'danger',
+    dangerNotice: '한 번 포기하면 다시 되돌릴 수 없습니다. 재추천을 희망하면 다음 라운드에서 재지원해야 합니다.',
+    finalConfirmText: '포기 확정',
+  }))) return
   try {
     await teacherAbandonApplication(r.student_id, r.track_id, r.round_id)
     await load()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }
 }
 

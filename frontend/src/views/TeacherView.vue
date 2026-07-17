@@ -192,6 +192,7 @@ import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
+import { dialog } from '../components/common/dialog.js'
 import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -266,7 +267,7 @@ async function changePw() {
   try {
     await teacherChangePassword(currentPw.value, newPw.value)
     closePwModal()
-    alert('비밀번호가 변경되었습니다.')
+    await dialog.alert({ title: '완료', message: '비밀번호가 변경되었습니다.' })
   } catch (e) {
     pwError.value = e.response?.data || e.message
   } finally {

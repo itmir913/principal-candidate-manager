@@ -84,6 +84,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
+import { dialog } from '../common/dialog.js'
 import {
   getCurrentRound,
   teacherGetStudents,
@@ -113,12 +114,17 @@ async function loadAll() {
 }
 
 async function removeApplication(app) {
-  if (!confirm(`${app.name} 학생의 ${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?`)) return
+  if (!(await dialog.confirm({
+    title: '지원 취소',
+    message: `${app.name} 학생의 ${app.univ_name} ${app.track_name} 지원을 취소하시겠습니까?\n라운드가 진행 중인 동안에는 다시 등록할 수 있습니다.`,
+    confirmText: '지원 취소',
+    level: 'warn',
+  }))) return
   try {
     await teacherDeleteApplication(app.student_id, app.track_id, app.round_id)
     applications.value = await teacherGetApplications()
   } catch (e) {
-    alert(e.response?.data || e.message)
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }
 }
 
