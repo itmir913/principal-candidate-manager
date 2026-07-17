@@ -188,12 +188,13 @@ pub async fn delete_area(
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let area_name: Option<String> = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+    // 삭제 전 이름 스냅샷 — 대상이 없으면 404 (없는 대상의 삭제 로그를 남기지 않는다)
+    let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let area_name = area_name.unwrap_or_default();
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "전형요소를 찾을 수 없습니다".to_string()))?;
 
     sqlx::query("DELETE FROM areas WHERE id = ?")
         .bind(id)

@@ -218,14 +218,15 @@ pub async fn delete_university(
         ));
     }
 
-    let univ_name: Option<String> = sqlx::query_scalar(
+    // 삭제 전 이름 스냅샷 — 대상이 없으면 404 (없는 대상의 삭제 로그를 남기지 않는다)
+    let univ_name: String = sqlx::query_scalar(
         "SELECT univ_name FROM universities WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let univ_name = univ_name.unwrap_or_default();
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "대학을 찾을 수 없습니다".to_string()))?;
 
     sqlx::query("DELETE FROM universities WHERE id = ?")
         .bind(id).execute(&mut *tx).await
@@ -395,7 +396,8 @@ pub async fn delete_track(
         ));
     }
 
-    let names: Option<(String, String)> = sqlx::query_as(
+    // 삭제 전 이름 스냅샷 — 대상이 없으면 404 (없는 대상의 삭제 로그를 남기지 않는다)
+    let (univ_name, track_name): (String, String) = sqlx::query_as(
         "SELECT u.univ_name, ut.track_name
          FROM univ_tracks ut
          JOIN universities u ON u.id = ut.univ_id
@@ -404,8 +406,8 @@ pub async fn delete_track(
     .bind(id)
     .fetch_optional(&mut *tx)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let (univ_name, track_name) = names.unwrap_or_default();
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "모집단위를 찾을 수 없습니다".to_string()))?;
 
     sqlx::query("DELETE FROM univ_tracks WHERE id = ?")
         .bind(id).execute(&mut *tx).await

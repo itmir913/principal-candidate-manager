@@ -268,7 +268,8 @@ pub async fn delete_class(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .flatten();
+    // 행 없음(404)과 담임명 미설정(NULL)을 구분 — 없는 학급의 삭제 로그를 남기지 않는다
+    .ok_or((StatusCode::NOT_FOUND, "학급을 찾을 수 없습니다".to_string()))?;
 
     sqlx::query("DELETE FROM classes WHERE grade = ? AND class_no = ?")
         .bind(grade)
