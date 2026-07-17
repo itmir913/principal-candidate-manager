@@ -1,4 +1,5 @@
 pub mod applications;
+pub mod audit;
 pub mod area_data;
 pub mod areas;
 pub mod external_import;

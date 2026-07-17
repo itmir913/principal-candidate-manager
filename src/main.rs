@@ -626,6 +626,8 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
         .route("/rounds/:id/summary/export", get(handlers::scoring::export_round_summary))
         .route("/score-preview", get(handlers::scoring::score_preview))
+        .route("/audit-logs", get(handlers::audit::list_audit_logs))
+        .route("/audit-logs/export", get(handlers::audit::export_audit_logs))
         .route("/applications", get(handlers::applications::admin_list_applications))
         .route(
             "/applications/:sid/:tid/:rid/abandon",

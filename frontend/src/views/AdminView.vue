@@ -237,7 +237,7 @@ import { changeAdminPassword, getCurrentRound } from '../api/admin.js'
 import { dialog } from '../components/common/dialog.js'
 import {
   Home, Trophy, LayoutGrid, Users, SlidersHorizontal,
-  Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu,
+  Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu, ScrollText,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -252,6 +252,7 @@ const AreasTab    = defineAsyncComponent(() => import('../components/admin/Areas
 const UnivTab     = defineAsyncComponent(() => import('../components/admin/UniversitiesTab.vue'))
 const UpdateTab   = defineAsyncComponent(() => import('../components/admin/UpdateTab.vue'))
 const ManualTab   = defineAsyncComponent(() => import('../components/admin/ManualTab.vue'))
+const AuditTab    = defineAsyncComponent(() => import('../components/admin/AuditTab.vue'))
 
 // ── 메뉴 정의 ────────────────────────────────────────────────
 const mainMenus = [
@@ -261,6 +262,7 @@ const mainMenus = [
   { key: 'areas',    label: '전형요소 설정', icon: SlidersHorizontal },
   { key: 'univs',    label: '대학 설정',     icon: Building2 },
   { key: 'rounds',   label: '라운드 관리',   icon: Trophy },
+  { key: 'audit',    label: '감사 기록',     icon: ScrollText },
 ]
 
 const hasUpdate = ref(false)
@@ -284,6 +286,7 @@ const currentTab = computed(() => {
   if (active.value === 'rounds')   return RoundsTab
   if (active.value === 'update')   return UpdateTab
   if (active.value === 'manual')   return ManualTab
+  if (active.value === 'audit')    return AuditTab
   return null
 })
 
