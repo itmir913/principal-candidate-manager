@@ -176,6 +176,16 @@ const helpBox = computed(() => {
       ],
     }
   }
+  if (rounds.value.length === 0) {
+    return {
+      key: 'results-none',
+      title: '도움말 — 결과는 마감 후 공개됩니다',
+      intro: '아직 라운드가 열리지 않았습니다.',
+      items: [
+        '관리자가 라운드를 열면 지원자 등록이 시작되고, 라운드가 마감되면 이 화면에 우리 반 학생들의 순위·총점·추천 여부가 표시됩니다.',
+      ],
+    }
+  }
   return {
     key: 'results-waiting',
     title: '도움말 — 결과는 마감 후 공개됩니다',
