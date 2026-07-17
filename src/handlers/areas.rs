@@ -8,7 +8,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
+use crate::audit::{self, Actor, AuditEntry};
+use crate::enums::{AuditAction, CalcType, CategoryAgg, LookupScope, MatchMode};
 use crate::score::Score;
 use crate::state::AppState;
 
@@ -96,6 +97,9 @@ pub async fn create_area(
     }
     let multi_value = body.category_agg == Some(CategoryAgg::Sum);
 
+    let area_name = body.name.clone();
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope,
                             match_mode, category_agg, multi_value)
@@ -110,9 +114,19 @@ pub async fn create_area(
     .bind(body.match_mode)
     .bind(body.category_agg)
     .bind(multi_value)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::AreaCreated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "name": area_name }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
@@ -143,6 +157,22 @@ pub async fn update_area(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
+    let (area_name, te_raw): (String, i64) = sqlx::query_as(
+        "SELECT name, teacher_editable FROM areas WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::AreaUpdated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "name": area_name, "teacher_editable": te_raw != 0 }),
+    }).await?;
+
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -155,10 +185,31 @@ pub async fn delete_area(
 ) -> Result<StatusCode, ApiError> {
     guard_no_closed_round(&state.db).await?;
 
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let area_name: Option<String> = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let area_name = area_name.unwrap_or_default();
+
     sqlx::query("DELETE FROM areas WHERE id = ?")
         .bind(id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::AreaDeleted,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "name": area_name }),
+    }).await?;
+
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)

@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use crate::{
-    enums::{CalcType, LookupScope, MatchMode},
+    audit::{self, Actor, AuditEntry},
+    enums::{AuditAction, CalcType, LookupScope, MatchMode},
     excel, score::Score, state::AppState,
     handlers::areas::guard_no_closed_round,
 };
@@ -475,6 +476,18 @@ pub async fn numeric_table_import(
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
 
+    let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::ScoreTableImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "area_name": area_name, "rows": rows }),
+    }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }
@@ -687,6 +700,18 @@ pub async fn category_map_import(
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
     }
 
+    let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::ScoreTableImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "area_name": area_name, "rows": rows }),
+    }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }
@@ -1082,6 +1107,18 @@ pub async fn base_data_import(
         }
     }
 
+    let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::BaseDataImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "area_name": area_name, "student_type": q.student_type, "rows": rows }),
+    }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
 }

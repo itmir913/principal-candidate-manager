@@ -9,7 +9,11 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
 use std::collections::HashMap;
 
-use crate::{excel, state::AppState};
+use crate::{
+    audit::{self, Actor, AuditEntry},
+    enums::AuditAction,
+    excel, state::AppState,
+};
 
 type ApiError = (StatusCode, String);
 
@@ -115,18 +119,30 @@ pub async fn create_university(
     if body.univ_name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
     }
+    let univ_name = body.univ_name.trim().to_string();
     let total_quota = body.total_quota.flatten();
     let enrolled = body.prioritize_enrolled as i64;
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO universities (univ_name, total_quota, prioritize_enrolled)
          VALUES (?, ?, ?) RETURNING id",
     )
-    .bind(body.univ_name.trim())
+    .bind(&univ_name)
     .bind(total_quota)
     .bind(enrolled)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::UniversityCreated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
 
@@ -136,25 +152,42 @@ pub async fn update_university(
     Path(id): Path<i64>,
     Json(body): Json<UpdateUnivBody>,
 ) -> Result<StatusCode, ApiError> {
-    if let Some(v) = body.univ_name {
-        let v = v.trim().to_string();
-        if v.is_empty() {
+    if let Some(v) = &body.univ_name {
+        if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
         }
+    }
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(v) = body.univ_name {
         sqlx::query("UPDATE universities SET univ_name = ? WHERE id = ?")
-            .bind(v).bind(id).execute(&state.db).await
+            .bind(v.trim().to_string()).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.total_quota {
         sqlx::query("UPDATE universities SET total_quota = ? WHERE id = ?")
-            .bind(v).bind(id).execute(&state.db).await
+            .bind(v).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.prioritize_enrolled {
         sqlx::query("UPDATE universities SET prioritize_enrolled = ? WHERE id = ?")
-            .bind(v as i64).bind(id).execute(&state.db).await
+            .bind(v as i64).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
+    let univ_name: String = sqlx::query_scalar("SELECT univ_name FROM universities WHERE id = ?")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::UniversityUpdated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -163,6 +196,9 @@ pub async fn delete_university(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // applications.track_id FK → univ_tracks 에 CASCADE 없음.
     // 지원 기록이 있으면 FK 위반으로 500이 나므로 친화적 409로 먼저 차단.
     let app_count: i64 = sqlx::query_scalar(
@@ -171,7 +207,7 @@ pub async fn delete_university(
          WHERE ut.univ_id = ?",
     )
     .bind(id)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -182,8 +218,28 @@ pub async fn delete_university(
         ));
     }
 
+    let univ_name: Option<String> = sqlx::query_scalar(
+        "SELECT univ_name FROM universities WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let univ_name = univ_name.unwrap_or_default();
+
     sqlx::query("DELETE FROM universities WHERE id = ?")
-        .bind(id).execute(&state.db).await
+        .bind(id).execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::UniversityDeleted,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name }),
+    }).await?;
+
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -231,19 +287,36 @@ pub async fn create_track(
     if body.track_name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
     }
+    let track_name = body.track_name.trim().to_string();
     let unit_quota = body.unit_quota.flatten();
     let enrolled = body.prioritize_enrolled as i64;
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled)
          VALUES (?, ?, ?, ?) RETURNING id",
     )
     .bind(univ_id)
-    .bind(body.track_name.trim())
+    .bind(&track_name)
     .bind(unit_quota)
     .bind(enrolled)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let univ_name: String = sqlx::query_scalar("SELECT univ_name FROM universities WHERE id = ?")
+        .bind(univ_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::TrackCreated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name, "track_name": track_name }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
 
@@ -253,25 +326,47 @@ pub async fn update_track(
     Path(id): Path<i64>,
     Json(body): Json<UpdateTrackBody>,
 ) -> Result<StatusCode, ApiError> {
-    if let Some(v) = body.track_name {
-        let v = v.trim().to_string();
-        if v.is_empty() {
+    if let Some(v) = &body.track_name {
+        if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
         }
+    }
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(v) = body.track_name {
         sqlx::query("UPDATE univ_tracks SET track_name = ? WHERE id = ?")
-            .bind(v).bind(id).execute(&state.db).await
+            .bind(v.trim().to_string()).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.unit_quota {
         sqlx::query("UPDATE univ_tracks SET unit_quota = ? WHERE id = ?")
-            .bind(v).bind(id).execute(&state.db).await
+            .bind(v).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.prioritize_enrolled {
         sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
-            .bind(v as i64).bind(id).execute(&state.db).await
+            .bind(v as i64).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
+    let (univ_name, track_name): (String, String) = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name
+         FROM univ_tracks ut
+         JOIN universities u ON u.id = ut.univ_id
+         WHERE ut.id = ?",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::TrackUpdated,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name, "track_name": track_name }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -280,13 +375,16 @@ pub async fn delete_track(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // applications.track_id FK → univ_tracks 에 CASCADE 없음.
     // 지원 기록이 있으면 FK 위반으로 500이 나므로 친화적 409로 먼저 차단.
     let app_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM applications WHERE track_id = ?",
     )
     .bind(id)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -297,8 +395,31 @@ pub async fn delete_track(
         ));
     }
 
+    let names: Option<(String, String)> = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name
+         FROM univ_tracks ut
+         JOIN universities u ON u.id = ut.univ_id
+         WHERE ut.id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (univ_name, track_name) = names.unwrap_or_default();
+
     sqlx::query("DELETE FROM univ_tracks WHERE id = ?")
-        .bind(id).execute(&state.db).await
+        .bind(id).execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::TrackDeleted,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "univ_name": univ_name, "track_name": track_name }),
+    }).await?;
+
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }

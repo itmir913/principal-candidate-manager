@@ -8,7 +8,11 @@ use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::{excel, state::AppState};
+use crate::{
+    audit::{self, Actor, AuditEntry},
+    enums::AuditAction,
+    excel, state::AppState,
+};
 
 #[derive(Deserialize)]
 pub struct AddEnrolledBody {
@@ -251,6 +255,13 @@ pub async fn import_students(
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
     }
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentsImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "source": "all", "inserted": inserted, "updated": updated }),
+    }).await?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
@@ -493,6 +504,13 @@ pub async fn import_enrolled(
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
     }
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentsImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "source": "enrolled", "inserted": inserted, "updated": updated }),
+    }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
@@ -562,6 +580,13 @@ pub async fn import_graduated(
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { inserted: 0, updated: 0, errors })));
     }
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentsImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "source": "graduated", "inserted": inserted, "updated": updated }),
+    }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
 }
@@ -664,6 +689,23 @@ pub async fn add_enrolled(
     upsert_enrolled_by_position(&mut *tx, &rec, &mut inserted, &mut updated)
         .await
         .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    let (student_id, student_code): (i64, String) = sqlx::query_as(
+        "SELECT id, student_code FROM students \
+         WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
+    )
+    .bind(body.grade)
+    .bind(body.class_no)
+    .bind(body.seq_no)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentAdded,
+        round_id: None,
+        student_id: Some(student_id),
+        detail: serde_json::json!({ "student_code": student_code, "name": rec.name }),
+    }).await?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
@@ -698,6 +740,18 @@ pub async fn add_graduated(
     upsert_student(&mut *tx, &rec, &mut inserted, &mut updated)
         .await
         .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    let student_id: i64 = sqlx::query_scalar("SELECT id FROM students WHERE student_code = ?")
+        .bind(&rec.student_code)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentAdded,
+        round_id: None,
+        student_id: Some(student_id),
+        detail: serde_json::json!({ "student_code": rec.student_code, "name": rec.name }),
+    }).await?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(ImportResult { inserted, updated, errors: vec![] })))
@@ -741,11 +795,27 @@ pub async fn delete_student(
         ));
     }
 
+    let (student_code, student_name): (String, String) = sqlx::query_as(
+        "SELECT student_code, name FROM students WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query("DELETE FROM students WHERE id = ?")
         .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::StudentDeleted,
+        round_id: None,
+        student_id: Some(id),
+        detail: serde_json::json!({ "student_code": student_code, "name": student_name }),
+    }).await?;
 
     tx.commit()
         .await

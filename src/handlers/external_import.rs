@@ -5,7 +5,11 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use crate::{excel, state::AppState};
+use crate::{
+    audit::{self, Actor, AuditEntry},
+    enums::AuditAction,
+    excel, state::AppState,
+};
 use super::area_data::{find_or_create_track, get_area, parse_display_value, ImportResult};
 
 type ApiError = (StatusCode, String);
@@ -192,6 +196,7 @@ async fn do_import(
     parsed: ParsedFile,
     univ_name: String,
     track_name: String,
+    source: &str,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let area = get_area(db, area_id).await?;
     if area.lookup_scope != crate::enums::LookupScope::Composite {
@@ -341,6 +346,24 @@ async fn do_import(
             Json(ImportResult { rows: 0, errors, warnings: vec![] }),
         ));
     }
+    let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
+        .bind(area_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::BaseDataImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({
+            "source": source,
+            "area_name": area_name,
+            "univ_name": univ_name,
+            "track_name": track_name,
+            "rows": rows,
+        }),
+    }).await?;
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -374,7 +397,7 @@ pub async fn daegyo_import(
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let (bytes, univ_name, track_name) = read_import_multipart(multipart).await?;
     let parsed = parse_daegyo(&bytes).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    do_import(&state.db, id, parsed, univ_name, track_name).await
+    do_import(&state.db, id, parsed, univ_name, track_name, "daegyo").await
 }
 
 pub async fn univ_preview(
@@ -402,5 +425,5 @@ pub async fn univ_import(
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let (bytes, univ_name, track_name) = read_import_multipart(multipart).await?;
     let parsed = parse_univ(&bytes).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    do_import(&state.db, id, parsed, univ_name, track_name).await
+    do_import(&state.db, id, parsed, univ_name, track_name, "univ").await
 }

@@ -8,7 +8,11 @@ use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-use crate::{excel, state::AppState};
+use crate::{
+    audit::{self, Actor, AuditEntry},
+    enums::AuditAction,
+    excel, state::AppState,
+};
 
 type ApiError = (StatusCode, String);
 
@@ -186,6 +190,13 @@ pub async fn import_classes(
     if !errors.is_empty() {
         return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({ "inserted": 0, "updated": 0, "errors": errors }))));
     }
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::ClassesImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "inserted": inserted, "updated": updated }),
+    }).await?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::OK, Json(serde_json::json!({ "inserted": inserted, "updated": updated, "errors": [] }))))
@@ -227,12 +238,15 @@ pub async fn delete_class(
     State(state): State<AppState>,
     Path((grade, class_no)): Path<(i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let student_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM students WHERE grade = ? AND class_no = ?",
     )
     .bind(grade)
     .bind(class_no)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -246,11 +260,32 @@ pub async fn delete_class(
         ));
     }
 
+    let teacher_name: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT teacher_name FROM classes WHERE grade = ? AND class_no = ?",
+    )
+    .bind(grade)
+    .bind(class_no)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .flatten();
+
     sqlx::query("DELETE FROM classes WHERE grade = ? AND class_no = ?")
         .bind(grade)
         .bind(class_no)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::ClassDeleted,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "grade": grade, "class_no": class_no, "teacher_name": teacher_name }),
+    }).await?;
+
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -275,6 +310,8 @@ pub async fn upsert_class(
             return Err((StatusCode::BAD_REQUEST, "비밀번호는 4자 이상이어야 합니다".into()));
         }
     }
+
+    let password_changed = body.password.is_some();
 
     // bcrypt는 CPU 작업이므로 트랜잭션 밖에서 미리 계산
     let password_hash = if let Some(ref pw) = body.password {
@@ -331,6 +368,29 @@ pub async fn upsert_class(
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
     }
+
+    let teacher_name: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT teacher_name FROM classes WHERE grade = ? AND class_no = ?",
+    )
+    .bind(grade)
+    .bind(class_no)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .flatten();
+
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::ClassSaved,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({
+            "grade": grade,
+            "class_no": class_no,
+            "teacher_name": teacher_name,
+            "password_changed": password_changed,
+        }),
+    }).await?;
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
