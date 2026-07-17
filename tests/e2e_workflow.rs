@@ -84,6 +84,7 @@ fn app_body(sid: i64, tid: i64, rid: i64, interview_area: i64, score: &str) -> C
             area_id: interview_area,
             values: vec![score.to_string()],
         }],
+        ..Default::default()
     }
 }
 

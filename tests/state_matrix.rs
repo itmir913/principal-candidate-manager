@@ -237,6 +237,7 @@ async fn call(ep: Ep, pool: &SqlitePool, fx: &Fx) -> StatusCode {
                 round_id: fx.rid,
                 department_name: "컴퓨터공학과".into(),
                 base_data_entries: vec![],
+                ..Default::default()
             };
             match teacher_create_application(
                 State(st),

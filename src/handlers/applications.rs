@@ -78,6 +78,7 @@ pub struct ApplicationRow {
     pub class_no: Option<i64>,
     pub seq_no: Option<i64>,
     pub is_enrolled: bool,
+    pub univ_id: i64,
     pub univ_name: String,
     pub track_name: String,
     pub recommended: Option<bool>,
@@ -123,6 +124,9 @@ pub struct CreateApplicationBody {
     pub department_name: String,
     #[serde(default)]
     pub base_data_entries: Vec<BaseDataEntry>,
+    /// 수정 모드에서 기존 지원의 track_id. Some(p) && p != track_id면 모집단위 변경.
+    #[serde(default)]
+    pub prev_track_id: Option<i64>,
 }
 
 // ── Admin ──────────────────────────────────────────────────────────
@@ -134,7 +138,7 @@ pub async fn admin_list_applications(
     let rows = sqlx::query_as::<_, ApplicationRow>(
         "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
+                ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
          FROM applications a
          JOIN students s ON a.student_id = s.id
          JOIN univ_tracks ut ON a.track_id = ut.id
@@ -347,7 +351,7 @@ pub async fn teacher_list_applications(
         sqlx::query_as::<_, ApplicationRow>(
             "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                    u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
+                    ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
              JOIN students s ON a.student_id = s.id
              JOIN univ_tracks ut ON a.track_id = ut.id
@@ -366,7 +370,7 @@ pub async fn teacher_list_applications(
         sqlx::query_as::<_, ApplicationRow>(
             "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                    u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
+                    ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
              JOIN students s ON a.student_id = s.id
              JOIN univ_tracks ut ON a.track_id = ut.id
@@ -618,6 +622,87 @@ pub async fn teacher_create_application(
 
     if round_status_in_tx != Some(RoundStatus::Open) {
         return Err((StatusCode::BAD_REQUEST, "라운드가 OPEN 상태가 아닙니다".into()));
+    }
+
+    // 모집단위 변경: prev_track_id가 있고 현재 track_id와 다를 때
+    if let Some(prev_tid) = body.prev_track_id {
+        if prev_tid != body.track_id {
+            // 대상 트랙에 이미 지원이 존재하면 409
+            let target_exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM applications \
+                 WHERE student_id = ? AND track_id = ? AND round_id = ?)",
+            )
+            .bind(body.student_id)
+            .bind(body.track_id)
+            .bind(body.round_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            if target_exists {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "이미 해당 모집단위에 지원되어 있습니다. 기존 지원을 먼저 취소하세요".into(),
+                ));
+            }
+
+            // 이전 지원이 없으면 404
+            let prev_exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM applications \
+                 WHERE student_id = ? AND track_id = ? AND round_id = ?)",
+            )
+            .bind(body.student_id)
+            .bind(prev_tid)
+            .bind(body.round_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            if !prev_exists {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    "수정할 지원 내역을 찾을 수 없습니다".into(),
+                ));
+            }
+
+            // 삭제 전 스냅샷
+            let prev_detail =
+                crate::audit::application_detail(&mut *tx, body.student_id, prev_tid).await?;
+
+            // results → applications 순서 삭제 (FK 제약)
+            sqlx::query(
+                "DELETE FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
+            )
+            .bind(body.student_id)
+            .bind(prev_tid)
+            .bind(body.round_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            sqlx::query(
+                "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+            )
+            .bind(body.student_id)
+            .bind(prev_tid)
+            .bind(body.round_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            // 감사 로그: ApplicationDeleted (이전 트랙)
+            crate::audit::log(
+                &mut *tx,
+                AuditEntry {
+                    actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+                    action: AuditAction::ApplicationDeleted,
+                    round_id: Some(body.round_id),
+                    student_id: Some(body.student_id),
+                    detail: prev_detail,
+                },
+            )
+            .await?;
+        }
     }
 
     for entry in &encoded {

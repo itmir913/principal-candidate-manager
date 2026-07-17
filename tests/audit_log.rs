@@ -474,6 +474,7 @@ async fn teacher_create_application_writes_audit_log_with_teacher_actor() {
             round_id: rid,
             department_name: "컴퓨터공학과".into(),
             base_data_entries: vec![],
+            ..Default::default()
         }),
     )
     .await

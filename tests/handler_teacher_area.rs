@@ -459,6 +459,7 @@ async fn create_application_with_base_data_saves_correctly() {
                 BaseDataEntry { area_id: num_aid, values: vec!["35".into()] },
                 BaseDataEntry { area_id: cat_aid, values: vec!["회장".into()] },
             ],
+            ..Default::default()
         }),
     )
     .await;
@@ -512,6 +513,7 @@ async fn create_application_non_editable_area_rejected() {
             base_data_entries: vec![
                 BaseDataEntry { area_id: man_aid, values: vec!["8.5".into()] },
             ],
+            ..Default::default()
         }),
     )
     .await;
@@ -538,6 +540,7 @@ async fn create_application_base_data_overwritten_on_resave() {
                 BaseDataEntry { area_id: num_aid, values: vec!["30".into()] },
                 BaseDataEntry { area_id: cat_aid, values: vec!["회장".into()] },
             ],
+            ..Default::default()
         }),
     )
     .await
@@ -554,6 +557,7 @@ async fn create_application_base_data_overwritten_on_resave() {
                 BaseDataEntry { area_id: num_aid, values: vec!["45".into()] },
                 BaseDataEntry { area_id: cat_aid, values: vec!["부회장".into()] },
             ],
+            ..Default::default()
         }),
     )
     .await
@@ -627,6 +631,7 @@ async fn create_application_manual_exceeds_max_score_returns_bad_request() {
             base_data_entries: vec![
                 BaseDataEntry { area_id: man_aid, values: vec!["10.01".into()] },
             ],
+            ..Default::default()
         }),
     ).await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
@@ -647,6 +652,7 @@ async fn create_application_manual_at_max_score_is_accepted() {
             base_data_entries: vec![
                 BaseDataEntry { area_id: man_aid, values: vec!["10".into()] },
             ],
+            ..Default::default()
         }),
     ).await;
     assert_eq!(res.unwrap(), StatusCode::CREATED);
