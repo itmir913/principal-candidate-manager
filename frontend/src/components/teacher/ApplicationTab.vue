@@ -386,7 +386,7 @@
                         style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
                         :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
                         :disabled="!area.teacher_editable"
-                        :placeholder="area.teacher_editable ? '점수 직접 입력' : (area.current_values[0] ?? '데이터 없음')"
+                        :placeholder="area.teacher_editable ? '점수 직접 입력 (점)' : (area.current_values[0] ?? '데이터 없음')"
                         @input="onNumericInput(area, $event.target.value)"
                       />
                     </template>

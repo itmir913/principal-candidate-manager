@@ -84,7 +84,9 @@
                       v-if="area.current_values.length > 0"
                       style="color: #1e293b;"
                     >
-                      <template v-if="area.calc_type !== 'CATEGORY' && area.unit">{{ area.current_values.join(', ') }} {{ area.unit }}</template>
+                      <!-- MANUAL은 입력값이 곧 점수 — 단위 '점'을 프로그램이 강제 표시 -->
+                      <template v-if="area.calc_type === 'MANUAL'">{{ area.current_values.join(', ') }} 점</template>
+                      <template v-else-if="area.calc_type === 'NUMERIC' && area.unit">{{ area.current_values.join(', ') }} {{ area.unit }}</template>
                       <template v-else>{{ area.current_values.join(', ') }}</template>
                     </span>
                     <span v-else style="color: #ef4444;">데이터 없음</span>

@@ -71,7 +71,8 @@
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
                   </div>
-                  <div v-if="area.calc_type !== 'CATEGORY'">
+                  <!-- MANUAL은 단위가 항상 '점'(프로그램 강제)이므로 NUMERIC만 단위 입력 -->
+                  <div v-if="area.calc_type === 'NUMERIC'">
                     <label class="block text-base font-medium mb-1.5" style="color: #64748b;">기준값 단위 <span style="color: #94a3b8;">(선택)</span></label>
                     <input v-model="editArea.unit" type="text" placeholder="예: 시간, 등급 (선택)"
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -201,7 +202,7 @@
                 <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
               </select>
             </div>
-            <div v-if="newArea.calc_type !== 'CATEGORY'">
+            <div v-if="newArea.calc_type === 'NUMERIC'">
               <label class="block text-base font-medium mb-1.5" style="color: #64748b;">기준값 단위 <span style="color: #94a3b8;">(선택)</span></label>
               <input v-model="newArea.unit" type="text" placeholder="예: 시간, 등급 (선택)"
                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -895,7 +896,7 @@ async function addArea() {
     teacher_editable: newArea.value.teacher_editable,
     match_mode: newArea.value.match_mode || null,
     category_agg: newArea.value.category_agg || null,
-    unit: newArea.value.calc_type !== 'CATEGORY' ? (newArea.value.unit || null) : null,
+    unit: newArea.value.calc_type === 'NUMERIC' ? (newArea.value.unit || null) : null,
   }
   try {
     await createArea(body)
@@ -936,7 +937,8 @@ async function saveEdit() {
   const body = {
     name: editArea.value.name,
     teacher_editable: editArea.value.teacher_editable,
-    unit: area?.calc_type !== 'CATEGORY' ? (editArea.value.unit ?? null) : undefined,
+    // MANUAL은 단위 '점' 강제(프론트 표시 전용)라 unit을 보내지 않는다
+    unit: area?.calc_type === 'NUMERIC' ? (editArea.value.unit ?? null) : undefined,
   }
   try {
     await updateArea(editingAreaId.value, body)
