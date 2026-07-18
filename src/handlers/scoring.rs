@@ -1150,6 +1150,56 @@ pub async fn recommend_result(
         }
     }
 
+    // 5b. 트랙 내부 순서 가드 — 자동 추천의 D 규칙("대학 컷은 같은 트랙에서 track_rank
+    //     상위자를 건너뛰고 하위자를 선택할 수 없다")을 수동 경로에도 적용한다.
+    //     동점(track_rank 동일)은 우열이 정해지지 않은 상태라 서로 막지 않는다 —
+    //     관리자 선택의 여지를 남긴다. 상위자가 이미 추천됐거나 포기했으면 막지 않는다.
+    //     track_rank 는 자동 추천 1단계(3c)와 같은 윈도우 함수로 파생 —
+    //     두 경로가 다른 순위를 쓰면 이 가드의 의미가 없다.
+    #[derive(sqlx::FromRow)]
+    struct Blocker { blockers: i64, top_rank: Option<i64> }
+    let blocker: Blocker = sqlx::query_as(
+        "WITH ranked AS (
+             SELECT r.student_id, r.recommended,
+                    CAST(RANK() OVER (
+                        PARTITION BY r.track_id
+                        ORDER BY
+                            CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
+                            r.total_score DESC
+                    ) AS INTEGER) AS track_rank
+             FROM results r
+             JOIN students s ON s.id = r.student_id
+             JOIN univ_tracks ut ON ut.id = r.track_id
+             WHERE r.round_id = ? AND r.track_id = ?
+         )
+         SELECT COUNT(*) AS blockers, MIN(k.track_rank) AS top_rank
+         FROM ranked k
+         JOIN applications a ON a.student_id = k.student_id
+                             AND a.track_id  = ?
+                             AND a.round_id  = ?
+         WHERE k.recommended = 0 AND a.abandoned = 0
+           AND k.track_rank < (SELECT track_rank FROM ranked WHERE student_id = ?)",
+    )
+    .bind(rid).bind(tid).bind(tid).bind(rid).bind(sid)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if blocker.blockers > 0 {
+        let top = blocker.top_rank
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR,
+                    "상위 미추천자 순위를 계산할 수 없습니다".to_string()))?;
+        return Err((
+            StatusCode::CONFLICT,
+            format!(
+                "같은 모집단위에 아직 추천되지 않은 상위 순위 지원자가 {}명 있습니다 \
+                 (최상위 모집단위 순위 {}위). 모집단위 순위를 건너뛴 추천은 할 수 없습니다. \
+                 상위 지원자를 먼저 추천하거나, 해당 지원자가 지원을 포기한 경우 포기 처리 후 다시 시도하세요.",
+                blocker.blockers, top
+            ),
+        ));
+    }
+
     // 6. 추천 확정
     let affected = sqlx::query(
         "UPDATE results SET recommended = 1 WHERE student_id = ? AND track_id = ? AND round_id = ?",
