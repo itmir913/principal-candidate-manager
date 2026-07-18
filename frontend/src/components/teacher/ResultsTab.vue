@@ -48,6 +48,31 @@
 
     <!-- 라운드별 결과 카드 -->
     <div v-else class="flex flex-col gap-6">
+      <!-- 순위 보기 토글 -->
+      <div v-if="results.length > 0" class="flex gap-2">
+        <button
+          class="text-base font-medium rounded-lg"
+          :style="{
+            padding: '6px 14px', cursor: 'pointer',
+            border: '1px solid',
+            borderColor: rankView === 'track' ? '#2563eb' : '#e2e8f0',
+            background: rankView === 'track' ? '#2563eb' : 'white',
+            color: rankView === 'track' ? 'white' : '#475569',
+          }"
+          @click="rankView = 'track'"
+        >모집단위별 순위</button>
+        <button
+          class="text-base font-medium rounded-lg"
+          :style="{
+            padding: '6px 14px', cursor: 'pointer',
+            border: '1px solid',
+            borderColor: rankView === 'univ' ? '#2563eb' : '#e2e8f0',
+            background: rankView === 'univ' ? '#2563eb' : 'white',
+            color: rankView === 'univ' ? 'white' : '#475569',
+          }"
+          @click="rankView = 'univ'"
+        >대학 전체 순위</button>
+      </div>
       <div
         v-for="round in rounds"
         :key="round.id"
@@ -101,7 +126,7 @@
                     <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">대학명</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">모집단위</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">지원 학과</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 80px;">순위</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 80px;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
                     <th class="text-base font-semibold text-right" style="padding: 12px 20px; color: #475569; width: 100px;">총점</th>
                     <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">상태</th>
                     <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">비고</th>
@@ -113,13 +138,16 @@
                     :key="r.track_id"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
-                      background: r.recommended && !r.abandoned ? '#f0fdf4' : '#fff1f2',
+                      background:
+                        r.recommended && !r.abandoned ? '#f0fdf4' :
+                        tieSet.has(`${r.student_id}-${r.track_id}-${round.id}`) ? '#fffbeb' :
+                        '#fff1f2',
                     }"
                   >
                     <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
                     <td class="text-base" style="padding: 12px 16px; color: #1e293b;">{{ r.track_name }}</td>
                     <td class="text-base" style="padding: 12px 16px; color: #475569;">{{ r.department_name }}</td>
-                    <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ r.ranking ?? '-' }}</td>
+                    <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
                     <td class="text-base text-right font-semibold" style="padding: 12px 20px; color: #1e293b;">
                       {{ r.total_score.toFixed(2) }}
                     </td>
@@ -160,6 +188,7 @@ const rounds    = ref([])
 const results   = ref([])
 const loading   = ref(false)
 const loadError = ref('')
+const rankView  = ref('track')
 
 const hasFinalized = computed(() => rounds.value.some(r => r.status === 'FINALIZED'))
 
@@ -196,6 +225,34 @@ const helpBox = computed(() => {
       '마감되면 이 화면에 우리 반 학생들의 순위·총점·추천 여부가 표시됩니다.',
     ],
   }
+})
+
+const tieSet = computed(() => {
+  const set = new Set()
+  if (rankView.value === 'track') {
+    const counts = {}
+    for (const r of results.value) {
+      if (r.track_rank == null) continue
+      const k = `${r.track_id}-${r.round_id}-${r.track_rank}`
+      if (!counts[k]) counts[k] = []
+      counts[k].push(r)
+    }
+    for (const rows of Object.values(counts)) {
+      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}-${r.round_id}`)
+    }
+  } else {
+    const counts = {}
+    for (const r of results.value) {
+      if (r.ranking == null) continue
+      const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
+      if (!counts[k]) counts[k] = []
+      counts[k].push(r)
+    }
+    for (const rows of Object.values(counts)) {
+      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}-${r.round_id}`)
+    }
+  }
+  return set
 })
 
 // round_id → { student_id → { ...student, results[] } } 구조

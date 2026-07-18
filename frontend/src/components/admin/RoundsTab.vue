@@ -322,7 +322,32 @@
               결과가 없습니다. 점수 계산을 먼저 실행하세요.
             </div>
 
-            <div v-for="(group, key) in resultsByUniv" :key="key" class="mb-6">
+            <div v-if="results.length > 0" class="flex gap-2 mb-4">
+              <button
+                class="text-base font-medium rounded-lg"
+                :style="{
+                  padding: '6px 14px', cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: rankView === 'track' ? '#2563eb' : '#e2e8f0',
+                  background: rankView === 'track' ? '#2563eb' : 'white',
+                  color: rankView === 'track' ? 'white' : '#475569',
+                }"
+                @click="rankView = 'track'"
+              >모집단위별 순위</button>
+              <button
+                class="text-base font-medium rounded-lg"
+                :style="{
+                  padding: '6px 14px', cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: rankView === 'univ' ? '#2563eb' : '#e2e8f0',
+                  background: rankView === 'univ' ? '#2563eb' : 'white',
+                  color: rankView === 'univ' ? 'white' : '#475569',
+                }"
+                @click="rankView = 'univ'"
+              >대학 전체 순위</button>
+            </div>
+
+            <div v-for="(group, key) in resultsByView" :key="key" class="mb-6">
               <div class="flex items-center gap-3 mb-3 flex-wrap">
                 <h4 class="text-base font-semibold" style="color: #1e293b; margin: 0;">{{ key }}</h4>
                 <span class="text-base" style="color: #94a3b8;">
@@ -330,11 +355,13 @@
                     대학 정원 {{ group.totalQuota }}명 / 잔여 {{ group.univRemaining }}석
                   </template>
                   <template v-else>대학 정원 무제한</template>
-                  <span style="margin: 0 6px; color: #e2e8f0;">|</span>
-                  <template v-if="group.unitQuota != null">
-                    모집단위 정원 {{ group.unitQuota }}명 / 잔여 {{ group.remaining }}석
+                  <template v-if="rankView === 'track'">
+                    <span style="margin: 0 6px; color: #e2e8f0;">|</span>
+                    <template v-if="group.unitQuota != null">
+                      모집단위 정원 {{ group.unitQuota }}명 / 잔여 {{ group.remaining }}석
+                    </template>
+                    <template v-else>모집단위 정원 무제한</template>
                   </template>
-                  <template v-else>모집단위 정원 무제한</template>
                 </span>
               </div>
               <div class="rounded-xl overflow-hidden"
@@ -344,7 +371,7 @@
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th style="width: 36px; padding: 13px 8px;"></th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569; width: 70px;">순위</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569; width: 70px;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학번/학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 90px;">구분</th>
@@ -363,6 +390,7 @@
                             background:
                               selected.status === 'FINALIZED' && (r.abandoned || !r.recommended) ? '#fef2f2' :
                               selected.status === 'FINALIZED' && r.recommended && !r.abandoned ? '#f0fdf4' :
+                              tieSet.has(`${r.student_id}-${r.track_id}`) ? '#fffbeb' :
                               undefined,
                           }"
                           @click="toggleRow(`${r.student_id}-${r.track_id}`)"
@@ -370,7 +398,7 @@
                           <td class="text-base text-center" style="padding: 12px 8px; color: #94a3b8; user-select: none;">
                             {{ expandedRows[`${r.student_id}-${r.track_id}`] ? '▼' : '▶' }}
                           </td>
-                          <td class="text-base text-center" style="padding: 12px 16px; color: #475569;">{{ r.ranking ?? '-' }}</td>
+                          <td class="text-base text-center" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
                           <td class="text-base" style="padding: 12px 18px; color: #475569; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <span v-if="r.is_enrolled">{{ r.grade }}학년 {{ r.class_no }}반 {{ r.seq_no }}번</span>
                             <span v-else class="font-mono">{{ r.student_code }}</span>
@@ -604,6 +632,8 @@ const trackQuotaMap = computed(() => {
   return map
 })
 
+const rankView = ref('track')
+
 const resultsByUniv = computed(() => {
   const map = {}
   for (const r of results.value) {
@@ -623,6 +653,54 @@ const resultsByUniv = computed(() => {
     map[key].results.push(r)
   }
   return map
+})
+
+const resultsByUnivOnly = computed(() => {
+  const map = {}
+  for (const r of results.value) {
+    const key = r.univ_name
+    if (!map[key]) {
+      const q = trackQuotaMap.value[r.track_id]
+      const totalQuota = q?.totalQuota ?? null
+      map[key] = {
+        totalQuota,
+        univRemaining: totalQuota != null ? Math.max(0, totalQuota - (q?.totalUsed ?? 0)) : null,
+        results: [],
+      }
+    }
+    map[key].results.push(r)
+  }
+  return map
+})
+
+const resultsByView = computed(() => rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value)
+
+const tieSet = computed(() => {
+  const set = new Set()
+  if (rankView.value === 'track') {
+    const counts = {}
+    for (const r of results.value) {
+      if (r.track_rank == null) continue
+      const k = `${r.track_id}-${r.round_id}-${r.track_rank}`
+      if (!counts[k]) counts[k] = []
+      counts[k].push(r)
+    }
+    for (const rows of Object.values(counts)) {
+      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}`)
+    }
+  } else {
+    const counts = {}
+    for (const r of results.value) {
+      if (r.ranking == null) continue
+      const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
+      if (!counts[k]) counts[k] = []
+      counts[k].push(r)
+    }
+    for (const rows of Object.values(counts)) {
+      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}`)
+    }
+  }
+  return set
 })
 
 function getAreaScore(r, areaId) {

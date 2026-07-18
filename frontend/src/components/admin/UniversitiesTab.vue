@@ -216,7 +216,7 @@
                     <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
                     <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
                     <td class="text-center" style="padding: 10px 16px;">
-                      <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" />
+                      <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
                     </td>
                     <td style="padding: 10px 16px;">
                       <div class="flex gap-2">
@@ -280,7 +280,7 @@
                       <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
                       <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
                       <td class="text-center" style="padding: 10px 16px;">
-                        <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" />
+                        <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
                       </td>
                       <td style="padding: 10px 16px;">
                         <div class="flex gap-2">
@@ -468,6 +468,7 @@ const quotaStats = ref(null)
 const modal = ref({ open: false, trackName: '', entries: [], loading: false })
 
 const selectedUniv = computed(() => univs.value.find(u => u.id === selectedUnivId.value) ?? null)
+const univPrioritize = computed(() => !!(selectedUniv.value?.prioritize_enrolled))
 
 const selectedUnivStats = computed(() => {
   if (!quotaStats.value || !selectedUnivId.value) return null
@@ -629,7 +630,12 @@ async function removeUniv(id) {
 }
 
 // ── 모집단위 CRUD ─────────────────────────────────────────────
-function startAddTrack() { trackForm.value = emptyTrackForm(); editingTrackId.value = null; addingTrack.value = true }
+function startAddTrack() {
+  trackForm.value = emptyTrackForm()
+  if (univPrioritize.value) trackForm.value.prioritize_enrolled = true
+  editingTrackId.value = null
+  addingTrack.value = true
+}
 
 async function saveAddTrack() {
   if (!selectedUnivId.value) return
@@ -639,7 +645,12 @@ async function saveAddTrack() {
   finally { saving.value = false }
 }
 
-function startEditTrack(t) { addingTrack.value = false; editingTrackId.value = t.id; trackForm.value = trackToForm(t) }
+function startEditTrack(t) {
+  addingTrack.value = false
+  editingTrackId.value = t.id
+  trackForm.value = trackToForm(t)
+  if (univPrioritize.value) trackForm.value.prioritize_enrolled = true
+}
 
 async function saveEditTrack(id) {
   saving.value = true; error.value = ''
