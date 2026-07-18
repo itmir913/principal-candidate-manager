@@ -269,6 +269,46 @@ pub async fn import_students(
 
 // ── DB upsert ─────────────────────────────────────────────────────
 
+/// 마감된 라운드에 결과가 있는 학생의 **재학/졸업 구분 변경**을 막는다.
+///
+/// `results.ranking`(대학 순위)은 close_round 시점에 저장된 값이고, 화면·자동 추천의
+/// 모집단위 순위(`track_rank`)는 실행 시점 라이브 계산이다. 재학/졸업 구분은 재학생 우선
+/// 트랙의 정렬 키이므로, CLOSED 라운드에 결과가 있는 학생의 구분이 바뀌면 두 순위의 기준
+/// 시점이 어긋나 라이브 기준 동점자 중 일부만 추천되는 결과가 나온다.
+/// `update_university`/`update_track` 의 prioritize 가드(E1)와 **같은 결함, 다른 입력 경로**다.
+///
+/// 신규 학생(INSERT)은 CLOSED 라운드에 결과가 있을 수 없으므로 대상이 아니다.
+async fn guard_enrollment_flip_closed(
+    conn: &mut sqlx::SqliteConnection,
+    student_code: &str,
+    to_enrolled: bool,
+) -> Result<(), String> {
+    let rounds: Vec<i64> = sqlx::query_scalar(
+        "SELECT DISTINCT r.round_id FROM results r
+         JOIN rounds ro ON ro.id = r.round_id
+         JOIN students s ON s.id = r.student_id
+         WHERE s.student_code = ? AND ro.status = 'CLOSED'
+         ORDER BY r.round_id",
+    )
+    .bind(student_code)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if rounds.is_empty() {
+        return Ok(());
+    }
+    let labels = rounds.iter().map(|id| format!("{}차", id)).collect::<Vec<_>>().join(", ");
+    Err(format!(
+        "마감된 라운드({})에 결과가 있어 재학/졸업 구분을 '{}'(으)로 바꿀 수 없습니다. \
+         저장된 대학 순위는 마감 시점의 재학/졸업 구분을 기준으로 계산된 값이라, \
+         구분만 바꾸면 순위와 어긋납니다. 변경하려면 해당 라운드를 다시 열고(재오픈) \
+         명단을 반영한 뒤 다시 마감하세요(마감 시 순위가 재계산됩니다).",
+        labels,
+        if to_enrolled { "재학" } else { "졸업" }
+    ))
+}
+
 pub async fn upsert_student(
     conn: &mut sqlx::SqliteConnection,
     rec: &StudentRecord,
@@ -319,14 +359,20 @@ pub async fn upsert_student(
             ));
         }
 
-        let exists: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE student_code = ?")
+        // 기존 학생의 현재 재학 구분 (None = 신규)
+        let current: Option<bool> =
+            sqlx::query_scalar("SELECT is_enrolled = 1 FROM students WHERE student_code = ?")
                 .bind(&rec.student_code)
-                .fetch_one(&mut *conn)
+                .fetch_optional(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
-        if exists > 0 {
+        if let Some(false) = current {
+            // 졸업 → 재학 전환: 마감 라운드에 결과가 있으면 거부
+            guard_enrollment_flip_closed(&mut *conn, &rec.student_code, true).await?;
+        }
+
+        if current.is_some() {
             sqlx::query(
                 "UPDATE students SET name=?, grade=?, class_no=?, seq_no=?,
                  is_enrolled=1, grad_year=NULL WHERE student_code=?",
@@ -350,14 +396,19 @@ pub async fn upsert_student(
     } else {
         let grad_year = rec.grad_year.ok_or("졸업생은 grad_year 필수")?;
 
-        let exists: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM students WHERE student_code = ?")
+        let current: Option<bool> =
+            sqlx::query_scalar("SELECT is_enrolled = 1 FROM students WHERE student_code = ?")
                 .bind(&rec.student_code)
-                .fetch_one(&mut *conn)
+                .fetch_optional(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
-        if exists > 0 {
+        if let Some(true) = current {
+            // 재학 → 졸업 전환: 마감 라운드에 결과가 있으면 거부
+            guard_enrollment_flip_closed(&mut *conn, &rec.student_code, false).await?;
+        }
+
+        if current.is_some() {
             sqlx::query(
                 "UPDATE students SET name=?, grade=NULL, class_no=NULL, seq_no=NULL,
                  is_enrolled=0, grad_year=? WHERE student_code=?",

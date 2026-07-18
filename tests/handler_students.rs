@@ -557,3 +557,179 @@ async fn db_allows_multiple_graduated_students() {
         .unwrap();
     assert_eq!(count, 2);
 }
+
+// ── E3: 마감 라운드 결과가 있는 학생의 재학/졸업 구분 변경 차단 ────
+//
+// results.ranking(대학 순위)은 close_round 시점 저장값이고 모집단위 순위(track_rank)는
+// 라이브 계산이다. 재학/졸업 구분은 재학생 우선 트랙의 정렬 키이므로, CLOSED 라운드에
+// 결과가 있는 학생의 구분이 바뀌면 두 순위의 기준 시점이 어긋난다.
+// (E1의 prioritize 가드와 같은 결함, 다른 입력 경로)
+
+/// 지정 상태의 라운드 + 그 학생의 결과 행 하나를 만든다.
+async fn seed_round_result(pool: &sqlx::SqlitePool, student_code: &str, status: &str) -> i64 {
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES (?, '2025-01-01T00:00:00Z') RETURNING id",
+    )
+    .bind(status).fetch_one(pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar("SELECT id FROM students WHERE student_code = ?")
+        .bind(student_code).fetch_one(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, department_name) \
+         VALUES (?, ?, ?, '학과')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results \
+         (student_id, track_id, round_id, score_detail, total_score, ranking, calculated_at) \
+         VALUES (?, ?, ?, '{}', 100000, 1, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(pool).await.unwrap();
+    rid
+}
+
+/// 재학 → 졸업 전환은 CLOSED 라운드에 결과가 있으면 거부된다.
+#[tokio::test]
+async fn upsert_student_enrolled_to_graduated_blocked_when_closed_round() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "CLOSED").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    let res = upsert_student(&mut *tx2, &graduated_rec("S1", "홍길동", 2024), &mut ins, &mut upd).await;
+
+    let err = res.expect_err("마감 라운드에 결과가 있으면 구분 변경 거부");
+    assert!(err.contains("마감된 라운드"), "사유에 라운드 명시: {}", err);
+    assert!(err.contains("졸업"), "바꾸려던 구분 명시: {}", err);
+    assert!(err.contains("재오픈"), "탈출구 안내: {}", err);
+    drop(tx2);
+    let still: i64 = sqlx::query_scalar("SELECT is_enrolled FROM students WHERE student_code = 'S1'")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(still, 1, "거부됐으므로 구분은 그대로");
+}
+
+/// 졸업 → 재학 전환도 같은 기준으로 거부된다.
+#[tokio::test]
+async fn upsert_student_graduated_to_enrolled_blocked_when_closed_round() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &graduated_rec("S1", "홍길동", 2024), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "CLOSED").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    let res = upsert_student(&mut *tx2, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd).await;
+
+    let err = res.expect_err("마감 라운드에 결과가 있으면 구분 변경 거부");
+    assert!(err.contains("재학"), "바꾸려던 구분 명시: {}", err);
+}
+
+/// OPEN 라운드는 막지 않는다 — 마감 전이라 저장 순위가 아직 없다.
+#[tokio::test]
+async fn upsert_student_enrollment_flip_allowed_when_round_open() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "OPEN").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    upsert_student(&mut *tx2, &graduated_rec("S1", "홍길동", 2024), &mut ins, &mut upd)
+        .await.expect("OPEN 라운드는 막지 않는다");
+    tx2.commit().await.unwrap();
+    let now: i64 = sqlx::query_scalar("SELECT is_enrolled FROM students WHERE student_code = 'S1'")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(now, 0);
+}
+
+/// FINALIZED 라운드도 막지 않는다 — 추천이 끝나 순위가 더 쓰이지 않는다.
+#[tokio::test]
+async fn upsert_student_enrollment_flip_allowed_when_round_finalized() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "FINALIZED").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    upsert_student(&mut *tx2, &graduated_rec("S1", "홍길동", 2024), &mut ins, &mut upd)
+        .await.expect("FINALIZED 라운드는 막지 않는다");
+}
+
+/// CLOSED 라운드가 있어도 **그 학생의 결과가 없으면** 막지 않는다.
+#[tokio::test]
+async fn upsert_student_enrollment_flip_allowed_when_student_has_no_result() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    upsert_student(&mut *tx, &enrolled_rec("S2", "김철수", 1, 1, 2), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S2", "CLOSED").await; // 결과는 S2 에만
+
+    let mut tx2 = pool.begin().await.unwrap();
+    upsert_student(&mut *tx2, &graduated_rec("S1", "홍길동", 2024), &mut ins, &mut upd)
+        .await.expect("결과가 없는 학생은 막지 않는다");
+}
+
+/// 구분이 그대로면 CLOSED 중에도 이름 수정은 허용된다(가드는 전환에만 걸린다).
+#[tokio::test]
+async fn upsert_student_name_only_update_allowed_when_closed_round() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "CLOSED").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    upsert_student(&mut *tx2, &enrolled_rec("S1", "홍길순", 1, 1, 1), &mut ins, &mut upd)
+        .await.expect("구분 무변경 — 이름 수정은 허용");
+    tx2.commit().await.unwrap();
+    let name: String = sqlx::query_scalar("SELECT name FROM students WHERE student_code = 'S1'")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(name, "홍길순");
+}
+
+/// 신규 학생 추가는 CLOSED 중에도 허용된다(마감 라운드에 결과가 있을 수 없다).
+#[tokio::test]
+async fn upsert_student_new_insert_allowed_when_closed_round() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    upsert_student(&mut *tx, &enrolled_rec("S1", "홍길동", 1, 1, 1), &mut ins, &mut upd)
+        .await.unwrap();
+    tx.commit().await.unwrap();
+    seed_round_result(&pool, "S1", "CLOSED").await;
+
+    let mut tx2 = pool.begin().await.unwrap();
+    upsert_student(&mut *tx2, &graduated_rec("S9", "신입", 2024), &mut ins, &mut upd)
+        .await.expect("신규 학생은 막지 않는다");
+}
