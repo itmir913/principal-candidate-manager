@@ -65,8 +65,8 @@ const normalizedItems = computed(() =>
 const lsKey = computed(() => `pcm-help-collapsed:${props.storageKey}`)
 
 function readOpen() {
-  // 기본 펼침. 사용자가 접은 적 있으면('1') 접힘 유지.
-  try { return localStorage.getItem(lsKey.value) !== '1' } catch { return true }
+  // 기본 접힘. 사용자가 펼친 적 있으면('1') 펼침 유지.
+  try { return localStorage.getItem(lsKey.value) === '1' } catch { return false }
 }
 
 const open = ref(readOpen())
@@ -76,6 +76,6 @@ watch(() => props.storageKey, () => { open.value = readOpen() })
 
 function toggle() {
   open.value = !open.value
-  try { localStorage.setItem(lsKey.value, open.value ? '0' : '1') } catch { /* 저장 불가 환경에서는 세션 내 토글만 동작 */ }
+  try { localStorage.setItem(lsKey.value, open.value ? '1' : '0') } catch { /* 저장 불가 환경에서는 세션 내 토글만 동작 */ }
 }
 </script>
