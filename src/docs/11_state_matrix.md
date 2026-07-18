@@ -20,6 +20,7 @@
 | `PUT /rounds/:id/finalize` | 404 | 404 | **204**¹ | 404 |
 | `POST /rounds/:id/calculate` | 404 | 400 | **200** | 400 |
 | `POST /rounds/:id/auto-recommend` | 404 | 400 | **200** | 400 |
+| `POST /rounds/:id/auto-recommend/univ/:univ_id` | 404 | 400 | **200** | 400 |
 | `PUT /results/:sid/:tid/:rid/recommend` | 404 | 400 | **204**³ | 400 |
 | `PUT /results/:sid/:tid/:rid/unrecommend` | 404 | 400 | **204** | 400 |
 | `PUT /applications/:sid/:tid/:rid/abandon` | 404 | 400 | 400 | **204**⁴ |

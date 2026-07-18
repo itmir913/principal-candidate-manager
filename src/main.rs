@@ -623,6 +623,7 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/finalize", put(handlers::rounds::finalize_round))
         .route("/rounds/:id/calculate", post(handlers::scoring::calculate_scores))
         .route("/rounds/:id/auto-recommend", post(handlers::scoring::auto_recommend_results))
+        .route("/rounds/:id/auto-recommend/univ/:univ_id", post(handlers::scoring::auto_recommend_results_univ))
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
         .route("/rounds/:id/summary/export", get(handlers::scoring::export_round_summary))

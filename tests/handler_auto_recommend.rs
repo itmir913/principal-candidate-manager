@@ -326,8 +326,9 @@ async fn auto_recommend_unlimited_quota() {
     assert!(get_recommended(&pool, s3, tid, rid).await);
 }
 
-/// 8. 대학 total_quota 초과: 두 모집단위(각 정원 1) 합산이 대학 정원 1 초과
-///    → 그 대학 두 모집단위 전부 manual + results 불변, 타 대학 모집단위는 정상 확정
+/// 8. 대학 total_quota 초과 + 경계 동점: 두 모집단위(각 정원 1) 합산 2명이 대학 정원 1 초과.
+///    두 후보는 대학 전체 순위가 동점(1위)이므로 2단계 대학 컷에서 원자 처리 →
+///    아무도 확정되지 않고 **대학 단위** manual 1건. 타 대학 모집단위는 정상 확정.
 #[tokio::test]
 async fn auto_recommend_univ_total_quota_exceeded() {
     let pool = common::create_test_pool().await;
@@ -354,8 +355,12 @@ async fn auto_recommend_univ_total_quota_exceeded() {
 
     let res = call_auto(&pool, rid).await;
 
-    // A대 두 모집단위 → manual (auto_count=2 > total_quota=1)
-    assert_eq!(res.manual.len(), 2, "A대 모집단위 2개 manual");
+    // A대 → 대학 단위 manual 1건 (대학 전체 1위 동점 2명이 잔여 1석 경합)
+    assert_eq!(res.manual.len(), 1, "A대 대학 단위 manual 1건");
+    assert_eq!(res.manual[0].track_id, None, "대학 단위 항목은 track_id 없음");
+    assert_eq!(res.manual[0].univ_name, "A대");
+    assert!(res.manual[0].reason.contains("동점"), "사유: {}", res.manual[0].reason);
+    assert!(res.manual[0].reason.contains("대학 정원 1명"), "사유에 대학 정원: {}", res.manual[0].reason);
     // B대 모집단위 → confirmed
     assert_eq!(res.confirmed.len(), 1, "B대 모집단위 confirmed");
     assert_eq!(res.confirmed[0].count, 1);
@@ -414,4 +419,490 @@ async fn auto_recommend_skip_no_candidates_or_exhausted() {
 
     assert_eq!(res.confirmed.len(), 0, "아무 모집단위도 confirmed 없음");
     assert_eq!(res.manual.len(), 0, "아무 모집단위도 manual 없음");
+}
+
+// ── B단계: 동점 그룹 원자적 채움 + 대학 전체 순위 컷 ──────────────
+
+use principal_candidate_manager::handlers::scoring::{
+    auto_recommend_results_univ, fill_by_rank_groups, TieBoundary,
+};
+
+/// 졸업생(is_enrolled=0). 스키마 CHECK: 졸업생은 grade/class_no/seq_no NULL + grad_year NOT NULL
+async fn new_graduate(pool: &SqlitePool, code: &str, grad_year: i64) -> i64 {
+    sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES (?, ?, 0, ?) RETURNING id",
+    )
+    .bind(code)
+    .bind(code)
+    .bind(grad_year)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// 대학 재학생 우선 ON. 트리거 "univ prioritize=1 requires track prioritize=1" 때문에
+/// 소속 모집단위를 먼저 ON 으로 바꾼 뒤 대학을 켠다.
+async fn set_univ_prioritize(pool: &SqlitePool, univ_id: i64) {
+    sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = 1 WHERE univ_id = ?")
+        .bind(univ_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(univ_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn call_auto_univ(pool: &SqlitePool, rid: i64, uid: i64) -> AutoRecommendResponse {
+    let st = common::make_state(pool.clone());
+    match auto_recommend_results_univ(State(st), Path((rid, uid))).await {
+        Ok(Json(v)) => v,
+        Err((s, msg)) => panic!("auto_recommend_results_univ 실패: {} — {}", s, msg),
+    }
+}
+
+/// 지원자 1명 등록 + 결과 생성 (ranking = 대학 전체 순위, total_score = 모집단위 순위 결정)
+async fn app_result(
+    pool: &SqlitePool,
+    sid: i64,
+    tid: i64,
+    rid: i64,
+    ranking: i64,
+    total_score: i64,
+) {
+    new_application(pool, sid, tid, rid, false).await;
+    new_result(pool, sid, tid, rid, Some(ranking), total_score, false).await;
+}
+
+// ── 헬퍼 단위 테스트: fill_by_rank_groups ─────────────────────────
+
+/// 무제한(None) → 전원 확정, 수동 없음
+#[test]
+fn fill_unlimited_confirms_all() {
+    let items = vec![(1, 'a'), (2, 'b'), (2, 'c')];
+    let out = fill_by_rank_groups(&items, None);
+    assert_eq!(out.confirmed, vec!['a', 'b', 'c']);
+    assert_eq!(out.tie, None);
+}
+
+/// 잔여 0 이하 → 아무도 확정 안 됨, 수동 없음 (정원 소진은 오류 아님)
+#[test]
+fn fill_zero_remaining_confirms_none() {
+    let items = vec![(1, 'a')];
+    assert!(fill_by_rank_groups(&items, Some(0)).confirmed.is_empty());
+    assert_eq!(fill_by_rank_groups(&items, Some(0)).tie, None);
+    assert!(fill_by_rank_groups(&items, Some(-3)).confirmed.is_empty());
+    assert_eq!(fill_by_rank_groups(&items, Some(-3)).tie, None);
+}
+
+/// 정원이 후보보다 많음 → 전원 확정
+#[test]
+fn fill_quota_exceeds_candidates() {
+    let items = vec![(1, 'a'), (2, 'b')];
+    let out = fill_by_rank_groups(&items, Some(5));
+    assert_eq!(out.confirmed, vec!['a', 'b']);
+    assert_eq!(out.tie, None);
+}
+
+/// 깨끗한 경계(동점 아님): [1,2,3] 정원 2 → 상위 2명 확정, 수동 불필요
+#[test]
+fn fill_clean_boundary_no_tie() {
+    let items = vec![(1, 'a'), (2, 'b'), (3, 'c')];
+    let out = fill_by_rank_groups(&items, Some(2));
+    assert_eq!(out.confirmed, vec!['a', 'b']);
+    assert_eq!(out.tie, None, "남은자리 0 — 깨끗한 경계");
+}
+
+/// 깨끗한 경계(동점 그룹이 정확히 정원까지): [1,2,2,4] 정원 3 → 3명 확정, 수동 불필요
+#[test]
+fn fill_clean_boundary_after_tie_group() {
+    let items = vec![(1, 'a'), (2, 'b'), (2, 'c'), (4, 'd')];
+    let out = fill_by_rank_groups(&items, Some(3));
+    assert_eq!(out.confirmed, vec!['a', 'b', 'c']);
+    assert_eq!(out.tie, None, "동점 그룹이 정원에 정확히 맞음 — 수동 불필요");
+}
+
+/// 동점이 경계를 가름: [1,2,2,4] 정원 2 → 1위만 확정, 2위 동점 그룹은 수동
+#[test]
+fn fill_tie_splits_boundary_confirms_above() {
+    let items = vec![(1, 'a'), (2, 'b'), (2, 'c'), (4, 'd')];
+    let out = fill_by_rank_groups(&items, Some(2));
+    assert_eq!(out.confirmed, vec!['a'], "동점 위까지는 자동 확정 (전체 차단 아님)");
+    assert_eq!(out.tie, Some(TieBoundary { rank: 2, free: 1, contenders: 2 }));
+}
+
+/// 최상위가 동점: [1,1,1] 정원 2 → 아무도 확정 안 됨 + 수동
+#[test]
+fn fill_top_tie_confirms_none() {
+    let items = vec![(1, 'a'), (1, 'b'), (1, 'c')];
+    let out = fill_by_rank_groups(&items, Some(2));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 3 }));
+}
+
+// ── 1단계(모집단위) 동점 그룹 원자 처리 ──────────────────────────
+
+/// 정원 2, 모집단위 순위 [1,2,2,4] → 1위만 확정, 2위 동점 2명은 수동.
+/// (구 동작: 트랙 전체 Manual — 0명 확정. B단계에서 상위 확정으로 바뀜.)
+#[tokio::test]
+async fn auto_recommend_track_tie_confirms_above_group() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await;
+    let tid = new_track(&pool, univ, "컴공", Some(2)).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let s4 = new_student(&pool, "S4", 1, 1, 4).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, tid, rid, 1, 400_000).await;
+    app_result(&pool, s2, tid, rid, 2, 300_000).await;
+    app_result(&pool, s3, tid, rid, 2, 300_000).await;
+    app_result(&pool, s4, tid, rid, 4, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.confirmed.len(), 1);
+    assert_eq!(res.confirmed[0].count, 1, "1위 1명만 확정");
+    assert_eq!(res.manual.len(), 1);
+    assert_eq!(res.manual[0].track_id, Some(tid));
+    let reason = &res.manual[0].reason;
+    assert!(reason.contains("2위"), "사유에 순위: {}", reason);
+    assert!(reason.contains("1석"), "사유에 잔여석: {}", reason);
+    assert!(reason.contains("2명"), "사유에 경합 인원: {}", reason);
+
+    assert!(get_recommended(&pool, s1, tid, rid).await);
+    assert!(!get_recommended(&pool, s2, tid, rid).await);
+    assert!(!get_recommended(&pool, s3, tid, rid).await);
+    assert!(!get_recommended(&pool, s4, tid, rid).await);
+}
+
+/// 정원 2, 모집단위 순위 [1,1,1] → 최상위 3명이 2석 경합 → 아무도 확정 안 됨 + 수동
+#[tokio::test]
+async fn auto_recommend_track_top_tie_confirms_none() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await;
+    let tid = new_track(&pool, univ, "컴공", Some(2)).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, tid, rid, 1, 300_000).await;
+    app_result(&pool, s2, tid, rid, 1, 300_000).await;
+    app_result(&pool, s3, tid, rid, 1, 300_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.confirmed.len(), 0);
+    assert_eq!(res.manual.len(), 1);
+    assert!(res.manual[0].reason.contains("1위"), "사유: {}", res.manual[0].reason);
+    for s in [s1, s2, s3] {
+        assert!(!get_recommended(&pool, s, tid, rid).await);
+    }
+}
+
+/// 정원 3, 모집단위 순위 [1,2,2,4] → 동점 그룹이 정원에 정확히 맞음 → 3명 확정, 수동 없음
+#[tokio::test]
+async fn auto_recommend_track_tie_exactly_fits_quota() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await;
+    let tid = new_track(&pool, univ, "컴공", Some(3)).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let s4 = new_student(&pool, "S4", 1, 1, 4).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, tid, rid, 1, 400_000).await;
+    app_result(&pool, s2, tid, rid, 2, 300_000).await;
+    app_result(&pool, s3, tid, rid, 2, 300_000).await;
+    app_result(&pool, s4, tid, rid, 4, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0, "깨끗한 경계 — 수동 불필요");
+    assert_eq!(res.confirmed[0].count, 3);
+    assert!(get_recommended(&pool, s3, tid, rid).await);
+    assert!(!get_recommended(&pool, s4, tid, rid).await);
+}
+
+/// 1단계 재학생 우선은 **트랙 플래그**를 쓴다: 트랙 prioritize=1, 대학 prioritize=0.
+/// 졸업생이 점수가 더 높아도 재학생이 모집단위 순위 상위 → 정원 1석은 재학생.
+#[tokio::test]
+async fn auto_recommend_track_phase_uses_track_prioritize_flag() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await; // 대학 prioritize 기본 0
+    let tid = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled) \
+         VALUES (?, '컴공', 1, 1) RETURNING id",
+    )
+    .bind(univ)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let grad = new_graduate(&pool, "G1", 2024).await;
+    let enr = new_student(&pool, "E1", 1, 1, 1).await;
+    let rid = new_closed_round(&pool).await;
+    // 대학 순위(ranking)는 대학 플래그 기준이라 점수순: 졸업생 1위, 재학생 2위
+    app_result(&pool, grad, tid, rid, 1, 300_000).await;
+    app_result(&pool, enr, tid, rid, 2, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0);
+    assert_eq!(res.confirmed[0].count, 1);
+    assert!(get_recommended(&pool, enr, tid, rid).await, "트랙 플래그로 재학생이 상위");
+    assert!(!get_recommended(&pool, grad, tid, rid).await);
+}
+
+// ── 2단계(대학 전체 순위) 정원 컷 ────────────────────────────────
+
+/// 대학 정원 유한 + 트랙 무제한 여럿: 대학 전체 순위 상위 N 확정, N+1위 미추천 (경계 비동점)
+#[tokio::test]
+async fn auto_recommend_univ_cut_across_unlimited_tracks() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s2, t2, rid, 2, 200_000).await;
+    app_result(&pool, s3, t1, rid, 3, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0, "경계 비동점 — 수동 없음");
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 2, "대학 정원 2명까지만");
+    assert!(get_recommended(&pool, s1, t1, rid).await);
+    assert!(get_recommended(&pool, s2, t2, rid).await);
+    assert!(!get_recommended(&pool, s3, t1, rid).await, "대학 3위는 미추천");
+}
+
+/// 대학 경계 동점: 대학 정원 2, 대학 순위 [1,2,2] → 1위만 확정, 2위 동점은 대학 단위 수동
+#[tokio::test]
+async fn auto_recommend_univ_cut_tie_at_boundary() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s2, t1, rid, 2, 200_000).await;
+    app_result(&pool, s3, t2, rid, 2, 200_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 1, "대학 단위 manual 1건");
+    assert_eq!(res.manual[0].track_id, None);
+    assert_eq!(res.manual[0].track_name, None);
+    let reason = &res.manual[0].reason;
+    assert!(reason.contains("대학 전체 2위"), "사유에 순위: {}", reason);
+    assert!(reason.contains("잔여 1석"), "사유에 잔여석: {}", reason);
+    assert!(reason.contains("2명 경합"), "사유에 경합 인원: {}", reason);
+    assert!(reason.contains("대학 정원 2명"), "사유에 대학 정원: {}", reason);
+
+    assert!(get_recommended(&pool, s1, t1, rid).await, "동점 위는 자동 확정");
+    assert!(!get_recommended(&pool, s2, t1, rid).await);
+    assert!(!get_recommended(&pool, s3, t2, rid).await);
+}
+
+/// 대학 무제한 → 2단계 컷 미발동, 트랙 결과가 곧 최종
+#[tokio::test]
+async fn auto_recommend_unlimited_univ_no_cut() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await;
+    let t1 = new_track(&pool, univ, "컴공", Some(1)).await;
+    let t2 = new_track(&pool, univ, "전기", Some(1)).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s2, t2, rid, 2, 200_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0);
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 2);
+    assert!(get_recommended(&pool, s1, t1, rid).await);
+    assert!(get_recommended(&pool, s2, t2, rid).await);
+}
+
+/// 이전 라운드 univ_used 반영: total_quota=2, 이전 라운드 1명 확정 → 잔여 1석
+#[tokio::test]
+async fn auto_recommend_univ_cut_counts_previous_rounds() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let rid1 = new_finalized_round(&pool).await;
+    let sp = new_student(&pool, "SP", 1, 1, 1).await;
+    new_application(&pool, sp, t1, rid1, false).await;
+    new_result(&pool, sp, t1, rid1, Some(1), 500_000, true).await;
+
+    let rid2 = new_closed_round(&pool).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 2).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 3).await;
+    app_result(&pool, s1, t1, rid2, 1, 300_000).await;
+    app_result(&pool, s2, t1, rid2, 2, 200_000).await;
+
+    let res = call_auto(&pool, rid2).await;
+
+    assert_eq!(res.manual.len(), 0, "경계 비동점");
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 1, "잔여 1석만");
+    assert!(get_recommended(&pool, s1, t1, rid2).await);
+    assert!(!get_recommended(&pool, s2, t1, rid2).await);
+}
+
+/// 같은 학생이 두 모집단위 지원(D3): 행 단위로 각각 정원 소비, 대학 정원도 행 수로 카운트
+#[tokio::test]
+async fn auto_recommend_same_student_two_tracks_counts_rows() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(1)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s1, t2, rid, 2, 200_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0);
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 1, "대학 정원 1 — 행 1개만 확정");
+    assert!(get_recommended(&pool, s1, t1, rid).await, "대학 1위 행");
+    assert!(!get_recommended(&pool, s1, t2, rid).await);
+}
+
+/// 대학 컷의 재학생 우선은 **대학 플래그**를 쓴다.
+/// 대학 prioritize=1, 트랙 무제한 → 점수가 낮아도 재학생이 대학 잔여석 차지.
+#[tokio::test]
+async fn auto_recommend_univ_cut_uses_univ_prioritize_flag() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(1)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    set_univ_prioritize(&pool, univ).await;
+    let grad = new_graduate(&pool, "G1", 2024).await;
+    let enr = new_student(&pool, "E1", 1, 1, 1).await;
+    let rid = new_closed_round(&pool).await;
+    // 대학 prioritize=1 → 재학생이 대학 1위, 졸업생 2위 (점수는 졸업생이 높음)
+    app_result(&pool, enr, t1, rid, 1, 100_000).await;
+    app_result(&pool, grad, t2, rid, 2, 300_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0);
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 1);
+    assert!(get_recommended(&pool, enr, t1, rid).await, "대학 플래그로 재학생 우선");
+    assert!(!get_recommended(&pool, grad, t2, rid).await);
+}
+
+/// 한 대학에 트랙 동점 manual 과 대학 동점 manual 이 동시에 날 수 있다 — 둘 다 보고
+#[tokio::test]
+async fn auto_recommend_reports_both_track_and_univ_manual() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    // t1: 정원 1, 후보 2명 동점 → 트랙 동점 manual (확정 0)
+    let t1 = new_track(&pool, univ, "컴공", Some(1)).await;
+    // t2: 무제한, 후보 3명 (대학 순위 1 / 2 동점 / 2 동점)
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let a1 = new_student(&pool, "A1", 1, 1, 1).await;
+    let a2 = new_student(&pool, "A2", 1, 1, 2).await;
+    let b1 = new_student(&pool, "B1", 1, 1, 3).await;
+    let b2 = new_student(&pool, "B2", 1, 1, 4).await;
+    let b3 = new_student(&pool, "B3", 1, 1, 5).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, a1, t1, rid, 4, 200_000).await;
+    app_result(&pool, a2, t1, rid, 4, 200_000).await;
+    app_result(&pool, b1, t2, rid, 1, 500_000).await;
+    app_result(&pool, b2, t2, rid, 2, 300_000).await;
+    app_result(&pool, b3, t2, rid, 2, 300_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 2, "트랙 manual + 대학 manual");
+    assert!(res.manual.iter().any(|m| m.track_id == Some(t1)), "트랙 동점 manual");
+    assert!(res.manual.iter().any(|m| m.track_id.is_none()), "대학 동점 manual");
+    // 대학 정원 2, 대학 순위 1위(b1) 확정 → 잔여 1석에 2위 동점 2명 경합 → 수동
+    assert!(get_recommended(&pool, b1, t2, rid).await);
+    assert!(!get_recommended(&pool, b2, t2, rid).await);
+    assert!(!get_recommended(&pool, b3, t2, rid).await);
+    assert!(!get_recommended(&pool, a1, t1, rid).await);
+    assert!(!get_recommended(&pool, a2, t1, rid).await);
+}
+
+// ── 대학별 개별 자동 추천 버튼 ───────────────────────────────────
+
+/// 대학별 버튼: 지정 대학만 처리, 다른 대학 results 무변경
+#[tokio::test]
+async fn auto_recommend_univ_scoped_only_touches_that_univ() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ_a = new_univ(&pool, "A대", None).await;
+    let ta = new_track(&pool, univ_a, "컴공", Some(5)).await;
+    let univ_b = new_univ(&pool, "B대", None).await;
+    let tb = new_track(&pool, univ_b, "수학", Some(5)).await;
+    let sa = new_student(&pool, "A1", 1, 1, 1).await;
+    let sb = new_student(&pool, "B1", 1, 1, 2).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, sa, ta, rid, 1, 300_000).await;
+    app_result(&pool, sb, tb, rid, 1, 300_000).await;
+
+    let res = call_auto_univ(&pool, rid, univ_a).await;
+
+    assert_eq!(res.confirmed.len(), 1);
+    assert_eq!(res.confirmed[0].univ_name, "A대");
+    assert!(get_recommended(&pool, sa, ta, rid).await);
+    assert!(!get_recommended(&pool, sb, tb, rid).await, "B대 무변경");
+}
+
+/// 대학별 버튼: 없는 대학 → 404 (Fail-Fast, 빈 결과로 조용히 성공하지 않음)
+#[tokio::test]
+async fn auto_recommend_univ_scoped_unknown_univ_404() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let rid = new_closed_round(&pool).await;
+    let st = common::make_state(pool.clone());
+    let err = auto_recommend_results_univ(State(st), Path((rid, 9999)))
+        .await
+        .err()
+        .expect("없는 대학은 404");
+    assert_eq!(err.0, axum::http::StatusCode::NOT_FOUND);
+}
+
+/// 대학별 버튼도 라운드 상태를 검증한다 (FINALIZED → 400)
+#[tokio::test]
+async fn auto_recommend_univ_scoped_rejects_non_closed_round() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", None).await;
+    let rid = new_finalized_round(&pool).await;
+    let st = common::make_state(pool.clone());
+    let err = auto_recommend_results_univ(State(st), Path((rid, univ)))
+        .await
+        .err()
+        .expect("CLOSED 아닌 라운드는 400");
+    assert_eq!(err.0, axum::http::StatusCode::BAD_REQUEST);
 }
