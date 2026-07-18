@@ -367,12 +367,12 @@
                   </template>
                 </span>
                 <button
-                  v-if="selected.status === 'CLOSED' && group.univId != null"
+                  v-if="selected.status === 'CLOSED' && univAutoButtonKeys.has(key)"
                   class="text-base font-medium rounded-lg disabled:opacity-40"
                   style="padding: 6px 14px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; cursor: pointer;"
                   :disabled="autoRecommendActing"
                   @click="handleAutoRecommendUniv(group)"
-                >이 대학 자동 추천</button>
+                >{{ group.univName }} 전체 자동 추천</button>
               </div>
               <div class="rounded-xl overflow-hidden"
                 style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
@@ -692,6 +692,20 @@ const resultsByUnivOnly = computed(() => {
 })
 
 const resultsByView = computed(() => rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value)
+
+// 대학별 자동 추천 버튼은 대학 단위 동작이다. 모집단위별 보기에서는 그룹이 모집단위마다
+// 나뉘므로 각 대학의 첫 그룹에만 노출한다 — 같은 버튼이 모집단위 수만큼 반복되어
+// "이 모집단위만 처리"로 오해되는 것을 막는다.
+const univAutoButtonKeys = computed(() => {
+  const seen = new Set()
+  const keys = new Set()
+  for (const [key, g] of Object.entries(resultsByView.value)) {
+    if (g.univId == null || seen.has(g.univId)) continue
+    seen.add(g.univId)
+    keys.add(key)
+  }
+  return keys
+})
 
 const tieSet = computed(() => {
   const set = new Set()
