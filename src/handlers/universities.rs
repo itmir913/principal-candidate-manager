@@ -297,6 +297,19 @@ pub async fn create_track(
     let enrolled = body.prioritize_enrolled as i64;
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // 불변식 가드: 대학=1이면 트랙도 반드시 재학생 우선
+    if !body.prioritize_enrolled {
+        let univ_prioritize: bool = sqlx::query_scalar(
+            "SELECT prioritize_enrolled = 1 FROM universities WHERE id = ?",
+        )
+        .bind(univ_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if univ_prioritize {
+            return Err((StatusCode::BAD_REQUEST, "재학생 우선 대학의 모집단위는 재학생 우선이어야 합니다".into()));
+        }
+    }
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled)
          VALUES (?, ?, ?, ?) RETURNING id",
@@ -353,6 +366,21 @@ pub async fn update_track(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.prioritize_enrolled {
+        // 불변식 가드: 대학=1이면 트랙 0으로 다운그레이드 금지
+        if !v {
+            let univ_prioritize: bool = sqlx::query_scalar(
+                "SELECT u.prioritize_enrolled = 1
+                 FROM univ_tracks ut JOIN universities u ON u.id = ut.univ_id
+                 WHERE ut.id = ?",
+            )
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if univ_prioritize {
+                return Err((StatusCode::BAD_REQUEST, "재학생 우선 대학의 모집단위는 재학생 우선을 해제할 수 없습니다".into()));
+            }
+        }
         sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
             .bind(v as i64).bind(id).execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

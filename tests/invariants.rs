@@ -186,9 +186,10 @@ async fn run_ranking_case(students: &[(i64, bool)], prioritize: bool) -> Vec<i64
     .await
     .unwrap();
     let tid: i64 = sqlx::query_scalar(
-        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', ?) RETURNING id",
     )
     .bind(univ_id)
+    .bind(prioritize as i64)
     .fetch_one(&pool)
     .await
     .unwrap();

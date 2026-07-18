@@ -5,7 +5,8 @@ use axum::{
     http::StatusCode,
 };
 use principal_candidate_manager::handlers::universities::{
-    delete_track, delete_university, export_quota_stats, ExportQuotaQuery,
+    create_track, delete_track, delete_university, export_quota_stats, update_track,
+    CreateTrackBody, ExportQuotaQuery, UpdateTrackBody,
 };
 
 // ── 공통 픽스처 ────────────────────────────────────────────────────
@@ -272,4 +273,153 @@ async fn export_quota_stats_empty_db_returns_header_only() {
     assert_eq!(rows.len(), 1, "빈 DB → 헤더 행만");
     assert_eq!(rows[0][0], "대학명", "첫 번째 헤더 열");
     assert!(cd.contains("전체_추천현황"), "빈 DB 파일명: {cd}");
+}
+
+// ── prioritize_enrolled 불변식 트리거 (DB 레벨) ────────────────────
+
+#[tokio::test]
+async fn trigger_cascade_univ_0_to_1_updates_all_tracks() {
+    // 대학 prioritize 0→1 UPDATE 시 그 대학의 모든 트랙이 1로 cascade되어야 함
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    // 트랙 2개를 prioritize=0으로 생성
+    let tid1 = insert_track(&pool, uid, "컴공").await;
+    let tid2 = insert_track(&pool, uid, "전자").await;
+
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+
+    let pe1: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid1).fetch_one(&pool).await.unwrap();
+    let pe2: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid2).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe1, 1, "트랙1이 cascade되어야 함");
+    assert_eq!(pe2, 1, "트랙2이 cascade되어야 함");
+}
+
+#[tokio::test]
+async fn trigger_insert_guard_blocks_track_prioritize_0_when_univ_1() {
+    // 대학=1인 상태에서 트랙 prioritize=0 INSERT → 에러 발생
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    let res = sqlx::query(
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', 0)",
+    )
+    .bind(uid).execute(&pool).await;
+    assert!(res.is_err(), "대학=1에서 트랙 prioritize=0 INSERT는 실패해야 함");
+}
+
+#[tokio::test]
+async fn trigger_update_guard_blocks_track_prioritize_downgrade_when_univ_1() {
+    // 대학=1에서 트랙 prioritize=0으로 UPDATE → 에러 발생
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // 대학=1이므로 트랙도 prioritize=1로 직접 삽입
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', 1) RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+
+    let res = sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = 0 WHERE id = ?")
+        .bind(tid).execute(&pool).await;
+    assert!(res.is_err(), "대학=1에서 트랙 prioritize=0 UPDATE는 실패해야 함");
+}
+
+#[tokio::test]
+async fn trigger_insert_ok_when_univ_1_and_track_1() {
+    // 대학=1이어도 트랙 prioritize=1 INSERT는 정상 통과
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    let res = sqlx::query(
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', 1)",
+    )
+    .bind(uid).execute(&pool).await;
+    assert!(res.is_ok(), "트랙 prioritize=1 INSERT는 통과해야 함");
+}
+
+#[tokio::test]
+async fn trigger_univ_1_to_0_allows_track_edit() {
+    // 대학 1→0으로 변경 후 트랙 prioritize=0으로 UPDATE 가능
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // 대학=1이므로 트랙도 prioritize=1로 직접 삽입
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', 1) RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+
+    // 대학을 1→0으로
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 0 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+
+    // 이제 트랙 0으로 변경 가능해야 함
+    let res = sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = 0 WHERE id = ?")
+        .bind(tid).execute(&pool).await;
+    assert!(res.is_ok(), "대학=0이면 트랙 0 UPDATE 가능해야 함");
+}
+
+// ── create_track / update_track 핸들러 가드 ────────────────────────
+
+#[tokio::test]
+async fn create_track_handler_400_when_univ_prioritize_and_track_0() {
+    // 대학=1인데 트랙 prioritize=false로 생성 → 핸들러에서 친절한 400
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    let body = CreateTrackBody {
+        track_name: "컴공".to_string(),
+        unit_quota: None,
+        prioritize_enrolled: false,
+    };
+    let res = create_track(
+        State(common::make_state(pool)),
+        axum::extract::Path(uid),
+        axum::Json(body),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_track_handler_400_when_univ_prioritize_and_downgrade() {
+    // 대학=1인 트랙을 prioritize=false로 UPDATE → 핸들러 400
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, prioritize_enrolled) VALUES (?, '컴공', 1) RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+
+    let body = UpdateTrackBody {
+        track_name: None,
+        unit_quota: None,
+        prioritize_enrolled: Some(false),
+    };
+    let res = update_track(
+        State(common::make_state(pool)),
+        axum::extract::Path(tid),
+        axum::Json(body),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }

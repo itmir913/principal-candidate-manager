@@ -255,7 +255,7 @@ async fn full_two_round_lifecycle() {
     let (total, rank, _) = result_row(&pool, s2, t_comp, r1).await;
     assert_eq!((total, rank), (12_000_000, Some(2)), "이순신 120점 2위");
     let (total, rank, _) = result_row(&pool, g1, t_mech, r1).await;
-    assert_eq!((total, rank), (3_000_000, Some(1)), "김졸업 30점 기계 1위");
+    assert_eq!((total, rank), (3_000_000, Some(3)), "김졸업 30점 기계 — 대학 전체 3위");
 
     // ── 6. 추천: 1위 확정, 정원(컴공 1명) 초과는 409 ──────────────
     let status = recommend_result(st(&pool), Path((s1, t_comp, r1))).await.unwrap();
@@ -309,7 +309,7 @@ async fn full_two_round_lifecycle() {
     let rows = excel::parse_xlsx_all_rows_raw(&bytes).unwrap();
     assert_eq!(rows.len(), 4, "헤더 + 지원자 3행");
     let header = &rows[0];
-    for h in ["순위", "대학", "모집단위", "학생명", "내신", "면접", "총점", "추천", "포기"] {
+    for h in ["대학 순위", "모집단위 순위", "대학", "모집단위", "학생명", "내신", "면접", "총점", "추천", "포기"] {
         assert!(header.iter().any(|c| c == h), "export 헤더에 '{}' 누락: {:?}", h, header);
     }
     // 홍길동 행: 총점 145, 추천 + 포기 표기

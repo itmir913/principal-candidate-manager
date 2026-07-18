@@ -5,10 +5,11 @@ use axum::{
     http::StatusCode,
 };
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
+use axum::extract::Query;
 use principal_candidate_manager::handlers::scoring::{
-    calc_area_score, calculate_scores, export_results, lookup_range_score, recommend_result,
-    teacher_get_results, unrecommend_result,
-    AreaRow, ResultRow, StudentTrackCtx,
+    calc_area_score, calculate_scores, export_results, get_results, lookup_range_score,
+    recommend_result, teacher_get_results, unrecommend_result,
+    AreaRow, ResultQuery, ResultRow, StudentTrackCtx,
 };
 use principal_candidate_manager::score::Score;
 
@@ -1321,6 +1322,7 @@ fn result_row_corrupt_score_detail_serialization_fails() {
         total_score: Score::from_raw(0),
         score_detail: "{not valid json".to_string(),
         ranking: None,
+        track_rank: None,
         recommended: false,
         abandoned: false,
         student_code: "S001".to_string(),
@@ -1349,6 +1351,7 @@ fn result_row_valid_score_detail_serializes_correctly() {
         total_score: Score::from_raw(500_000),
         score_detail: r#"{"1": 300000, "2": 200000}"#.to_string(),
         ranking: Some(1),
+        track_rank: None,
         recommended: false,
         abandoned: false,
         student_code: "S001".to_string(),
@@ -1707,4 +1710,191 @@ fn score_add_overflow_panics() {
 fn score_sum_overflow_panics() {
     let scores = vec![Score::from_raw(i64::MAX), Score::from_raw(1)];
     let _: Score = scores.into_iter().sum();
+}
+
+// ── 대학 전체 순위(univ 파티션) 테스트 ───────────────────────────────
+
+/// 학생 삽입 헬퍼 (is_enrolled=1)
+async fn insert_enrolled_student(pool: &sqlx::SqlitePool, code: &str, seq: i64) -> i64 {
+    sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES (?, '테스트', 1, 1, ?, 1) RETURNING id",
+    )
+    .bind(code).bind(seq)
+    .fetch_one(pool).await.unwrap()
+}
+
+#[tokio::test]
+async fn univ_ranking_crosses_track_boundary() {
+    // 한국대 2트랙: 전자학생(800점) vs 컴공학생(600점). 같은 대학이므로 전자1위, 컴공2위
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid_cs: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let tid_ee: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '전자', 5) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01T00:00:00Z') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('수동점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let sid_cs = insert_enrolled_student(&pool, "S001", 1).await;
+    let sid_ee = insert_enrolled_student(&pool, "S002", 2).await;
+
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '600000')")
+        .bind(sid_cs).bind(area_id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '800000')")
+        .bind(sid_ee).bind(area_id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid_cs).bind(tid_cs).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid_ee).bind(tid_ee).bind(rid).execute(&pool).await.unwrap();
+
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let rank_cs: Option<i64> = sqlx::query_scalar(
+        "SELECT ranking FROM results WHERE student_id = ? AND round_id = ?",
+    ).bind(sid_cs).bind(rid).fetch_one(&pool).await.unwrap();
+    let rank_ee: Option<i64> = sqlx::query_scalar(
+        "SELECT ranking FROM results WHERE student_id = ? AND round_id = ?",
+    ).bind(sid_ee).bind(rid).fetch_one(&pool).await.unwrap();
+
+    assert_eq!(rank_ee, Some(1), "전자(높은 점수)가 대학 전체 1위여야 함");
+    assert_eq!(rank_cs, Some(2), "컴공(낮은 점수)이 대학 전체 2위여야 함");
+}
+
+#[tokio::test]
+async fn univ_ranking_ties_get_same_rank() {
+    // 두 학생이 같은 점수 → 동점이므로 같은 순위, 다음 순위는 건너뜀
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let sid1 = insert_enrolled_student(&pool, "S001", 1).await;
+    let sid2 = insert_enrolled_student(&pool, "S002", 2).await;
+    let sid3 = insert_enrolled_student(&pool, "S003", 3).await;
+
+    let same_score = 700_000i64;
+    let low_score  = 500_000i64;
+    for (sid, sc) in [(sid1, same_score), (sid2, same_score), (sid3, low_score)] {
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, ?)")
+            .bind(sid).bind(area_id).bind(sc.to_string()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let r1: Option<i64> = sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
+        .bind(sid1).bind(rid).fetch_one(&pool).await.unwrap();
+    let r2: Option<i64> = sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
+        .bind(sid2).bind(rid).fetch_one(&pool).await.unwrap();
+    let r3: Option<i64> = sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
+        .bind(sid3).bind(rid).fetch_one(&pool).await.unwrap();
+
+    assert_eq!(r1, Some(1), "동점 1위");
+    assert_eq!(r2, Some(1), "동점 1위 (같은 점수)");
+    assert_eq!(r3, Some(3), "3위 (1,2위 건너뜀 — 표준 경쟁 순위)");
+}
+
+#[tokio::test]
+async fn get_results_returns_track_rank() {
+    // get_results 응답에 track_rank 필드가 포함되어야 함
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let sid1 = insert_enrolled_student(&pool, "S001", 1).await;
+    let sid2 = insert_enrolled_student(&pool, "S002", 2).await;
+
+    for (sid, sc) in [(sid1, 800_000i64), (sid2, 600_000i64)] {
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, ?)")
+            .bind(sid).bind(area_id).bind(sc.to_string()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let axum::Json(rows) = get_results(
+        State(common::make_state(pool)),
+        Path(rid),
+        Query(ResultQuery { track_id: None }),
+    ).await.unwrap();
+
+    assert!(rows.iter().all(|r| r.track_rank.is_some()), "모든 행에 track_rank가 있어야 함");
+    let row1 = rows.iter().find(|r| r.student_id == sid1).unwrap();
+    let row2 = rows.iter().find(|r| r.student_id == sid2).unwrap();
+    assert_eq!(row1.track_rank, Some(1), "높은 점수 학생의 track_rank=1");
+    assert_eq!(row2.track_rank, Some(2), "낮은 점수 학생의 track_rank=2");
+}
+
+#[tokio::test]
+async fn export_results_header_contains_univ_rank() {
+    // export_results 헤더에 "대학 순위"와 "모집단위 순위"가 포함되어야 함
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '500000')")
+        .bind(sid).bind(area_id).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_all_rows_raw(&bytes).unwrap();
+    let header = &rows[0];
+    assert!(header.contains(&"대학 순위".to_string()), "헤더에 '대학 순위' 포함: {:?}", header);
+    assert!(header.contains(&"모집단위 순위".to_string()), "헤더에 '모집단위 순위' 포함: {:?}", header);
 }
