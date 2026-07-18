@@ -23,7 +23,7 @@
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold" style="color: #1e293b;">라운드 목록</h2>
           <button
-            class="text-base font-medium rounded-lg disabled:opacity-40"
+            class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
             style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
             :disabled="hasOpenRound || loading"
             @click="handleOpenRound"
@@ -98,7 +98,7 @@
               <!-- 상태 액션 버튼 -->
               <template v-if="selected.status === 'OPEN'">
                 <button
-                  class="text-base font-medium rounded-lg disabled:opacity-40"
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
                   :disabled="roundActing"
                   @click="handleCloseRound(selected.id)"
@@ -106,13 +106,13 @@
               </template>
               <template v-else-if="selected.status === 'CLOSED'">
                 <button
-                  class="text-base font-medium rounded-lg disabled:opacity-40"
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
                   :disabled="roundActing"
                   @click="handleReopenRound(selected.id)"
                 >다시 열기</button>
                 <button
-                  class="text-base font-medium rounded-lg disabled:opacity-40"
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 4px 14px; border: 1px solid #d8b4fe; background: white; color: #7c3aed; cursor: pointer;"
                   :disabled="roundActing"
                   @click="handleFinalizeRound(selected.id)"
@@ -185,7 +185,7 @@
                 <span v-if="calcMsg" class="text-base font-medium"
                   :style="{ color: calcMsg.ok ? '#16a34a' : '#ef4444' }">{{ calcMsg.text }}</span>
                 <button
-                  class="text-base font-semibold rounded-lg disabled:opacity-40"
+                  class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 9px 18px; border: none; background: #4f46e5; color: white; cursor: pointer;"
                   :disabled="calcLoading || apps.length === 0"
                   @click="handleCalculate"
@@ -276,26 +276,26 @@
                 </option>
               </select>
               <button
-                class="text-base font-medium rounded-lg"
+                class="text-base font-medium rounded-lg whitespace-nowrap"
                 style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
                 @click="loadResults"
               >새로고침</button>
               <span style="color: #cbd5e1; user-select: none;">|</span>
               <button
                 v-if="selected.status === 'CLOSED'"
-                class="text-base font-semibold rounded-lg disabled:opacity-40"
+                class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
                 style="padding: 9px 16px; border: none; background: #d97706; color: white; cursor: pointer;"
                 :disabled="autoRecommendActing"
                 @click="handleAutoRecommend"
               >자동 추천 확정</button>
               <button
-                class="text-base font-medium rounded-lg disabled:opacity-40"
+                class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                 style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
                 :disabled="results.length === 0 || downloading"
                 @click="downloadExcel"
               >전체 지원자 결과 다운로드</button>
               <button
-                class="text-base font-medium rounded-lg disabled:opacity-40"
+                class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                 style="padding: 9px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
                 :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
                 @click="downloadSummary"
@@ -327,7 +327,7 @@
 
             <div v-if="results.length > 0" class="flex gap-2 mb-4">
               <button
-                class="text-base font-medium rounded-lg"
+                class="text-base font-medium rounded-lg whitespace-nowrap"
                 :style="{
                   padding: '6px 14px', cursor: 'pointer',
                   border: '1px solid',
@@ -338,7 +338,7 @@
                 @click="rankView = 'track'"
               >모집단위별 순위</button>
               <button
-                class="text-base font-medium rounded-lg"
+                class="text-base font-medium rounded-lg whitespace-nowrap"
                 :style="{
                   padding: '6px 14px', cursor: 'pointer',
                   border: '1px solid',
@@ -368,7 +368,7 @@
                 </span>
                 <button
                   v-if="selected.status === 'CLOSED' && univAutoButtonKeys.has(key)"
-                  class="text-base font-medium rounded-lg disabled:opacity-40"
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 6px 14px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; cursor: pointer;"
                   :disabled="autoRecommendActing"
                   @click="handleAutoRecommendUniv(group)"
@@ -431,14 +431,14 @@
                               <span class="text-base font-semibold" style="color: #16a34a;">추천 확정됨</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
-                                class="text-base rounded-lg ml-2"
+                                class="text-base rounded-lg ml-2 whitespace-nowrap"
                                 style="padding: 3px 10px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
                                 @click="handleUnrecommend(r)"
                               >추천 취소</button>
                             </template>
                             <button
                               v-else-if="selected.status === 'CLOSED' && !r.excluded"
-                              class="text-base font-semibold rounded-lg"
+                              class="text-base font-semibold rounded-lg whitespace-nowrap"
                               style="padding: 5px 12px; border: none; background: #16a34a; color: white; cursor: pointer;"
                               @click="handleRecommend(r)"
                             >추천 확정</button>
@@ -478,13 +478,13 @@
                                 />
                                 <div class="flex gap-1 justify-center" style="margin-top: 4px;">
                                   <button
-                                    class="text-base rounded-lg"
+                                    class="text-base rounded-lg whitespace-nowrap"
                                     style="padding: 3px 10px; border: none; background: #d97706; color: white; cursor: pointer;"
                                     :disabled="!excludeReasonDraft.trim()"
                                     @click="confirmExclude(r)"
                                   >확정</button>
                                   <button
-                                    class="text-base rounded-lg"
+                                    class="text-base rounded-lg whitespace-nowrap"
                                     style="padding: 3px 10px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
                                     @click="excludingKey = null"
                                   >취소</button>
