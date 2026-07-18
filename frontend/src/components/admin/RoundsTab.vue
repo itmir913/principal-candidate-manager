@@ -128,6 +128,29 @@
             </div>
           </div>
 
+          <!-- OPEN 라운드 담임 확정 현황 -->
+          <div
+            v-if="selected.status === 'OPEN' && confirmationStatus"
+            class="rounded-xl mb-5"
+            style="padding: 18px 22px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+          >
+            <p class="text-base font-semibold mb-3" style="color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">담임 입력 확정 현황</p>
+            <template v-if="confirmationStatus.classes.filter(c => !c.confirmed).length === 0">
+              <p class="text-base font-semibold" style="color: #15803d;">✓ 모든 학급이 입력을 확정했습니다</p>
+            </template>
+            <template v-else>
+              <p class="text-base mb-2" style="color: #475569;">
+                확정:
+                <span class="font-semibold" style="color: #1e293b;">
+                  {{ confirmationStatus.classes.filter(c => c.confirmed).length }} / {{ confirmationStatus.classes.length }} 학급
+                </span>
+              </p>
+              <p class="text-base" style="color: #d97706;">
+                미확정: {{ confirmationStatus.classes.filter(c => !c.confirmed).map(classLabel).join(', ') }}
+              </p>
+            </template>
+          </div>
+
           <HelpBox
             v-if="helpBox"
             :key="helpBox.key"
@@ -431,6 +454,7 @@ import {
   getQuotaStats,
   autoRecommend,
   blobErrMsg,
+  getRoundConfirmationStatus,
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
@@ -473,7 +497,8 @@ const quotaStats         = ref(null)
 const autoRecommendActing = ref(false)
 const autoRecommendResult = ref(null)
 
-const selectedTrackId = ref('')
+const selectedTrackId   = ref('')
+const confirmationStatus = ref(null)  // { classes: [...] } | null
 
 const subTabs = [
   { key: 'apps',    label: '지원 현황' },
@@ -616,11 +641,30 @@ async function loadRounds() {
   rounds.value = await getRounds()
 }
 
+function classLabel(c) {
+  if (c.grade === 0 && c.class_no === 0) return '졸업생 담당'
+  const base = `${c.grade}학년 ${c.class_no}반`
+  return c.teacher_name ? `${base} (${c.teacher_name})` : base
+}
+
+async function loadConfirmationStatus() {
+  if (!selected.value || selected.value.status !== 'OPEN') {
+    confirmationStatus.value = null
+    return
+  }
+  try {
+    confirmationStatus.value = await getRoundConfirmationStatus(selected.value.id)
+  } catch {
+    confirmationStatus.value = null
+  }
+}
+
 async function selectRound(r) {
   selected.value = r
   calcMsg.value = null
   autoRecommendResult.value = null
-  await Promise.all([loadApps(), loadResults(), loadAreas()])
+  confirmationStatus.value = null
+  await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
 }
 
 async function loadApps() {
@@ -670,9 +714,24 @@ async function handleOpenRound() {
 
 async function handleCloseRound(id) {
   if (roundActing.value) return
+
+  // 미확정 학급 조회
+  let closeMsg = '라운드를 종료하시겠습니까?\n담임교사의 입력이 차단되고, 모든 지원자의 점수가 계산됩니다.\n필요하면 "다시 열기"로 되돌릴 수 있습니다.'
+  try {
+    const status = await getRoundConfirmationStatus(id)
+    const unconfirmed = status.classes.filter(c => !c.confirmed)
+    if (unconfirmed.length > 0) {
+      const labels = unconfirmed.slice(0, 10).map(classLabel)
+      const extra = unconfirmed.length > 10 ? `\n외 ${unconfirmed.length - 10}곳` : ''
+      closeMsg += `\n\n⚠ 아직 입력을 확정하지 않은 학급이 있습니다:\n${labels.join(', ')}${extra}`
+    }
+  } catch {
+    closeMsg += '\n\n확정 현황을 불러오지 못했습니다'
+  }
+
   if (!(await dialog.confirm({
     title: '라운드 종료',
-    message: '라운드를 종료하시겠습니까?\n담임교사의 입력이 차단되고, 모든 지원자의 점수가 계산됩니다.\n필요하면 "다시 열기"로 되돌릴 수 있습니다.',
+    message: closeMsg,
     confirmText: '종료하기',
     level: 'warn',
   }))) return

@@ -216,6 +216,10 @@ export const scorePreview = (studentId, trackId) =>
 export const getQuotaStats = () =>
   axios.get('/api/universities/quota-stats').then(r => r.data)
 
+// ── 담임 확정 현황 ─────────────────────────────────────────────
+export const getRoundConfirmationStatus = (roundId) =>
+  axios.get(`/api/rounds/${roundId}/confirmation-status`).then(r => r.data)
+
 export const exportQuotaStats = (univId) =>
   axios.get('/api/universities/quota-stats/export', {
     responseType: 'blob',

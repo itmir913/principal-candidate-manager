@@ -177,6 +177,18 @@
                   미입력 학급
                 </p>
               </div>
+              <div class="flex-1 lg:flex-none rounded-xl text-center"
+                :style="unconfirmedCount > 0
+                  ? { padding: '16px', background: '#fffbeb' }
+                  : { padding: '16px', background: '#f0fdf4' }"
+              >
+                <p class="text-2xl font-bold" :style="unconfirmedCount > 0 ? { color: '#d97706' } : { color: '#16a34a' }">
+                  {{ unconfirmedCount > 0 ? `${unconfirmedCount}개` : '모두 확정' }}
+                </p>
+                <p class="text-base mt-0.5" :style="unconfirmedCount > 0 ? { color: '#d97706' } : { color: '#4ade80' }">
+                  미확정 학급
+                </p>
+              </div>
             </div>
 
             <!-- 테이블 -->
@@ -188,6 +200,7 @@
                     <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">학급</th>
                     <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">담임</th>
                     <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569;">지원자 수</th>
+                    <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569;">입력 확정</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,6 +223,45 @@
                         0명
                       </span>
                       <span v-else class="font-semibold" style="color: #1e293b;">{{ c.submitted }}명</span>
+                    </td>
+                    <td class="text-base text-center" style="padding: 14px 20px;">
+                      <span v-if="c.confirmed"
+                        class="font-semibold"
+                        style="padding: 3px 10px; border-radius: 999px; background: #f0fdf4; color: #16a34a;">
+                        ✓ 확정
+                      </span>
+                      <span v-else
+                        style="padding: 3px 10px; border-radius: 999px; background: #fffbeb; color: #d97706;">
+                        미확정
+                      </span>
+                    </td>
+                  </tr>
+                  <!-- 졸업생 행 -->
+                  <tr
+                    v-if="data.graduated"
+                    style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;"
+                    :style="data.graduated.submitted === 0 ? { background: '#fef2f2' } : {}"
+                    class="hover:bg-slate-50"
+                  >
+                    <td class="text-base font-semibold" style="padding: 14px 20px; color: #1e293b;">졸업생 담당</td>
+                    <td class="text-base" style="padding: 14px 20px; color: #475569;">{{ data.graduated.teacher_name ?? '관리자' }}</td>
+                    <td class="text-base text-right" style="padding: 14px 20px;">
+                      <span v-if="data.graduated.submitted === 0" class="flex items-center justify-end gap-1 font-bold" style="color: #ef4444;">
+                        <AlertTriangle :size="16" />
+                        0명
+                      </span>
+                      <span v-else class="font-semibold" style="color: #1e293b;">{{ data.graduated.submitted }}명</span>
+                    </td>
+                    <td class="text-base text-center" style="padding: 14px 20px;">
+                      <span v-if="data.graduated.confirmed"
+                        class="font-semibold"
+                        style="padding: 3px 10px; border-radius: 999px; background: #f0fdf4; color: #16a34a;">
+                        ✓ 확정
+                      </span>
+                      <span v-else
+                        style="padding: 3px 10px; border-radius: 999px; background: #fffbeb; color: #d97706;">
+                        미확정
+                      </span>
                     </td>
                   </tr>
                 </tbody>
@@ -397,12 +449,21 @@ const checklist = computed(() => {
 const allReady = computed(() => checklist.value?.every(item => item.count > 0) ?? false)
 
 // ── 파생값 ────────────────────────────────────────────────────
-const totalApplicants = computed(() =>
-  data.value?.classes.reduce((s, c) => s + c.submitted, 0) ?? 0
-)
-const zeroClassCount = computed(() =>
-  data.value?.classes.filter(c => c.submitted === 0).length ?? 0
-)
+const totalApplicants = computed(() => {
+  const classSum = data.value?.classes.reduce((s, c) => s + c.submitted, 0) ?? 0
+  const gradSum  = data.value?.graduated?.submitted ?? 0
+  return classSum + gradSum
+})
+const zeroClassCount = computed(() => {
+  let count = data.value?.classes.filter(c => c.submitted === 0).length ?? 0
+  if (data.value?.graduated && data.value.graduated.submitted === 0) count++
+  return count
+})
+const unconfirmedCount = computed(() => {
+  let count = data.value?.classes.filter(c => !c.confirmed).length ?? 0
+  if (data.value?.graduated && !data.value.graduated.confirmed) count++
+  return count
+})
 const helpBox = computed(() => {
   if (!data.value) return null
   const round = data.value.round
