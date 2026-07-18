@@ -76,6 +76,9 @@ pub enum AuditAction {
     // 점수 기준·기초데이터
     ScoreTableImported,
     BaseDataImported,
+    // 담임 입력 확정
+    RoundConfirmed,
+    RoundConfirmationRevoked,
     // 대학·모집단위
     UniversityCreated,
     UniversityUpdated,

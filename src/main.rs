@@ -625,6 +625,7 @@ fn build_router(state: AppState) -> Router {
         .route("/rounds/:id/results", get(handlers::scoring::get_results))
         .route("/rounds/:id/results/export", get(handlers::scoring::export_results))
         .route("/rounds/:id/summary/export", get(handlers::scoring::export_round_summary))
+        .route("/rounds/:id/confirmation-status", get(handlers::round_confirmations::admin_get_confirmation_status))
         .route("/score-preview", get(handlers::scoring::score_preview))
         .route("/audit-logs", get(handlers::audit::list_audit_logs))
         .route("/audit-logs/export", get(handlers::audit::export_audit_logs))
@@ -665,6 +666,9 @@ fn build_router(state: AppState) -> Router {
         .route("/area-context", get(handlers::teacher_areas::teacher_area_context))
         .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))
         .route("/results", get(handlers::scoring::teacher_get_results))
+        .route("/rounds/:id/confirm", get(handlers::round_confirmations::teacher_get_confirmation))
+        .route("/rounds/:id/confirm", post(handlers::round_confirmations::teacher_confirm_round))
+        .route("/rounds/:id/confirm", delete(handlers::round_confirmations::teacher_revoke_confirmation))
         .route_layer(axum_middleware::from_fn_with_state(
             state.clone(),
             middleware::require_teacher,

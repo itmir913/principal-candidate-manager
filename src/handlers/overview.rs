@@ -13,6 +13,7 @@ pub struct OverviewResponse {
     pub version: &'static str,
     pub round: Option<OverviewRound>,
     pub classes: Vec<OverviewClass>,
+    pub graduated: Option<OverviewGraduated>,
     pub universities: Vec<OverviewUniversity>,
     pub all_time: OverviewAllTime,
 }
@@ -30,6 +31,17 @@ pub struct OverviewClass {
     pub class_no: i64,
     pub teacher_name: Option<String>,
     pub submitted: i64,
+    pub confirmed: bool,
+    pub confirmed_at: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct OverviewGraduated {
+    pub student_count: i64,
+    pub submitted: i64,
+    pub teacher_name: Option<String>,
+    pub confirmed: bool,
+    pub confirmed_at: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -71,6 +83,7 @@ struct ClassRow {
     class_no: i64,
     teacher_name: Option<String>,
     submitted: i64,
+    confirmed_at: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -90,6 +103,14 @@ struct AllTimeRow {
     total_applicants: i64,
     confirmed: i64,
     abandoned: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct GraduatedRow {
+    student_count: i64,
+    submitted: i64,
+    teacher_name: Option<String>,
+    confirmed_at: Option<String>,
 }
 
 // ── Handler ────────────────────────────────────────────────────
@@ -116,19 +137,23 @@ pub async fn get_overview(
         opened_at: r.opened_at,
     });
 
-    // 2. 학급별 지원자 수 (이번 라운드, grade=0 class_no=0 제외)
+    // 2. 학급별 지원자 수 + 확정 여부 (이번 라운드, grade=0 class_no=0 제외)
     let class_rows = sqlx::query_as::<_, ClassRow>(
         "SELECT c.grade, c.class_no, c.teacher_name,
-                COUNT(DISTINCT a.student_id) AS submitted
+                COUNT(DISTINCT a.student_id) AS submitted,
+                rc.confirmed_at
          FROM classes c
          LEFT JOIN students s
                ON s.grade = c.grade AND s.class_no = c.class_no AND s.is_enrolled = 1
          LEFT JOIN applications a
                ON a.student_id = s.id AND a.round_id = ?
+         LEFT JOIN round_confirmations rc
+               ON rc.round_id = ? AND rc.grade = c.grade AND rc.class_no = c.class_no
          WHERE NOT (c.grade = 0 AND c.class_no = 0)
-         GROUP BY c.grade, c.class_no, c.teacher_name
+         GROUP BY c.grade, c.class_no, c.teacher_name, rc.confirmed_at
          ORDER BY c.grade, c.class_no",
     )
+    .bind(round_id)
     .bind(round_id)
     .fetch_all(&state.db)
     .await
@@ -141,10 +166,48 @@ pub async fn get_overview(
             class_no: r.class_no,
             teacher_name: r.teacher_name,
             submitted: r.submitted,
+            confirmed: r.confirmed_at.is_some(),
+            confirmed_at: r.confirmed_at,
         })
         .collect();
 
-    // 3. 대학/모집단위별 지원자 수 (이번 라운드)
+    // 3. 졸업생 현황 (is_enrolled=0 학생이 1명 이상일 때만 Some)
+    let graduated_row = sqlx::query_as::<_, GraduatedRow>(
+        "SELECT
+             (SELECT COUNT(*) FROM students WHERE is_enrolled = 0) AS student_count,
+             COUNT(DISTINCT a.student_id) AS submitted,
+             c.teacher_name,
+             rc.confirmed_at
+         FROM students s
+         LEFT JOIN applications a
+               ON a.student_id = s.id AND a.round_id = ? AND s.is_enrolled = 0
+         LEFT JOIN classes c
+               ON c.grade = 0 AND c.class_no = 0
+         LEFT JOIN round_confirmations rc
+               ON rc.round_id = ? AND rc.grade = 0 AND rc.class_no = 0
+         WHERE s.is_enrolled = 0",
+    )
+    .bind(round_id)
+    .bind(round_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_err)?;
+
+    let graduated = graduated_row.and_then(|r| {
+        if r.student_count == 0 {
+            None
+        } else {
+            Some(OverviewGraduated {
+                student_count: r.student_count,
+                submitted: r.submitted,
+                teacher_name: r.teacher_name,
+                confirmed: r.confirmed_at.is_some(),
+                confirmed_at: r.confirmed_at,
+            })
+        }
+    });
+
+    // 4. 대학/모집단위별 지원자 수 (이번 라운드)
     let univ_rows = sqlx::query_as::<_, UnivTrackRow>(
         "SELECT u.id AS univ_id, u.univ_name, u.total_quota,
                 t.id AS track_id, t.track_name, t.unit_quota,
@@ -183,7 +246,7 @@ pub async fn get_overview(
         }
     }
 
-    // 4. 전체 누적 통계
+    // 5. 전체 누적 통계
     let stats = sqlx::query_as::<_, AllTimeRow>(
         "SELECT
              (SELECT COUNT(*)                    FROM rounds)                          AS total_rounds,
@@ -200,6 +263,7 @@ pub async fn get_overview(
         version: env!("CARGO_PKG_VERSION"),
         round,
         classes,
+        graduated,
         universities,
         all_time: OverviewAllTime {
             total_rounds: stats.total_rounds,

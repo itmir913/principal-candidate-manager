@@ -836,6 +836,18 @@ pub async fn teacher_create_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 지원 변경 시 확정 자동 해제 — 확정 후 지원이 바뀌면 관리자가 보는 "확정됨"이 거짓이 됨
+    let revoked_count = sqlx::query(
+        "DELETE FROM round_confirmations WHERE round_id = ? AND grade = ? AND class_no = ?",
+    )
+    .bind(body.round_id)
+    .bind(claims.grade)
+    .bind(claims.class_no)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
     let mut app_detail =
         crate::audit::application_detail(&mut *tx, body.student_id, body.track_id).await?;
     if let serde_json::Value::Object(ref mut map) = app_detail {
@@ -855,6 +867,20 @@ pub async fn teacher_create_application(
         },
     )
     .await?;
+
+    if revoked_count > 0 {
+        crate::audit::log(
+            &mut *tx,
+            AuditEntry {
+                actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+                action: AuditAction::RoundConfirmationRevoked,
+                round_id: Some(body.round_id),
+                student_id: None,
+                detail: serde_json::json!({ "auto": true }),
+            },
+        )
+        .await?;
+    }
 
     tx.commit()
         .await
@@ -942,6 +968,18 @@ pub async fn teacher_delete_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 지원 삭제 시 확정 자동 해제
+    let revoked_count = sqlx::query(
+        "DELETE FROM round_confirmations WHERE round_id = ? AND grade = ? AND class_no = ?",
+    )
+    .bind(rid)
+    .bind(claims.grade)
+    .bind(claims.class_no)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
     crate::audit::log(
         &mut *tx,
         AuditEntry {
@@ -953,6 +991,20 @@ pub async fn teacher_delete_application(
         },
     )
     .await?;
+
+    if revoked_count > 0 {
+        crate::audit::log(
+            &mut *tx,
+            AuditEntry {
+                actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+                action: AuditAction::RoundConfirmationRevoked,
+                round_id: Some(rid),
+                student_id: None,
+                detail: serde_json::json!({ "auto": true }),
+            },
+        )
+        .await?;
+    }
 
     tx.commit()
         .await

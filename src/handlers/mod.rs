@@ -6,6 +6,7 @@ pub mod external_import;
 pub mod auth;
 pub mod classes;
 pub mod overview;
+pub mod round_confirmations;
 pub mod rounds;
 pub mod scoring;
 pub mod students;
