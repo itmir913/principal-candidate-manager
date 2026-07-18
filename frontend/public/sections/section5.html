@@ -113,9 +113,20 @@
             <p class="text-slate-600 leading-relaxed">시스템은 동점자를 자동으로 감지하거나 알리지 않습니다. 동점자는 같은 순위로 표시될 뿐이며, <span class="font-semibold text-slate-700">관리자가 순위 목록을 직접 검토하여 판단</span>해야 합니다. 동점자 중 모집 정원을 초과하는 경우, 추천할 학생을 관리자가 직접 선택한 후 추천 확정을 진행합니다.</p>
         </div>
 
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🔢</span>모집단위 순위를 건너뛴 추천은 거부됩니다</p>
+            <p class="text-slate-600 leading-relaxed mb-2">학생별 <span class="font-semibold text-slate-700">추천 확정</span> 버튼을 누를 때, 같은 모집단위에 <span class="font-semibold text-slate-700">아직 추천되지 않은 상위 순위 지원자</span>가 있으면 추천이 거부됩니다. 자동 추천이 모집단위 내부 순서를 지키는 것과 같은 규칙을 수동 추천에도 적용한 것입니다.</p>
+            <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
+                <li><span class="font-semibold text-slate-700">동점자끼리는 서로 막지 않습니다.</span> 우열이 정해지지 않은 상태이므로 관리자가 누구를 추천할지 선택할 수 있습니다.</li>
+                <li>상위 지원자가 <span class="font-semibold text-slate-700">이미 추천 확정</span>되었거나 <span class="font-semibold text-slate-700">지원을 포기</span>한 경우에는 막지 않습니다.</li>
+                <li>따라서 상위 지원자를 건너뛰어야 할 사정이 있다면, 먼저 그 학생을 <span class="font-semibold text-slate-700">지원 포기 처리</span>해야 합니다. 건너뛴 사실이 기록으로 남습니다.</li>
+            </ul>
+        </div>
+
         <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">🔓</span>CLOSED → OPEN 역전환</p>
-            <p class="text-indigo-800 leading-relaxed">CLOSED 상태는 다시 OPEN으로 되돌릴 수 있습니다. 라운드 종료 후 담임교사가 입력 누락을 알린 경우, 라운드를 OPEN으로 재전환하여 추가 입력을 허용한 뒤 다시 종료하면 됩니다. 단, FINALIZED(최종 마감) 상태는 어떤 상태로도 되돌릴 수 없습니다.</p>
+            <p class="text-indigo-800 leading-relaxed mb-2">CLOSED 상태는 다시 OPEN으로 되돌릴 수 있습니다. 라운드 종료 후 담임교사가 입력 누락을 알린 경우, 라운드를 OPEN으로 재전환하여 추가 입력을 허용한 뒤 다시 종료하면 됩니다. 단, FINALIZED(최종 마감) 상태는 어떤 상태로도 되돌릴 수 없습니다.</p>
+            <p class="text-indigo-800 leading-relaxed">라운드가 <span class="font-semibold">마감(CLOSED)된 동안에는</span> 순위의 기준이 되는 설정을 바꿀 수 없습니다 — <span class="font-semibold">재학생 우선 설정</span>(대학·모집단위)과 <span class="font-semibold">학생의 재학/졸업 구분</span>이 그렇습니다. 저장된 순위는 마감 시점 기준으로 계산된 값이라, 기준만 바꾸면 순위와 어긋나기 때문입니다. 바꿔야 한다면 <span class="font-semibold">라운드를 다시 열고 → 설정·명단을 고친 뒤 → 다시 마감</span>하십시오. 마감할 때 순위가 재계산됩니다. (정원 변경은 마감 중에도 가능합니다.)</p>
         </div>
 
         <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
