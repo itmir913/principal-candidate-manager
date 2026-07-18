@@ -21,6 +21,10 @@ pub struct AuditQuery {
     #[serde(default = "default_per_page")] pub per_page: i64,
     pub round_id: Option<i64>,
     pub action: Option<String>,
+    /// 학급 필터 — grade·class_no 둘 다 지정 시에만 적용 (0/0 = 졸업생 담당).
+    /// 지정 시 해당 학급 담임의 행위만 반환 (관리자 행은 제외됨).
+    pub grade: Option<i64>,
+    pub class_no: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,12 +61,16 @@ pub async fn list_audit_logs(
     let total: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM audit_log
          WHERE (? IS NULL OR round_id = ?)
-           AND (? IS NULL OR action = ?)",
+           AND (? IS NULL OR action = ?)
+           AND (? IS NULL OR (actor_grade = ? AND actor_class_no = ?))",
     )
     .bind(q.round_id)
     .bind(q.round_id)
     .bind(q.action.as_deref())
     .bind(q.action.as_deref())
+    .bind(q.grade)
+    .bind(q.grade)
+    .bind(q.class_no)
     .fetch_one(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -73,6 +81,7 @@ pub async fn list_audit_logs(
          FROM audit_log
          WHERE (? IS NULL OR round_id = ?)
            AND (? IS NULL OR action = ?)
+           AND (? IS NULL OR (actor_grade = ? AND actor_class_no = ?))
          ORDER BY id DESC
          LIMIT ? OFFSET ?",
     )
@@ -80,6 +89,9 @@ pub async fn list_audit_logs(
     .bind(q.round_id)
     .bind(q.action.as_deref())
     .bind(q.action.as_deref())
+    .bind(q.grade)
+    .bind(q.grade)
+    .bind(q.class_no)
     .bind(per_page)
     .bind(offset)
     .fetch_all(&state.db)
@@ -116,12 +128,16 @@ pub async fn export_audit_logs(
          FROM audit_log
          WHERE (? IS NULL OR round_id = ?)
            AND (? IS NULL OR action = ?)
+           AND (? IS NULL OR (actor_grade = ? AND actor_class_no = ?))
          ORDER BY id DESC",
     )
     .bind(q.round_id)
     .bind(q.round_id)
     .bind(q.action.as_deref())
     .bind(q.action.as_deref())
+    .bind(q.grade)
+    .bind(q.grade)
+    .bind(q.class_no)
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

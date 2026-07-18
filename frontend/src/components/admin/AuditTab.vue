@@ -37,6 +37,16 @@
         <option v-for="(label, key) in AUDIT_ACTION_LABELS" :key="key" :value="key">{{ label }}</option>
       </select>
 
+      <select
+        v-model="filterClass"
+        class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 border border-slate-200 py-2 pl-3 pr-8 text-slate-800 bg-white"
+      >
+        <option value="">전체 학급</option>
+        <option v-for="c in classes" :key="`${c.grade}-${c.class_no}`" :value="`${c.grade}-${c.class_no}`">
+          {{ classLabel(c) }}
+        </option>
+      </select>
+
       <button
         class="text-base font-medium rounded-lg px-[18px] py-2 bg-[#2563eb] text-white hover:bg-blue-700 transition-colors"
         @click="load()"
@@ -114,7 +124,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getAuditLogs, exportAuditLogs, getRounds, blobErrMsg } from '../../api/admin.js'
+import { getAuditLogs, exportAuditLogs, getRounds, getClasses, blobErrMsg } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
 import { AUDIT_ACTION_LABELS } from '../../data/auditLabels.js'
 
@@ -123,23 +133,42 @@ const HELP = {
   intro: '누가 언제 무엇을 했는지 자동으로 기록된 목록입니다. 이 기록은 수정하거나 삭제할 수 없습니다.',
   items: [
     '추천 확정, 라운드 마감, 명단 가져오기 등 모든 주요 작업이 자동으로 남습니다.',
-    '라운드와 작업 종류로 걸러서 볼 수 있고, \'전체 목록 다운로드\'로 엑셀 파일로 내려받을 수 있습니다.',
+    '라운드·작업 종류·학급으로 걸러서 볼 수 있고, \'전체 목록 다운로드\'로 엑셀 파일로 내려받을 수 있습니다. 학급 필터에는 졸업생 담당 계정도 포함됩니다.',
   ],
 }
 
 const auditPage = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 const rounds = ref([])
+const classes = ref([])
 const filterRound = ref(null)
 const filterAction = ref('')
+const filterClass = ref('')   // '' | `${grade}-${class_no}` (0-0 = 졸업생 담당)
 const downloading = ref(false)
 const error = ref('')
+
+function classLabel(c) {
+  // grade=0/class_no=0은 졸업생 담당 특수 계정 — 0학년 0반으로 표기하지 않는다
+  if (c.grade === 0 && c.class_no === 0) return '졸업생 담당'
+  const base = `${c.grade}학년 ${c.class_no}반`
+  return c.teacher_name ? `${base} (${c.teacher_name})` : base
+}
+
+function filterParams() {
+  const params = {}
+  if (filterRound.value != null) params.round_id = filterRound.value
+  if (filterAction.value) params.action = filterAction.value
+  if (filterClass.value) {
+    const [grade, classNo] = filterClass.value.split('-')
+    params.grade = Number(grade)
+    params.class_no = Number(classNo)
+  }
+  return params
+}
 
 async function load(page = 1) {
   error.value = ''
   try {
-    const params = { page, per_page: auditPage.value.per_page }
-    if (filterRound.value != null) params.round_id = filterRound.value
-    if (filterAction.value) params.action = filterAction.value
+    const params = { page, per_page: auditPage.value.per_page, ...filterParams() }
     auditPage.value = await getAuditLogs(params)
   } catch (e) {
     error.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
@@ -152,6 +181,13 @@ async function loadRounds() {
   } catch { /* 라운드 목록 실패 시 필터 없이 동작 */ }
 }
 
+async function loadClasses() {
+  try {
+    // 졸업생 담당(0/0) 포함 전체 학급 — ClassesTab과 달리 여기서는 숨기지 않는다
+    classes.value = await getClasses()
+  } catch { /* 학급 목록 실패 시 필터 없이 동작 */ }
+}
+
 function saveBlob(response, fallback) {
   const url = URL.createObjectURL(new Blob([response.data]))
   const a = document.createElement('a')
@@ -162,10 +198,7 @@ function saveBlob(response, fallback) {
 async function dlAll() {
   downloading.value = true
   try {
-    const params = {}
-    if (filterRound.value != null) params.round_id = filterRound.value
-    if (filterAction.value) params.action = filterAction.value
-    saveBlob(await exportAuditLogs(params), 'audit_log.xlsx')
+    saveBlob(await exportAuditLogs(filterParams()), 'audit_log.xlsx')
   } catch (e) {
     error.value = await blobErrMsg(e)
   } finally {
@@ -218,6 +251,7 @@ function fmtDetail(detailStr) {
     if (d.manual_tracks != null && d.manual_tracks > 0) parts.push(`수동처리 필요 ${d.manual_tracks}개`)
     if (d.source) parts.push(d.source)
     if (d.student_type) parts.push(d.student_type === 'enrolled' ? '재학생' : '졸업생')
+    if (d.auto != null) parts.push(d.auto ? '자동 해제 (지원 변경)' : '수동 해제')
     return parts.join(' · ')
   } catch {
     return ''
@@ -226,6 +260,7 @@ function fmtDetail(detailStr) {
 
 onMounted(() => {
   loadRounds()
+  loadClasses()
   load()
 })
 </script>
