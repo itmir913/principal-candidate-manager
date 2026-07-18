@@ -26,6 +26,7 @@ pub struct AreaRow {
     pub match_mode: Option<MatchMode>,
     pub category_agg: Option<CategoryAgg>,
     pub multi_value: bool,
+    pub unit: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,18 +40,21 @@ pub struct CreateAreaBody {
     pub category_agg: Option<CategoryAgg>,
     #[serde(default)]
     pub multi_value: bool,
+    #[serde(default)]
+    pub unit: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateAreaBody {
     pub name: Option<String>,
     pub teacher_editable: Option<bool>,
+    pub unit: Option<String>,
 }
 
 pub async fn list_areas(State(state): State<AppState>) -> Result<Json<Vec<AreaRow>>, ApiError> {
     let rows = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, max_score, calc_type, teacher_editable, lookup_scope,
-                match_mode, category_agg, multi_value
+                match_mode, category_agg, multi_value, unit
          FROM areas ORDER BY name",
     )
     .fetch_all(&state.db)
@@ -95,6 +99,10 @@ pub async fn create_area(
     if body.calc_type == CalcType::Category && body.category_agg.is_none() {
         return Err((StatusCode::BAD_REQUEST, "선택형 입력 전형요소는 복수 활동 처리 방식(SUM/MAX)이 필수입니다".into()));
     }
+    let unit = body.unit.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    if body.calc_type == CalcType::Category && unit.is_some() {
+        return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소에는 단위를 설정할 수 없습니다".into()));
+    }
     let multi_value = body.category_agg == Some(CategoryAgg::Sum);
 
     let area_name = body.name.clone();
@@ -102,8 +110,8 @@ pub async fn create_area(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope,
-                            match_mode, category_agg, multi_value)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            match_mode, category_agg, multi_value, unit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id",
     )
     .bind(&body.name)
@@ -114,6 +122,7 @@ pub async fn create_area(
     .bind(body.match_mode)
     .bind(body.category_agg)
     .bind(multi_value)
+    .bind(unit)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -138,7 +147,7 @@ pub async fn update_area(
 ) -> Result<StatusCode, ApiError> {
     guard_no_closed_round(&state.db).await?;
     // 변경 필드가 하나도 없는 요청은 거부 — 아무것도 바꾸지 않는 AREA_UPDATED 감사 로그를 남기지 않는다
-    if body.name.is_none() && body.teacher_editable.is_none() {
+    if body.name.is_none() && body.teacher_editable.is_none() && body.unit.is_none() {
         return Err((StatusCode::BAD_REQUEST, "수정할 내용이 없습니다".into()));
     }
     let mut tx = state.db.begin().await
@@ -157,6 +166,27 @@ pub async fn update_area(
     if let Some(v) = body.teacher_editable {
         sqlx::query("UPDATE areas SET teacher_editable = ? WHERE id = ?")
             .bind(v).bind(id)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    if let Some(raw_unit) = body.unit {
+        let unit_val = raw_unit.trim().to_string();
+        // CATEGORY 전형요소에 비어있지 않은 unit 설정 시도는 거부
+        if !unit_val.is_empty() {
+            let calc_type: String = sqlx::query_scalar("SELECT calc_type FROM areas WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .ok_or((StatusCode::NOT_FOUND, "전형요소를 찾을 수 없습니다".to_string()))?;
+            if calc_type == "CATEGORY" {
+                return Err((StatusCode::BAD_REQUEST, "CATEGORY 전형요소에는 단위를 설정할 수 없습니다".into()));
+            }
+        }
+        // 빈 문자열이면 NULL, 그 외에는 trim된 값 저장
+        let stored: Option<String> = if unit_val.is_empty() { None } else { Some(unit_val) };
+        sqlx::query("UPDATE areas SET unit = ? WHERE id = ?")
+            .bind(stored).bind(id)
             .execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }

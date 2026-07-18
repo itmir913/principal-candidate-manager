@@ -197,6 +197,33 @@ async fn area_context_wrong_class_forbidden() {
 }
 
 #[tokio::test]
+async fn area_context_includes_unit() {
+    // unit "시간"으로 등록된 전형요소가 teacher_area_context 응답에 unit 포함
+    let pool = common::create_test_pool_shared().await;
+    let (sid, tid, _, _, _, _, _) = setup_base(&pool).await;
+
+    // unit이 있는 NUMERIC 전형요소 추가
+    sqlx::query(
+        "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope, match_mode, unit)
+         VALUES ('봉사시간_단위', 500000, 'NUMERIC', 1, 'SIMPLE', 'UPPER', '시간') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let Json(items) = teacher_area_context(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+        Query(AreaContextQuery { student_id: sid, track_id: tid }),
+    )
+    .await
+    .unwrap();
+
+    let area = items.iter().find(|i| i.area_name == "봉사시간_단위").unwrap();
+    assert_eq!(area.unit.as_deref(), Some("시간"));
+}
+
+#[tokio::test]
 async fn area_context_composite_fallback_to_global_table() {
     let pool = common::create_test_pool_shared().await;
     let hash = bcrypt::hash("pass", 4u32).unwrap();

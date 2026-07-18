@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS areas (
     category_agg     TEXT    CHECK(category_agg IN ('SUM', 'MAX')),
     -- 0=단일값(NUMERIC·MANUAL·단일선택CATEGORY), 1=복수값(복수선택CATEGORY 전용)
     multi_value      INTEGER NOT NULL DEFAULT 0 CHECK(multi_value IN (0, 1)),
+    unit             TEXT,    -- 기준값 표시 단위 (예: '시간', '등급'). NUMERIC·MANUAL 전용, 표시용
     CHECK(calc_type = 'CATEGORY' OR multi_value = 0),
     CHECK(calc_type = 'NUMERIC' OR match_mode IS NULL),
-    CHECK(calc_type = 'CATEGORY' OR category_agg IS NULL)
+    CHECK(calc_type = 'CATEGORY' OR category_agg IS NULL),
+    CHECK(calc_type != 'CATEGORY' OR unit IS NULL)
 );

@@ -41,6 +41,7 @@ pub struct AreaContextItem {
     pub match_mode: Option<MatchMode>,
     pub category_agg: Option<CategoryAgg>,
     pub multi_value: bool,
+    pub unit: Option<String>,
     /// 기저장 기초데이터 값 목록. NUMERIC/MANUAL은 표시용 소수 문자열, CATEGORY는 원문.
     /// 데이터 없으면 빈 배열.
     pub current_values: Vec<String>,
@@ -58,6 +59,7 @@ struct AreaRow {
     lookup_scope: LookupScope,
     match_mode: Option<MatchMode>,
     category_agg: Option<CategoryAgg>,
+    unit: Option<String>,
 }
 
 /// GET /api/teacher/area-context?student_id=X&track_id=Y
@@ -95,7 +97,7 @@ pub async fn teacher_area_context(
 
     let areas: Vec<AreaRow> = sqlx::query_as::<_, AreaRow>(
         "SELECT id, name, max_score, calc_type, teacher_editable, lookup_scope,
-                match_mode, category_agg
+                match_mode, category_agg, unit
          FROM areas ORDER BY id",
     )
     .fetch_all(&state.db)
@@ -142,6 +144,7 @@ pub async fn teacher_area_context(
             match_mode: area.match_mode,
             category_agg: area.category_agg,
             multi_value: area.category_agg == Some(CategoryAgg::Sum),
+            unit: area.unit.clone(),
             current_values,
             table,
         });

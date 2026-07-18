@@ -324,6 +324,7 @@ async fn area_created_writes_one_log() {
             match_mode: Some(MatchMode::Upper),
             category_agg: None,
             multi_value: false,
+            unit: None,
         }),
     )
     .await
@@ -338,7 +339,7 @@ async fn area_updated_writes_one_log() {
     update_area(
         State(common::make_state(pool.clone())),
         Path(aid),
-        Json(UpdateAreaBody { name: Some("내신수정".into()), teacher_editable: None }),
+        Json(UpdateAreaBody { name: Some("내신수정".into()), teacher_editable: None, unit: None }),
     )
     .await
     .unwrap();
@@ -608,7 +609,7 @@ async fn update_area_with_no_fields_rejected_and_unlogged() {
     let err = update_area(
         State(common::make_state(pool.clone())),
         Path(aid),
-        Json(UpdateAreaBody { name: None, teacher_editable: None }),
+        Json(UpdateAreaBody { name: None, teacher_editable: None, unit: None }),
     )
     .await
     .unwrap_err();

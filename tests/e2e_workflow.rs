@@ -163,6 +163,7 @@ async fn full_two_round_lifecycle() {
             match_mode: Some(MatchMode::Upper),
             category_agg: None,
             multi_value: false,
+            unit: None,
         }),
     )
     .await
@@ -180,6 +181,7 @@ async fn full_two_round_lifecycle() {
             match_mode: None,
             category_agg: None,
             multi_value: false,
+            unit: None,
         }),
     )
     .await
