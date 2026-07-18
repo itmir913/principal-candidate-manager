@@ -30,12 +30,16 @@ CREATE TABLE IF NOT EXISTS univ_tracks (
 );
 
 -- 불변식: universities.prioritize_enrolled=1 ⇒ 그 대학 모든 트랙 prioritize_enrolled=1
--- 대학을 0→1로 전환 시 해당 대학 모든 트랙 cascade
+-- 대학 값이 바뀌면 해당 대학 모든 트랙에 **양방향** cascade.
+--   0→1: 불변식 강제.
+--   1→0: 그 트랙들의 1은 관리자가 고른 값이 아니라 0→1 cascade 가 강제한 값이므로 되돌린다.
+--        (되돌리지 않으면 "대학 재학생 우선을 껐는데 전 모집단위가 여전히 재학생 우선"이 된다.)
+-- 대학=0 상태에서 트랙별로 1을 켜는 것은 허용된다(그 모집단위만 재학생 우선).
 CREATE TRIGGER IF NOT EXISTS trg_univ_prioritize_cascade
 AFTER UPDATE OF prioritize_enrolled ON universities
-WHEN NEW.prioritize_enrolled = 1 AND OLD.prioritize_enrolled = 0
+WHEN NEW.prioritize_enrolled <> OLD.prioritize_enrolled
 BEGIN
-    UPDATE univ_tracks SET prioritize_enrolled = 1 WHERE univ_id = NEW.id;
+    UPDATE univ_tracks SET prioritize_enrolled = NEW.prioritize_enrolled WHERE univ_id = NEW.id;
 END;
 
 -- 대학=1 상태에서 트랙 prioritize=0으로 INSERT 차단

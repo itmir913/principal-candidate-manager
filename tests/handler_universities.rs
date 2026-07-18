@@ -372,6 +372,74 @@ async fn trigger_univ_1_to_0_allows_track_edit() {
     assert!(res.is_ok(), "대학=0이면 트랙 0 UPDATE 가능해야 함");
 }
 
+/// **양방향 cascade (D단계)**: 대학 1→0 이면 그 대학 모든 트랙도 0 으로 되돌린다.
+/// 그 트랙들의 1 은 관리자가 고른 값이 아니라 0→1 cascade 가 강제한 값이므로,
+/// 되돌리지 않으면 "대학 재학생 우선을 껐는데 전 모집단위가 여전히 우선"이 된다.
+#[tokio::test]
+async fn trigger_cascade_univ_1_to_0_clears_all_tracks() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid1 = insert_track(&pool, uid, "컴공").await;
+    let tid2 = insert_track(&pool, uid, "전자").await;
+
+    // 0→1 (트랙 전부 1 로 cascade)
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+    // 1→0 (트랙 전부 0 으로 되돌아와야 함)
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 0 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+
+    let pe1: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid1).fetch_one(&pool).await.unwrap();
+    let pe2: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid2).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe1, 0, "대학 1→0 이면 트랙1도 0 으로 cascade");
+    assert_eq!(pe2, 0, "대학 1→0 이면 트랙2도 0 으로 cascade");
+}
+
+/// 양방향 cascade 는 대학=0 상태의 **트랙별 개별 설정을 막지 않는다**.
+/// (대학=0 · 트랙=1 = "이 모집단위만 재학생 우선" — D2 에서 허용된 정상 구성)
+#[tokio::test]
+async fn track_prioritize_1_allowed_while_univ_0() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await; // prioritize 0
+    let tid1 = insert_track(&pool, uid, "의학").await;
+    let tid2 = insert_track(&pool, uid, "전자").await;
+
+    let res = sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(tid1).execute(&pool).await;
+    assert!(res.is_ok(), "대학=0 에서 트랙 개별 1 설정은 허용");
+
+    let pe1: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid1).fetch_one(&pool).await.unwrap();
+    let pe2: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid2).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe1, 1, "그 모집단위만 재학생 우선");
+    assert_eq!(pe2, 0, "다른 모집단위는 영향 없음");
+    let upe: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM universities WHERE id = ?")
+        .bind(uid).fetch_one(&pool).await.unwrap();
+    assert_eq!(upe, 0, "대학은 0 유지");
+}
+
+/// 대학 값이 **바뀌지 않는** UPDATE 는 cascade 하지 않는다 (0→0).
+/// 대학=0 에서 관리자가 고른 트랙별 1 이 무관한 대학 UPDATE 로 지워지면 안 된다.
+#[tokio::test]
+async fn trigger_no_cascade_when_univ_value_unchanged() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track(&pool, uid, "의학").await;
+    sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(tid).execute(&pool).await.unwrap();
+
+    // 값이 같은 UPDATE (0→0)
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 0 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+
+    let pe: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe, 1, "값 무변경 UPDATE 는 관리자가 고른 트랙 설정을 건드리지 않는다");
+}
+
 // ── create_track / update_track 핸들러 가드 ────────────────────────
 
 #[tokio::test]
