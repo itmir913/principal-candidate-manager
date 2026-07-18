@@ -352,6 +352,14 @@
               @result="onScoreResult" />
             <ImportResultBox v-if="scoreResult" :result="scoreResult" class="mt-3" />
 
+            <!-- 점수 계산 테스트 카드 -->
+            <ScoreDemoCard
+              v-if="scorePage.rows.length > 0"
+              class="mt-5"
+              :area="selected"
+              :rows="scorePage.rows"
+              @highlight="onDemoHighlight" />
+
             <!-- 점수 기준 목록 -->
             <div class="mt-5 rounded-xl overflow-hidden"
               style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
@@ -374,7 +382,11 @@
                 </thead>
                 <tbody>
                   <tr v-for="(row, i) in scorePage.rows" :key="i"
-                    :style="{ background: i % 2 === 1 ? '#f8fafc' : 'white', borderBottom: '1px solid #f1f5f9' }">
+                    :style="{
+                      background: isDemoHighlighted(row) ? '#fefce8' : (i % 2 === 1 ? '#f8fafc' : 'white'),
+                      borderBottom: '1px solid #f1f5f9',
+                      fontWeight: isDemoHighlighted(row) ? '600' : '400',
+                    }">
                     <td class="text-base" style="padding: 11px 18px; color: #1e293b;">
                       {{ selected.calc_type === 'NUMERIC' ? row.threshold : row.category }}
                     </td>
@@ -616,6 +628,8 @@ import {
 import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
+import ScoreDemoCard from './ScoreDemoCard.vue'
+import { isKeyMatched } from '../../utils/scorePreviewShared.js'
 
 // ── 도움말 문구 ────────────────────────────────────────────────
 const HELP_MAIN = {
@@ -626,6 +640,7 @@ const HELP_MAIN = {
     '왼쪽 목록에서 전형요소를 클릭하면 오른쪽에서 점수 기준과 기초 데이터를 등록할 수 있습니다.',
     '목록 아래 총점이 학교 규정의 학교장 추천 전형 총점과 일치하는지 확인하세요.',
     { text: '라운드 종료 이후에는 전형요소 추가·수정·삭제가 차단됩니다. 반드시 첫 라운드를 열기 전에 전형요소 설정을 끝내세요. 첫 라운드 마감 이후에 전형요소는 수정할 수 없습니다.', warn: true },
+    '점수 기준을 입력한 뒤 \'점수 계산 테스트\'에 값을 넣어 보면 실제 계산될 점수를 미리 확인할 수 있습니다.',
   ],
 }
 
@@ -837,6 +852,32 @@ const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_
 const baseStudentType = ref('enrolled')
 watch(baseStudentType, () => loadBaseRows(1))
 
+// ── 점수 계산 테스트 하이라이트 ───────────────────────────────────
+const demoHighlight = ref({ matchedKeys: [], trackId: null })
+
+function onDemoHighlight({ matchedKeys, trackId }) {
+  demoHighlight.value = { matchedKeys, trackId }
+}
+
+function isDemoHighlighted(row) {
+  const { matchedKeys, trackId } = demoHighlight.value
+  if (!matchedKeys.length) return false
+  const rowKey = selected.value?.calc_type === 'NUMERIC' ? row.threshold : row.category
+  if (selected.value?.lookup_scope === 'COMPOSITE') {
+    if (trackId === 0) {
+      if (row.track_id != null) return false
+    } else {
+      const hasTrackRows = scorePage.value.rows.some(r => r.track_id === trackId)
+      if (hasTrackRows) {
+        if (row.track_id !== trackId) return false
+      } else {
+        if (row.track_id != null) return false
+      }
+    }
+  }
+  return isKeyMatched(selected.value?.calc_type, matchedKeys, rowKey)
+}
+
 const scoreEx = computed(() => selected.value ? getScoreExample(selected.value) : null)
 const baseEx  = computed(() => selected.value ? getBaseExample(selected.value, baseStudentType.value) : null)
 
@@ -854,6 +895,7 @@ function selectArea(area) {
 
   scoreResult.value = null
   baseResult.value  = null
+  demoHighlight.value = { matchedKeys: [], trackId: null }
   loadScoreRows(1)
   loadBaseRows(1)
 }

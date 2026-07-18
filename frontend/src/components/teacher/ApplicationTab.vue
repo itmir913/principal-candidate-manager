@@ -448,6 +448,7 @@ import {
 } from '../../api/teacher.js'
 import HelpBox from '../common/HelpBox.vue'
 import ApplicationDetailModal from './ApplicationDetailModal.vue'
+import { isKeyMatched } from '../../utils/scorePreviewShared.js'
 
 const auth = useAuthStore()
 
@@ -816,12 +817,7 @@ async function fetchScorePreview(area, values) {
 function isHighlighted(area, rowKey) {
   const preview = scorePreview.value[area.area_id]
   if (!preview?.matched_keys?.length) return false
-  if (area.calc_type === 'NUMERIC') {
-    return preview.matched_keys.some(
-      mk => typeof mk === 'number' && Math.abs(mk - rowKey) < 1e-9
-    )
-  }
-  return preview.matched_keys.includes(rowKey)
+  return isKeyMatched(area.calc_type, preview.matched_keys, rowKey)
 }
 
 // ── 저장 ──────────────────────────────────────────────────────────

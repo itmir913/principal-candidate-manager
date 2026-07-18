@@ -238,3 +238,7 @@ export const getAuditLogs = (params = {}) =>
 
 export const exportAuditLogs = (params = {}) =>
   axios.get('/api/audit-logs/export', { responseType: 'blob', params })
+
+// 점수 계산 데모 (비저장) — 담임 미리보기와 동일 응답
+export const adminAreaScorePreview = (areaId, trackId, values) =>
+  axios.post('/api/area-score-preview', { area_id: areaId, track_id: trackId, values }).then(r => r.data)
