@@ -83,7 +83,10 @@
                     <span
                       v-if="area.current_values.length > 0"
                       style="color: #1e293b;"
-                    >{{ area.current_values.join(', ') }}</span>
+                    >
+                      <template v-if="area.calc_type !== 'CATEGORY' && area.unit">{{ area.current_values.join(', ') }} {{ area.unit }}</template>
+                      <template v-else>{{ area.current_values.join(', ') }}</template>
+                    </span>
                     <span v-else style="color: #ef4444;">데이터 없음</span>
                   </td>
                   <td class="text-base text-right" style="padding: 10px 14px; white-space: nowrap;">

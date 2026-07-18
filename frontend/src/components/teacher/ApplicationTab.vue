@@ -249,7 +249,7 @@
                       >관리자 입력 고정</span>
                     </div>
                     <div class="flex items-center justify-between mt-1">
-                      <span class="text-base" style="color: #94a3b8;">만점 {{ area.max_score }}</span>
+                      <span class="text-base" style="color: #94a3b8;">만점 {{ area.max_score }}점</span>
                       <template v-if="scorePreview[area.area_id]">
                         <span v-if="scorePreview[area.area_id].error" class="text-base" style="color: #ef4444;">
                           {{ scorePreview[area.area_id].error }}
@@ -277,11 +277,12 @@
                       <thead class="sticky top-0">
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th class="text-base font-semibold text-left" style="padding: 8px 12px; color: #475569;">
-                          {{ area.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
+                          <template v-if="area.calc_type === 'NUMERIC'">기준값<span v-if="area.unit"> ({{ area.unit }})</span></template>
+                          <template v-else>범주</template>
                         </th>
 
                         <th class="text-base font-semibold text-right whitespace-nowrap w-12" style="padding: 8px 12px; color: #475569;">
-                          점수
+                          점수 (점)
                         </th>
                       </tr>
                       </thead>
@@ -333,7 +334,7 @@
                         style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
                         :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
                         :disabled="!area.teacher_editable"
-                        :placeholder="area.teacher_editable ? '데이터 입력' : (area.current_values[0] ?? '데이터 없음')"
+                        :placeholder="area.teacher_editable ? (area.unit ? `데이터 입력 (${area.unit})` : '데이터 입력') : (area.current_values[0] ?? '데이터 없음')"
                         @input="onNumericInput(area, $event.target.value)"
                       />
                     </template>

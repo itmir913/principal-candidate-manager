@@ -71,6 +71,12 @@
                       class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
                   </div>
+                  <div v-if="area.calc_type !== 'CATEGORY'">
+                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">기준값 단위 <span style="color: #94a3b8;">(선택)</span></label>
+                    <input v-model="editArea.unit" type="text" placeholder="예: 시간, 등급 (선택)"
+                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
+                  </div>
                   <div class="flex items-center gap-2">
                     <input v-model="editArea.teacher_editable" type="checkbox"
                       :id="`edit-te-${area.id}`" class="accent-blue-600 w-4 h-4" />
@@ -194,6 +200,12 @@
                 <option value="SUM">중복 선택 가능 (점수 합산)</option>
                 <option value="MAX">최대 1개만 인정 (최고점 반영)</option>
               </select>
+            </div>
+            <div v-if="newArea.calc_type !== 'CATEGORY'">
+              <label class="block text-base font-medium mb-1.5" style="color: #64748b;">기준값 단위 <span style="color: #94a3b8;">(선택)</span></label>
+              <input v-model="newArea.unit" type="text" placeholder="예: 시간, 등급 (선택)"
+                     class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                     style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
             </div>
             <div class="flex items-center gap-2">
               <input v-model="newArea.teacher_editable" type="checkbox" id="te" class="accent-blue-600 w-4 h-4" />
@@ -349,9 +361,10 @@
                 <thead style="position: sticky; top: 0; z-index: 1;">
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">
-                      {{ selected.calc_type === 'NUMERIC' ? '기준값' : '범주' }}
+                      <template v-if="selected.calc_type === 'NUMERIC'">기준값<span v-if="selected.unit"> ({{ selected.unit }})</span></template>
+                      <template v-else>범주</template>
                     </th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">점수</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">점수 (점)</th>
                     <template v-if="selected.lookup_scope === 'COMPOSITE'">
                       <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
                       <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
@@ -796,13 +809,13 @@ const newArea = ref(defaultNewArea())
 const addError = ref('')
 
 const editingAreaId = ref(null)
-const editArea = ref({ name: '', teacher_editable: false })
+const editArea = ref({ name: '', teacher_editable: false, unit: '' })
 const editError = ref('')
 
 function defaultNewArea() {
   return { name: '', max_score_display: '', calc_type: 'NUMERIC',
            lookup_scope: 'SIMPLE', teacher_editable: true,
-           match_mode: '', category_agg: '' }
+           match_mode: '', category_agg: '', unit: '' }
 }
 
 
@@ -882,6 +895,7 @@ async function addArea() {
     teacher_editable: newArea.value.teacher_editable,
     match_mode: newArea.value.match_mode || null,
     category_agg: newArea.value.category_agg || null,
+    unit: newArea.value.calc_type !== 'CATEGORY' ? (newArea.value.unit || null) : null,
   }
   try {
     await createArea(body)
@@ -907,7 +921,7 @@ async function removeArea(id) {
 }
 
 function startEditArea(area) {
-  editArea.value = { name: area.name, teacher_editable: area.teacher_editable }
+  editArea.value = { name: area.name, teacher_editable: area.teacher_editable, unit: area.unit ?? '' }
   editError.value = ''
   editingAreaId.value = area.id
 }
@@ -918,9 +932,11 @@ function cancelEdit() {
 
 async function saveEdit() {
   editError.value = ''
+  const area = areas.value.find(a => a.id === editingAreaId.value)
   const body = {
     name: editArea.value.name,
     teacher_editable: editArea.value.teacher_editable,
+    unit: area?.calc_type !== 'CATEGORY' ? (editArea.value.unit ?? null) : undefined,
   }
   try {
     await updateArea(editingAreaId.value, body)
