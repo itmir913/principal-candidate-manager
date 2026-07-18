@@ -95,6 +95,39 @@ pub struct UpdateTrackBody {
     pub prioritize_enrolled: Option<bool>,
 }
 
+// ── 재학생 우선 변경 가드 ────────────────────────────────────────
+// results.ranking(대학 순위)은 close_round 시점에 저장된 값이고, 화면·자동 추천의
+// 모집단위 순위(track_rank)는 실행 시점 라이브 계산이다. CLOSED 라운드가 있는 동안
+// prioritize_enrolled 를 바꾸면 두 값의 기준 시점이 어긋나 라이브 기준 동점자 중
+// 일부만 추천되는 결과가 나온다. 정원(total_quota/unit_quota)은 저장 순위에
+// 영향이 없으므로 계속 허용한다.
+
+async fn guard_prioritize_change_closed(
+    tx: &mut sqlx::SqliteConnection,
+) -> Result<(), ApiError> {
+    let closed: Vec<i64> = sqlx::query_scalar(
+        "SELECT id FROM rounds WHERE status = 'CLOSED' ORDER BY id",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if closed.is_empty() {
+        return Ok(());
+    }
+    let labels = closed.iter().map(|id| format!("{}차", id)).collect::<Vec<_>>().join(", ");
+    Err((
+        StatusCode::CONFLICT,
+        format!(
+            "마감된 라운드({})가 있어 재학생 우선 설정을 바꿀 수 없습니다. \
+             저장된 대학 순위는 마감 시점 기준이므로 설정만 바꾸면 순위와 어긋납니다. \
+             변경하려면 해당 라운드를 다시 열고(재오픈) 설정을 바꾼 뒤 다시 마감하세요 \
+             (마감 시 순위가 재계산됩니다). 정원 변경은 지금도 가능합니다.",
+            labels
+        ),
+    ))
+}
+
 // ── 대학 마스터 핸들러 ───────────────────────────────────────────
 
 /// GET /api/universities
@@ -174,9 +207,21 @@ pub async fn update_university(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.prioritize_enrolled {
-        sqlx::query("UPDATE universities SET prioritize_enrolled = ? WHERE id = ?")
-            .bind(v as i64).bind(id).execute(&mut *tx).await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // 값이 실제로 바뀔 때만 가드 — 이름/정원만 고치는 요청(폼이 전 필드를 함께 보낸다)은 통과시킨다
+        let current: bool = sqlx::query_scalar(
+            "SELECT prioritize_enrolled = 1 FROM universities WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if current != v {
+            // 대학 UPDATE 를 막으면 트리거의 트랙 cascade 도 함께 차단된다
+            guard_prioritize_change_closed(&mut *tx).await?;
+            sqlx::query("UPDATE universities SET prioritize_enrolled = ? WHERE id = ?")
+                .bind(v as i64).bind(id).execute(&mut *tx).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
     }
     let univ_name: String = sqlx::query_scalar("SELECT univ_name FROM universities WHERE id = ?")
         .bind(id)
@@ -366,6 +411,13 @@ pub async fn update_track(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
     if let Some(v) = body.prioritize_enrolled {
+        let current: bool = sqlx::query_scalar(
+            "SELECT prioritize_enrolled = 1 FROM univ_tracks WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         // 불변식 가드: 대학=1이면 트랙 0으로 다운그레이드 금지
         if !v {
             let univ_prioritize: bool = sqlx::query_scalar(
@@ -381,9 +433,13 @@ pub async fn update_track(
                 return Err((StatusCode::BAD_REQUEST, "재학생 우선 대학의 모집단위는 재학생 우선을 해제할 수 없습니다".into()));
             }
         }
-        sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
-            .bind(v as i64).bind(id).execute(&mut *tx).await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // 값이 실제로 바뀔 때만 가드 (대학 쪽과 동일 기준)
+        if current != v {
+            guard_prioritize_change_closed(&mut *tx).await?;
+            sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
+                .bind(v as i64).bind(id).execute(&mut *tx).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
     }
     let (univ_name, track_name): (String, String) = sqlx::query_as(
         "SELECT u.univ_name, ut.track_name

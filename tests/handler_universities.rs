@@ -6,7 +6,7 @@ use axum::{
 };
 use principal_candidate_manager::handlers::universities::{
     create_track, delete_track, delete_university, export_quota_stats, update_track,
-    CreateTrackBody, ExportQuotaQuery, UpdateTrackBody,
+    update_university, CreateTrackBody, ExportQuotaQuery, UpdateTrackBody, UpdateUnivBody,
 };
 
 // ── 공통 픽스처 ────────────────────────────────────────────────────
@@ -490,4 +490,130 @@ async fn update_track_handler_400_when_univ_prioritize_and_downgrade() {
     )
     .await;
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+}
+
+// ── E1: CLOSED 라운드 중 재학생 우선 변경 차단 ────────────────────
+// results.ranking 은 마감 시점 저장값, 화면·자동 추천의 모집단위 순위는 라이브 계산.
+// CLOSED 중 설정만 바꾸면 두 기준이 어긋난다.
+
+async fn insert_round_with_status(pool: &sqlx::SqlitePool, status: &str) -> i64 {
+    sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at, finalized_at) \
+         VALUES (?, '2025-01-01', '2025-01-02', '2025-01-03') RETURNING id",
+    )
+    .bind(status)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+fn univ_body(pe: Option<bool>, quota: Option<Option<i64>>, name: Option<String>) -> UpdateUnivBody {
+    UpdateUnivBody { univ_name: name, total_quota: quota, prioritize_enrolled: pe }
+}
+
+#[tokio::test]
+async fn update_university_prioritize_409_when_closed_round_exists() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    insert_round_with_status(&pool, "CLOSED").await;
+
+    let res = update_university(
+        State(common::make_state(pool.clone())),
+        Path(uid),
+        axum::Json(univ_body(Some(true), None, None)),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
+
+    let pe: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM universities WHERE id = ?")
+        .bind(uid).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe, 0, "409 시 값이 바뀌면 안 된다");
+}
+
+#[tokio::test]
+async fn update_track_prioritize_409_when_closed_round_exists() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track(&pool, uid, "컴공").await;
+    insert_round_with_status(&pool, "CLOSED").await;
+
+    let res = update_track(
+        State(common::make_state(pool.clone())),
+        Path(tid),
+        axum::Json(UpdateTrackBody {
+            track_name: None,
+            unit_quota: None,
+            prioritize_enrolled: Some(true),
+        }),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT);
+
+    let pe: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM univ_tracks WHERE id = ?")
+        .bind(tid).fetch_one(&pool).await.unwrap();
+    assert_eq!(pe, 0, "409 시 값이 바뀌면 안 된다");
+}
+
+#[tokio::test]
+async fn update_university_quota_allowed_when_closed_round_exists() {
+    // 정원은 저장 순위에 영향이 없으므로 CLOSED 중에도 허용 (불필요하게 조이지 않는다)
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    insert_round_with_status(&pool, "CLOSED").await;
+
+    let st = update_university(
+        State(common::make_state(pool.clone())),
+        Path(uid),
+        axum::Json(univ_body(None, Some(Some(3)), None)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(st, StatusCode::NO_CONTENT);
+
+    let q: Option<i64> = sqlx::query_scalar("SELECT total_quota FROM universities WHERE id = ?")
+        .bind(uid).fetch_one(&pool).await.unwrap();
+    assert_eq!(q, Some(3));
+}
+
+#[tokio::test]
+async fn update_university_same_prioritize_value_allowed_when_closed() {
+    // 폼이 전 필드를 함께 보내므로, 값이 그대로면 이름/정원 수정은 통과해야 한다
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "한국대").await;
+    insert_round_with_status(&pool, "CLOSED").await;
+
+    let st = update_university(
+        State(common::make_state(pool.clone())),
+        Path(uid),
+        axum::Json(univ_body(Some(false), None, Some("한국대학교".into()))),
+    )
+    .await
+    .unwrap();
+    assert_eq!(st, StatusCode::NO_CONTENT);
+
+    let name: String = sqlx::query_scalar("SELECT univ_name FROM universities WHERE id = ?")
+        .bind(uid).fetch_one(&pool).await.unwrap();
+    assert_eq!(name, "한국대학교");
+}
+
+#[tokio::test]
+async fn update_university_prioritize_allowed_when_open_or_finalized() {
+    for status in ["OPEN", "FINALIZED"] {
+        let pool = common::create_test_pool().await;
+        let uid = insert_univ(&pool, "한국대").await;
+        insert_round_with_status(&pool, status).await;
+
+        let st = update_university(
+            State(common::make_state(pool.clone())),
+            Path(uid),
+            axum::Json(univ_body(Some(true), None, None)),
+        )
+        .await
+        .unwrap_or_else(|e| panic!("{status} 라운드에서는 허용되어야 함: {}", e.1));
+        assert_eq!(st, StatusCode::NO_CONTENT);
+
+        let pe: i64 = sqlx::query_scalar("SELECT prioritize_enrolled FROM universities WHERE id = ?")
+            .bind(uid).fetch_one(&pool).await.unwrap();
+        assert_eq!(pe, 1, "{status} 라운드에서는 변경이 반영되어야 함");
+    }
 }

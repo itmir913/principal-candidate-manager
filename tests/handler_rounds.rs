@@ -758,3 +758,82 @@ async fn db_allows_result_delete_in_open_round() {
         .bind(rid).fetch_one(&pool).await.unwrap();
     assert_eq!(count, 0);
 }
+
+// ── E1: 재오픈 → 재학생 우선 변경 → 재마감 경로가 순위를 갱신 ─────
+// CLOSED 중 prioritize 변경은 409로 막히므로(handler_universities.rs), 이 경로가
+// 관리자의 유일한 탈출구다. 실제로 저장 순위가 새 설정으로 재계산되는지 확인한다.
+
+#[tokio::test]
+async fn reopen_change_prioritize_reclose_recalculates_ranking() {
+    let pool = common::create_test_pool().await;
+    let st = || State(common::make_state(pool.clone()));
+
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, calc_type, max_score, match_mode, lookup_scope) \
+         VALUES ('내신', 'NUMERIC', 10000000, 'UPPER', 'SIMPLE') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // threshold 이상이면 그 점수 — 재학생 1점, 졸업생 2점이 되도록 두 구간
+    for (threshold, score) in [(0i64, 100000i64), (200000, 200000)] {
+        sqlx::query("INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)")
+            .bind(area_id).bind(threshold).bind(score)
+            .execute(&pool).await.unwrap();
+    }
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, prioritize_enrolled) VALUES ('한국대', 0) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+
+    // 재학생(낮은 점수) / 졸업생(높은 점수). 졸업생 담당은 특수 계정 0/0
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    for (g, c) in [(1i64, 1i64), (0, 0)] {
+        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (?, ?, ?)")
+            .bind(g).bind(c).bind(&hash).execute(&pool).await.unwrap();
+    }
+    let enrolled: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '재학생', 1, 1, 1, 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let graduated: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grad_year, is_enrolled) \
+         VALUES ('S002', '졸업생', 2024, 0) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let (_, axum::Json(body)) = open_round(st()).await.unwrap();
+    let rid = body["id"].as_i64().unwrap();
+    for (sid, value) in [(enrolled, "0"), (graduated, "200000")] {
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, ?, 0)")
+            .bind(sid).bind(area_id).bind(value).execute(&pool).await.unwrap();
+    }
+
+    let ranking = |sid: i64| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, Option<i64>>(
+                "SELECT ranking FROM results WHERE student_id = ? AND round_id = ?",
+            )
+            .bind(sid).bind(rid).fetch_one(&pool).await.unwrap()
+        }
+    };
+
+    // 1차 마감: 재학생 우선 OFF → 점수 높은 졸업생이 1위
+    close_round(st(), Path(rid)).await.unwrap();
+    assert_eq!(ranking(graduated).await, Some(1), "우선 OFF: 고득점 졸업생이 1위");
+    assert_eq!(ranking(enrolled).await, Some(2));
+
+    // 재오픈 → 설정 변경 → 재마감
+    reopen_round(st(), Path(rid)).await.unwrap();
+    sqlx::query("UPDATE universities SET prioritize_enrolled = 1 WHERE id = ?")
+        .bind(uid).execute(&pool).await.unwrap();
+    close_round(st(), Path(rid)).await.unwrap();
+
+    assert_eq!(ranking(enrolled).await, Some(1), "재마감 후 재학생 우선이 반영되어야 한다");
+    assert_eq!(ranking(graduated).await, Some(2));
+}
