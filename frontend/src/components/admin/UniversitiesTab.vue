@@ -607,8 +607,25 @@ async function saveAddUniv() {
 function startEditUniv(u) { addingUniv.value = false; editingUnivId.value = u.id; univForm.value = univToForm(u) }
 
 async function saveEditUniv(id) {
+  const body = univFormToBody(univForm.value)
+  const current = univs.value.find(u => u.id === id)
+  // 대학 재학생 우선 값이 바뀌면 그 대학 모든 모집단위에 cascade 된다(양방향).
+  // 실제로 값이 달라지는 모집단위가 있을 때만 확인 — 무변경엔 유령 확인을 띄우지 않는다.
+  if (current && !!current.prioritize_enrolled !== body.prioritize_enrolled) {
+    const uTracks = selectedUnivId.value === id ? tracks.value : await getUnivTracks(id)
+    const changing = uTracks.filter(t => !!t.prioritize_enrolled !== body.prioritize_enrolled).length
+    if (changing > 0) {
+      const ok = await dialog.confirm({
+        title: '재학생 우선 설정 변경',
+        message: `이 대학의 모든 모집단위 재학생 우선 설정이 대학 설정값으로 통일됩니다.\n개별 지정한 모집단위 설정 ${changing}곳이 사라집니다.`,
+        confirmText: '변경',
+        level: 'warn',
+      })
+      if (!ok) return
+    }
+  }
   saving.value = true; error.value = ''
-  try { await updateUniversity(id, univFormToBody(univForm.value)); editingUnivId.value = null; await loadUnivs() }
+  try { await updateUniversity(id, body); editingUnivId.value = null; await loadUnivs() }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }

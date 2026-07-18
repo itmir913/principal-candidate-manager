@@ -252,6 +252,7 @@ function fmtDetail(detailStr) {
     if (d.source) parts.push(d.source)
     if (d.student_type) parts.push(d.student_type === 'enrolled' ? '재학생' : '졸업생')
     if (d.auto != null) parts.push(d.auto ? '자동 해제 (지원 변경)' : '수동 해제')
+    if (d.reason) parts.push(`사유: ${d.reason}`)
     return parts.join(' · ')
   } catch {
     return ''

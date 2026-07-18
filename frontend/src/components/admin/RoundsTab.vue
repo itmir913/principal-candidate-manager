@@ -389,6 +389,7 @@
                         <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569; width: 90px;">총점</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 120px;">추천</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 110px;">포기처리</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 160px;">제외(결격)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -436,11 +437,12 @@
                               >추천 취소</button>
                             </template>
                             <button
-                              v-else-if="selected.status === 'CLOSED'"
+                              v-else-if="selected.status === 'CLOSED' && !r.excluded"
                               class="text-base font-semibold rounded-lg"
                               style="padding: 5px 12px; border: none; background: #16a34a; color: white; cursor: pointer;"
                               @click="handleRecommend(r)"
                             >추천 확정</button>
+                            <span v-else-if="selected.status === 'CLOSED' && r.excluded" style="color: #cbd5e1;">-</span>
                             <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
                             <span v-else class="text-base font-semibold" style="color: #94a3b8;">-</span>
                           </td>
@@ -453,11 +455,55 @@
                             >포기하기</button>
                             <span v-else style="color: #cbd5e1;">-</span>
                           </td>
+                          <td class="text-center" style="padding: 12px 18px;" @click.stop>
+                            <template v-if="r.excluded">
+                              <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">제외됨</span>
+                              <div v-if="r.excluded_reason" class="text-base" style="color: #92400e; margin-top: 2px;">{{ r.excluded_reason }}</div>
+                              <button
+                                v-if="selected.status === 'CLOSED'"
+                                class="text-base rounded-lg whitespace-nowrap"
+                                style="padding: 3px 10px; margin-top: 4px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                                @click="handleClearExclusion(r)"
+                              >제외 해제</button>
+                            </template>
+                            <template v-else-if="selected.status === 'CLOSED'">
+                              <template v-if="excludingKey === rowKey(r)">
+                                <input
+                                  v-model="excludeReasonDraft"
+                                  type="text"
+                                  placeholder="제외 사유 입력"
+                                  class="text-base"
+                                  style="border: 1px solid #fcd34d; border-radius: 6px; padding: 4px 8px; width: 120px; box-sizing: border-box;"
+                                  @keyup.enter="confirmExclude(r)"
+                                />
+                                <div class="flex gap-1 justify-center" style="margin-top: 4px;">
+                                  <button
+                                    class="text-base rounded-lg"
+                                    style="padding: 3px 10px; border: none; background: #d97706; color: white; cursor: pointer;"
+                                    :disabled="!excludeReasonDraft.trim()"
+                                    @click="confirmExclude(r)"
+                                  >확정</button>
+                                  <button
+                                    class="text-base rounded-lg"
+                                    style="padding: 3px 10px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                                    @click="excludingKey = null"
+                                  >취소</button>
+                                </div>
+                              </template>
+                              <button
+                                v-else
+                                class="text-base rounded-lg whitespace-nowrap"
+                                style="padding: 5px 12px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                                @click="startExclude(r)"
+                              >제외 처리</button>
+                            </template>
+                            <span v-else style="color: #cbd5e1;">-</span>
+                          </td>
                         </tr>
                         <!-- 전형요소 점수 상세 -->
                         <tr v-if="expandedRows[`${r.student_id}-${r.track_id}`]"
                           style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
-                          <td colspan="9" style="padding: 14px 36px;">
+                          <td colspan="10" style="padding: 14px 36px;">
                             <div class="flex flex-wrap gap-x-6 gap-y-2">
                               <div v-for="area in areas" :key="area.id" class="flex items-center gap-2">
                                 <span class="text-base" style="color: #64748b;">{{ area.name }}</span>
@@ -486,6 +532,7 @@ import {
   getRounds, openRound, closeRound, reopenRound, finalizeRound,
   calculateScores, getResults, recommendResult, unrecommendResult,
   getApplications, abandonApplication,
+  excludeApplication, clearApplicationExclusion,
   getAreas,
   exportResultsExcel,
   exportRoundSummary,
@@ -539,6 +586,11 @@ const autoRecommendScope  = ref('')
 
 const selectedTrackId   = ref('')
 const confirmationStatus = ref(null)  // { classes: [...] } | null
+
+const excludingKey      = ref(null)   // `${student_id}-${track_id}` | null — 인라인 사유 입력 중인 행
+const excludeReasonDraft = ref('')
+
+function rowKey(r) { return `${r.student_id}-${r.track_id}` }
 
 const subTabs = [
   { key: 'apps',    label: '지원 현황' },
@@ -959,6 +1011,44 @@ async function handleAbandon(app) {
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
     await Promise.all([loadApps(), loadResults()])
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  }
+}
+
+function startExclude(r) {
+  excludingKey.value = rowKey(r)
+  excludeReasonDraft.value = ''
+}
+
+async function confirmExclude(r) {
+  const reason = excludeReasonDraft.value.trim()
+  if (!reason) return
+  if (!(await dialog.confirm({
+    title: '추천 제외 처리',
+    message: `${r.name} 학생을 이번 라운드 추천 대상에서 제외하시겠습니까?\n사유: ${reason}`,
+    confirmText: '제외 처리',
+    level: 'warn',
+  }))) return
+  try {
+    await excludeApplication(r.student_id, r.track_id, r.round_id, reason)
+    excludingKey.value = null
+    await loadResults()
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  }
+}
+
+async function handleClearExclusion(r) {
+  if (!(await dialog.confirm({
+    title: '제외 해제',
+    message: `${r.name} 학생의 추천 제외를 해제하시겠습니까?`,
+    confirmText: '해제',
+    level: 'warn',
+  }))) return
+  try {
+    await clearApplicationExclusion(r.student_id, r.track_id, r.round_id)
+    await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
   }

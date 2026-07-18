@@ -193,6 +193,10 @@ export const getApplications = (roundId, trackId) =>
   axios.get('/api/applications', { params: { round_id: roundId, track_id: trackId || undefined } }).then(r => r.data)
 export const abandonApplication = (sid, tid, rid) =>
   axios.put(`/api/applications/${sid}/${tid}/${rid}/abandon`)
+export const excludeApplication = (sid, tid, rid, reason) =>
+  axios.put(`/api/applications/${sid}/${tid}/${rid}/exclude`, { reason })
+export const clearApplicationExclusion = (sid, tid, rid) =>
+  axios.delete(`/api/applications/${sid}/${tid}/${rid}/exclude`)
 
 // ── 현재 라운드 (공용) ─────────────────────────────────────────
 export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => r.data)
