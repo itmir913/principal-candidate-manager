@@ -693,6 +693,71 @@ fn merge_equals_fill_when_flags_align() {
     }
 }
 
+/// **감사 보강**: 위 등가성 테스트는 `track_rank == univ_rank` 로 두 값을 같게 만들기 때문에
+/// 병합의 프리픽스 조건(`univ_rank == r` **그리고** `track_rank == head.track_rank`)의 두 절이
+/// 항상 동시에 참/거짓이 되어, 두 값의 **번호 체계가 다른** 실제 데이터를 검증하지 못한다.
+///
+/// 실제로는 대학 순위(대학 파티션)와 모집단위 순위(트랙 파티션)의 **숫자가 다르다**
+/// (예: 한 트랙의 대학 순위가 1·3·5 여도 그 트랙 내부 순위는 1·2·3). 플래그가 일치하면
+/// **순서와 동점 관계만** 같다. 그 조건에서도 병합 = 기존 정렬임을 고정한다.
+#[test]
+fn merge_equals_fill_when_track_rank_numbering_differs() {
+    let shapes: Vec<Vec<i64>> = vec![
+        vec![1, 2, 3, 4],
+        vec![1, 2, 2, 4],
+        vec![1, 1, 1],
+        vec![1, 2, 2, 4, 5, 5],
+        vec![1, 1, 3, 3, 5],
+        vec![1],
+    ];
+    for ranks in shapes {
+        for num_tracks in 1..=3usize {
+            for rem in -1..=(ranks.len() as i64 + 1) {
+                let flat: Vec<(i64, MergeCand)> = ranks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &r)| (r, mc(i as i64, (i % num_tracks) as i64, r, r)))
+                    .collect();
+
+                let mut tracks: Vec<Vec<MergeCand>> = vec![Vec::new(); num_tracks];
+                for (_, c) in &flat {
+                    tracks[c.track_id as usize].push(c.clone());
+                }
+                // 각 트랙 내부 순위를 **그 트랙 안에서 다시 매긴다** (표준 경쟁 순위).
+                // 플래그가 일치하므로 트랙 내부의 동점 관계는 대학 순위의 동점 관계와 같고,
+                // 순서도 같다 — 숫자만 달라진다.
+                for list in tracks.iter_mut() {
+                    let mut tr = 0i64;
+                    for i in 0..list.len() {
+                        if i == 0 || list[i].univ_rank != list[i - 1].univ_rank {
+                            tr = (i + 1) as i64;
+                        }
+                        list[i].track_rank = tr;
+                    }
+                }
+
+                let fill = fill_by_rank_groups(&flat, Some(rem));
+                let merge = merge_univ_cut(&tracks, Some(rem));
+
+                let mut a = sids(&fill.confirmed);
+                let mut b = sids(&merge.confirmed);
+                a.sort_unstable();
+                b.sort_unstable();
+                assert_eq!(
+                    a, b,
+                    "확정 집합 불일치: ranks={:?} tracks={} rem={}",
+                    ranks, num_tracks, rem
+                );
+                assert_eq!(
+                    fill.tie, merge.tie,
+                    "동점 경계 불일치: ranks={:?} tracks={} rem={}",
+                    ranks, num_tracks, rem
+                );
+            }
+        }
+    }
+}
+
 // ── 1단계(모집단위) 동점 그룹 원자 처리 ──────────────────────────
 
 /// 정원 2, 모집단위 순위 [1,2,2,4] → 1위만 확정, 2위 동점 2명은 수동.

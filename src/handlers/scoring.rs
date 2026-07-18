@@ -1724,7 +1724,10 @@ async fn run_auto_recommend(
                 univ_name: univ_name.clone(),
                 track_name: None,
                 reason: format!(
-                    "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 (대학 정원 {}명, 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
+                    "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 \
+                     (경합 대상은 각 모집단위의 다음 차례 지원자에 한함 — \
+                     같은 모집단위 상위 지원자에게 막힌 동순위자는 제외 / \
+                     대학 정원 {}명, 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
                     tie.rank, tie.free, tie.contenders, tq, univ_used, remaining_univ,
                 ),
             });
