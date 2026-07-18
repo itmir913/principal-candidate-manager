@@ -1131,6 +1131,7 @@ pub struct RangeTableListRow {
     pub score: Score,
     pub univ_name: Option<String>,
     pub track_name: Option<String>,
+    pub track_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -1147,6 +1148,7 @@ pub struct CategoryMapListRow {
     pub score: Score,
     pub univ_name: Option<String>,
     pub track_name: Option<String>,
+    pub track_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -1194,7 +1196,7 @@ pub async fn numeric_table_list(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
-        "SELECT rt.threshold, rt.score,
+        "SELECT rt.threshold, rt.score, rt.track_id,
                 COALESCE(u.univ_name, '') AS univ_name,
                 COALESCE(ut.track_name, '') AS track_name
          FROM numeric_table rt
@@ -1218,6 +1220,7 @@ pub async fn numeric_table_list(
             score: Score::from_raw(row.get("score")),
             univ_name: if composite { Some(row.get("univ_name")) } else { None },
             track_name: if composite { Some(row.get("track_name")) } else { None },
+            track_id: if composite { row.get("track_id") } else { None },
         })
         .collect();
     Ok(Json(NumericTablePage { rows: result, total, page, per_page }))
@@ -1243,7 +1246,7 @@ pub async fn category_map_list(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
-        "SELECT cm.category, cm.score,
+        "SELECT cm.category, cm.score, cm.track_id,
                 COALESCE(u.univ_name, '') AS univ_name,
                 COALESCE(ut.track_name, '') AS track_name
          FROM category_map cm
@@ -1267,6 +1270,7 @@ pub async fn category_map_list(
             score: Score::from_raw(row.get("score")),
             univ_name: if composite { Some(row.get("univ_name")) } else { None },
             track_name: if composite { Some(row.get("track_name")) } else { None },
+            track_id: if composite { row.get("track_id") } else { None },
         })
         .collect();
     Ok(Json(CategoryMapPage { rows: result, total, page, per_page }))

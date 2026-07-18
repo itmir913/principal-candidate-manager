@@ -270,7 +270,7 @@ struct AreaProps {
     category_agg: Option<CategoryAgg>,
 }
 
-/// POST /api/teacher/area-score-preview
+/// POST /api/teacher/area-score-preview, POST /api/area-score-preview (관리자 데모에서도 재사용)
 ///
 /// 입력값을 DB에 저장하지 않고 점수를 즉시 계산한다.
 /// 프론트엔드 실시간 점수표 하이라이팅 전용.

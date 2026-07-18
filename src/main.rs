@@ -603,6 +603,7 @@ fn build_router(state: AppState) -> Router {
         .route("/areas/:id/base-data/external/daegyo/import",  post(handlers::external_import::daegyo_import))
         .route("/areas/:id/base-data/external/univ/preview",   post(handlers::external_import::univ_preview))
         .route("/areas/:id/base-data/external/univ/import",    post(handlers::external_import::univ_import))
+        .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))
         .route("/universities", get(handlers::universities::list_universities))
         .route("/universities", post(handlers::universities::create_university))
         .route("/universities/quota-stats", get(handlers::universities::get_quota_stats))
