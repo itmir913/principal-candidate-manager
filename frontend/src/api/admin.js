@@ -232,6 +232,9 @@ export const getTrackRecommendedList = (trackId) =>
 export const autoRecommend = (roundId) =>
   axios.post(`/api/rounds/${roundId}/auto-recommend`).then(r => r.data)
 
+export const autoRecommendUniv = (roundId, univId) =>
+  axios.post(`/api/rounds/${roundId}/auto-recommend/univ/${univId}`).then(r => r.data)
+
 // ── 감사 기록 ──────────────────────────────────────────────────────
 export const getAuditLogs = (params = {}) =>
   axios.get('/api/audit-logs', { params }).then(r => r.data)

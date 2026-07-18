@@ -304,6 +304,9 @@
 
             <!-- 자동 추천 확정 결과 표시 -->
             <div v-if="autoRecommendResult" class="mb-5 rounded-xl" style="padding: 16px 20px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+              <div v-if="autoRecommendScope" class="text-base mb-2" style="color: #64748b;">
+                처리 범위: {{ autoRecommendScope }}
+              </div>
               <div v-if="autoRecommendResult.confirmed.length > 0" class="text-base font-semibold mb-2" style="color: #15803d;">
                 {{ autoRecommendResult.confirmed.length }}개 모집단위 {{ autoRecommendResult.confirmed.reduce((s, c) => s + c.count, 0) }}명 추천 확정
               </div>
@@ -311,9 +314,9 @@
                 자동 확정 대상 없음 (정원 소진 또는 후보 없음)
               </div>
               <div v-if="autoRecommendResult.manual.length > 0" class="rounded-lg mt-2" style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d;">
-                <p class="text-base font-semibold mb-2" style="color: #92400e;">수동 확인 필요 모집단위</p>
-                <div v-for="m in autoRecommendResult.manual" :key="m.track_id" class="text-base" style="color: #78350f;">
-                  {{ m.univ_name }} {{ m.track_name }} — {{ m.reason }}
+                <p class="text-base font-semibold mb-2" style="color: #92400e;">수동 확인 필요</p>
+                <div v-for="(m, i) in autoRecommendResult.manual" :key="i" class="text-base" style="color: #78350f;">
+                  {{ m.univ_name }}<template v-if="m.track_name"> {{ m.track_name }}</template><template v-else> (대학 전체)</template> — {{ m.reason }}
                 </div>
               </div>
             </div>
@@ -363,6 +366,13 @@
                     <template v-else>모집단위 정원 무제한</template>
                   </template>
                 </span>
+                <button
+                  v-if="selected.status === 'CLOSED' && group.univId != null"
+                  class="text-base font-medium rounded-lg disabled:opacity-40"
+                  style="padding: 6px 14px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; cursor: pointer;"
+                  :disabled="autoRecommendActing"
+                  @click="handleAutoRecommendUniv(group)"
+                >이 대학 자동 추천</button>
               </div>
               <div class="rounded-xl overflow-hidden"
                 style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
@@ -481,6 +491,7 @@ import {
   exportRoundSummary,
   getQuotaStats,
   autoRecommend,
+  autoRecommendUniv,
   blobErrMsg,
   getRoundConfirmationStatus,
 } from '../../api/admin.js'
@@ -524,6 +535,7 @@ const expandedRows       = ref({})
 const quotaStats         = ref(null)
 const autoRecommendActing = ref(false)
 const autoRecommendResult = ref(null)
+const autoRecommendScope  = ref('')
 
 const selectedTrackId   = ref('')
 const confirmationStatus = ref(null)  // { classes: [...] } | null
@@ -622,6 +634,8 @@ const trackQuotaMap = computed(() => {
   for (const u of quotaStats.value.univs) {
     for (const t of u.tracks) {
       map[t.track_id] = {
+        univId: u.univ_id,
+        univName: u.univ_name,
         unitQuota: t.unit_quota,
         unitUsed: t.unit_used,
         totalQuota: u.total_quota,
@@ -643,6 +657,8 @@ const resultsByUniv = computed(() => {
       const unitQuota = q?.unitQuota ?? null
       const totalQuota = q?.totalQuota ?? null
       map[key] = {
+        univId: q?.univId ?? null,
+        univName: r.univ_name,
         unitQuota,
         totalQuota,
         remaining: unitQuota != null ? Math.max(0, unitQuota - (q?.unitUsed ?? 0)) : null,
@@ -663,6 +679,8 @@ const resultsByUnivOnly = computed(() => {
       const q = trackQuotaMap.value[r.track_id]
       const totalQuota = q?.totalQuota ?? null
       map[key] = {
+        univId: q?.univId ?? null,
+        univName: r.univ_name,
         totalQuota,
         univRemaining: totalQuota != null ? Math.max(0, totalQuota - (q?.totalUsed ?? 0)) : null,
         results: [],
@@ -741,6 +759,7 @@ async function selectRound(r) {
   selected.value = r
   calcMsg.value = null
   autoRecommendResult.value = null
+  autoRecommendScope.value = ''
   confirmationStatus.value = null
   await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
 }
@@ -967,18 +986,41 @@ async function downloadSummary() {
   }
 }
 
+const AUTO_RECOMMEND_NOTE =
+  '모집단위 정원까지 순위순으로 채운 뒤, 대학 정원이 있으면 대학 전체 순위로 상위까지만 남깁니다.\n'
+  + '동점이 정원 경계를 가르는 지점은 자동 확정하지 않고 수동 확인 목록으로 알려드립니다.'
+
 async function handleAutoRecommend() {
   if (!selected.value) return
   if (!(await dialog.confirm({
     title: '자동 추천 확정',
-    message: '모든 모집단위에 대해 순위순으로 잔여 정원까지 추천을 자동 확정할까요?\n동점 등으로 자동 확정할 수 없는 모집단위는 건너뛰고 알려드립니다.',
+    message: `모든 대학에 대해 추천을 자동 확정할까요?\n${AUTO_RECOMMEND_NOTE}`,
     confirmText: '자동 확정',
   }))) return
+  await runAutoRecommend(() => autoRecommend(selected.value.id), '전체 대학')
+}
+
+async function handleAutoRecommendUniv(group) {
+  if (!selected.value || group.univId == null) return
+  if (!(await dialog.confirm({
+    title: '이 대학 자동 추천',
+    message: `${group.univName}의 모집단위만 자동 확정할까요?\n${AUTO_RECOMMEND_NOTE}`,
+    confirmText: '자동 확정',
+  }))) return
+  await runAutoRecommend(
+    () => autoRecommendUniv(selected.value.id, group.univId),
+    group.univName,
+  )
+}
+
+async function runAutoRecommend(call, scopeLabel) {
   autoRecommendActing.value = true
   autoRecommendResult.value = null
+  autoRecommendScope.value = ''
   try {
-    const res = await autoRecommend(selected.value.id)
+    const res = await call()
     autoRecommendResult.value = res
+    autoRecommendScope.value = scopeLabel
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
