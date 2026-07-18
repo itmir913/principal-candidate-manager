@@ -958,7 +958,7 @@ pub async fn teacher_delete_application(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query(
+    let deleted = sqlx::query(
         "DELETE FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid)
@@ -966,7 +966,14 @@ pub async fn teacher_delete_application(
     .bind(rid)
     .execute(&mut *tx)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
+    // silent no-op 방지: 없는 지원 삭제가 204로 성공하면 확정 자동 해제·감사 로그까지
+    // 유령으로 발생한다 (rollback으로 전부 취소됨)
+    if deleted == 0 {
+        return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
+    }
 
     // 지원 삭제 시 확정 자동 해제
     let revoked_count = sqlx::query(

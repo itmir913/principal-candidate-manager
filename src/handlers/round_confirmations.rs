@@ -89,10 +89,18 @@ pub async fn teacher_confirm_round(
     Extension(claims): Extension<TeacherClaims>,
     Path(round_id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    // BEGIN IMMEDIATE: 시작 시점에 쓰기 잠금 획득 — 상태 확인 후 close_round가
+    // 끼어들어 CLOSED 라운드에 확정이 삽입되는 TOCTOU 방지
+    let mut tx = state
+        .db
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     // OPEN 라운드만 확정 가능
     let status: Option<String> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
         .bind(round_id)
-        .fetch_optional(&state.db)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -101,12 +109,6 @@ pub async fn teacher_confirm_round(
         Some(_) => return Err((StatusCode::BAD_REQUEST, "OPEN 라운드에서만 확정할 수 있습니다".into())),
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
-
-    let mut tx = state
-        .db
-        .begin()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -164,22 +166,25 @@ pub async fn teacher_revoke_confirmation(
     Extension(claims): Extension<TeacherClaims>,
     Path(round_id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    let round_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rounds WHERE id = ?)")
-        .bind(round_id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .unwrap_or(false);
-
-    if !round_exists {
-        return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into()));
-    }
-
+    // BEGIN IMMEDIATE: confirm과 동일 — 상태 확인·삭제가 close_round와 원자적으로 배타
     let mut tx = state
         .db
-        .begin()
+        .begin_with("BEGIN IMMEDIATE")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // OPEN 라운드만 취소 가능 — 종료된 라운드의 확정 기록은 담임이 사후 변경할 수 없다
+    let status: Option<String> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(round_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match status.as_deref() {
+        Some("OPEN") => {}
+        Some(_) => return Err((StatusCode::BAD_REQUEST, "OPEN 라운드에서만 확정을 취소할 수 있습니다".into())),
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
+    }
 
     let affected = sqlx::query(
         "DELETE FROM round_confirmations \

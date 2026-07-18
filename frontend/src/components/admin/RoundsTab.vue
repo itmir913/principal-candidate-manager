@@ -767,6 +767,7 @@ async function handleReopenRound(id) {
     if (selected.value?.id === id) {
       const updated = rounds.value.find(r => r.id === id)
       if (updated) selected.value = updated
+      await loadConfirmationStatus()
     }
     await refreshSidebarRound()
   } catch (e) {

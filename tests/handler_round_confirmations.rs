@@ -622,3 +622,89 @@ async fn open_round_creates_new_active_round() {
     assert_eq!(status, StatusCode::CREATED);
     assert!(val["id"].is_number());
 }
+
+// ── 리뷰 추가: CLOSED 라운드 확정 취소 → 400 (종료 후 사후 변경 차단) ──
+
+#[tokio::test]
+async fn revoke_on_closed_round_returns_bad_request() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup(&pool).await;
+
+    teacher_confirm_round(app_state(pool.clone()), Extension(common::teacher_claims(1, 1)), Path(rid))
+        .await
+        .unwrap();
+
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let res = teacher_revoke_confirmation(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(1, 1)),
+        Path(rid),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
+
+    // 확정 기록은 그대로 보존
+    let row_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM round_confirmations WHERE round_id = ?",
+    )
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row_count, 1, "종료된 라운드의 확정은 담임이 취소할 수 없다");
+
+    let revoke_logs: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_log WHERE action = ?",
+    )
+    .bind(AuditAction::RoundConfirmationRevoked)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(revoke_logs, 0, "해제 로그 없음");
+}
+
+// ── 리뷰 추가: 없는 지원 삭제 → 404, 확정·로그 유령 발생 금지 ─────
+
+#[tokio::test]
+async fn delete_nonexistent_application_returns_404_keeps_confirmation() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup(&pool).await;
+
+    teacher_confirm_round(app_state(pool.clone()), Extension(common::teacher_claims(1, 1)), Path(rid))
+        .await
+        .unwrap();
+
+    // 지원이 존재하지 않는 상태에서 삭제 시도
+    let res = teacher_delete_application(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(1, 1)),
+        Path((sid, tid, rid)),
+    )
+    .await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+
+    // 확정이 유령 해제되지 않아야 함 (rollback)
+    let row_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM round_confirmations WHERE round_id = ?",
+    )
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row_count, 1, "없는 지원 삭제 요청이 확정을 해제하면 안 된다");
+
+    let ghost_logs: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_log WHERE action IN (?, ?)",
+    )
+    .bind(AuditAction::RoundConfirmationRevoked)
+    .bind(AuditAction::ApplicationDeleted)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ghost_logs, 0, "삭제·해제 유령 로그 없음");
+}

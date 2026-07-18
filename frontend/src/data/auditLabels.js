@@ -28,6 +28,9 @@ export const AUDIT_ACTION_LABELS = {
   // 점수 기준·기초데이터
   SCORE_TABLE_IMPORTED: '점수 기준 가져오기',
   BASE_DATA_IMPORTED:   '기초데이터 가져오기',
+  // 담임 입력 확정
+  ROUND_CONFIRMED:              '담임 입력 확정',
+  ROUND_CONFIRMATION_REVOKED:   '담임 입력 확정 해제',
   // 대학·모집단위
   UNIVERSITY_CREATED: '대학 추가',
   UNIVERSITY_UPDATED: '대학 수정',
