@@ -3,9 +3,38 @@
   <div class="flex flex-col">
 
     <!-- 페이지 헤더 -->
-    <div class="flex-shrink-0 pt-8 pb-5 px-4 sm:px-10">
-      <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
-      <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
+    <div class="flex-shrink-0 pt-8 pb-5 px-4 sm:px-10 flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
+        <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
+      </div>
+
+      <!-- 확정 영역 (OPEN 라운드 있을 때만) -->
+      <div v-if="currentRound && loaded" class="flex items-center gap-3 flex-wrap mt-2">
+        <!-- 미확정 -->
+        <template v-if="!confirmation?.confirmed">
+          <button
+            class="text-base font-semibold rounded-lg disabled:opacity-40"
+            style="padding: 9px 20px; border: none; background: #16a34a; color: white; cursor: pointer;"
+            :disabled="confirmActing"
+            @click="handleConfirm"
+          >입력 완료 확정</button>
+        </template>
+        <!-- 확정됨 -->
+        <template v-else>
+          <span
+            class="text-base font-semibold"
+            style="padding: 7px 16px; border-radius: 8px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;"
+          >✓ 입력 확정됨</span>
+          <span class="text-base" style="color: #94a3b8;">{{ fmtLocal(confirmation.confirmed_at) }}</span>
+          <button
+            class="text-base rounded-lg disabled:opacity-40"
+            style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+            :disabled="confirmActing"
+            @click="handleRevokeConfirmation"
+          >확정 취소</button>
+        </template>
+      </div>
     </div>
 
     <div v-if="loaded" class="px-4 sm:px-10 pb-5">
@@ -412,6 +441,9 @@ import {
   teacherAreaScorePreview,
   teacherCreateApplication,
   teacherGetResults,
+  teacherGetRoundConfirmation,
+  teacherConfirmRound,
+  teacherRevokeRoundConfirmation,
 } from '../../api/teacher.js'
 import HelpBox from '../common/HelpBox.vue'
 import ApplicationDetailModal from './ApplicationDetailModal.vue'
@@ -425,6 +457,8 @@ const applications  = ref([])
 const universities  = ref([])
 const allRounds     = ref([])
 const loaded        = ref(false)
+const confirmation  = ref(null)   // { confirmed, confirmed_at } | null
+const confirmActing = ref(false)
 
 const selectedStudent = ref(null)
 const showForm        = ref(false)
@@ -532,6 +566,16 @@ onBeforeRouteLeave(async () => {
   })
 })
 
+// ── 확정 상태 로드 ────────────────────────────────────────────────
+async function loadConfirmation() {
+  if (!currentRound.value) { confirmation.value = null; return }
+  try {
+    confirmation.value = await teacherGetRoundConfirmation(currentRound.value.id)
+  } catch {
+    confirmation.value = null
+  }
+}
+
 // ── 초기 로드 ─────────────────────────────────────────────────────
 async function loadAll() {
   const [round, sts, univs, resultsData] = await Promise.all([
@@ -547,6 +591,7 @@ async function loadAll() {
 
   if (round) {
     applications.value = await teacherGetApplications(round.id)
+    await loadConfirmation()
   }
   loaded.value = true
 }
@@ -570,6 +615,7 @@ const helpBox = computed(() => {
         '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. "관리자 입력 고정" 항목은 관리자가 이미 입력해 둔 값이라 수정할 수 없습니다.',
         '모든 항목을 입력해야 "저장" 버튼이 활성화됩니다. 저장 전에 예상 점수가 맞는지 확인하세요.',
         '저장한 지원은 학생 이름 옆 파란 숫자로 표시됩니다. 지원을 클릭하면 상세 정보를 확인하고 수정하거나 취소할 수 있습니다. 수정 시 대학·모집단위도 변경할 수 있습니다.',
+        '모든 학생의 지원 입력을 마쳤으면 오른쪽 위 \'입력 완료 확정\' 버튼을 눌러 주세요. 확정 후 지원을 수정하면 확정이 자동으로 해제되니 다시 확정하면 됩니다.',
       ],
     }
   }
@@ -806,6 +852,7 @@ async function saveApplication() {
     }
     await teacherCreateApplication(body)
     applications.value = await teacherGetApplications(currentRound.value.id)
+    await loadConfirmation()
     closeForm()
   } catch (e) {
     saveError.value = e.response?.data || e.message
@@ -822,6 +869,7 @@ function openDetail(app) {
 async function onModalDeleted() {
   detailApp.value = null
   applications.value = await teacherGetApplications(currentRound.value.id)
+  await loadConfirmation()
 }
 
 async function onModalEdit(app) {
@@ -870,6 +918,50 @@ async function onModalEdit(app) {
   } finally {
     tracksLoading.value = false
   }
+}
+
+// ── 확정 핸들러 ───────────────────────────────────────────────────
+async function handleConfirm() {
+  const ok = await dialog.confirm({
+    title: '입력 완료 확정',
+    message: '이번 라운드에 우리 반 학생의 지원을 모두 입력했습니까?\n확정 후에도 라운드 종료 전까지 수정할 수 있으며, 지원을 수정하면 확정이 자동으로 해제됩니다.',
+    confirmText: '확정',
+    level: 'warn',
+  })
+  if (!ok) return
+  confirmActing.value = true
+  try {
+    await teacherConfirmRound(currentRound.value.id)
+    await loadConfirmation()
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message })
+  } finally {
+    confirmActing.value = false
+  }
+}
+
+async function handleRevokeConfirmation() {
+  const ok = await dialog.confirm({
+    title: '확정 취소',
+    message: '입력 완료 확정을 취소하시겠습니까?',
+    confirmText: '취소',
+    level: 'warn',
+  })
+  if (!ok) return
+  confirmActing.value = true
+  try {
+    await teacherRevokeRoundConfirmation(currentRound.value.id)
+    await loadConfirmation()
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message })
+  } finally {
+    confirmActing.value = false
+  }
+}
+
+function fmtLocal(isoStr) {
+  if (!isoStr) return ''
+  return new Date(isoStr).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 onMounted(loadAll)

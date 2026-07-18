@@ -47,3 +47,12 @@ export const teacherGetResults = () =>
 
 export const teacherAbandonApplication = (sid, tid, rid) =>
   axios.put(`/api/teacher/applications/${sid}/${tid}/${rid}/abandon`)
+
+export const teacherGetRoundConfirmation = (roundId) =>
+  axios.get(`/api/teacher/rounds/${roundId}/confirm`).then(r => r.data)
+
+export const teacherConfirmRound = (roundId) =>
+  axios.post(`/api/teacher/rounds/${roundId}/confirm`)
+
+export const teacherRevokeRoundConfirmation = (roundId) =>
+  axios.delete(`/api/teacher/rounds/${roundId}/confirm`)
