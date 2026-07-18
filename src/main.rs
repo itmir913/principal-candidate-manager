@@ -637,6 +637,14 @@ fn build_router(state: AppState) -> Router {
             put(handlers::applications::abandon_application),
         )
         .route(
+            "/applications/:sid/:tid/:rid/exclude",
+            put(handlers::applications::exclude_application),
+        )
+        .route(
+            "/applications/:sid/:tid/:rid/exclude",
+            delete(handlers::applications::clear_application_exclusion),
+        )
+        .route(
             "/results/:sid/:tid/:rid/recommend",
             put(handlers::scoring::recommend_result),
         )

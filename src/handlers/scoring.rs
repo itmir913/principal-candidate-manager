@@ -69,6 +69,8 @@ pub struct ResultRow {
     pub track_rank: Option<i64>,
     pub recommended: bool,
     pub abandoned: bool,
+    pub excluded: bool,
+    pub excluded_reason: Option<String>,
     pub student_code: String,
     pub name: String,
     pub grade: Option<i64>,
@@ -476,6 +478,7 @@ pub async fn get_results(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 u.univ_name, ut.track_name,
                 COALESCE(a.department_name, '') AS department_name,
@@ -527,6 +530,7 @@ pub async fn export_results(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 u.univ_name, ut.track_name,
                 COALESCE(a.department_name, '') AS department_name,
@@ -569,7 +573,9 @@ pub async fn export_results(
     }
     ws.write_string(0, col, "총점").map_err(excel::xlsx_err)?; col += 1;
     ws.write_string(0, col, "추천").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "포기").map_err(excel::xlsx_err)?;
+    ws.write_string(0, col, "포기").map_err(excel::xlsx_err)?; col += 1;
+    ws.write_string(0, col, "제외여부").map_err(excel::xlsx_err)?; col += 1;
+    ws.write_string(0, col, "제외사유").map_err(excel::xlsx_err)?;
 
     // 데이터 행
     for (i, r) in all_results.iter().enumerate() {
@@ -617,7 +623,9 @@ pub async fn export_results(
 
         ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, if r.recommended { "추천" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
-        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).map_err(excel::xlsx_err)?;
+        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.excluded { "제외" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, r.excluded_reason.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb
@@ -657,6 +665,8 @@ struct ApplicantResultRow {
     track_rank: Option<i64>,
     recommended: Option<i64>,
     abandoned: i64,
+    excluded: i64,
+    excluded_reason: Option<String>,
 }
 
 pub async fn export_round_summary(
@@ -780,7 +790,8 @@ pub async fn export_round_summary(
          )
          SELECT s.student_code, s.is_enrolled, s.grade, s.class_no, s.seq_no, s.name,
                 u.univ_name, ut.track_name, a.department_name,
-                r.total_score, r.ranking, tr.track_rank, r.recommended, a.abandoned
+                r.total_score, r.ranking, tr.track_rank, r.recommended, a.abandoned,
+                a.excluded, a.excluded_reason
          FROM applications a
          JOIN students s     ON s.id    = a.student_id
          JOIN univ_tracks ut ON ut.id   = a.track_id
@@ -807,6 +818,7 @@ pub async fn export_round_summary(
     let headers2 = [
         "학생코드", "재학생여부", "학년", "반", "번호", "이름",
         "지원대학", "모집단위", "지원학과명", "총점", "대학 순위", "모집단위 순위", "추천대상", "포기여부",
+        "제외여부", "제외사유",
     ];
     for (col, h) in headers2.iter().enumerate() {
         ws2.write_string(0, col as u16, *h).map_err(excel::xlsx_err)?;
@@ -849,6 +861,8 @@ pub async fn export_round_summary(
             _       => "X",
         }).map_err(excel::xlsx_err)?;
         ws2.write_string(r, 13, if row.abandoned == 1 { "O" } else { "X" }).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 14, if row.excluded == 1 { "O" } else { "X" }).map_err(excel::xlsx_err)?;
+        ws2.write_string(r, 15, row.excluded_reason.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb
@@ -906,6 +920,7 @@ pub async fn teacher_get_results(
              SELECT r.student_id, r.track_id, r.round_id,
                     r.total_score, r.score_detail, r.ranking, r.recommended,
                     COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     u.univ_name, ut.track_name,
                     COALESCE(a.department_name, '') AS department_name,
@@ -946,6 +961,7 @@ pub async fn teacher_get_results(
              SELECT r.student_id, r.track_id, r.round_id,
                     r.total_score, r.score_detail, r.ranking, r.recommended,
                     COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     u.univ_name, ut.track_name,
                     COALESCE(a.department_name, '') AS department_name,
@@ -1085,6 +1101,20 @@ pub async fn recommend_result(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
+    // 1b. 제외(결격) 처리된 지원은 추천 불가 — 존재하지 않으면 이후 검증에서 자연히 404/409로 처리된다
+    let excluded: Option<bool> = sqlx::query_scalar(
+        "SELECT excluded = 1 FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if excluded == Some(true) {
+        return Err((StatusCode::CONFLICT, "제외 처리된 지원은 추천할 수 없습니다".into()));
+    }
+
     // 2. 모집단위 정원 정보 조회
     #[derive(sqlx::FromRow)]
     struct TrackInfo { unit_quota: Option<i64>, univ_id: i64 }
@@ -1177,7 +1207,7 @@ pub async fn recommend_result(
          JOIN applications a ON a.student_id = k.student_id
                              AND a.track_id  = ?
                              AND a.round_id  = ?
-         WHERE k.recommended = 0 AND a.abandoned = 0
+         WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
            AND k.track_rank < (SELECT track_rank FROM ranked WHERE student_id = ?)",
     )
     .bind(rid).bind(tid).bind(tid).bind(rid).bind(sid)
@@ -1600,6 +1630,7 @@ async fn run_auto_recommend(
         /// 모집단위 순위 (트랙 prioritize_enrolled 기준 파생) — 1단계에서 사용
         track_rank: i64,
         recommended: i64,
+        excluded: i64,
     }
 
     let mut confirmed_items: Vec<AutoRecommendItem> = Vec::new();
@@ -1643,7 +1674,7 @@ async fn run_auto_recommend(
         //     RANK() 는 이미 추천 확정된 행까지 포함해 계산한다 — 화면(get_results)의
         //     모집단위 순위와 같은 값이어야 사유 메시지의 순위가 관리자에게 일치한다.
         let all_rows: Vec<CandidateRow> = sqlx::query_as(
-            "SELECT r.student_id, r.ranking, r.recommended,
+            "SELECT r.student_id, r.ranking, r.recommended, a.excluded,
                     CAST(RANK() OVER (
                         PARTITION BY r.track_id
                         ORDER BY
@@ -1653,6 +1684,9 @@ async fn run_auto_recommend(
              FROM results r
              JOIN students s ON s.id = r.student_id
              JOIN univ_tracks ut ON ut.id = r.track_id
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
              WHERE r.round_id = ? AND r.track_id = ?
              ORDER BY track_rank ASC",
         )
@@ -1662,8 +1696,10 @@ async fn run_auto_recommend(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+        // 제외(결격) 처리된 지원은 자동 추천 후보에서 빠진다 — RANK() 자체는 excluded 포함 전원으로
+        // 계산해 화면(get_results)·수동 추천 가드와 같은 순위를 유지한다.
         let candidates: Vec<&CandidateRow> =
-            all_rows.iter().filter(|c| c.recommended == 0).collect();
+            all_rows.iter().filter(|c| c.recommended == 0 && c.excluded == 0).collect();
 
         // 3d. ranking IS NULL → manual (Fail-Fast: silent 스킵 금지)
         //     2단계 대학 컷이 대학 전체 순위를 필요로 하므로 누락 시 자동 판단 불가.

@@ -7,7 +7,13 @@ CREATE TABLE IF NOT EXISTS applications (
     round_id        INTEGER NOT NULL REFERENCES rounds(id),
     abandoned       INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
     department_name TEXT    NOT NULL DEFAULT '',
-    PRIMARY KEY (student_id, track_id, round_id)
+    -- excluded: CLOSED 라운드에서 결격·서류미비 등으로 이번 라운드 추천 대상에서 제외.
+    -- abandoned(포기, FINALIZED 전용)와 별개 — 정원 집계(recommended=1 AND abandoned=0)와
+    -- 무관하므로 건드리면 이중 차감이 된다. 사유 없는 제외는 DB 레벨에서 차단(Fail-Fast).
+    excluded         INTEGER NOT NULL DEFAULT 0 CHECK(excluded IN (0, 1)),
+    excluded_reason  TEXT,
+    PRIMARY KEY (student_id, track_id, round_id),
+    CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <> ''))
 );
 CREATE INDEX IF NOT EXISTS idx_applications_round
     ON applications(round_id);
@@ -20,13 +26,20 @@ BEGIN
     WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) IN ('CLOSED', 'FINALIZED');
 END;
 
--- CLOSED : 모든 업데이트 차단
+-- CLOSED : excluded/excluded_reason 변경만 허용(제외 처리·해제)
 -- FINALIZED : abandoned 0→1 만 허용
 CREATE TRIGGER IF NOT EXISTS trg_prevent_update_closed_application
 BEFORE UPDATE ON applications
 BEGIN
-    SELECT RAISE(ABORT, 'Cannot update application: round is CLOSED')
-    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED';
+    SELECT RAISE(ABORT, 'Cannot update application: round is CLOSED. Only excluded/excluded_reason may change.')
+    WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'CLOSED'
+      AND (
+          OLD.student_id      != NEW.student_id
+          OR OLD.track_id         != NEW.track_id
+          OR OLD.round_id         != NEW.round_id
+          OR OLD.department_name  != NEW.department_name
+          OR OLD.abandoned        != NEW.abandoned
+      );
     SELECT RAISE(ABORT, 'Cannot update application: round is FINALIZED. Only abandoned 0->1 is permitted.')
     WHERE (SELECT status FROM rounds WHERE id = OLD.round_id) = 'FINALIZED'
       AND (
@@ -35,6 +48,8 @@ BEGIN
           OR OLD.round_id         != NEW.round_id
           OR OLD.department_name  != NEW.department_name
           OR (OLD.abandoned = 1 AND NEW.abandoned = 0)
+          OR OLD.excluded         != NEW.excluded
+          OR OLD.excluded_reason  IS NOT NEW.excluded_reason
       );
 END;
 

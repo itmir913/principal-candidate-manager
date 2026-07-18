@@ -71,6 +71,8 @@ pub struct ApplicationRow {
     pub track_id: i64,
     pub round_id: i64,
     pub abandoned: bool,
+    pub excluded: bool,
+    pub excluded_reason: Option<String>,
     pub department_name: String,
     pub student_code: String,
     pub name: String,
@@ -136,7 +138,7 @@ pub async fn admin_list_applications(
     Query(q): Query<ApplicationListQuery>,
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = sqlx::query_as::<_, ApplicationRow>(
-        "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
+        "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.excluded, a.excluded_reason, a.department_name,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
          FROM applications a
@@ -209,6 +211,171 @@ pub async fn abandon_application(
         AuditEntry {
             actor: Actor::Admin,
             action: AuditAction::ApplicationAbandoned,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ── 추천 제외(결격) ────────────────────────────────────────────────
+// abandoned(포기)와 별개 — CLOSED 전용, 정원 집계는 건드리지 않는다(feedback_...F단계 설계 참조).
+
+#[derive(Deserialize)]
+pub struct ExcludeApplicationBody {
+    pub reason: String,
+}
+
+fn check_round_closed_for_exclusion(status: Option<RoundStatus>) -> Result<(), ApiError> {
+    match status {
+        Some(RoundStatus::Closed) => Ok(()),
+        Some(RoundStatus::Open) => Err((
+            StatusCode::BAD_REQUEST,
+            "진행 중 라운드는 담임이 지원을 삭제하세요".into(),
+        )),
+        Some(RoundStatus::Finalized) => Err((
+            StatusCode::BAD_REQUEST,
+            "마감된 라운드의 지원은 추천 제외 처리를 변경할 수 없습니다".into(),
+        )),
+        None => Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
+    }
+}
+
+// URL: /applications/:sid/:tid/:rid/exclude  (PUT — 제외 설정)
+pub async fn exclude_application(
+    State(state): State<AppState>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+    Json(body): Json<ExcludeApplicationBody>,
+) -> Result<StatusCode, ApiError> {
+    let reason = body.reason.trim().to_string();
+    if reason.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "제외 사유는 필수입니다".into()));
+    }
+
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let status: Option<RoundStatus> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    check_round_closed_for_exclusion(status)?;
+
+    let current_excluded: Option<bool> = sqlx::query_scalar(
+        "SELECT excluded = 1 FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match current_excluded {
+        None => return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into())),
+        Some(true) => return Err((StatusCode::CONFLICT, "이미 제외 처리된 지원입니다".into())),
+        Some(false) => {}
+    }
+
+    let mut detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+    if let serde_json::Value::Object(ref mut map) = detail {
+        map.insert("reason".to_string(), serde_json::Value::String(reason.clone()));
+    }
+
+    sqlx::query(
+        "UPDATE applications SET excluded = 1, excluded_reason = ?
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(&reason)
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::ApplicationExcluded,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail,
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// URL: /applications/:sid/:tid/:rid/exclude  (DELETE — 제외 해제)
+pub async fn clear_application_exclusion(
+    State(state): State<AppState>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+) -> Result<StatusCode, ApiError> {
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let status: Option<RoundStatus> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    check_round_closed_for_exclusion(status)?;
+
+    let current_excluded: Option<bool> = sqlx::query_scalar(
+        "SELECT excluded = 1 FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match current_excluded {
+        None => return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into())),
+        Some(false) => return Err((StatusCode::CONFLICT, "제외 상태가 아닙니다".into())),
+        Some(true) => {}
+    }
+
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+
+    sqlx::query(
+        "UPDATE applications SET excluded = 0, excluded_reason = NULL
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::ApplicationExclusionCleared,
             round_id: Some(rid),
             student_id: Some(sid),
             detail,
@@ -349,7 +516,7 @@ pub async fn teacher_list_applications(
 ) -> Result<Json<Vec<ApplicationRow>>, ApiError> {
     let rows = if is_grad_teacher(&claims) {
         sqlx::query_as::<_, ApplicationRow>(
-            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
+            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.excluded, a.excluded_reason, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
@@ -368,7 +535,7 @@ pub async fn teacher_list_applications(
         .await
     } else {
         sqlx::query_as::<_, ApplicationRow>(
-            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.department_name,
+            "SELECT a.student_id, a.track_id, a.round_id, a.abandoned, a.excluded, a.excluded_reason, a.department_name,
                     s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                     ut.univ_id, u.univ_name, ut.track_name, r.recommended, rnd.status AS round_status
              FROM applications a
