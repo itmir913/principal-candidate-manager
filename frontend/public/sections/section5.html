@@ -16,7 +16,7 @@
                 <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
                     <li>라운드 생성 및 OPEN 상태로 전환</li>
                     <li>담임교사에게 서버 IP 주소·입력 기간·마감일 공지</li>
-                    <li><span class="font-semibold text-slate-700">개요</span> 탭에서 담임교사별 입력 현황(교사별 등록 학생 수 등) 통계 확인</li>
+                    <li><span class="font-semibold text-slate-700">개요</span> 탭에서 담임교사별 입력 현황(등록 수·입력 확정 여부) 통계 확인</li>
                     <li>전체 지원 현황 모니터링</li>
                 </ul>
             </div>
@@ -28,6 +28,7 @@
                     <li>학생별로 지원한 <span class="font-semibold text-slate-700">모든 대학·모집단위</span>의 전형요소 값 입력</li>
                     <li>점수 미리보기로 예상 점수 확인 후 저장</li>
                     <li>입력 오류 시 해당 지원내역 수정·삭제 가능</li>
+                    <li>모든 입력이 완료되면 화면 오른쪽 상단의 <span class="font-semibold text-slate-700">"입력 완료 확정"</span> 버튼을 클릭하여 완료를 알린다. 확정 후 지원을 추가·삭제하면 확정이 자동으로 취소됨</li>
                 </ul>
             </div>
         </div>
@@ -116,6 +117,7 @@
         <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-amber-700 mb-2"><span class="mr-2">⚠️</span>주의 사항</p>
             <ul class="space-y-1 text-amber-800 leading-relaxed list-disc list-outside pl-5">
+                <li>"종료하기" 버튼을 클릭하면 학급별 <span class="font-semibold">입력 확정 현황</span>이 먼저 표시됩니다. 미확정 학급이 있어도 종료 자체는 가능하지만, 해당 학급의 입력이 완전히 끝났는지 담임교사와 반드시 확인하십시오.</li>
                 <li>점수 산출 중 오류가 발생하면 CLOSED 상태로 전환할 수 없습니다. 라운드 종료 전에 모든 담임교사의 입력 완료 여부를 반드시 확인하십시오.</li>
                 <li>시스템은 추천 확정 누락을 자동으로 차단하지 않습니다. 마감하기 버튼을 누르기 전에 관리자가 <span class="font-semibold">모든 모집단위의 추천 확정 버튼을 빠짐없이 눌렀는지 직접 확인</span>하십시오.</li>
                 <li>마감하기 클릭 시 정원을 초과한 모집단위가 있으면 마감이 거부됩니다. 화면에 위반 모집단위 목록(모집단위 정원·추천 확정 수)이 표시되므로, 해당 모집단위의 추천을 정원 이내로 조정한 뒤 다시 마감하십시오.</li>
