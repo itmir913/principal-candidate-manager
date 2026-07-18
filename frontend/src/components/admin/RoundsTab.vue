@@ -1025,7 +1025,7 @@ async function confirmExclude(r) {
   const reason = excludeReasonDraft.value.trim()
   if (!reason) return
   if (!(await dialog.confirm({
-    title: '추천 제외 처리',
+    title: '결격 제외 처리',
     message: `${r.name} 학생을 이번 라운드 추천 대상에서 제외하시겠습니까?\n사유: ${reason}`,
     confirmText: '제외 처리',
     level: 'warn',
@@ -1041,8 +1041,8 @@ async function confirmExclude(r) {
 
 async function handleClearExclusion(r) {
   if (!(await dialog.confirm({
-    title: '제외 해제',
-    message: `${r.name} 학생의 추천 제외를 해제하시겠습니까?`,
+    title: '결격 제외 해제',
+    message: `${r.name} 학생의 결격 제외를 해제하시겠습니까?`,
     confirmText: '해제',
     level: 'warn',
   }))) return
