@@ -1304,9 +1304,6 @@ pub fn fill_by_rank_groups<T: Clone>(
     };
 
     let mut confirmed: Vec<T> = Vec::new();
-    if rem <= 0 {
-        return FillOutcome { confirmed, tie: None };
-    }
 
     let mut i = 0usize;
     while i < items.len() {
@@ -1317,26 +1314,147 @@ pub fn fill_by_rank_groups<T: Clone>(
         }
         let group_size = (j - i) as i64;
 
-        if confirmed.len() as i64 + group_size <= rem {
-            confirmed.extend(items[i..j].iter().map(|(_, v)| v.clone()));
-            i = j;
-            continue;
+        match decide_group(confirmed.len() as i64, group_size, rem) {
+            GroupStep::Take => {
+                confirmed.extend(items[i..j].iter().map(|(_, v)| v.clone()));
+                i = j;
+            }
+            GroupStep::StopClean => return FillOutcome { confirmed, tie: None },
+            GroupStep::StopTie { free } => {
+                return FillOutcome {
+                    confirmed,
+                    tie: Some(TieBoundary { rank, free, contenders: group_size }),
+                }
+            }
         }
-
-        // 이 그룹을 전원 넣으면 정원 초과 — 여기서 멈춘다
-        let free = rem - confirmed.len() as i64;
-        if free == 0 {
-            // 깨끗한 경계: 정원이 그룹 사이에 정확히 떨어짐 — 수동 불필요
-            return FillOutcome { confirmed, tie: None };
-        }
-        // 0 < free < group_size — 동점이 정원 경계를 가름
-        return FillOutcome {
-            confirmed,
-            tie: Some(TieBoundary { rank, free, contenders: group_size }),
-        };
     }
 
     FillOutcome { confirmed, tie: None }
+}
+
+/// 동점 그룹 하나를 만났을 때의 판정 결과.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GroupStep {
+    /// 그룹 전원이 잔여 정원 안 — 전원 확정하고 다음 그룹으로
+    Take,
+    /// 잔여 0 — 정원이 그룹 사이에 정확히 떨어진 **깨끗한 경계**. 수동 불필요
+    StopClean,
+    /// 0 < free < 그룹 크기 — **동점이 정원 경계를 가름**. 그룹은 아무도 확정하지 않고 수동
+    StopTie { free: i64 },
+}
+
+/// 동점 경계 4갈래 판정의 **단일 정의**.
+///
+/// `fill_by_rank_groups`(전체 정렬 목록)와 `merge_univ_cut`(트랙 선두 집합)이
+/// **같은 함수**를 사용해 두 경로의 경계 의미가 구조적으로 일치함을 보장한다.
+/// (무제한(None)은 컷 자체가 없으므로 각 호출자가 진입 전에 처리한다.)
+pub fn decide_group(confirmed_len: i64, group_size: i64, rem: i64) -> GroupStep {
+    if confirmed_len + group_size <= rem {
+        return GroupStep::Take;
+    }
+    let free = rem - confirmed_len;
+    if free <= 0 {
+        GroupStep::StopClean
+    } else {
+        GroupStep::StopTie { free }
+    }
+}
+
+/// 2단계(대학 정원 컷) 병합 대상 후보 — 1단계를 통과한 행 하나.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeCand {
+    pub student_id: i64,
+    pub track_id: i64,
+    /// 모집단위 순위 (트랙 prioritize_enrolled 기준) — 트랙 내부 순서를 결정
+    pub track_rank: i64,
+    /// 대학 전체 순위 (results.ranking, 대학 prioritize_enrolled 기준) — 트랙 간 우선을 결정
+    pub univ_rank: i64,
+}
+
+/// **대학 정원 컷 — 트랙 내부 순서 보존 k-way 병합** (D단계).
+///
+/// `tracks` 는 트랙별 1단계 확정 후보 리스트이며, 각 리스트는
+/// `(track_rank, univ_rank)` 오름차순으로 정렬되어 있어야 한다.
+///
+/// 규칙: **대학 컷은 같은 트랙 안에서 track_rank 상위자를 건너뛰고 하위자를 선택할 수 없다.**
+/// - 트랙 내부 순서 = 트랙 플래그(track_rank) — 항상 보존.
+/// - 트랙 간 우선   = 대학 플래그(univ_rank) — 트랙 설정이 타 트랙 학생에게 영향 없음.
+///
+/// 매 단계에서 각 트랙의 **선두**(아직 미선택인 첫 후보)만 경쟁한다. 자기 트랙 상위자에
+/// 막힌 후보는 애초에 경쟁 대상이 아니므로 동점 판정에도 넣지 않는다 — 그 후보가 탈락하는 것은
+/// 해당 모집단위의 재학생 우선 정책이 정상 작동한 결과이지 오류가 아니다(수동 사유로 올리지 않음).
+///
+/// 동점 그룹 G = 대학 순위가 최상위(r)인 선두들 + 그 선두와 **트랙 내부에서도 동점**
+/// (track_rank 동일)인 연속 후보들. track_rank 가 다르면 트랙 순서가 이미 우열을 정한
+/// 것이므로 동점이 아니다. 경계 처리는 `decide_group` 으로 `fill_by_rank_groups` 와 동일.
+///
+/// 대학 플래그와 모든 트랙 플래그가 일치하는 구성에서는 대학 순위와 트랙 순서가 같으므로
+/// 이 병합 결과는 **기존 전체 정렬(`fill_by_rank_groups`) 결과와 동일**하다.
+pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> FillOutcome<MergeCand> {
+    let Some(rem) = remaining else {
+        // 대학 정원 무제한 — 컷 자체가 없으므로 1단계 결과가 그대로 최종
+        return FillOutcome {
+            confirmed: tracks.iter().flatten().cloned().collect(),
+            tie: None,
+        };
+    };
+
+    // pos[i] = 트랙 i 에서 다음에 볼 후보의 인덱스 (그 앞은 모두 선택됨)
+    let mut pos: Vec<usize> = vec![0; tracks.len()];
+    let mut confirmed: Vec<MergeCand> = Vec::new();
+
+    loop {
+        // 선두들 중 대학 순위가 가장 좋은 값 r
+        let mut best: Option<i64> = None;
+        for (ti, list) in tracks.iter().enumerate() {
+            if let Some(head) = list.get(pos[ti]) {
+                if best.map_or(true, |b| head.univ_rank < b) {
+                    best = Some(head.univ_rank);
+                }
+            }
+        }
+        // 선두 집합이 비면 종료
+        let Some(r) = best else {
+            return FillOutcome { confirmed, tie: None };
+        };
+
+        // 동점 그룹 G — 선두들끼리만 판정
+        let mut group: Vec<(usize, usize)> = Vec::new(); // (트랙 인덱스, 인원)
+        let mut group_size: i64 = 0;
+        for (ti, list) in tracks.iter().enumerate() {
+            let Some(head) = list.get(pos[ti]) else { continue };
+            if head.univ_rank != r {
+                continue;
+            }
+            // 선두와 트랙 내부 동점(track_rank 동일)인 연속 후보까지 하나의 덩어리
+            let mut n = 0usize;
+            while let Some(c) = list.get(pos[ti] + n) {
+                if c.univ_rank == r && c.track_rank == head.track_rank {
+                    n += 1;
+                } else {
+                    break;
+                }
+            }
+            group.push((ti, n));
+            group_size += n as i64;
+        }
+
+        match decide_group(confirmed.len() as i64, group_size, rem) {
+            GroupStep::Take => {
+                for (ti, n) in group {
+                    confirmed.extend(tracks[ti][pos[ti]..pos[ti] + n].iter().cloned());
+                    pos[ti] += n;
+                }
+            }
+            GroupStep::StopClean => return FillOutcome { confirmed, tie: None },
+            GroupStep::StopTie { free } => {
+                return FillOutcome {
+                    confirmed,
+                    tie: Some(TieBoundary { rank: r, free, contenders: group_size }),
+                }
+            }
+        }
+    }
 }
 
 /// CLOSED 라운드의 자동 추천 확정 (전 대학).
@@ -1424,13 +1542,6 @@ async fn run_auto_recommend(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    /// 1단계 통과 후보 — 2단계 대학 컷 풀에 들어가는 행
-    #[derive(Clone)]
-    struct Picked {
-        student_id: i64,
-        track_id: i64,
-    }
-
     #[derive(sqlx::FromRow)]
     struct CandidateRow {
         student_id: i64,
@@ -1446,8 +1557,9 @@ async fn run_auto_recommend(
 
     // univ_id → (univ_name, total_quota)
     let mut univ_meta: HashMap<i64, (String, Option<i64>)> = HashMap::new();
-    // univ_id → 1단계 확정 후보 (대학 순위, 행)
-    let mut univ_pool: HashMap<i64, Vec<(i64, Picked)>> = HashMap::new();
+    // univ_id → 트랙별 1단계 확정 후보 리스트 (각 리스트는 트랙 내부 순서 = (track_rank, univ_rank) 오름차순).
+    // 2단계 병합이 트랙 내부 순서를 보존해야 하므로 **트랙 경계를 유지한 채** 넘긴다(평탄화 금지).
+    let mut univ_pool: HashMap<i64, Vec<Vec<MergeCand>>> = HashMap::new();
     // track_id → (univ_id, univ_name, track_name)
     let mut track_meta: HashMap<i64, (i64, String, String)> = HashMap::new();
 
@@ -1521,10 +1633,32 @@ async fn run_auto_recommend(
         }
 
         // 3f. 동점 그룹 원자적 채움 — 모집단위 순위 기준
-        let items: Vec<(i64, Picked)> = candidates
+        //     정렬 키에 대학 순위를 2차로 넣는다: track_rank 가 같은(트랙 내부 동점) 후보들 사이에서
+        //     대학 순위가 좋은 쪽이 앞에 오도록 — 2단계 병합의 선두가 그 덩어리의 최선이어야 한다.
+        //     동점 그룹은 원자 처리(전원 확정 or 전원 보류)이므로 1단계 결과에는 영향이 없다.
+        let mut items: Vec<(i64, MergeCand)> = candidates
             .iter()
-            .map(|c| (c.track_rank, Picked { student_id: c.student_id, track_id: track.track_id }))
-            .collect();
+            .map(|c| {
+                // 대학 전체 순위 — 3d 에서 NULL 없음이 보장됨
+                let univ_rank = c.ranking.ok_or_else(|| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "대학 전체 순위를 찾을 수 없습니다".to_string(),
+                    )
+                })?;
+                Ok((
+                    c.track_rank,
+                    MergeCand {
+                        student_id: c.student_id,
+                        track_id: track.track_id,
+                        track_rank: c.track_rank,
+                        univ_rank,
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>, ApiError>>()?;
+        items.sort_by_key(|(_, c)| (c.track_rank, c.univ_rank));
+
         let outcome = fill_by_rank_groups(&items, remaining);
 
         if let Some(tie) = &outcome.tie {
@@ -1540,29 +1674,20 @@ async fn run_auto_recommend(
         }
 
         // 1단계에서 동점으로 확정되지 않은 후보는 2단계 풀에 들어가지 않는다.
-        let pool = univ_pool.entry(track.univ_id).or_default();
-        for picked in outcome.confirmed {
-            // 대학 전체 순위 — 3d에서 NULL 없음이 보장됨
-            let rank = candidates
-                .iter()
-                .find(|c| c.student_id == picked.student_id)
-                .and_then(|c| c.ranking)
-                .ok_or_else(|| (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "대학 전체 순위를 찾을 수 없습니다".to_string(),
-                ))?;
-            pool.push((rank, picked));
+        // outcome.confirmed 는 items 순서 = (track_rank, univ_rank) 오름차순을 그대로 보존한다.
+        if !outcome.confirmed.is_empty() {
+            univ_pool.entry(track.univ_id).or_default().push(outcome.confirmed);
         }
     }
 
-    // 4. 2단계 — 대학 전체 정원 컷 (대학 전체 순위 기준)
-    let mut final_picks: Vec<Picked> = Vec::new();
+    // 4. 2단계 — 대학 전체 정원 컷 (트랙 내부 순서 보존 k-way 병합)
+    let mut final_picks: Vec<MergeCand> = Vec::new();
 
     let mut univ_ids: Vec<i64> = univ_pool.keys().copied().collect();
     univ_ids.sort_unstable();
 
     for univ_id in univ_ids {
-        let mut pool = univ_pool.remove(&univ_id).unwrap_or_default();
+        let pool = univ_pool.remove(&univ_id).unwrap_or_default();
         let (univ_name, total_quota) = univ_meta
             .get(&univ_id)
             .cloned()
@@ -1570,7 +1695,7 @@ async fn run_auto_recommend(
 
         let Some(tq) = total_quota else {
             // 대학 정원 무제한 — 컷 미발동, 1단계 결과가 곧 최종
-            final_picks.extend(pool.into_iter().map(|(_, p)| p));
+            final_picks.extend(merge_univ_cut(&pool, None).confirmed);
             continue;
         };
 
@@ -1589,10 +1714,9 @@ async fn run_auto_recommend(
 
         let remaining_univ = tq - univ_used;
 
-        // 대학 전체 순위 오름차순 — 동점(같은 ranking) 판정을 위해 반드시 정렬
-        pool.sort_by_key(|(rank, _)| *rank);
-
-        let outcome = fill_by_rank_groups(&pool, Some(remaining_univ));
+        // 트랙 내부 순서를 보존한 채 대학 순위로 병합 컷.
+        // (전체 재정렬 금지 — 같은 트랙의 track_rank 상위자를 건너뛰면 안 된다.)
+        let outcome = merge_univ_cut(&pool, Some(remaining_univ));
 
         if let Some(tie) = &outcome.tie {
             manual_items.push(AutoRecommendManualItem {

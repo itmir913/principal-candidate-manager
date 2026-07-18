@@ -424,7 +424,7 @@ async fn auto_recommend_skip_no_candidates_or_exhausted() {
 // ── B단계: 동점 그룹 원자적 채움 + 대학 전체 순위 컷 ──────────────
 
 use principal_candidate_manager::handlers::scoring::{
-    auto_recommend_results_univ, fill_by_rank_groups, TieBoundary,
+    auto_recommend_results_univ, fill_by_rank_groups, merge_univ_cut, MergeCand, TieBoundary,
 };
 
 /// 졸업생(is_enrolled=0). 스키마 CHECK: 졸업생은 grade/class_no/seq_no NULL + grad_year NOT NULL
@@ -541,6 +541,156 @@ fn fill_top_tie_confirms_none() {
     let out = fill_by_rank_groups(&items, Some(2));
     assert!(out.confirmed.is_empty());
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 3 }));
+}
+
+// ── 헬퍼 단위 테스트: merge_univ_cut (D단계 k-way 병합) ──────────
+
+/// 병합 후보 하나. sid 는 확인용 식별자.
+fn mc(sid: i64, track_id: i64, track_rank: i64, univ_rank: i64) -> MergeCand {
+    MergeCand { student_id: sid, track_id, track_rank, univ_rank }
+}
+
+fn sids(cands: &[MergeCand]) -> Vec<i64> {
+    cands.iter().map(|c| c.student_id).collect()
+}
+
+/// 무제한(None) → 트랙 전원 확정, 수동 없음
+#[test]
+fn merge_unlimited_confirms_all() {
+    let tracks = vec![vec![mc(1, 10, 1, 2), mc(2, 10, 2, 5)], vec![mc(3, 20, 1, 1)]];
+    let out = merge_univ_cut(&tracks, None);
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    assert_eq!(got, vec![1, 2, 3]);
+    assert_eq!(out.tie, None);
+}
+
+/// **선두만 경쟁**: 트랙 상위자에 막힌 후보는 대학 순위가 최상위여도 뽑히지 않는다.
+/// 트랙A [재학(트랙1위, 대학3위), 졸업(트랙2위, 대학1위)], 트랙B [X(대학2위)], 정원 2
+/// → {X, 재학}. 졸업은 자기 트랙 선두에 막힘.
+#[test]
+fn merge_head_only_blocked_candidate_never_jumps() {
+    let tracks = vec![
+        vec![mc(1, 10, 1, 3), mc(2, 10, 2, 1)], // 재학, 졸업
+        vec![mc(3, 20, 1, 2)],                  // X
+    ];
+    let out = merge_univ_cut(&tracks, Some(2));
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    assert_eq!(got, vec![1, 3], "막힌 졸업생(2)은 제외");
+    assert_eq!(out.tie, None, "막힌 후보는 동점 경계가 아니다");
+}
+
+/// 동점 판정은 **선두들끼리만**: 트랙A 선두가 대학 2위이고 그 뒤에 대학 2위가 또 있어도,
+/// 그 뒤 후보는 트랙 순서상 하위(track_rank 다름)이므로 동점 그룹에 넣지 않는다.
+/// 정원 1 → 트랙A 선두 1명 확정(수동 아님).
+#[test]
+fn merge_tie_group_excludes_lower_track_rank_same_univ_rank() {
+    let tracks = vec![vec![mc(1, 10, 1, 2), mc(2, 10, 2, 2)]];
+    let out = merge_univ_cut(&tracks, Some(1));
+    assert_eq!(sids(&out.confirmed), vec![1], "트랙 순서가 우열을 정함 — 동점 아님");
+    assert_eq!(out.tie, None);
+}
+
+/// 트랙 내부 **진짜 동점**(track_rank 도 같음)은 원자적: 정원 1 → 아무도 확정 안 되고 수동.
+#[test]
+fn merge_intra_track_true_tie_is_atomic() {
+    let tracks = vec![vec![mc(1, 10, 1, 2), mc(2, 10, 1, 2)]];
+    let out = merge_univ_cut(&tracks, Some(1));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 2, free: 1, contenders: 2 }));
+}
+
+/// 트랙 간 동점이 경계를 가름 → 상위는 확정, 동점 그룹은 수동
+#[test]
+fn merge_cross_track_tie_splits_boundary() {
+    let tracks = vec![vec![mc(1, 10, 1, 1), mc(2, 10, 2, 2)], vec![mc(3, 20, 1, 2)]];
+    let out = merge_univ_cut(&tracks, Some(2));
+    assert_eq!(sids(&out.confirmed), vec![1], "동점 위까지는 자동 확정");
+    assert_eq!(out.tie, Some(TieBoundary { rank: 2, free: 1, contenders: 2 }));
+}
+
+/// 깨끗한 경계: 잔여가 정확히 0 이 되며 끝 → 수동 불필요
+#[test]
+fn merge_clean_boundary_no_tie() {
+    let tracks = vec![vec![mc(1, 10, 1, 1), mc(2, 10, 2, 3)], vec![mc(3, 20, 1, 2)]];
+    let out = merge_univ_cut(&tracks, Some(2));
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    assert_eq!(got, vec![1, 3]);
+    assert_eq!(out.tie, None, "남은자리 0 — 깨끗한 경계");
+}
+
+/// 잔여 0 이하 → 아무도 확정 안 됨, 수동 없음 (fill_by_rank_groups 와 같은 의미)
+#[test]
+fn merge_zero_remaining_confirms_none() {
+    let tracks = vec![vec![mc(1, 10, 1, 1)]];
+    assert!(merge_univ_cut(&tracks, Some(0)).confirmed.is_empty());
+    assert_eq!(merge_univ_cut(&tracks, Some(0)).tie, None);
+    assert!(merge_univ_cut(&tracks, Some(-3)).confirmed.is_empty());
+    assert_eq!(merge_univ_cut(&tracks, Some(-3)).tie, None);
+}
+
+/// 후보 없음 → 빈 결과, 수동 없음
+#[test]
+fn merge_empty_pool() {
+    let out = merge_univ_cut(&[], Some(3));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, None);
+}
+
+/// **동작 불변 고정**: 대학 플래그와 모든 트랙 플래그가 일치하는 구성에서는
+/// 대학 순위 순서와 트랙 내부 순서가 같다(같은 대학 순위 ⟺ 같은 트랙 순위).
+/// 그런 입력에서 `merge_univ_cut` 은 기존 `fill_by_rank_groups`(전체 정렬)와
+/// **정확히 같은 확정 집합·같은 동점 경계**를 낸다.
+#[test]
+fn merge_equals_fill_when_flags_align() {
+    // 대학 순위 목록(동점 포함) — 플래그 일치 구성이므로 track_rank 도 같은 값을 쓴다
+    let shapes: Vec<Vec<i64>> = vec![
+        vec![1, 2, 3, 4],
+        vec![1, 2, 2, 4],
+        vec![1, 1, 1],
+        vec![1, 2, 2, 4, 5, 5],
+        vec![1],
+    ];
+    for ranks in shapes {
+        for num_tracks in 1..=3usize {
+            for rem in -1..=(ranks.len() as i64 + 1) {
+                // 대학 순위 오름차순 전체 목록 (fill 입력)
+                let flat: Vec<(i64, MergeCand)> = ranks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &r)| {
+                        let tid = (i % num_tracks) as i64;
+                        (r, mc(i as i64, tid, r, r))
+                    })
+                    .collect();
+                // 같은 후보를 트랙별로 분배 (각 트랙 내부는 대학 순위 오름차순 = 트랙 순서)
+                let mut tracks: Vec<Vec<MergeCand>> = vec![Vec::new(); num_tracks];
+                for (_, c) in &flat {
+                    tracks[c.track_id as usize].push(c.clone());
+                }
+
+                let fill = fill_by_rank_groups(&flat, Some(rem));
+                let merge = merge_univ_cut(&tracks, Some(rem));
+
+                let mut a = sids(&fill.confirmed);
+                let mut b = sids(&merge.confirmed);
+                a.sort_unstable();
+                b.sort_unstable();
+                assert_eq!(
+                    a, b,
+                    "확정 집합 불일치: ranks={:?} tracks={} rem={}",
+                    ranks, num_tracks, rem
+                );
+                assert_eq!(
+                    fill.tie, merge.tie,
+                    "동점 경계 불일치: ranks={:?} tracks={} rem={}",
+                    ranks, num_tracks, rem
+                );
+            }
+        }
+    }
 }
 
 // ── 1단계(모집단위) 동점 그룹 원자 처리 ──────────────────────────
@@ -909,13 +1059,17 @@ async fn auto_recommend_univ_scoped_rejects_non_closed_round() {
 
 // ── 감사 추가 회귀 테스트 (B단계 리뷰) ───────────────────────────
 
-/// **설계 귀결 고정**: 대학 total_quota 가 있으면 2단계 컷이 **대학 플래그**로 재정렬하므로,
-/// 대학 prioritize=0 · 트랙 prioritize=1 인 트랙의 재학생 우선은 대학 컷에서 유지되지 않는다.
-/// (1단계 트랙 정원 컷에서는 유지된다 — auto_recommend_track_phase_uses_track_prioritize_flag)
-/// D2 "각 범위 자기 플래그만" 의 직접적 귀결이며, 의도적 동작임을 이 테스트로 고정한다.
-/// 변경하려면 설계 결정(D2) 자체를 다시 정해야 한다.
+/// **D단계 규칙 고정 (기대값 반전)**: 대학 컷은 같은 트랙 안에서 track_rank 상위자를
+/// 건너뛰고 하위자를 선택할 수 없다.
+///
+/// 이 테스트는 B단계 감사 시점에 **잘못된 당시 동작**(대학 컷이 전체를 대학 플래그로
+/// 재정렬 → 같은 트랙 내부 순서가 뒤집힘)을 고정하고 있었다. D단계에서 규칙이 바뀌었으므로
+/// 같은 시나리오의 기대값을 뒤집는다.
+///
+/// 트랙이 하나뿐이라 이 컷은 사실상 **트랙 내부 비교**다. 트랙 prioritize=1 이므로
+/// 재학생이 트랙 선두이고, 졸업생은 자기 트랙 상위자에 막혀 선두가 아니다 → 재학생 확정.
 #[tokio::test]
-async fn auto_recommend_univ_cut_uses_univ_flag_even_when_track_flag_differs() {
+async fn auto_recommend_univ_cut_preserves_track_order_when_track_flag_differs() {
     let pool = common::create_test_pool().await;
     common::insert_class(&pool, 1, 1).await;
     let univ = new_univ(&pool, "A대", Some(1)).await; // 대학 정원 1, 대학 prioritize 0
@@ -931,20 +1085,173 @@ async fn auto_recommend_univ_cut_uses_univ_flag_even_when_track_flag_differs() {
     let enr = new_student(&pool, "E1", 1, 1, 1).await;
     let rid = new_closed_round(&pool).await;
     // 대학 순위(대학 플래그=0) = 점수순 → 졸업생 1위, 재학생 2위
+    // 모집단위 순위(트랙 플래그=1) = 재학생 우선 → 재학생 1위, 졸업생 2위
     app_result(&pool, grad, tid, rid, 1, 300_000).await;
     app_result(&pool, enr, tid, rid, 2, 100_000).await;
 
     let res = call_auto(&pool, rid).await;
 
-    // 1단계(트랙 무제한)는 둘 다 통과 → 2단계 대학 컷 1석이 대학 순위 1위를 택함
     assert_eq!(res.manual.len(), 0, "경계 비동점 — 수동 없음");
     let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
     assert_eq!(total, 1);
     assert!(
-        get_recommended(&pool, grad, tid, rid).await,
-        "대학 컷은 대학 플래그(prioritize=0) 기준 — 트랙 재학생 우선이 여기선 적용되지 않음",
+        get_recommended(&pool, enr, tid, rid).await,
+        "트랙 내부 순서 보존 — 대학 컷이 트랙 상위자(재학생)를 건너뛸 수 없다",
     );
-    assert!(!get_recommended(&pool, enr, tid, rid).await);
+    assert!(
+        !get_recommended(&pool, grad, tid, rid).await,
+        "졸업생은 자기 트랙 상위자에 막힘 — 오류가 아니라 모집단위 재학생 우선의 정상 작동",
+    );
+}
+
+// ── D단계: 트랙 내부 순서 보존 k-way 병합 ────────────────────────
+
+/// **트랙 간 새치기 없음**: 대학 정원 2, 대학 prioritize=0.
+/// 의학A(트랙 prioritize=1): 재학 100점(트랙 1위, 대학 3위), 졸업 300점(트랙 2위, 대학 1위)
+/// 트랙B(prioritize=0): X 200점(대학 2위)
+/// → 확정 = {X, 재학100}. A의 졸업 300점은 대학 1위지만 자기 트랙 선두에 막혀 탈락한다.
+///   (탈락은 manual 사유로 올리지 않는다 — 그 모집단위 정책의 정상 결과)
+#[tokio::test]
+async fn auto_recommend_univ_cut_no_cross_track_queue_jumping() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t_med = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled) \
+         VALUES (?, '의학', NULL, 1) RETURNING id",
+    )
+    .bind(univ)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let t_b = new_track(&pool, univ, "전기", None).await;
+    let enr = new_student(&pool, "E1", 1, 1, 1).await;
+    let grad = new_graduate(&pool, "G1", 2024).await;
+    let x = new_student(&pool, "X1", 1, 1, 2).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, grad, t_med, rid, 1, 300_000).await;
+    app_result(&pool, x, t_b, rid, 2, 200_000).await;
+    app_result(&pool, enr, t_med, rid, 3, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0, "막힌 후보는 수동 사유가 아니다");
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 2);
+    assert!(get_recommended(&pool, x, t_b, rid).await, "타 트랙 선두 — 대학 2위");
+    assert!(get_recommended(&pool, enr, t_med, rid).await, "의학 트랙 선두(재학생 우선)");
+    assert!(
+        !get_recommended(&pool, grad, t_med, rid).await,
+        "대학 1위여도 자기 트랙 선두에 막힘 — 이번 라운드 미추천",
+    );
+}
+
+/// **동점 원자 처리는 선두들끼리만**: 서로 다른 트랙의 선두 2명이 같은 대학 순위인데
+/// 잔여 1석 → 그 대학 manual, 둘 다 미확정.
+#[tokio::test]
+async fn auto_recommend_univ_merge_tie_among_heads_is_manual() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(1)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let rid = new_closed_round(&pool).await;
+    // 서로 다른 트랙의 선두 둘이 대학 1위 동점
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s2, t2, rid, 1, 300_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 1, "대학 단위 manual 1건");
+    assert_eq!(res.manual[0].track_id, None, "대학 단위 — 트랙 없음");
+    let reason = &res.manual[0].reason;
+    assert!(reason.contains("대학 전체 1위"), "사유에 순위: {}", reason);
+    assert!(reason.contains("잔여 1석"), "사유에 잔여석: {}", reason);
+    assert!(reason.contains("2명 경합"), "사유에 경합 인원: {}", reason);
+    assert!(!get_recommended(&pool, s1, t1, rid).await, "동점은 아무도 자동 확정 안 됨");
+    assert!(!get_recommended(&pool, s2, t2, rid).await);
+}
+
+/// **트랙 내부 동점은 여전히 원자적**: 같은 트랙에서 track_rank 가 같은(진짜 동점) 두 명이
+/// 병합 선두일 때 잔여 1석 → manual. 트랙 순서가 우열을 못 정하므로 시스템이 고를 수 없다.
+#[tokio::test]
+async fn auto_recommend_univ_merge_intra_track_tie_is_atomic() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(1)).await;
+    let tid = new_track(&pool, univ, "컴공", None).await;
+    let a = new_student(&pool, "A1", 1, 1, 1).await;
+    let b = new_student(&pool, "B1", 1, 1, 2).await;
+    let rid = new_closed_round(&pool).await;
+    // 같은 트랙·같은 점수 → 트랙 순위도 대학 순위도 동점
+    app_result(&pool, a, tid, rid, 1, 300_000).await;
+    app_result(&pool, b, tid, rid, 1, 300_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 1);
+    assert!(res.manual[0].reason.contains("대학 전체 1위"), "{}", res.manual[0].reason);
+    assert!(!get_recommended(&pool, a, tid, rid).await);
+    assert!(!get_recommended(&pool, b, tid, rid).await);
+}
+
+/// **깨끗한 경계**: 병합이 잔여 0에서 정확히 끝나면 수동 불필요.
+/// 대학 정원 2, 트랙 2개 · 대학 순위 [1,2,3] → 상위 2명 확정, 3위는 조용히 미추천.
+#[tokio::test]
+async fn auto_recommend_univ_merge_clean_boundary_no_manual() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    let s1 = new_student(&pool, "S1", 1, 1, 1).await;
+    let s2 = new_student(&pool, "S2", 1, 1, 2).await;
+    let s3 = new_student(&pool, "S3", 1, 1, 3).await;
+    let rid = new_closed_round(&pool).await;
+    app_result(&pool, s1, t1, rid, 1, 300_000).await;
+    app_result(&pool, s2, t2, rid, 2, 200_000).await;
+    app_result(&pool, s3, t2, rid, 3, 100_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0, "잔여 0 — 깨끗한 경계, 수동 불필요");
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 2);
+    assert!(get_recommended(&pool, s1, t1, rid).await);
+    assert!(get_recommended(&pool, s2, t2, rid).await);
+    assert!(!get_recommended(&pool, s3, t2, rid).await);
+}
+
+/// **동작 불변**: 대학 플래그와 모든 트랙 플래그가 일치하면(여기선 전부 1)
+/// 대학 순위와 트랙 순서가 같으므로 병합 결과 = 기존 전체 정렬 결과.
+/// 대학 정원 2 · 트랙 무제한 2개, 재학생 우선 전면 ON → 재학생 2명이 졸업생 고득점자를 이긴다.
+#[tokio::test]
+async fn auto_recommend_univ_merge_matches_sort_when_flags_align() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let univ = new_univ(&pool, "A대", Some(2)).await;
+    let t1 = new_track(&pool, univ, "컴공", None).await;
+    let t2 = new_track(&pool, univ, "전기", None).await;
+    set_univ_prioritize(&pool, univ).await; // 대학=1 ⇒ 모든 트랙=1
+    let e1 = new_student(&pool, "E1", 1, 1, 1).await;
+    let e2 = new_student(&pool, "E2", 1, 1, 2).await;
+    let g1 = new_graduate(&pool, "G1", 2024).await;
+    let rid = new_closed_round(&pool).await;
+    // 대학 순위 = 재학생 우선 → e1(1), e2(2), g1(3) — 점수는 g1 이 최고
+    app_result(&pool, e1, t1, rid, 1, 200_000).await;
+    app_result(&pool, e2, t2, rid, 2, 100_000).await;
+    app_result(&pool, g1, t1, rid, 3, 900_000).await;
+
+    let res = call_auto(&pool, rid).await;
+
+    assert_eq!(res.manual.len(), 0);
+    let total: i64 = res.confirmed.iter().map(|c| c.count).sum();
+    assert_eq!(total, 2);
+    assert!(get_recommended(&pool, e1, t1, rid).await);
+    assert!(get_recommended(&pool, e2, t2, rid).await);
+    assert!(!get_recommended(&pool, g1, t1, rid).await, "플래그 일치 구성 — 기존 정렬과 동일");
 }
 
 /// 1단계 모집단위 순위는 **이미 추천 확정된 행까지 포함해** RANK() 로 계산하고,

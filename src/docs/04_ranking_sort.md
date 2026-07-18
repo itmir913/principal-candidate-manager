@@ -13,7 +13,21 @@
 
 1순위 → 총점 내림차순 (`total_score DESC`)만 적용
 
-**`prioritize_enrolled` 판단 기준**: 해당 모집단위(`univ_tracks`)의 `prioritize_enrolled` 또는 해당 대학(`universities`)의 `prioritize_enrolled` 중 하나라도 1이면 우선 적용된다 (`u.prioritize_enrolled = 1 OR ut.prioritize_enrolled = 1`).
+**`prioritize_enrolled` 판단 기준 — 각 범위는 자기 플래그만 사용한다 (OR 금지, D2)**
+
+- **대학 전체 순위**(`results.ranking`, 대학 파티션) = `universities.prioritize_enrolled` 만.
+- **모집단위 순위**(`track_rank`, 트랙 파티션 파생) = `univ_tracks.prioritize_enrolled` 만.
+
+불변식 "대학=1 ⇒ 그 대학 모든 트랙=1"을 트리거가 강제하므로, 대학=1이면 트랙도 실제 1이라
+OR 없이도 두 순위가 일치한다. 대학=0·트랙=1(그 모집단위만 재학생 우선)은 허용되는 정상 구성이다.
+대학 값이 바뀌면 트랙에 **양방향 cascade** 된다(1→0 시 트랙의 1은 cascade 강제값이므로 되돌림).
+
+**자동 추천 2단계의 대학 정원 컷 (D)**: 대학 컷은 같은 모집단위 안에서 `track_rank` 상위자를
+건너뛰고 하위자를 선택할 수 없다. 1단계 확정분을 전체 재정렬하지 않고, 각 트랙의 **선두**(아직
+미선택인 첫 후보)들만 대학 순위로 겨루는 k-way 병합(`merge_univ_cut`)으로 컷한다.
+동점 판정도 선두들끼리만 하며, 자기 트랙 상위자에 막힌 후보는 경쟁 대상이 아니므로
+탈락해도 수동 사유가 아니다(그 모집단위 정책의 정상 결과 — "이번 라운드 미추천").
+경계 4갈래 판정은 `decide_group` 하나를 `fill_by_rank_groups` 와 공유한다.
 
 ---
 
