@@ -731,6 +731,7 @@ const AREA_TEMPLATES = [
       match_mode: 'EXACT',
       category_agg: '',
       teacher_editable: false,
+      unit: '등급',
     },
   },
   {
@@ -746,6 +747,7 @@ const AREA_TEMPLATES = [
       match_mode: 'LOWER',
       category_agg: '',
       teacher_editable: true,
+      unit: '일',
     },
   },
   {
@@ -761,6 +763,7 @@ const AREA_TEMPLATES = [
       match_mode: 'UPPER',
       category_agg: '',
       teacher_editable: true,
+      unit: '시간',
     },
   },
   {
@@ -776,6 +779,7 @@ const AREA_TEMPLATES = [
       match_mode: '',
       category_agg: 'MAX',
       teacher_editable: true,
+      unit: '',
     },
   },
   {
@@ -791,6 +795,7 @@ const AREA_TEMPLATES = [
       match_mode: '',
       category_agg: 'SUM',
       teacher_editable: true,
+      unit: '',
     },
   },
   {
@@ -806,6 +811,7 @@ const AREA_TEMPLATES = [
       match_mode: '',
       category_agg: 'SUM',
       teacher_editable: true,
+      unit: '',
     },
   },
 ]
