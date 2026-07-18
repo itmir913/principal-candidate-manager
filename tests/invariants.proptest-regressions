@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d7b5cff1099551448e01dae901e14410f8ddf9712ce4bc9544bb05b918bb4fc2 # shrinks to (students, prioritize) = ([(0, false)], true)
