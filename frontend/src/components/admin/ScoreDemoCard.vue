@@ -172,8 +172,7 @@ async function callPreview(values) {
   }
 }
 
-// 전형요소 변경 시 전체 초기화
-watch(() => props.area.id, () => {
+function resetDemo() {
   demoTrackId.value   = 0
   numericInput.value  = ''
   categoryValue.value = ''
@@ -181,5 +180,11 @@ watch(() => props.area.id, () => {
   result.value        = null
   clearTimeout(previewTimer)
   emit('highlight', { matchedKeys: [], trackId: null })
-})
+}
+
+// 전형요소 변경 시 전체 초기화
+watch(() => props.area.id, resetDemo)
+// 점수 기준 목록은 페이지네이션 — 페이지가 바뀌면 트랙·범주 선택지의 파생 원본(rows)이
+// 바뀌므로 데모를 초기화한다 (이전 페이지 트랙이 남아 하이라이팅이 오판되는 것 방지)
+watch(() => props.rows, resetDemo)
 </script>
