@@ -217,6 +217,16 @@ pub async fn reopen_round(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 미선발 플래그 초기화 — 추천과 동일하게 재개 시 리셋
+    // (rounds.status가 이미 OPEN으로 변경된 후이므로 trg_prevent_update_closed_application 비활성)
+    sqlx::query(
+        "UPDATE applications SET excluded = 0, excluded_reason = NULL WHERE round_id = ?",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     crate::audit::log(
         &mut *tx,
         AuditEntry {

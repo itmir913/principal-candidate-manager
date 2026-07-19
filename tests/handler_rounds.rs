@@ -270,6 +270,70 @@ async fn reopen_round_resets_results_recommended_and_ranking() {
 }
 
 #[tokio::test]
+async fn reopen_round_clears_excluded_applications() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let univ_id: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(univ_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    // INSERT 시 excluded=1 직접 지정 (INSERT는 트리거 비대상, DB CHECK 만족)
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, excluded, excluded_reason) \
+         VALUES (?, ?, ?, 1, '테스트 미선발 사유')",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    reopen_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap();
+
+    let (excluded, reason): (i64, Option<String>) = sqlx::query_as(
+        "SELECT excluded, excluded_reason FROM applications WHERE student_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(excluded, 0, "reopen 후 excluded는 0이어야 함");
+    assert!(reason.is_none(), "reopen 후 excluded_reason은 NULL이어야 함");
+}
+
+#[tokio::test]
 async fn reopen_nonexistent_round_returns_not_found() {
     let pool = common::create_test_pool().await;
     let res = reopen_round(State(common::make_state(pool)), Path(9999i64)).await;

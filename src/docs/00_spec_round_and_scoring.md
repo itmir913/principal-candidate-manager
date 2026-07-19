@@ -118,7 +118,8 @@ DB 방어선: `idx_one_active_round`(`003-rounds.sql:19`) — `status != 'FINALI
 관리자에게 잘못된 정보가 표시되므로 모두 지운다. 점수(`total_score`, `score_detail`)는 남겨두어  
 재계산 시 덮어쓴다.
 
-`excluded` 상태는 초기화되지 않는다 — §미결 사항 2 참조.
+`excluded`(미선발) 상태도 동일하게 초기화한다: `UPDATE applications SET excluded=0, excluded_reason=NULL WHERE round_id=?`.  
+rounds.status를 OPEN으로 먼저 변경한 후 이 UPDATE를 실행하므로 `trg_prevent_update_closed_application` 트리거가 비활성 상태다.
 
 ### 1.6 라운드 확정 (`PUT /rounds/:id/finalize`)
 
@@ -648,7 +649,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 | `10_frontend_backend_contract.md` | 아니오 | 부분 불일치 (ResultRow에 excluded 필드 누락) | **유지 + 수정** |
 | `11_state_matrix.md` | **예** | 부분 불일치 (recommend 거부 조건 불완전) | **통합 후 삭제 (행렬 §1.2에 보존)** |
 | `silent_fallback_allowed.md` | 아니오 | 예 | **유지** |
-| `2026-06-01-score-audit.md` | 아니오 | 역사 문서 (C-1 근거가 구버전 SQL) | **유지** (역사 문서는 수정하지 않음) |
+| `2026-06-01-score-audit.md` | 아니오 | 구버전 SQL 참조 (C-1이 현재 코드와 불일치) | **삭제** |
 
 ---
 
@@ -659,12 +660,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
    현재 FINALIZED 라운드에서 applications를 삭제하는 정상 경로가 없다고 가정한 것으로 보인다.  
    향후 "과거 라운드 데이터 정리" 기능을 추가할 경우 이 트리거가 막는다. 의도하신 것이 맞습니까?
 
-2. **reopen 후 excluded 상태 유지**:  
-   `reopen_round`는 `recommended=0, ranking=NULL`로 초기화하지만 `excluded` 상태는 유지한다.  
-   재개 후 기초데이터 변경 시 미선발 사유가 여전히 유효한지는 관리자가 수동으로 확인해야 한다.  
-   미선발 해제를 자동화할 필요가 있습니까?
-
-3. **정원 초과 검증의 LIMIT 5** (`rounds.rs:329, 349`):  
+2. **정원 초과 검증의 LIMIT 5** (`rounds.rs:329, 349`):  
    미결정 검증은 LIMIT 없이 전원을 반환하지만, 정원 초과 검증은 LIMIT 5를 사용한다.  
    정원 초과 건이 6건 이상 있을 경우 앞 5건만 표시된다. 의도된 것입니까?
 
@@ -685,17 +681,13 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 
 ---
 
-## 알려진 미결 사항
+## 설계 결정 사항 (미결 아님)
 
-1. **`unrecommend_result` 역방향 순위 가드 부재** (`scoring.rs:1266`):  
-   추천 취소 시 더 낮은 순위 학생이 추천된 채로 남는 상태를 시스템이 감지하거나 방지하지 않는다.  
-   예: 1위 취소 후 2위만 추천 → 마감 시 1위가 미결정으로 탐지된다.  
-   관리자의 수동 확인에 의존한다.
+1. **`unrecommend_result` 역방향 순위 가드 없음** (`scoring.rs:1266`):  
+   의도된 동작이다. 1위가 추천 취소된 후 2위만 추천 상태로 남더라도, 1위가 미선발 처리되지 않으면 미결정으로 남아 `finalize_round`에서 차단된다. 1위를 미선발 처리하면 2위만 추천된 상태로 마감이 허용된다. 즉 관리자가 명시적으로 1위를 미선발 처리해야 2위 단독 추천이 적법해지며, 이 책임을 시스템이 강제한다.
 
-2. **재개(`reopen`) 후 excluded 상태 유지**:  
-   §확인 필요 2번 참조. 관리자가 수동으로 미선발 해제 후 재결정해야 한다.
+2. **재개(`reopen`) 후 excluded 초기화**:  
+   `reopen_round`는 `recommended=0`, `ranking=NULL`과 함께 `excluded=0`, `excluded_reason=NULL`도 초기화한다. 추천 상태와 미선발 상태는 같은 라운드 맥락에 종속되므로 재개 시 함께 리셋한다 (`rounds.rs:211-226`).
 
-3. **`guard_no_closed_round` 전형요소 수정 전면 차단**:  
-   CLOSED/FINALIZED 라운드 존재 시 전형요소 이름·설정 변경 자체가 불가하다.  
-   `update_area`가 `guard_no_closed_round` 대상이므로, 이름 오탈자를 수정하는 것도 막힌다.  
-   이후 라운드에서는 이름이 반영되므로 큰 문제는 아니나, 알려진 제약이다.
+3. **CLOSED/FINALIZED 라운드 존재 시 전형요소 이름 수정 차단**:  
+   `guard_no_closed_round`가 `update_area`에 적용되어 이름 오탈자 수정도 막힌다. 이는 의도된 동작이다. 과거 라운드의 결과를 내보낼 때 점수 기준 명칭이 바뀌면 감사 추적이 불가능해지므로, 이름 포함 모든 전형요소 속성 변경을 차단한다. 다음 라운드에서 수정된 이름이 반영된다.
