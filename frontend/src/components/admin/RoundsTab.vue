@@ -460,12 +460,13 @@
                             <span v-else style="color: #cbd5e1;">-</span>
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
+                            <div class="flex flex-col items-center gap-1">
                             <template v-if="r.excluded">
                               <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">미선발</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg whitespace-nowrap"
-                                style="display: block; margin: 4px auto 0; padding: 3px 10px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                                style="padding: 3px 10px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
                                 @click="handleClearExclusion(r)"
                               >미선발 해제</button>
                             </template>
@@ -476,6 +477,7 @@
                               @click="startExclude(r)"
                             >미선발 처리</button>
                             <span v-else style="color: #cbd5e1;">-</span>
+                            </div>
                           </td>
                         </tr>
                         <!-- 전형요소 점수 상세 -->

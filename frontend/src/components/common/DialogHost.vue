@@ -4,7 +4,7 @@
     <div
       v-if="s.open"
       class="fixed inset-0 flex items-center justify-center"
-      style="background: rgba(0,0,0,0.35); z-index: 60;"
+      style="background: rgba(0,0,0,0.35); z-index: 80;"
       role="dialog"
       aria-modal="true"
     >
