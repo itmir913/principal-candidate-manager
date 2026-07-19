@@ -801,6 +801,14 @@ const resultsByUnivOnly = computed(() => {
     }
     map[key].results.push(r)
   }
+  for (const g of Object.values(map)) {
+    g.results.sort((a, b) => {
+      if (a.ranking == null && b.ranking == null) return 0
+      if (a.ranking == null) return 1
+      if (b.ranking == null) return -1
+      return a.ranking - b.ranking
+    })
+  }
   return map
 })
 
