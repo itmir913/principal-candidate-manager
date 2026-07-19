@@ -263,7 +263,7 @@
 
           <!-- ── 결과 탭 ──────────────────────────────────── -->
           <div v-if="view === 'results'">
-            <div class="flex items-center gap-3 mb-4 flex-wrap">
+            <div class="flex items-center gap-3 mb-4 flex-wrap sticky top-0 z-10" style="background: #f8fafc; padding: 10px 0; margin: -10px 0 6px;">
               <select
                 v-model="selectedTrackId"
                 class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
