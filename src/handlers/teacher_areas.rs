@@ -189,7 +189,7 @@ async fn load_category_table(
     sqlx::query(
         "SELECT category, score FROM category_map
          WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
-         ORDER BY category",
+         ORDER BY category, score",
     )
     .bind(area_id)
     .bind(track_id)
@@ -500,7 +500,7 @@ async fn load_category_raw(
     sqlx::query(
         "SELECT category, score FROM category_map
          WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
-         ORDER BY category",
+         ORDER BY category, score",
     )
     .bind(area_id)
     .bind(track_id)
