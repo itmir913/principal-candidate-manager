@@ -166,7 +166,7 @@
             </div>
 
             <!-- 대학 / 모집단위 / 학과명 -->
-            <div class="grid grid-cols-1 @4xl:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 @3xl:grid-cols-3 gap-4 mb-6">
               <div>
                 <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
                   대학 <span style="color: #ef4444;">*</span>
@@ -221,7 +221,7 @@
                 전형요소
               </p>
 
-              <div class="grid gap-4 grid-cols-1 @4xl:grid-cols-3">
+              <div class="grid gap-4 grid-cols-1 @3xl:grid-cols-2">
                 <div
                   v-for="area in areaContext"
                   :key="area.area_id"
