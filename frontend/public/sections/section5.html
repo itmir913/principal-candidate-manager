@@ -118,19 +118,19 @@
             <p class="text-slate-600 leading-relaxed mb-2">학생별 <span class="font-semibold text-slate-700">추천 확정</span> 버튼을 누를 때, 같은 모집단위에 <span class="font-semibold text-slate-700">아직 추천되지 않은 상위 순위 지원자</span>가 있으면 추천이 거부됩니다. 자동 추천이 모집단위 내부 순서를 지키는 것과 같은 규칙을 수동 추천에도 적용한 것입니다.</p>
             <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
                 <li><span class="font-semibold text-slate-700">동점자끼리는 서로 막지 않습니다.</span> 우열이 정해지지 않은 상태이므로 관리자가 누구를 추천할지 선택할 수 있습니다.</li>
-                <li>상위 지원자가 <span class="font-semibold text-slate-700">이미 추천 확정</span>되었거나 <span class="font-semibold text-slate-700">제외 처리</span>된 경우에는 막지 않습니다.</li>
-                <li>따라서 상위 지원자를 건너뛰어야 할 사정이 있다면, 먼저 그 학생을 <span class="font-semibold text-slate-700">제외 처리</span>해야 합니다(아래 항목 참고). 건너뛴 사실이 기록으로 남습니다.</li>
+                <li>상위 지원자가 <span class="font-semibold text-slate-700">이미 추천 확정</span>되었거나 <span class="font-semibold text-slate-700">미선발 처리</span>된 경우에는 막지 않습니다.</li>
+                <li>따라서 상위 지원자를 건너뛰어야 할 사정이 있다면, 먼저 그 학생을 <span class="font-semibold text-slate-700">미선발 처리</span>해야 합니다(아래 항목 참고). 건너뛴 사실이 기록으로 남습니다.</li>
             </ul>
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🚫</span>추천 제외(결격) — 포기와는 다릅니다</p>
-            <p class="text-slate-600 leading-relaxed mb-2">라운드가 <span class="font-semibold text-slate-700">종료(CLOSED)</span>된 동안, 결격·서류 미비 등의 사유로 특정 지원자를 이번 라운드 추천 대상에서 뺄 수 있습니다. 결과 탭의 학생별 행에서 <span class="font-semibold text-slate-700">제외 처리</span> 버튼을 누르고 사유를 입력하면 됩니다. <span class="font-semibold text-slate-700">제외 해제</span>로 언제든 되돌릴 수 있습니다.</p>
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🚫</span>미선발 처리 — 포기와는 다릅니다</p>
+            <p class="text-slate-600 leading-relaxed mb-2">라운드가 <span class="font-semibold text-slate-700">종료(CLOSED)</span>된 동안, 선발하지 않기로 한 지원자를 <span class="font-semibold text-slate-700">미선발 처리</span>합니다. 결격·서류 미비든 정원에 들지 못한 경우든 모두 이 기능을 사용합니다. 결과 탭의 학생별 행에서 <span class="font-semibold text-slate-700">미선발 처리</span> 버튼을 누르고 사유를 입력하면 됩니다. <span class="font-semibold text-slate-700">미선발 해제</span>로 언제든 되돌릴 수 있습니다. <strong>라운드를 마감하려면 모든 지원자에 대해 추천 확정 또는 미선발 처리가 완료되어야 합니다.</strong></p>
             <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
-                <li>제외된 지원자는 <span class="font-semibold text-slate-700">자동 추천 후보</span>와 <span class="font-semibold text-slate-700">수동 추천의 순서 가드(위 항목)</span> 양쪽에서 모두 빠집니다 — 다음 순위 지원자를 바로 추천할 수 있습니다.</li>
-                <li>사유 입력은 필수이며, 제외 처리·해제 모두 감사 기록에 남습니다.</li>
-                <li><span class="font-semibold text-amber-700">포기(다음 페이지 참고)와 혼동하지 마십시오.</span> 포기는 라운드가 <span class="font-semibold">마감(FINALIZED)</span>된 뒤 이미 추천된 학생이 진학을 철회하여 다음 라운드에 자리가 반환되는 것으로, 되돌릴 수 없습니다. 제외는 정원 집계에 영향을 주지 않고 언제든 해제할 수 있습니다.</li>
-                <li>라운드를 다시 열면(재개방) 그 라운드에서 확정된 추천이 <span class="font-semibold">전부 초기화</span>됩니다. 결격자 한 명 때문에 재개방하지 말고, 반드시 제외 기능을 사용하십시오.</li>
+                <li>미선발 처리된 지원자는 <span class="font-semibold text-slate-700">자동 추천 후보</span>와 <span class="font-semibold text-slate-700">수동 추천의 순서 가드(위 항목)</span> 양쪽에서 모두 빠집니다 — 다음 순위 지원자를 바로 추천할 수 있습니다.</li>
+                <li>사유 입력은 필수이며, 미선발 처리·해제 모두 감사 기록에 남습니다. 결격인지 정원 미달인지는 사유 텍스트로 구분해 기록합니다.</li>
+                <li><span class="font-semibold text-amber-700">포기(다음 페이지 참고)와 혼동하지 마십시오.</span> 포기는 라운드가 <span class="font-semibold">마감(FINALIZED)</span>된 뒤 이미 추천된 학생이 진학을 철회하여 다음 라운드에 자리가 반환되는 것으로, 되돌릴 수 없습니다. 미선발 처리는 정원 집계에 영향을 주지 않고 언제든 해제할 수 있습니다.</li>
+                <li>라운드를 다시 열면(재개방) 그 라운드에서 확정된 추천이 <span class="font-semibold">전부 초기화</span>됩니다. 결격자 한 명 때문에 재개방하지 말고, 반드시 미선발 처리 기능을 사용하십시오.</li>
             </ul>
         </div>
 
