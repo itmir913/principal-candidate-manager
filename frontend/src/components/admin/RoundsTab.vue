@@ -237,7 +237,7 @@
                           <span v-else-if="selected.status === 'FINALIZED' && app.recommended"
                             class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
                           <span v-else-if="selected.status === 'FINALIZED' && !app.recommended"
-                            class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
+                            class="text-base font-semibold" style="color: #ef4444;">미선발</span>
                           <span v-else style="color: #cbd5e1;">-</span>
                         </td>
                         <td class="text-center" style="padding: 12px 18px;">
@@ -389,7 +389,7 @@
                         <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569; width: 90px;">총점</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 120px;">추천</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 110px;">포기처리</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 160px;">제외(결격)</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 160px;">미선발</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -443,7 +443,7 @@
                               @click="handleRecommend(r)"
                             >추천 확정</button>
                             <span v-else-if="selected.status === 'CLOSED' && r.excluded" style="color: #cbd5e1;">-</span>
-                            <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
+                            <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
                             <span v-else class="text-base font-semibold" style="color: #94a3b8;">-</span>
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
@@ -457,21 +457,21 @@
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <template v-if="r.excluded">
-                              <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">제외됨</span>
+                              <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">미선발</span>
                               <div v-if="r.excluded_reason" class="text-base" style="color: #92400e; margin-top: 2px;">{{ r.excluded_reason }}</div>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg whitespace-nowrap"
                                 style="padding: 3px 10px; margin-top: 4px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
                                 @click="handleClearExclusion(r)"
-                              >제외 해제</button>
+                              >미선발 해제</button>
                             </template>
                             <template v-else-if="selected.status === 'CLOSED'">
                               <template v-if="excludingKey === rowKey(r)">
                                 <input
                                   v-model="excludeReasonDraft"
                                   type="text"
-                                  placeholder="제외 사유 입력"
+                                  placeholder="미선발 사유 입력"
                                   class="text-base"
                                   style="border: 1px solid #fcd34d; border-radius: 6px; padding: 4px 8px; width: 120px; box-sizing: border-box;"
                                   @keyup.enter="confirmExclude(r)"
@@ -495,7 +495,7 @@
                                 class="text-base rounded-lg whitespace-nowrap"
                                 style="padding: 5px 12px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
                                 @click="startExclude(r)"
-                              >제외 처리</button>
+                              >미선발 처리</button>
                             </template>
                             <span v-else style="color: #cbd5e1;">-</span>
                           </td>
@@ -524,6 +524,64 @@
       </div>
     </div>
   </div>
+
+  <!-- 미결정 지원자 안내 모달 -->
+  <Teleport to="body">
+    <div
+      v-if="showUndecidedModal"
+      class="fixed inset-0 flex items-center justify-center"
+      style="background: rgba(0,0,0,0.35); z-index: 60;"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        class="bg-white flex flex-col"
+        style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 100%; max-width: 680px; margin: 0 16px; padding: 1.5rem 1.75rem; max-height: 80vh;"
+      >
+        <h2 class="text-lg font-semibold mb-1" style="margin: 0; color: #b91c1c;">마감할 수 없습니다</h2>
+        <p class="text-base mb-1" style="color: #475569; line-height: 1.6;">
+          아래 지원자는 추천도 미선발도 결정되지 않았습니다.<br>
+          각 지원자를 추천 확정하거나 미선발 처리한 후 다시 마감하세요.
+        </p>
+        <p class="text-base font-semibold mb-3" style="color: #1e293b;">총 {{ undecidedList.length }}명</p>
+        <div class="overflow-y-auto" style="max-height: 380px;">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-max" style="border-collapse: collapse;">
+              <thead>
+                <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0;">
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 110px;">학년/반</th>
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 140px;">학번</th>
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 100px;">이름</th>
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 150px;">대학</th>
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 150px;">모집단위</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="u in undecidedList"
+                  :key="`${u.student_code}-${u.univ_name}-${u.track_name}`"
+                  style="border-bottom: 1px solid #f1f5f9;"
+                >
+                  <td class="text-base" style="padding: 10px 16px; color: #475569;">{{ u.grade }}학년 {{ u.class_no }}반</td>
+                  <td class="text-base font-mono" style="padding: 10px 16px; color: #475569;">{{ u.student_code }}</td>
+                  <td class="text-base font-medium" style="padding: 10px 16px; color: #1e293b;">{{ u.student_name }}</td>
+                  <td class="text-base" style="padding: 10px 16px; color: #1e293b;">{{ u.univ_name }}</td>
+                  <td class="text-base" style="padding: 10px 16px; color: #475569;">{{ u.track_name }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="flex justify-end mt-5">
+          <button
+            class="text-base font-semibold rounded-lg"
+            style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            @click="showUndecidedModal = false"
+          >닫기</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -589,6 +647,9 @@ const confirmationStatus = ref(null)  // { classes: [...] } | null
 
 const excludingKey      = ref(null)   // `${student_id}-${track_id}` | null — 인라인 사유 입력 중인 행
 const excludeReasonDraft = ref('')
+
+const showUndecidedModal = ref(false)
+const undecidedList      = ref([])
 
 function rowKey(r) { return `${r.student_id}-${r.track_id}` }
 
@@ -960,7 +1021,17 @@ async function handleFinalizeRound(id) {
     }
     await refreshSidebarRound()
   } catch (e) {
-    await dialog.alert({ title: '마감할 수 없습니다', message: finalizeErrMsg(e), level: 'error' })
+    const d = e.response?.data
+    if (d != null && typeof d === 'object' && Array.isArray(d.undecided)) {
+      if (d.undecided.length === 0) {
+        await dialog.alert({ title: '마감할 수 없습니다', message: d.error ?? '미결정 지원자 오류가 발생했습니다', level: 'error' })
+      } else {
+        undecidedList.value = d.undecided
+        showUndecidedModal.value = true
+      }
+    } else {
+      await dialog.alert({ title: '마감할 수 없습니다', message: finalizeErrMsg(e), level: 'error' })
+    }
   } finally {
     roundActing.value = false
   }
@@ -1025,9 +1096,9 @@ async function confirmExclude(r) {
   const reason = excludeReasonDraft.value.trim()
   if (!reason) return
   if (!(await dialog.confirm({
-    title: '결격 제외 처리',
-    message: `${r.name} 학생을 이번 라운드 추천 대상에서 제외하시겠습니까?\n사유: ${reason}`,
-    confirmText: '제외 처리',
+    title: '미선발 처리',
+    message: `${r.name} 학생을 이번 라운드에서 미선발 처리하시겠습니까?\n사유: ${reason}`,
+    confirmText: '미선발 처리',
     level: 'warn',
   }))) return
   try {
@@ -1041,8 +1112,8 @@ async function confirmExclude(r) {
 
 async function handleClearExclusion(r) {
   if (!(await dialog.confirm({
-    title: '결격 제외 해제',
-    message: `${r.name} 학생의 결격 제외를 해제하시겠습니까?`,
+    title: '미선발 해제',
+    message: `${r.name} 학생의 미선발 처리를 해제하시겠습니까?`,
     confirmText: '해제',
     level: 'warn',
   }))) return

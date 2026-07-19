@@ -13,9 +13,9 @@ export const AUDIT_ACTION_LABELS = {
   APPLICATION_SAVED:    '지원 등록',
   APPLICATION_DELETED:  '지원 삭제',
   APPLICATION_ABANDONED:'지원 포기',
-  // 결격 제외 — FINALIZED 탈락 표시("추천 제외")와 다른 개념이라 라벨을 구분한다
-  APPLICATION_EXCLUDED:            '결격 제외',
-  APPLICATION_EXCLUSION_CLEARED:   '결격 제외 해제',
+  // B단계 이후 마감 전 모든 지원이 추천 또는 미선발로 결정돼야 하므로 두 개념이 같은 집합을 가리킴 → "미선발"로 통일
+  APPLICATION_EXCLUDED:            '미선발 처리',
+  APPLICATION_EXCLUSION_CLEARED:   '미선발 해제',
   // 학급
   CLASSES_IMPORTED: '학급 일괄 가져오기',
   CLASS_SAVED:      '학급 저장',

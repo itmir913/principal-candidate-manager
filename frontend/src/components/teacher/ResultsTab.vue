@@ -154,7 +154,7 @@
                     <td class="text-center" style="padding: 12px 16px;">
                       <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
                       <span v-else-if="r.recommended" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
-                      <span v-else class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
+                      <span v-else class="text-base font-semibold" style="color: #ef4444;">미선발</span>
                     </td>
                     <td class="text-center" style="padding: 12px 16px;">
                       <button
@@ -199,10 +199,10 @@ const helpBox = computed(() => {
       title: '도움말 — 결과 보는 방법',
       intro: '마감된 라운드의 우리 반 학생 결과입니다.',
       items: [
-        '초록색 배경의 "추천 확정"은 학교장추천 대상으로 확정된 것이고, 붉은색 배경의 "추천 제외"는 이번 라운드에서 추천되지 않은 것입니다.',
+        '초록색 배경의 "추천 확정"은 학교장추천 대상으로 확정된 것이고, 붉은색 배경의 "미선발"은 이번 라운드에서 추천되지 않은 것입니다.',
         '추천이 확정된 학생이 추천을 포기하려면 "추천 포기"를 누르세요.',
         { text: '포기는 되돌릴 수 없습니다. 반드시 학생·학부모와 확인한 뒤 처리하세요. 다시 추천받으려면 다음 라운드에서 재지원해야 합니다.', warn: true },
-        '"추천 제외"된 학생은 다음 라운드가 열리면 다시 지원할 수 있습니다.',
+        '"미선발"된 학생은 다음 라운드가 열리면 다시 지원할 수 있습니다.',
       ],
     }
   }

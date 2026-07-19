@@ -7,9 +7,10 @@ CREATE TABLE IF NOT EXISTS applications (
     round_id        INTEGER NOT NULL REFERENCES rounds(id),
     abandoned       INTEGER NOT NULL DEFAULT 0 CHECK(abandoned IN (0, 1)),
     department_name TEXT    NOT NULL DEFAULT '',
-    -- excluded: CLOSED 라운드에서 결격·서류미비 등으로 이번 라운드 추천 대상에서 제외.
-    -- abandoned(포기, FINALIZED 전용)와 별개 — 정원 집계(recommended=1 AND abandoned=0)와
-    -- 무관하므로 건드리면 이중 차감이 된다. 사유 없는 제외는 DB 레벨에서 차단(Fail-Fast).
+    -- excluded: 이번 라운드에 선발하지 않기로 한 관리자의 명시적 결정(미선발).
+    --   결격·서류미비·정원 미달 등 구체적 사유는 excluded_reason 에 기록.
+    --   abandoned(포기, FINALIZED 전용)와 별개 — 정원 집계(recommended=1 AND abandoned=0)와
+    --   무관하므로 건드리면 이중 차감이 된다. 사유 없는 미선발 처리는 DB 레벨에서 차단(Fail-Fast).
     excluded         INTEGER NOT NULL DEFAULT 0 CHECK(excluded IN (0, 1)),
     excluded_reason  TEXT,
     PRIMARY KEY (student_id, track_id, round_id),

@@ -64,7 +64,7 @@
                   </span>
                   <span v-if="app.abandoned" class="text-base font-semibold" style="color: #ef4444;">(포기됨)</span>
                   <span v-else-if="app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
-                  <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">추천 제외</span>
+                  <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
                   <button
                     v-if="currentRound && app.round_id === currentRound.id && !app.abandoned"
                     class="text-base"
