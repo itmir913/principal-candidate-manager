@@ -225,7 +225,7 @@ pub async fn abandon_application(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── 추천 제외(결격) ────────────────────────────────────────────────
+// ── 미선발 처리 ────────────────────────────────────────────────────
 // abandoned(포기)와 별개 — CLOSED 전용, 정원 집계는 건드리지 않는다(feedback_...F단계 설계 참조).
 
 #[derive(Deserialize)]
@@ -242,7 +242,7 @@ fn check_round_closed_for_exclusion(status: Option<RoundStatus>) -> Result<(), A
         )),
         Some(RoundStatus::Finalized) => Err((
             StatusCode::BAD_REQUEST,
-            "마감된 라운드의 지원은 추천 제외 처리를 변경할 수 없습니다".into(),
+            "마감된 라운드의 지원은 미선발 처리를 변경할 수 없습니다".into(),
         )),
         None => Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
