@@ -3,7 +3,7 @@
   <div class="flex flex-col">
 
     <!-- 페이지 헤더 -->
-    <div class="flex-shrink-0 pt-8 pb-5 px-4 sm:px-10 flex items-start justify-between gap-4 flex-wrap">
+    <div ref="pageTopRef" class="flex-shrink-0 pt-8 pb-5 px-4 sm:px-10 flex items-start justify-between gap-4 flex-wrap">
       <div>
         <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
         <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">지원자 등록</h1>
@@ -495,6 +495,8 @@ const areaContext     = ref([])
 // 입력 디바운스 타이머
 const previewTimers = {}
 
+const pageTopRef = ref(null)
+
 // 점수표 컨테이너 ref (area_id → DOM element)
 const tableRefs = {}
 function setTableRef(el, areaId) {
@@ -851,6 +853,7 @@ async function saveApplication() {
     applications.value = await teacherGetApplications(currentRound.value.id)
     await loadConfirmation()
     closeForm()
+    pageTopRef.value?.scrollIntoView({ behavior: 'smooth' })
   } catch (e) {
     saveError.value = e.response?.data || e.message
   } finally {
