@@ -460,45 +460,19 @@
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <template v-if="r.excluded">
                               <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">미선발</span>
-                              <div v-if="r.excluded_reason" class="text-base" style="color: #92400e; margin-top: 2px;">{{ r.excluded_reason }}</div>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg whitespace-nowrap"
-                                style="padding: 3px 10px; margin-top: 4px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                                style="display: block; margin: 4px auto 0; padding: 3px 10px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
                                 @click="handleClearExclusion(r)"
                               >미선발 해제</button>
                             </template>
-                            <template v-else-if="selected.status === 'CLOSED'">
-                              <template v-if="excludingKey === rowKey(r)">
-                                <input
-                                  v-model="excludeReasonDraft"
-                                  type="text"
-                                  placeholder="미선발 사유 입력"
-                                  class="text-base"
-                                  style="border: 1px solid #fcd34d; border-radius: 6px; padding: 4px 8px; width: 120px; box-sizing: border-box;"
-                                  @keyup.enter="confirmExclude(r)"
-                                />
-                                <div class="flex gap-1 justify-center" style="margin-top: 4px;">
-                                  <button
-                                    class="text-base rounded-lg whitespace-nowrap"
-                                    style="padding: 3px 10px; border: none; background: #d97706; color: white; cursor: pointer;"
-                                    :disabled="!excludeReasonDraft.trim()"
-                                    @click="confirmExclude(r)"
-                                  >확정</button>
-                                  <button
-                                    class="text-base rounded-lg whitespace-nowrap"
-                                    style="padding: 3px 10px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                                    @click="excludingKey = null"
-                                  >취소</button>
-                                </div>
-                              </template>
-                              <button
-                                v-else
-                                class="text-base rounded-lg whitespace-nowrap"
-                                style="padding: 5px 12px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
-                                @click="startExclude(r)"
-                              >미선발 처리</button>
-                            </template>
+                            <button
+                              v-else-if="selected.status === 'CLOSED'"
+                              class="text-base rounded-lg whitespace-nowrap"
+                              style="padding: 5px 12px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                              @click="startExclude(r)"
+                            >미선발 처리</button>
                             <span v-else style="color: #cbd5e1;">-</span>
                           </td>
                         </tr>
@@ -526,6 +500,50 @@
       </div>
     </div>
   </div>
+
+  <!-- 미선발 처리 모달 -->
+  <Teleport to="body">
+    <div
+      v-if="showExcludeModal"
+      class="fixed inset-0 flex items-center justify-center"
+      style="background: rgba(0,0,0,0.35); z-index: 60;"
+      role="dialog"
+      aria-modal="true"
+      @keydown.escape="showExcludeModal = false"
+    >
+      <div
+        class="bg-white flex flex-col"
+        style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 100%; max-width: 480px; margin: 0 16px; padding: 1.5rem 1.75rem;"
+      >
+        <h2 class="text-lg font-semibold mb-1" style="margin: 0; color: #92400e;">미선발 처리</h2>
+        <p class="text-base mb-4" style="color: #475569;">
+          <span class="font-semibold" style="color: #1e293b;">{{ excludeTarget?.name }}</span> 학생을 이번 라운드에서 미선발 처리합니다.
+        </p>
+        <label class="block text-base font-medium mb-1.5" style="color: #64748b;">미선발 사유 <span style="color: #ef4444;">*</span></label>
+        <input
+          v-model="excludeReasonDraft"
+          type="text"
+          placeholder="미선발 사유를 입력하세요"
+          class="text-base w-full"
+          style="border: 1px solid #fcd34d; border-radius: 8px; padding: 9px 12px; box-sizing: border-box; outline: none;"
+          @keyup.enter="confirmExclude"
+        />
+        <div class="flex justify-end gap-2 mt-5">
+          <button
+            class="text-base rounded-lg whitespace-nowrap"
+            style="padding: 9px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+            @click="showExcludeModal = false"
+          >취소</button>
+          <button
+            class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
+            style="padding: 9px 18px; border: none; background: #d97706; color: white; cursor: pointer;"
+            :disabled="!excludeReasonDraft.trim()"
+            @click="confirmExclude"
+          >미선발 확정</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- 미결정 지원자 안내 모달 -->
   <Teleport to="body">
@@ -647,7 +665,8 @@ const autoRecommendScope  = ref('')
 const selectedTrackId   = ref('')
 const confirmationStatus = ref(null)  // { classes: [...] } | null
 
-const excludingKey      = ref(null)   // `${student_id}-${track_id}` | null — 인라인 사유 입력 중인 행
+const showExcludeModal   = ref(false)
+const excludeTarget      = ref(null)   // ResultRow | null
 const excludeReasonDraft = ref('')
 
 const showUndecidedModal = ref(false)
@@ -1098,22 +1117,19 @@ async function handleAbandon(app) {
 }
 
 function startExclude(r) {
-  excludingKey.value = rowKey(r)
+  excludeTarget.value = r
   excludeReasonDraft.value = ''
+  showExcludeModal.value = true
 }
 
-async function confirmExclude(r) {
+async function confirmExclude() {
+  const r = excludeTarget.value
+  if (!r) return
   const reason = excludeReasonDraft.value.trim()
   if (!reason) return
-  if (!(await dialog.confirm({
-    title: '미선발 처리',
-    message: `${r.name} 학생을 이번 라운드에서 미선발 처리하시겠습니까?\n사유: ${reason}`,
-    confirmText: '미선발 처리',
-    level: 'warn',
-  }))) return
   try {
     await excludeApplication(r.student_id, r.track_id, r.round_id, reason)
-    excludingKey.value = null
+    showExcludeModal.value = false
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
