@@ -256,7 +256,7 @@ pub async fn exclude_application(
 ) -> Result<StatusCode, ApiError> {
     let reason = body.reason.trim().to_string();
     if reason.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "제외 사유는 필수입니다".into()));
+        return Err((StatusCode::BAD_REQUEST, "미선발 사유는 필수입니다".into()));
     }
 
     // BEGIN IMMEDIATE: 추천 확정 여부 조회(SELECT) 후 excluded 갱신(UPDATE)까지 원자적으로 처리.
@@ -286,7 +286,7 @@ pub async fn exclude_application(
 
     match current_excluded {
         None => return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into())),
-        Some(true) => return Err((StatusCode::CONFLICT, "이미 제외 처리된 지원입니다".into())),
+        Some(true) => return Err((StatusCode::CONFLICT, "이미 미선발 처리된 지원입니다".into())),
         Some(false) => {}
     }
 
@@ -307,7 +307,7 @@ pub async fn exclude_application(
     if recommended == Some(true) {
         return Err((
             StatusCode::CONFLICT,
-            "이미 추천 확정된 지원은 제외할 수 없습니다. 추천을 먼저 취소한 후 제외 처리하세요.".to_string(),
+            "이미 추천 확정된 지원은 미선발 처리할 수 없습니다. 추천을 먼저 취소한 후 미선발 처리하세요.".to_string(),
         ));
     }
 
@@ -379,7 +379,7 @@ pub async fn clear_application_exclusion(
 
     match current_excluded {
         None => return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into())),
-        Some(false) => return Err((StatusCode::CONFLICT, "제외 상태가 아닙니다".into())),
+        Some(false) => return Err((StatusCode::CONFLICT, "미선발 상태가 아닙니다".into())),
         Some(true) => {}
     }
 

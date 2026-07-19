@@ -1906,6 +1906,46 @@ async fn export_results_header_contains_univ_rank() {
     assert!(header.contains(&"모집단위 순위".to_string()), "헤더에 '모집단위 순위' 포함: {:?}", header);
 }
 
+/// 내보내기 용어가 화면·매뉴얼의 "미선발"과 일치해야 한다.
+/// 화면 라벨만 바꾸고 엑셀 문자열을 빠뜨리면 산출물에서만 옛 용어("제외")가 살아남는다 —
+/// 실제로 그렇게 어긋난 적이 있어 헤더와 셀 값을 함께 단언한다.
+#[tokio::test]
+async fn export_results_uses_unselected_terminology() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, '500000')")
+        .bind(sid).bind(area_id).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    // 미선발 처리 — 셀 값 확인용
+    sqlx::query(
+        "UPDATE applications SET excluded = 1, excluded_reason = '정원 미달' \
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_all_rows_raw(&bytes).unwrap();
+
+    let header = &rows[0];
+    assert!(header.contains(&"미선발여부".to_string()), "헤더에 '미선발여부' 포함: {:?}", header);
+    assert!(header.contains(&"미선발사유".to_string()), "헤더에 '미선발사유' 포함: {:?}", header);
+    assert!(!header.iter().any(|h| h.contains("제외")), "옛 용어 '제외'가 헤더에 남아 있음: {:?}", header);
+
+    let data = &rows[1];
+    assert!(data.contains(&"미선발".to_string()), "셀 값이 '미선발'이어야 함: {:?}", data);
+    assert!(data.contains(&"정원 미달".to_string()), "미선발 사유가 기록되어야 함: {:?}", data);
+}
+
 #[tokio::test]
 async fn each_scope_own_prioritize_flag_no_silent_or() {
     // 대학=재학생우선 OFF, 트랙=재학생우선 ON (같은 트랙).

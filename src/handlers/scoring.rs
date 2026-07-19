@@ -574,8 +574,8 @@ pub async fn export_results(
     ws.write_string(0, col, "총점").map_err(excel::xlsx_err)?; col += 1;
     ws.write_string(0, col, "추천").map_err(excel::xlsx_err)?; col += 1;
     ws.write_string(0, col, "포기").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "제외여부").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "제외사유").map_err(excel::xlsx_err)?;
+    ws.write_string(0, col, "미선발여부").map_err(excel::xlsx_err)?; col += 1;
+    ws.write_string(0, col, "미선발사유").map_err(excel::xlsx_err)?;
 
     // 데이터 행
     for (i, r) in all_results.iter().enumerate() {
@@ -624,7 +624,7 @@ pub async fn export_results(
         ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, if r.recommended { "추천" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
-        ws.write_string(row, col, if r.excluded { "제외" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.excluded { "미선발" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, r.excluded_reason.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
 
@@ -818,7 +818,7 @@ pub async fn export_round_summary(
     let headers2 = [
         "학생코드", "재학생여부", "학년", "반", "번호", "이름",
         "지원대학", "모집단위", "지원학과명", "총점", "대학 순위", "모집단위 순위", "추천대상", "포기여부",
-        "제외여부", "제외사유",
+        "미선발여부", "미선발사유",
     ];
     for (col, h) in headers2.iter().enumerate() {
         ws2.write_string(0, col as u16, *h).map_err(excel::xlsx_err)?;
@@ -1101,7 +1101,7 @@ pub async fn recommend_result(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
-    // 1b. 제외(결격) 처리된 지원은 추천 불가 — 존재하지 않으면 이후 검증에서 자연히 404/409로 처리된다
+    // 1b. 미선발 처리된 지원은 추천 불가 — 존재하지 않으면 이후 검증에서 자연히 404/409로 처리된다
     let excluded: Option<bool> = sqlx::query_scalar(
         "SELECT excluded = 1 FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
@@ -1112,7 +1112,7 @@ pub async fn recommend_result(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if excluded == Some(true) {
-        return Err((StatusCode::CONFLICT, "제외 처리된 지원은 추천할 수 없습니다".into()));
+        return Err((StatusCode::CONFLICT, "미선발 처리된 지원은 추천할 수 없습니다".into()));
     }
 
     // 2. 모집단위 정원 정보 조회
@@ -1696,7 +1696,7 @@ async fn run_auto_recommend(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        // 제외(결격) 처리된 지원은 자동 추천 후보에서 빠진다 — RANK() 자체는 excluded 포함 전원으로
+        // 미선발 처리된 지원은 자동 추천 후보에서 빠진다 — RANK() 자체는 excluded 포함 전원으로
         // 계산해 화면(get_results)·수동 추천 가드와 같은 순위를 유지한다.
         let candidates: Vec<&CandidateRow> =
             all_rows.iter().filter(|c| c.recommended == 0 && c.excluded == 0).collect();
