@@ -2,12 +2,11 @@
   <div
     class="fixed inset-0 flex items-center justify-center z-50"
     style="background: rgba(0,0,0,0.35);"
-    @click.self="$emit('close')"
     @keydown.escape.window="$emit('close')"
   >
     <div
       class="bg-white flex flex-col"
-      style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 100%; max-width: 640px; margin: 0 16px; max-height: 85vh;"
+      style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 85vw; max-width: 85vw; height: 85vh; max-height: 85vh; margin: 0;"
     >
       <!-- 헤더 -->
       <div
