@@ -94,17 +94,30 @@
 
 1. `SELECT status FROM rounds WHERE id = ?` 로 현재 상태 확인.
    - `status != 'CLOSED'`이거나 라운드가 없으면 404 반환, ROLLBACK.
-2. 아래 정원 위반 검증 수행. 위반이 있으면 422 반환, ROLLBACK.
-3. `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ? AND status = 'CLOSED'` 실행.
+2. **미결정 지원 검증** — 추천도 제외도 되지 않은 지원이 있으면 422 반환, ROLLBACK. (아래 참조)
+3. 아래 정원 위반 검증 수행. 위반이 있으면 422 반환, ROLLBACK.
+4. `UPDATE rounds SET status = 'FINALIZED', finalized_at = ? WHERE id = ? AND status = 'CLOSED'` 실행.
    - `AND status = 'CLOSED'` 가드: 트랜잭션 보유 중 외부 변경 방어.
 
 `BEGIN IMMEDIATE` 덕분에 상태 확인부터 UPDATE까지 다른 커넥션이 끼어들 수 없어, 과거에 존재하던 TOCTOU 위험이 해소됐다.
 
-⚠️ [finalize_round] 코드 내부에서 아직 자동으로 추천자를 결정하지 않으므로 관리자가 직접 추천이 완료됐는지 확인 후 확정해야 하는 운영 규칙이 있다.
+### 전건 결정 완료 사전 검증
 
-- `finalize_round`에 두 단계 검증 추가:
-  1. **모집단위 검증** — `unit_quota IS NOT NULL`인 트랙 중, 전체 라운드 누적 `recommended=1 AND abandoned=0` 수가 `unit_quota`를 초과하는 항목 탐지
-  2. **대학 검증** — `total_quota IS NOT NULL`인 대학 중, 소속 트랙 전체 추천 합산이 `total_quota`를 초과하는 항목 탐지
+마감 전 모든 지원에 대해 "추천 확정" 또는 "제외(결격)" 중 하나가 반드시 결정되어 있어야 한다.
+
+**미결정의 정의**: `excluded = 0` AND (추천 확정되지 않음)
+- (a) 대응하는 `results` 행이 있고 `recommended = 0`
+- (b) 대응하는 `results` 행이 아예 없음(점수 미계산)
+
+미결정이 1건이라도 있으면 422 + 미결정 지원자 전체 명단 JSON (`"undecided"` 키) 반환, 상태는 `CLOSED` 유지.
+이 검증은 정원 검증보다 먼저 수행된다 — 두 위반이 동시에 존재할 때 미결정 안내를 먼저 표시한다.
+
+**DB 방어선**: `trg_require_all_decided_before_finalize` 트리거가 핸들러 우회 경로에서도 동일 조건을 차단한다.
+
+### 정원 초과 검증
+
+- **모집단위 검증** — `unit_quota IS NOT NULL`인 트랙 중, 전체 라운드 누적 `recommended=1 AND abandoned=0` 수가 `unit_quota`를 초과하는 항목 탐지
+- **대학 검증** — `total_quota IS NOT NULL`인 대학 중, 소속 트랙 전체 추천 합산이 `total_quota`를 초과하는 항목 탐지
 - 위반 항목이 있으면 422 + 위반 목록 JSON 반환, 상태는 `CLOSED` 유지
 - 정원이 `NULL`이면 무제한으로 처리
 

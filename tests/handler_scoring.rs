@@ -1559,7 +1559,10 @@ async fn unrecommend_on_finalized_round_returns_bad_request() {
     // FINALIZED 상태에서는 추천 취소 불가
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup_with_quota(&pool, None, None).await;
-    // CLOSED → FINALIZED
+    // trg_require_all_decided_before_finalize: CLOSED→FINALIZED 직접 SQL은 미결정이 없어야 통과.
+    // setup_with_quota가 recommended=0으로 삽입하므로 먼저 결정 완료 상태로 전환한다.
+    sqlx::query("UPDATE results SET recommended = 1 WHERE student_id = ? AND round_id = ?")
+        .bind(sid).bind(rid).execute(&pool).await.unwrap();
     sqlx::query("UPDATE rounds SET status = 'FINALIZED', finalized_at = '2025-01-03T00:00:00Z' WHERE id = ?")
         .bind(rid)
         .execute(&pool)

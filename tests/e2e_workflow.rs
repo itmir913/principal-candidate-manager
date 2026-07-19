@@ -20,8 +20,8 @@ use principal_candidate_manager::{
     excel,
     handlers::{
         applications::{
-            teacher_abandon_application, teacher_create_application, BaseDataEntry,
-            CreateApplicationBody,
+            exclude_application, teacher_abandon_application, teacher_create_application,
+            BaseDataEntry, CreateApplicationBody, ExcludeApplicationBody,
         },
         area_data::{base_data_import, numeric_table_import, StudentTypeQuery},
         areas::{create_area, CreateAreaBody},
@@ -264,7 +264,27 @@ async fn full_two_round_lifecycle() {
     let res = recommend_result(st(&pool), Path((s2, t_comp, r1))).await;
     assert_eq!(res.unwrap_err().0, StatusCode::CONFLICT, "컴공 정원 1명 초과 → 409");
 
-    // ── 7. finalize → 담임 포기 처리 ──────────────────────────────
+    // ── 7. 미결정 제외 처리 → finalize → 담임 포기 처리 ─────────────
+    // B단계: 미결정(excluded=0, recommended=0) 지원이 있으면 finalize 불가.
+    // 컴공 정원(1명)이 차서 추천받지 못한 이순신과 기계 미추천 김졸업을 제외 처리.
+    let status = exclude_application(
+        st(&pool),
+        Path((s2, t_comp, r1)),
+        Json(ExcludeApplicationBody { reason: "정원 외".to_string() }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "이순신 제외");
+
+    let status = exclude_application(
+        st(&pool),
+        Path((g1, t_mech, r1)),
+        Json(ExcludeApplicationBody { reason: "정원 외".to_string() }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "김졸업 제외");
+
     let status = finalize_round(st(&pool), Path(r1)).await.unwrap();
     assert_eq!(status, StatusCode::NO_CONTENT);
 

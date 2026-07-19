@@ -759,6 +759,364 @@ async fn db_allows_result_delete_in_open_round() {
     assert_eq!(count, 0);
 }
 
+// ── B단계: 미결정 지원 마감 차단 ─────────────────────────────────
+
+/// 미결정(excluded=0, recommended=0) 지원이 있을 때 finalize_round → 422.
+/// T1: 지원 2건 중 1건만 추천, 나머지 방치 → undecided 명단 1건 반환.
+#[tokio::test]
+async fn finalize_blocked_when_undecided_application_remains() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    let sid1: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid2: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S002', '김철수', 1, 1, 2, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    for sid in [sid1, sid2] {
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+    // sid1만 추천 — sid2는 results 행 있고 recommended=0 (미결정)
+    for (sid, rec) in [(sid1, 1i64), (sid2, 0)] {
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 500000, ?, ?, '2025-01-02T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).bind(if rec == 1 { 1i64 } else { 2 }).bind(rec)
+        .execute(&pool).await.unwrap();
+    }
+
+    let err = finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let body: serde_json::Value = serde_json::from_str(&err.1).unwrap();
+    let undecided = body["undecided"].as_array().unwrap();
+    assert_eq!(undecided.len(), 1, "미결정 1건이어야 함");
+    assert_eq!(undecided[0]["student_code"].as_str().unwrap(), "S002");
+    assert_eq!(undecided[0]["student_name"].as_str().unwrap(), "김철수");
+    assert_eq!(undecided[0]["univ_name"].as_str().unwrap(), "한국대");
+    assert_eq!(undecided[0]["track_name"].as_str().unwrap(), "컴공");
+}
+
+/// T2: 전건 추천 → 마감 성공.
+#[tokio::test]
+async fn finalize_succeeds_when_all_recommended() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup_closed_with_result(&pool).await;
+    // setup_closed_with_result이 recommended=1로 결과를 삽입하므로 미결정 없음
+    let res = finalize_round(State(common::make_state(pool.clone())), Path(rid)).await;
+    assert!(res.is_ok(), "전건 추천 완료 시 finalize는 성공해야 함");
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "FINALIZED");
+}
+
+/// T3: 추천 + 제외 혼합 → 마감 성공.
+#[tokio::test]
+async fn finalize_succeeds_with_mixed_recommended_and_excluded() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    // sid1: 추천 확정, sid2: 제외(결격)
+    let sid1: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid2: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S002', '김철수', 1, 1, 2, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid1).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, excluded, excluded_reason) \
+         VALUES (?, ?, ?, 0, 1, '결격')",
+    )
+    .bind(sid2).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 500000, 1, 1, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid1).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 400000, 2, 0, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid2).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let res = finalize_round(State(common::make_state(pool)), Path(rid)).await;
+    assert!(res.is_ok(), "추천+제외 혼합 시 finalize는 성공해야 함");
+}
+
+/// T4: 전건 제외 → 마감 성공 (추천자가 0명이어도 전원 제외면 가능).
+#[tokio::test]
+async fn finalize_succeeds_when_all_excluded() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, abandoned, excluded, excluded_reason) \
+         VALUES (?, ?, ?, 0, 1, '결격')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 500000, 1, 0, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let res = finalize_round(State(common::make_state(pool)), Path(rid)).await;
+    assert!(res.is_ok(), "전원 제외 시에도 finalize는 성공해야 함");
+}
+
+/// T5: results 행이 없는 지원(점수 미계산) → 미결정으로 판정 → 422.
+#[tokio::test]
+async fn finalize_blocked_when_application_has_no_results_row() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // applications만 삽입 — results 행 없음(점수 미계산)
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let err = finalize_round(State(common::make_state(pool)), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY, "results 행 없는 지원은 미결정으로 판정되어 422여야 함");
+    let body: serde_json::Value = serde_json::from_str(&err.1).unwrap();
+    assert!(body.get("undecided").is_some(), "응답 본문에 undecided 키가 있어야 함");
+}
+
+/// T6: 미결정 + 정원 초과 동시 → 미결정이 먼저 반환된다.
+#[tokio::test]
+async fn finalize_returns_undecided_before_quota_violation() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // unit_quota=1, 두 학생 모두 recommended=1이면 정원 초과
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 1) RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    // sid1: 추천(정원 초과 유발), sid2: 미결정
+    for (code, name, seq, rec) in [("S001", "홍길동", 1, 1i64), ("S002", "김철수", 2, 0)] {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
+        )
+        .bind(code).bind(name).bind(seq).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 500000, ?, ?, '2025-01-02T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).bind(seq).bind(rec)
+        .execute(&pool).await.unwrap();
+    }
+
+    let err = finalize_round(State(common::make_state(pool)), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY);
+    let body: serde_json::Value = serde_json::from_str(&err.1).unwrap();
+    assert!(body.get("undecided").is_some(), "미결정이 정원 초과보다 먼저 반환되어야 함: undecided 키가 있어야 함");
+    assert!(body.get("track_violations").is_none(), "미결정 오류에 track_violations 키가 없어야 함");
+    assert!(body.get("univ_violations").is_none(), "미결정 오류에 univ_violations 키가 없어야 함");
+}
+
+/// T7: 422 이후 상태 무결성 — 라운드 CLOSED 유지, results 불변.
+#[tokio::test]
+async fn finalize_422_leaves_round_closed_and_results_unchanged() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 500000, 1, 0, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let err = finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "CLOSED", "422 후 라운드는 CLOSED 유지");
+
+    let recommended: i64 = sqlx::query_scalar(
+        "SELECT recommended FROM results WHERE student_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(recommended, 0, "422 후 results.recommended는 변하지 않아야 함");
+}
+
+/// T8: 트리거 직접 검증 — 핸들러 우회 SQL로 FINALIZED 전환 시도.
+/// 미결정 있으면 트리거 ABORT, 미결정 없으면 통과.
+#[tokio::test]
+async fn trigger_blocks_direct_sql_finalize_when_undecided() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+         VALUES (?, ?, ?, '{}', 500000, 1, 0, '2025-01-02T00:00:00Z')",
+    )
+    .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    // 미결정(recommended=0) 상태에서 직접 UPDATE → 트리거가 ABORT
+    let result = sqlx::query(
+        "UPDATE rounds SET status = 'FINALIZED', finalized_at = 'now' WHERE id = ?",
+    )
+    .bind(rid)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "미결정 지원이 있을 때 직접 FINALIZED 전환은 트리거가 차단해야 함");
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("undecided applications remain"),
+        "트리거가 아닌 다른 이유로 실패: {msg}"
+    );
+
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "CLOSED", "트리거 ABORT 후 라운드는 CLOSED 유지");
+
+    // recommended=1로 변경 후 직접 UPDATE → 통과
+    sqlx::query("UPDATE results SET recommended = 1 WHERE student_id = ? AND round_id = ?")
+        .bind(sid).bind(rid).execute(&pool).await.unwrap();
+    sqlx::query(
+        "UPDATE rounds SET status = 'FINALIZED', finalized_at = 'now' WHERE id = ?",
+    )
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid).fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "FINALIZED", "미결정 없으면 직접 SQL FINALIZED 전환이 허용되어야 함");
+}
+
 // ── E1: 재오픈 → 재학생 우선 변경 → 재마감 경로가 순위를 갱신 ─────
 // CLOSED 중 prioritize 변경은 409로 막히므로(handler_universities.rs), 이 경로가
 // 관리자의 유일한 탈출구다. 실제로 저장 순위가 새 설정으로 재계산되는지 확인한다.

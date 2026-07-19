@@ -237,6 +237,16 @@ pub async fn reopen_round(
 }
 
 #[derive(Serialize, FromRow)]
+struct UndecidedApplication {
+    student_code: String,
+    student_name: String,
+    grade: i64,
+    class_no: i64,
+    univ_name: String,
+    track_name: String,
+}
+
+#[derive(Serialize, FromRow)]
 struct TrackOverQuota {
     track_name: String,
     univ_name: String,
@@ -269,6 +279,37 @@ pub async fn finalize_round(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if status.as_deref() != Some("CLOSED") {
         return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없거나 CLOSED 상태가 아닙니다".into()));
+    }
+
+    // 미결정 지원 검증 — 추천도 제외도 되지 않은 지원이 있으면 마감 불가.
+    // COALESCE(r.recommended, 0) = 0: results 행 없음(점수 미계산)도 미결정에 포함한다(LEFT JOIN).
+    // 이는 silent fallback이 아닌 "results 없음 = 미결정"이라는 의도된 3상태(추천/제외/미결정) 판정.
+    let undecided: Vec<UndecidedApplication> = sqlx::query_as(
+        "SELECT s.student_code, s.name AS student_name, s.grade, s.class_no,
+                u.univ_name, ut.track_name
+         FROM applications a
+         JOIN students s      ON s.id  = a.student_id
+         JOIN univ_tracks ut  ON ut.id = a.track_id
+         JOIN universities u  ON u.id  = ut.univ_id
+         LEFT JOIN results r  ON r.student_id = a.student_id
+                             AND r.track_id   = a.track_id
+                             AND r.round_id   = a.round_id
+         WHERE a.round_id = ?
+           AND a.excluded = 0
+           AND COALESCE(r.recommended, 0) = 0
+         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.student_code",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !undecided.is_empty() {
+        let body = serde_json::json!({
+            "error": "추천 또는 제외가 결정되지 않은 지원자가 있어 라운드를 마감할 수 없습니다",
+            "undecided": undecided,
+        });
+        return Err((StatusCode::UNPROCESSABLE_ENTITY, body.to_string()));
     }
 
     // 모집단위 정원 초과 검증 (unit_quota IS NOT NULL인 트랙만)

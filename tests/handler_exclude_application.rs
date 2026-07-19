@@ -488,6 +488,11 @@ async fn trigger_blocks_direct_sql_exclude_when_recommended() {
         result.is_err(),
         "트리거가 동작해야 한다: recommended=1 인 행을 직접 excluded=1 로 업데이트할 수 없어야 함"
     );
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("already recommended"),
+        "트리거가 아닌 다른 이유로 실패: {msg}"
+    );
 
     // DB 상태 무결성 확인
     let excluded: i64 = sqlx::query_scalar(

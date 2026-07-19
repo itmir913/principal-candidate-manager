@@ -327,14 +327,33 @@ async fn matrix_reopen_round() {
     .await;
 }
 
+/// finalize_round 상태 기계 테스트.
+/// B단계 이후 미결정 지원이 있으면 422를 반환하므로 공유 픽스처(recommended=0)를
+/// 그대로 쓸 수 없다. 상태 기계 검증(CLOSED만 통과, 나머지 404)을 위해
+/// CLOSED 케이스만 전건 추천 완료 픽스처를 별도로 구성한다.
 #[tokio::test]
 async fn matrix_finalize_round() {
     use StatusCode as S;
-    assert_matrix_row(
-        Ep::FinalizeRound,
-        [S::NOT_FOUND, S::NOT_FOUND, S::NO_CONTENT, S::NOT_FOUND],
-    )
-    .await;
+    // CLOSED: 전건 recommended=1 → 미결정 없음 → 204
+    {
+        let pool = common::create_test_pool().await;
+        let fx = setup(&pool, RState::Closed).await;
+        // 공유 픽스처의 recommended=0을 1로 갱신해 미결정 없는 상태를 만든다
+        sqlx::query("UPDATE results SET recommended = 1 WHERE student_id = ? AND round_id = ?")
+            .bind(fx.sid).bind(fx.rid).execute(&pool).await.unwrap();
+        let got = call(Ep::FinalizeRound, &pool, &fx).await;
+        assert_eq!(got, S::NO_CONTENT, "FinalizeRound × Closed: 전건 결정 시 204여야 함");
+    }
+    // Missing / Open / Finalized: 상태 불일치 → 404
+    for state in [RState::Missing, RState::Open, RState::Finalized] {
+        let pool = common::create_test_pool().await;
+        let fx = setup(&pool, state).await;
+        let before = snapshot(&pool).await;
+        let got = call(Ep::FinalizeRound, &pool, &fx).await;
+        assert_eq!(got, S::NOT_FOUND, "FinalizeRound × {state:?}: 404여야 함");
+        let after = snapshot(&pool).await;
+        assert_eq!(before, after, "FinalizeRound × {state:?}: 거부 시 DB 불변");
+    }
 }
 
 #[tokio::test]
