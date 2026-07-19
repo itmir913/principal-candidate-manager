@@ -428,12 +428,13 @@
                             {{ r.total_score.toFixed(2) }}
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
+                            <div class="flex flex-col items-center gap-1">
                             <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
                             <template v-else-if="r.recommended">
                               <span class="text-base font-semibold" style="color: #16a34a;">추천 확정됨</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
-                                class="text-base rounded-lg ml-2 whitespace-nowrap"
+                                class="text-base rounded-lg whitespace-nowrap"
                                 style="padding: 3px 10px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
                                 @click="handleUnrecommend(r)"
                               >추천 취소</button>
@@ -447,6 +448,7 @@
                             <span v-else-if="selected.status === 'CLOSED' && r.excluded" style="color: #cbd5e1;">-</span>
                             <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
                             <span v-else class="text-base font-semibold" style="color: #94a3b8;">-</span>
+                            </div>
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <button
