@@ -338,3 +338,162 @@ async fn quota_count_unaffected_by_exclusion() {
     assert_eq!(used_before, 1);
     let _ = recommended_student;
 }
+
+// ── A단계: 추천/제외 상호배타성 가드 ────────────────────────────────
+
+// T1. 추천 확정된 지원의 제외 시도 → 409
+#[tokio::test]
+async fn exclude_recommended_application_is_conflict() {
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    let sid = new_candidate(&pool, tid, rid, "S001", 1, 900000, 1, false).await;
+
+    assert_eq!(recommend(&pool, sid, tid, rid).await.unwrap(), StatusCode::NO_CONTENT);
+
+    let err = exclude(&pool, sid, tid, rid, "결격").await.unwrap_err();
+    assert_eq!(err.0, StatusCode::CONFLICT);
+    assert!(
+        err.1.contains("추천을 먼저 취소"),
+        "오류 본문에 '추천을 먼저 취소' 문구가 없음: {}",
+        err.1
+    );
+}
+
+// T2. T1 이후 상태 무결성 — rollback 확인
+#[tokio::test]
+async fn exclude_recommended_leaves_state_intact() {
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    let sid = new_candidate(&pool, tid, rid, "S001", 1, 900000, 1, false).await;
+
+    assert_eq!(recommend(&pool, sid, tid, rid).await.unwrap(), StatusCode::NO_CONTENT);
+    let _ = exclude(&pool, sid, tid, rid, "결격").await.unwrap_err();
+
+    let excluded: i64 = sqlx::query_scalar(
+        "SELECT excluded FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool).await.unwrap();
+    assert_eq!(excluded, 0, "409 후 excluded 가 0 으로 유지되어야 한다");
+
+    let recommended: i64 = sqlx::query_scalar(
+        "SELECT recommended FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool).await.unwrap();
+    assert_eq!(recommended, 1, "409 후 recommended 가 1 로 유지되어야 한다");
+}
+
+// T3. 추천 취소 후 제외 → 성공
+#[tokio::test]
+async fn exclude_after_unrecommend_succeeds() {
+    use principal_candidate_manager::handlers::scoring::unrecommend_result;
+
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    let sid = new_candidate(&pool, tid, rid, "S001", 1, 900000, 1, false).await;
+
+    assert_eq!(recommend(&pool, sid, tid, rid).await.unwrap(), StatusCode::NO_CONTENT);
+
+    unrecommend_result(State(common::make_state(pool.clone())), Path((sid, tid, rid)))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        exclude(&pool, sid, tid, rid, "결격").await.unwrap(),
+        StatusCode::NO_CONTENT
+    );
+
+    let excluded: i64 = sqlx::query_scalar(
+        "SELECT excluded FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool).await.unwrap();
+    assert_eq!(excluded, 1);
+
+    let reason: Option<String> = sqlx::query_scalar(
+        "SELECT excluded_reason FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool).await.unwrap();
+    assert_eq!(reason.as_deref(), Some("결격"));
+}
+
+// T4. results 행이 없는 지원의 제외 → 성공 (점수 미계산 상태)
+#[tokio::test]
+async fn exclude_without_results_row_succeeds() {
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    // new_candidate 대신 직접 applications만 삽입 — results 행 없음
+    let sid = new_student(&pool, "S001", 1).await;
+    sqlx::query(
+        "INSERT INTO applications (student_id, track_id, round_id, department_name) \
+         VALUES (?, ?, ?, '학과')",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .execute(&pool).await.unwrap();
+
+    // results 행이 없어도 제외는 가능해야 한다
+    assert_eq!(
+        exclude(&pool, sid, tid, rid, "서류미비").await.unwrap(),
+        StatusCode::NO_CONTENT
+    );
+    assert!(is_excluded(&pool, sid, tid, rid).await);
+}
+
+// T5. 기존 회귀: 추천 없는 일반 제외·재제외·공백 사유가 여전히 동작하는지
+#[tokio::test]
+async fn regression_normal_exclude_still_works() {
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    let sid = new_candidate(&pool, tid, rid, "S001", 1, 500000, 1, false).await;
+
+    // 일반 제외 → 204
+    assert_eq!(
+        exclude(&pool, sid, tid, rid, "사유").await.unwrap(),
+        StatusCode::NO_CONTENT
+    );
+
+    // 재제외 → 409
+    let err = exclude(&pool, sid, tid, rid, "사유2").await.unwrap_err();
+    assert_eq!(err.0, StatusCode::CONFLICT);
+
+    // 사유 공백 → 400
+    let sid2 = new_candidate(&pool, tid, rid, "S002", 2, 400000, 2, false).await;
+    let err2 = exclude(&pool, sid2, tid, rid, "   ").await.unwrap_err();
+    assert_eq!(err2.0, StatusCode::BAD_REQUEST);
+}
+
+// T6. 트리거 직접 검증 — 앱 핸들러 우회 시 SQLite 오류 발생
+#[tokio::test]
+async fn trigger_blocks_direct_sql_exclude_when_recommended() {
+    let pool = common::create_test_pool().await;
+    let (tid, _) = setup(&pool).await;
+    let rid = new_round(&pool, "CLOSED").await;
+    let sid = new_candidate(&pool, tid, rid, "S001", 1, 900000, 1, true).await;
+    // results.recommended = 1 상태에서 직접 UPDATE로 excluded=1 시도
+    let result = sqlx::query(
+        "UPDATE applications SET excluded = 1, excluded_reason = 'bypass'
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .execute(&pool).await;
+
+    assert!(
+        result.is_err(),
+        "트리거가 동작해야 한다: recommended=1 인 행을 직접 excluded=1 로 업데이트할 수 없어야 함"
+    );
+
+    // DB 상태 무결성 확인
+    let excluded: i64 = sqlx::query_scalar(
+        "SELECT excluded FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid).bind(tid).bind(rid)
+    .fetch_one(&pool).await.unwrap();
+    assert_eq!(excluded, 0, "트리거 abort 후 excluded 는 0 으로 유지되어야 한다");
+}

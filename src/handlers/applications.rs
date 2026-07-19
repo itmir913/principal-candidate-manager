@@ -259,9 +259,11 @@ pub async fn exclude_application(
         return Err((StatusCode::BAD_REQUEST, "제외 사유는 필수입니다".into()));
     }
 
+    // BEGIN IMMEDIATE: 추천 확정 여부 조회(SELECT) 후 excluded 갱신(UPDATE)까지 원자적으로 처리.
+    // DEFERRED면 두 커넥션이 동시에 recommended=0 을 읽고 둘 다 통과해 모순 상태(recommended=1 AND excluded=1)가 된다.
     let mut tx = state
         .db
-        .begin()
+        .begin_with("BEGIN IMMEDIATE")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -286,6 +288,27 @@ pub async fn exclude_application(
         None => return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into())),
         Some(true) => return Err((StatusCode::CONFLICT, "이미 제외 처리된 지원입니다".into())),
         Some(false) => {}
+    }
+
+    // 추천 확정된 지원은 제외할 수 없다 — recommended 와 excluded 는 상호배타.
+    // 둘 다 1인 행은 정원 집계(recommended=1 AND abandoned=0)에 그대로 잡혀
+    // 결격 학생이 정원을 점유하는 모순 상태가 된다.
+    let recommended: Option<bool> = sqlx::query_scalar(
+        "SELECT recommended = 1 FROM results
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if recommended == Some(true) {
+        return Err((
+            StatusCode::CONFLICT,
+            "이미 추천 확정된 지원은 제외할 수 없습니다. 추천을 먼저 취소한 후 제외 처리하세요.".to_string(),
+        ));
     }
 
     let mut detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
@@ -329,9 +352,11 @@ pub async fn clear_application_exclusion(
     State(state): State<AppState>,
     Path((sid, tid, rid)): Path<(i64, i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    // BEGIN IMMEDIATE: excluded 상태 조회 후 갱신 사이에 recommend_result 가 끼어들 수 있으므로
+    // exclude_application 과 동일하게 읽기-쓰기를 원자적으로 처리한다.
     let mut tx = state
         .db
-        .begin()
+        .begin_with("BEGIN IMMEDIATE")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

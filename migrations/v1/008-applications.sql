@@ -67,3 +67,21 @@ BEGIN
           AND r.status = 'CLOSED'
     );
 END;
+
+-- 추천 확정된 지원의 제외 처리 차단 (recommended 와 excluded 상호배타)
+-- 앱 레벨 가드(exclude_application)에 대한 DB 방어선.
+-- 정원 집계는 recommended=1 AND abandoned=0 기준이므로 두 플래그가
+-- 동시에 1이면 결격 학생이 정원을 점유하는 모순 상태가 된다.
+CREATE TRIGGER IF NOT EXISTS trg_prevent_exclude_recommended
+BEFORE UPDATE ON applications
+WHEN OLD.excluded = 0 AND NEW.excluded = 1
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot exclude application: already recommended')
+    WHERE EXISTS (
+        SELECT 1 FROM results r
+        WHERE r.student_id = NEW.student_id
+          AND r.track_id   = NEW.track_id
+          AND r.round_id   = NEW.round_id
+          AND r.recommended = 1
+    );
+END;
