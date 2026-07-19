@@ -530,7 +530,7 @@ pub async fn category_map_export(
              LEFT JOIN univ_tracks ut ON cm.track_id = ut.id
              LEFT JOIN universities u ON ut.univ_id = u.id
              WHERE cm.area_id = ?
-             ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category",
+             ORDER BY u.univ_name, ut.track_name, cm.category, cm.score",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -549,7 +549,7 @@ pub async fn category_map_export(
         }
         let rows = sqlx::query(
             "SELECT category, score FROM category_map
-             WHERE area_id = ? AND track_id IS NULL ORDER BY score DESC, category",
+             WHERE area_id = ? AND track_id IS NULL ORDER BY category, score",
         )
         .bind(id)
         .fetch_all(&state.db)
@@ -1253,7 +1253,7 @@ pub async fn category_map_list(
          LEFT JOIN univ_tracks ut ON cm.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE cm.area_id = ?
-         ORDER BY u.univ_name, ut.track_name, cm.score DESC, cm.category
+         ORDER BY u.univ_name, ut.track_name, cm.category, cm.score
          LIMIT ? OFFSET ?",
     )
     .bind(id)
