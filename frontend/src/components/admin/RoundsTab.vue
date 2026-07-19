@@ -263,43 +263,70 @@
 
           <!-- ── 결과 탭 ──────────────────────────────────── -->
           <div v-if="view === 'results'">
-            <div class="flex items-center gap-3 mb-4 flex-wrap sticky top-0 z-10" style="background: #f8fafc; padding: 10px 0; margin: -10px 0 6px;">
-              <select
-                v-model="selectedTrackId"
-                class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                style="border: 1px solid #e2e8f0; padding: 9px 12px; color: #1e293b;"
-                @change="loadResults"
-              >
-                <option value="">전체 대학</option>
-                <option v-for="t in tracksInRound" :key="t.id" :value="t.id">
-                  {{ t.univ_name }} {{ t.track_name }}
-                </option>
-              </select>
-              <button
-                class="text-base font-medium rounded-lg whitespace-nowrap"
-                style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-                @click="loadResults"
-              >새로고침</button>
-              <span style="color: #cbd5e1; user-select: none;">|</span>
-              <button
-                v-if="selected.status === 'CLOSED'"
-                class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
-                style="padding: 9px 16px; border: none; background: #d97706; color: white; cursor: pointer;"
-                :disabled="autoRecommendActing"
-                @click="handleAutoRecommend"
-              >자동 추천 확정</button>
-              <button
-                class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
-                style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
-                :disabled="results.length === 0 || downloading"
-                @click="downloadExcel"
-              >전체 지원자 결과 다운로드</button>
-              <button
-                class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
-                style="padding: 9px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
-                @click="downloadSummary"
-              >라운드 요약 다운로드</button>
+            <div class="sticky top-0 z-10" style="padding: 10px 0; margin: -10px 0 6px;">
+              <div class="flex items-center gap-3 mb-3 flex-wrap">
+                <select
+                  v-model="selectedTrackId"
+                  class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  style="border: 1px solid #e2e8f0; padding: 9px 12px; color: #1e293b;"
+                  @change="loadResults"
+                >
+                  <option value="">전체 대학</option>
+                  <option v-for="t in tracksInRound" :key="t.id" :value="t.id">
+                    {{ t.univ_name }} {{ t.track_name }}
+                  </option>
+                </select>
+                <button
+                  class="text-base font-medium rounded-lg whitespace-nowrap"
+                  style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+                  @click="loadResults"
+                >새로고침</button>
+                <span style="color: #cbd5e1; user-select: none;">|</span>
+                <button
+                  v-if="selected.status === 'CLOSED'"
+                  class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
+                  style="padding: 9px 16px; border: none; background: #d97706; color: white; cursor: pointer;"
+                  :disabled="autoRecommendActing"
+                  @click="handleAutoRecommend"
+                >자동 추천 확정</button>
+                <button
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
+                  style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
+                  :disabled="results.length === 0 || downloading"
+                  @click="downloadExcel"
+                >전체 지원자 결과 다운로드</button>
+                <button
+                  class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
+                  style="padding: 9px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                  :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
+                  @click="downloadSummary"
+                >라운드 요약 다운로드</button>
+              </div>
+
+              <div v-if="results.length > 0" class="flex gap-2">
+                <button
+                  class="text-base font-medium rounded-lg whitespace-nowrap"
+                  :style="{
+                    padding: '6px 14px', cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: rankView === 'track' ? '#2563eb' : '#e2e8f0',
+                    background: rankView === 'track' ? '#2563eb' : 'white',
+                    color: rankView === 'track' ? 'white' : '#475569',
+                  }"
+                  @click="rankView = 'track'"
+                >모집단위별 순위</button>
+                <button
+                  class="text-base font-medium rounded-lg whitespace-nowrap"
+                  :style="{
+                    padding: '6px 14px', cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: rankView === 'univ' ? '#2563eb' : '#e2e8f0',
+                    background: rankView === 'univ' ? '#2563eb' : 'white',
+                    color: rankView === 'univ' ? 'white' : '#475569',
+                  }"
+                  @click="rankView = 'univ'"
+                >대학 전체 순위</button>
+              </div>
             </div>
 
             <!-- 자동 추천 확정 결과 표시 -->
@@ -323,31 +350,6 @@
 
             <div v-if="results.length === 0" class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
               결과가 없습니다. 점수 계산을 먼저 실행하세요.
-            </div>
-
-            <div v-if="results.length > 0" class="flex gap-2 mb-4">
-              <button
-                class="text-base font-medium rounded-lg whitespace-nowrap"
-                :style="{
-                  padding: '6px 14px', cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: rankView === 'track' ? '#2563eb' : '#e2e8f0',
-                  background: rankView === 'track' ? '#2563eb' : 'white',
-                  color: rankView === 'track' ? 'white' : '#475569',
-                }"
-                @click="rankView = 'track'"
-              >모집단위별 순위</button>
-              <button
-                class="text-base font-medium rounded-lg whitespace-nowrap"
-                :style="{
-                  padding: '6px 14px', cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: rankView === 'univ' ? '#2563eb' : '#e2e8f0',
-                  background: rankView === 'univ' ? '#2563eb' : 'white',
-                  color: rankView === 'univ' ? 'white' : '#475569',
-                }"
-                @click="rankView = 'univ'"
-              >대학 전체 순위</button>
             </div>
 
             <div v-for="(group, key) in resultsByView" :key="key" class="mb-6">
