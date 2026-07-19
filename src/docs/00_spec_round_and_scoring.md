@@ -269,15 +269,33 @@ CAST(RANK() OVER (
 
 저장하지 않는 이유: 순위는 동적으로 파생되는 값으로 관리자 수동 조작·재계산 시 자동으로 최신화되어야 한다. 별도 컬럼에 저장하면 점수 변경 시 순위를 함께 갱신하는 동기화 부담이 생긴다.
 
-### 3.3 같은 윈도우 함수가 세 곳에 있다
+### 3.3 모집단위 순위 윈도우 함수 — 단일 출처
 
-**모집단위 순위 정의가 세 곳에서 사용되며 반드시 일치해야 한다**:
+**모집단위 순위 파생 식은 `track_rank_window()` 헬퍼 하나로 통일되어 있다** (`scoring.rs`).  
+이전에는 7곳에 동일한 `CAST(RANK() OVER (...) AS INTEGER) AS track_rank` 리터럴이 중복 존재했다.  
+헬퍼가 없으면 한 곳만 수정했을 때 나머지가 달라져 가드·화면·자동 추천이 서로 다른 순위를 쓰는 상태가 된다.
 
-| 위치 | 파일:행 | 용도 |
-|------|--------|------|
-| `get_results` / `export_results` | `scoring.rs:483, 537` | 화면 표시 및 내보내기 |
-| `recommend_result` blocker 쿼리 | `scoring.rs:1193` | 수동 추천 트랙 순서 가드 |
-| `run_auto_recommend` 3c 단계 | `scoring.rs:1678` | 자동 추천 1단계 후보 순위 |
+```rust
+fn track_rank_window(r: &str, ut: &str, s: &str, partition_by_round: bool) -> String
+```
+
+| 파라미터 | 의미 |
+|---------|------|
+| `r`, `ut`, `s` | SQL 테이블 별칭 (results, univ_tracks, students) |
+| `partition_by_round=true` | `PARTITION BY r.track_id, r.round_id` — 다중 라운드 CTE |
+| `partition_by_round=false` | `PARTITION BY r.track_id` — 단일 라운드 인라인 |
+
+**사용 위치 7곳**:
+
+| 핸들러 | 용도 | partition_by_round |
+|--------|------|-------------------|
+| `get_results` | 화면 표시 | true |
+| `export_results` | 엑셀 내보내기 | true |
+| `export_round_summary` | 요약 내보내기 CTE | true |
+| `teacher_get_results` (졸업생 분기) | 담임 결과 조회 | true |
+| `teacher_get_results` (재학생 분기) | 담임 결과 조회 | true |
+| `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | false |
+| `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | false |
 
 어긋나면: 관리자가 화면에서 보는 순위와 가드·자동 추천이 비교하는 순위가 달라져  
 가드가 잘못된 후보를 막거나 허용하고, 자동 추천이 다른 결과를 낸다.

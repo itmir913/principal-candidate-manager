@@ -18,6 +18,26 @@ use crate::{
 
 type ApiError = (StatusCode, String);
 
+/// 모집단위 track_rank 윈도우 함수 SQL 단편 — 단일 출처.
+/// 테이블 별칭: r(results), ut(univ_tracks), s(students).
+/// partition_by_round=true  → PARTITION BY r.track_id, r.round_id  (다중 라운드 조회)
+/// partition_by_round=false → PARTITION BY r.track_id               (단일 라운드 CTE)
+fn track_rank_window(r: &str, ut: &str, s: &str, partition_by_round: bool) -> String {
+    let partition = if partition_by_round {
+        format!("{r}.track_id, {r}.round_id")
+    } else {
+        format!("{r}.track_id")
+    };
+    format!(
+        "CAST(RANK() OVER (
+                    PARTITION BY {partition}
+                    ORDER BY
+                        CASE WHEN {ut}.prioritize_enrolled = 1 THEN {s}.is_enrolled ELSE NULL END DESC NULLS LAST,
+                        {r}.total_score DESC
+                ) AS INTEGER) AS track_rank"
+    )
+}
+
 fn score_detail_as_map<S: Serializer>(val: &str, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::{Error, SerializeMap};
     let raw: HashMap<String, i64> = serde_json::from_str(val)
@@ -474,7 +494,8 @@ pub async fn get_results(
     Path(round_id): Path<i64>,
     Query(q): Query<ResultQuery>,
 ) -> Result<Json<Vec<ResultRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, ResultRow>(
+    let track_rank = track_rank_window("r", "ut", "s", true);
+    let sql = format!(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
@@ -482,12 +503,7 @@ pub async fn get_results(
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 u.univ_name, ut.track_name,
                 COALESCE(a.department_name, '') AS department_name,
-                CAST(RANK() OVER (
-                    PARTITION BY r.track_id, r.round_id
-                    ORDER BY
-                        CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
-                        r.total_score DESC
-                ) AS INTEGER) AS track_rank
+                {track_rank}
          FROM results r
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id
@@ -497,8 +513,9 @@ pub async fn get_results(
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
            AND (? IS NULL OR r.track_id = ?)
-         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC",
-    )
+         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC"
+    );
+    let rows = sqlx::query_as::<_, ResultRow>(&sql)
     .bind(round_id)
     .bind(q.track_id).bind(q.track_id)
     .fetch_all(&state.db)
@@ -526,7 +543,8 @@ pub async fn export_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let all_results = sqlx::query_as::<_, ResultRow>(
+    let track_rank = track_rank_window("r", "ut", "s", true);
+    let export_sql = format!(
         "SELECT r.student_id, r.track_id, r.round_id,
                 r.total_score, r.score_detail, r.ranking, r.recommended,
                 COALESCE(a.abandoned, 0) AS abandoned,
@@ -534,12 +552,7 @@ pub async fn export_results(
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
                 u.univ_name, ut.track_name,
                 COALESCE(a.department_name, '') AS department_name,
-                CAST(RANK() OVER (
-                    PARTITION BY r.track_id, r.round_id
-                    ORDER BY
-                        CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
-                        r.total_score DESC
-                ) AS INTEGER) AS track_rank
+                {track_rank}
          FROM results r
          JOIN students s ON r.student_id = s.id
          JOIN univ_tracks ut ON r.track_id = ut.id
@@ -548,8 +561,9 @@ pub async fn export_results(
                                   AND a.track_id  = r.track_id
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
-         ORDER BY u.univ_name, ut.track_name, r.ranking NULLS LAST, r.total_score DESC",
-    )
+         ORDER BY u.univ_name, ut.track_name, r.ranking NULLS LAST, r.total_score DESC"
+    );
+    let all_results = sqlx::query_as::<_, ResultRow>(&export_sql)
     .bind(round_id)
     .fetch_all(&state.db)
     .await
@@ -775,15 +789,11 @@ pub async fn export_round_summary(
     }
 
     // ── 지원자결과 시트 ──────────────────────────────────────────────
-    let applicants: Vec<ApplicantResultRow> = sqlx::query_as::<_, ApplicantResultRow>(
+    let track_rank = track_rank_window("r2", "ut2", "s2", true);
+    let summary_sql = format!(
         "WITH tr AS (
              SELECT r2.student_id, r2.track_id, r2.round_id,
-                    CAST(RANK() OVER (
-                        PARTITION BY r2.track_id, r2.round_id
-                        ORDER BY
-                            CASE WHEN ut2.prioritize_enrolled = 1 THEN s2.is_enrolled ELSE NULL END DESC NULLS LAST,
-                            r2.total_score DESC
-                    ) AS INTEGER) AS track_rank
+                    {track_rank}
              FROM results r2
              JOIN students s2   ON s2.id  = r2.student_id
              JOIN univ_tracks ut2 ON ut2.id = r2.track_id
@@ -803,8 +813,9 @@ pub async fn export_round_summary(
                       AND tr.track_id  = a.track_id
                       AND tr.round_id  = a.round_id
          WHERE a.round_id = ?
-         ORDER BY s.is_enrolled DESC, s.student_code, u.univ_name, ut.track_name",
-    )
+         ORDER BY s.is_enrolled DESC, s.student_code, u.univ_name, ut.track_name"
+    );
+    let applicants: Vec<ApplicantResultRow> = sqlx::query_as::<_, ApplicantResultRow>(&summary_sql)
     .bind(round_id)
     .fetch_all(&state.db)
     .await
@@ -901,16 +912,12 @@ pub async fn teacher_get_results(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // track_rank는 FINALIZED 전체 결과 기준으로 계산(grade/class 필터 전)
+    let tr_cte = track_rank_window("r2", "ut2", "s2", true);
     let results = if claims.grade == 0 && claims.class_no == 0 {
-        sqlx::query_as::<_, ResultRow>(
+        let sql = format!(
             "WITH tr AS (
                  SELECT r2.student_id, r2.track_id, r2.round_id,
-                        CAST(RANK() OVER (
-                            PARTITION BY r2.track_id, r2.round_id
-                            ORDER BY
-                                CASE WHEN ut2.prioritize_enrolled = 1 THEN s2.is_enrolled ELSE NULL END DESC NULLS LAST,
-                                r2.total_score DESC
-                        ) AS INTEGER) AS track_rank
+                        {tr_cte}
                  FROM results r2
                  JOIN students s2    ON s2.id   = r2.student_id
                  JOIN univ_tracks ut2 ON ut2.id = r2.track_id
@@ -938,20 +945,16 @@ pub async fn teacher_get_results(
                      AND tr.round_id  = r.round_id
              WHERE rnd.status = 'FINALIZED'
                AND s.is_enrolled = 0
-             ORDER BY r.round_id, s.student_code, r.track_id",
-        )
-        .fetch_all(&state.db)
-        .await
+             ORDER BY r.round_id, s.student_code, r.track_id"
+        );
+        sqlx::query_as::<_, ResultRow>(&sql)
+            .fetch_all(&state.db)
+            .await
     } else {
-        sqlx::query_as::<_, ResultRow>(
+        let sql = format!(
             "WITH tr AS (
                  SELECT r2.student_id, r2.track_id, r2.round_id,
-                        CAST(RANK() OVER (
-                            PARTITION BY r2.track_id, r2.round_id
-                            ORDER BY
-                                CASE WHEN ut2.prioritize_enrolled = 1 THEN s2.is_enrolled ELSE NULL END DESC NULLS LAST,
-                                r2.total_score DESC
-                        ) AS INTEGER) AS track_rank
+                        {tr_cte}
                  FROM results r2
                  JOIN students s2    ON s2.id   = r2.student_id
                  JOIN univ_tracks ut2 ON ut2.id = r2.track_id
@@ -980,12 +983,13 @@ pub async fn teacher_get_results(
              WHERE rnd.status = 'FINALIZED'
                AND s.grade = ?
                AND s.class_no = ?
-             ORDER BY r.round_id, s.seq_no, r.track_id",
-        )
-        .bind(claims.grade)
-        .bind(claims.class_no)
-        .fetch_all(&state.db)
-        .await
+             ORDER BY r.round_id, s.seq_no, r.track_id"
+        );
+        sqlx::query_as::<_, ResultRow>(&sql)
+            .bind(claims.grade)
+            .bind(claims.class_no)
+            .fetch_all(&state.db)
+            .await
     }
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -1188,15 +1192,11 @@ pub async fn recommend_result(
     //     두 경로가 다른 순위를 쓰면 이 가드의 의미가 없다.
     #[derive(sqlx::FromRow)]
     struct Blocker { blockers: i64, top_rank: Option<i64> }
-    let blocker: Blocker = sqlx::query_as(
+    let blocker_rank = track_rank_window("r", "ut", "s", false);
+    let blocker_sql = format!(
         "WITH ranked AS (
              SELECT r.student_id, r.recommended,
-                    CAST(RANK() OVER (
-                        PARTITION BY r.track_id
-                        ORDER BY
-                            CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
-                            r.total_score DESC
-                    ) AS INTEGER) AS track_rank
+                    {blocker_rank}
              FROM results r
              JOIN students s ON s.id = r.student_id
              JOIN univ_tracks ut ON ut.id = r.track_id
@@ -1208,8 +1208,9 @@ pub async fn recommend_result(
                              AND a.track_id  = ?
                              AND a.round_id  = ?
          WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
-           AND k.track_rank < (SELECT track_rank FROM ranked WHERE student_id = ?)",
-    )
+           AND k.track_rank < (SELECT track_rank FROM ranked WHERE student_id = ?)"
+    );
+    let blocker: Blocker = sqlx::query_as(&blocker_sql)
     .bind(rid).bind(tid).bind(tid).bind(rid).bind(sid)
     .fetch_one(&mut *tx)
     .await
@@ -1673,14 +1674,10 @@ async fn run_auto_recommend(
         // 3c. 이 모집단위 전체 결과 행 + 모집단위 순위 파생.
         //     RANK() 는 이미 추천 확정된 행까지 포함해 계산한다 — 화면(get_results)의
         //     모집단위 순위와 같은 값이어야 사유 메시지의 순위가 관리자에게 일치한다.
-        let all_rows: Vec<CandidateRow> = sqlx::query_as(
+        let candidate_rank = track_rank_window("r", "ut", "s", false);
+        let candidate_sql = format!(
             "SELECT r.student_id, r.ranking, r.recommended, a.excluded,
-                    CAST(RANK() OVER (
-                        PARTITION BY r.track_id
-                        ORDER BY
-                            CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
-                            r.total_score DESC
-                    ) AS INTEGER) AS track_rank
+                    {candidate_rank}
              FROM results r
              JOIN students s ON s.id = r.student_id
              JOIN univ_tracks ut ON ut.id = r.track_id
@@ -1688,8 +1685,9 @@ async fn run_auto_recommend(
                                  AND a.track_id  = r.track_id
                                  AND a.round_id  = r.round_id
              WHERE r.round_id = ? AND r.track_id = ?
-             ORDER BY track_rank ASC",
-        )
+             ORDER BY track_rank ASC"
+        );
+        let all_rows: Vec<CandidateRow> = sqlx::query_as(&candidate_sql)
         .bind(round_id)
         .bind(track.track_id)
         .fetch_all(&mut *tx)
