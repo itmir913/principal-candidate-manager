@@ -17,6 +17,20 @@ UI·문서에서 사용하는 **"미선발"**은 DB 컬럼 `applications.exclude
 
 ---
 
+## 인용 규약
+
+이 문서의 가치는 **코드와 대조 가능한 근거**에 있으므로, 인용이 깨지면 문서가 무의미해진다.
+
+- **Rust 코드는 `파일.rs::심볼` 로 인용한다** (예: `scoring.rs::finalize_round`).  
+  **행 번호를 쓰지 말 것.** 2026-07-19 `track_rank_window()` 추출 리팩터링이 파일 상단에 20줄을
+  삽입하면서 이 문서의 행 번호 인용 30여 개가 한꺼번에 무효화된 적이 있다. 심볼 이름은 코드가
+  위아래로 밀려도 유효하고 grep·IDE 점프로 바로 찾을 수 있다.
+- **SQL 마이그레이션은 행 번호를 써도 된다.** 조각 파일이 append-only로만 자라고, 인용할 때
+  트리거·인덱스 **이름을 함께 적어** 번호가 밀려도 대상을 특정할 수 있기 때문이다.
+- `src/score.rs` 처럼 trait impl 위주라 심볼 이름이 오히려 모호한 파일은 행 번호를 유지한다.
+
+---
+
 ## 1. 라운드 생명주기
 
 ### 1.1 상태 정의와 전이 경로
@@ -37,7 +51,7 @@ UI·문서에서 사용하는 **"미선발"**은 DB 컬럼 `applications.exclude
          └──────────────┘
 ```
 
-FINALIZED는 비가역이다. `trg_prevent_update_finalized_result` 트리거(`migrations/v1/009-results.sql:28`)가  
+FINALIZED는 비가역이다. `trg_prevent_update_finalized_result` 트리거(`migrations/v1/009-results.sql:27`)가  
 FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들러 우회(직접 SQL)로도 되돌릴 수 없다.
 
 ### 1.2 상태×행위 매트릭스
@@ -74,7 +88,7 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 |---|---|---|
 | `idx_one_active_round` | `003-rounds.sql:19` | 비-FINALIZED 라운드 2개 이상 INSERT |
 | `trg_require_all_decided_before_finalize` | `003-rounds.sql:26` | 미결정 지원 존재 시 CLOSED→FINALIZED 전환 |
-| `trg_prevent_update_finalized_result` | `009-results.sql:28` | FINALIZED 라운드 results UPDATE |
+| `trg_prevent_update_finalized_result` | `009-results.sql:27` | FINALIZED 라운드 results UPDATE |
 | `trg_prevent_delete_closed_result` | `009-results.sql:36` | CLOSED/FINALIZED 라운드 results DELETE |
 | `trg_prevent_exclude_recommended` | `008-applications.sql:76` | 추천 확정 행에 excluded=1 설정 |
 | `trg_prevent_delete_closed_application` | `008-applications.sql:23` | CLOSED/FINALIZED 라운드 applications DELETE |
@@ -83,7 +97,7 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 ### 1.3 라운드 열기 (`POST /rounds/open`)
 
 `INSERT ... SELECT ... WHERE NOT EXISTS (...) RETURNING id` 패턴으로 "진행 중(OPEN 또는 CLOSED) 라운드 없음"  
-확인과 삽입을 원자적으로 처리한다 (`src/handlers/rounds.rs:61`). RETURNING id가 None이면 409.  
+확인과 삽입을 원자적으로 처리한다 (`src/handlers/rounds.rs::open_round`). RETURNING id가 None이면 409.  
 FINALIZED 라운드만 있으면 허용 — FINALIZED 라운드는 "진행 중"이 아니다.
 
 DB 방어선: `idx_one_active_round`(`003-rounds.sql:19`) — `status != 'FINALIZED'` 조건 부분 유니크 인덱스.  
@@ -91,17 +105,17 @@ DB 방어선: `idx_one_active_round`(`003-rounds.sql:19`) — `status != 'FINALI
 
 ### 1.4 라운드 종료 (`PUT /rounds/:id/close`)
 
-**전체 흐름이 `BEGIN IMMEDIATE` 단일 트랜잭션** (`rounds.rs:98-186`).  
+**전체 흐름이 `BEGIN IMMEDIATE` 단일 트랜잭션** (`rounds.rs::close_round`).  
 오류 경로에서 tx drop 시 자동 ROLLBACK — 라운드는 OPEN으로 복귀.  
 "CLOSED + 결과 없음" 불일치 상태가 구조적으로 불가능하다.
 
-1. **기초데이터 누락 사전 검증** (`rounds.rs:113`): 모든 지원자×전형요소 조합에 대해 base_data 존재 확인.  
+1. **기초데이터 누락 사전 검증** (`rounds.rs::close_round`): 모든 지원자×전형요소 조합에 대해 base_data 존재 확인.  
    COMPOSITE 전형요소는 `track_id = ap.track_id`, SIMPLE은 `track_id IS NULL` 조건.  
    누락 1건이라도 있으면 422 + 최대 5건 안내, ROLLBACK.
-2. **상태 변경** (`rounds.rs:150`):  
+2. **상태 변경** (`rounds.rs::close_round`):  
    `UPDATE rounds SET status='CLOSED', closed_at=? WHERE id=? AND status='OPEN'`.  
    rows_affected=0이면 404.
-3. **점수 계산** (`rounds.rs:165`): `run_calculate_scores_on_conn` 호출.  
+3. **점수 계산** (`rounds.rs::close_round`): `run_calculate_scores_on_conn` 호출.  
    실패 시 ROLLBACK → OPEN 복귀. 성공 시 COMMIT.
 
 `BEGIN IMMEDIATE`를 쓰는 이유: 검증 구간 동안 다른 커넥션의 쓰기(base_data import 등)를 차단해  
@@ -109,7 +123,7 @@ DB 방어선: `idx_one_active_round`(`003-rounds.sql:19`) — `status != 'FINALI
 
 ### 1.5 라운드 재개 (`PUT /rounds/:id/reopen`)
 
-단일 트랜잭션 (`rounds.rs:188`):
+단일 트랜잭션 (`rounds.rs::reopen_round`):
 
 1. `UPDATE rounds SET status='OPEN', closed_at=NULL WHERE id=? AND status='CLOSED'` — CLOSED 라운드만 허용.
 2. `UPDATE results SET recommended=0, ranking=NULL WHERE round_id=?` — 추천 플래그·순위 초기화.
@@ -123,19 +137,19 @@ rounds.status를 OPEN으로 먼저 변경한 후 이 UPDATE를 실행하므로 `
 
 ### 1.6 라운드 확정 (`PUT /rounds/:id/finalize`)
 
-**`BEGIN IMMEDIATE` 단일 트랜잭션** (`rounds.rs:264`):
+**`BEGIN IMMEDIATE` 단일 트랜잭션** (`rounds.rs::finalize_round`):
 
-1. `SELECT status` → CLOSED가 아니면 404 (`rounds.rs:275`).
-2. **미결정 검증** (`rounds.rs:287`):  
+1. `SELECT status` → CLOSED가 아니면 404 (`rounds.rs::finalize_round`).
+2. **미결정 검증** (`rounds.rs::finalize_round`):  
    `excluded=0 AND COALESCE(r.recommended, 0)=0`. results 행 없음(LEFT JOIN null)도 미결정에 포함.  
    미결정 1건이라도 있으면 422 + 전원 명단(LIMIT 없음). 정원 검증보다 먼저 수행.
-3. **모집단위 정원 초과 검증** (`rounds.rs:316`):  
+3. **모집단위 정원 초과 검증** (`rounds.rs::finalize_round`):  
    `unit_quota IS NOT NULL`인 트랙 중 전 라운드 누적 `recommended=1 AND abandoned=0` > `unit_quota`.  
    최대 5건.
-4. **대학 정원 초과 검증** (`rounds.rs:336`):  
+4. **대학 정원 초과 검증** (`rounds.rs::finalize_round`):  
    `total_quota IS NOT NULL`인 대학 중 전 라운드 누적 합산 > `total_quota`. 최대 5건.
 5. 위반 있으면 422 + `{"error":..., "track_violations":[...], "univ_violations":[...]}` JSON.
-6. `UPDATE rounds SET status='FINALIZED', finalized_at=? WHERE id=? AND status='CLOSED'` (`rounds.rs:365`).
+6. `UPDATE rounds SET status='FINALIZED', finalized_at=? WHERE id=? AND status='CLOSED'` (`rounds.rs::finalize_round`).
 
 DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —  
 핸들러 우회 직접 SQL에서도 미결정이 있으면 ABORT.
@@ -163,40 +177,40 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 
 | 경로 | 진입 함수 | 트랜잭션 소유자 |
 |------|-----------|----------------|
-| `close_round` | `run_calculate_scores_on_conn` | close_round의 BEGIN IMMEDIATE (`rounds.rs:108`) |
-| `POST /rounds/:id/calculate` | `calculate_scores` → `run_calculate_scores_on_conn` | calculate_scores 내부 BEGIN IMMEDIATE (`scoring.rs:430`) |
+| `close_round` | `run_calculate_scores_on_conn` | close_round의 BEGIN IMMEDIATE (`rounds.rs::close_round`) |
+| `POST /rounds/:id/calculate` | `calculate_scores` → `run_calculate_scores_on_conn` | calculate_scores 내부 BEGIN IMMEDIATE (`scoring.rs::calculate_scores`) |
 | `POST /teacher/applications` | `calc_area_score` (전형요소별) | teacher_create_application의 BEGIN IMMEDIATE |
 
-핵심 로직은 `run_calculate_scores_on_conn(&mut SqliteConnection, round_id, now)` (`scoring.rs:277`)에 집중.  
+핵심 로직은 `run_calculate_scores_on_conn(&mut SqliteConnection, round_id, now)` (`scoring.rs::run_calculate_scores_on_conn`)에 집중.  
 트랜잭션 관리는 호출자 책임.
 
 ### 2.3 CalcType별 계산 로직
 
-#### NUMERIC (구간 점수) — `scoring.rs:141`
+#### NUMERIC (구간 점수) — `scoring.rs::calc_area_score`
 
 1. `base_data`에서 ×100000 정수 문자열 조회 → `parse::<i64>()`. 없거나 파싱 실패 시 오류.
 2. `numeric_table`에서 `threshold` 오름차순 구간표 조회.  
-   COMPOSITE이고 모집단위별 구간표가 없으면 공통(`track_id IS NULL`)으로 폴백 (`scoring.rs:173`).
-3. `lookup_range_score` (`scoring.rs:92`):
+   COMPOSITE이고 모집단위별 구간표가 없으면 공통(`track_id IS NULL`)으로 폴백 (`scoring.rs::calc_area_score`).
+3. `lookup_range_score` (`scoring.rs::lookup_range_score`):
    - **UPPER**: `value >= threshold`인 행 중 최대 threshold 행의 점수. 모든 threshold보다 작으면 오류 (Fail-Fast).
-   - **LOWER**: `value <= threshold`인 행 중 최소 threshold 행의 점수. value > 최대 threshold이면 최대 threshold 행 사용(오류 아님 — `scoring.rs:107`).
+   - **LOWER**: `value <= threshold`인 행 중 최소 threshold 행의 점수. value > 최대 threshold이면 최대 threshold 행 사용(오류 아님 — `scoring.rs::lookup_range_score`).
    - **EXACT**: `threshold == value`인 행. 없으면 오류.
-4. `raw.min(area.max_score)` — 상한 적용 (`scoring.rs:270`).
+4. `raw.min(area.max_score)` — 상한 적용 (`scoring.rs::calc_area_score`).
 
-#### CATEGORY (범주 점수) — `scoring.rs:191`
+#### CATEGORY (범주 점수) — `scoring.rs::calc_area_score`
 
 1. `base_data`에서 범주 문자열 복수 행 조회. 0건이면 오류.
-2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지, `scoring.rs:222`).  
-   COMPOSITE 폴백: 모집단위별 없으면 공통 테이블 (`scoring.rs:211`).
+2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지, `scoring.rs::calc_area_score`).  
+   COMPOSITE 폴백: 모집단위별 없으면 공통 테이블 (`scoring.rs::calc_area_score`).
 3. `category_agg`에 따라 집계:
-   - **SUM**: `try_fold + checked_add` — overflow 시 Fail-Fast (`scoring.rs:237`).
-   - **MAX**: `scores.iter().max()`. 비어있지 않음이 1번에서 보장 (`scoring.rs:240`).
+   - **SUM**: `try_fold + checked_add` — overflow 시 Fail-Fast (`scoring.rs::calc_area_score`).
+   - **MAX**: `scores.iter().max()`. 비어있지 않음이 1번에서 보장 (`scoring.rs::calc_area_score`).
 4. `max_score` 상한 적용.
 
 **CATEGORY 0점 처리**: `category_map` 설계 단계에서 "해당 없음" 범주를 score=0으로 등록하는 방식.  
 `category_map_import` 시 양수 점수 있는 그룹에 score=0 행이 없으면 import 거부(`08_excel_import.md` §4).
 
-#### MANUAL (수동 입력) — `scoring.rs:248`
+#### MANUAL (수동 입력) — `scoring.rs::calc_area_score`
 
 1. `base_data`에서 ×100000 정수 문자열 1개 조회. 없으면 오류.
 2. `parse::<i64>()` 후 그대로 점수로 사용.
@@ -204,9 +218,9 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 
 ### 2.4 전체 점수 합산 및 results 저장
 
-각 지원자에 대해 전 전형요소 순회 후 `checked_add`로 합산(`scoring.rs:317`). overflow 시 Fail-Fast.
+각 지원자에 대해 전 전형요소 순회 후 `checked_add`로 합산(`scoring.rs::run_calculate_scores_on_conn`). overflow 시 Fail-Fast.
 
-results 저장 패턴 (`scoring.rs:323`):
+results 저장 패턴 (`scoring.rs::run_calculate_scores_on_conn`):
 ```sql
 INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)
 VALUES (?, ?, ?, ?, ?, NULL, 0, ?)
@@ -242,27 +256,20 @@ DO UPDATE SET score_detail=excluded.score_detail,
 
 ### 3.1 대학 전체 순위 (`results.ranking`)
 
-`results.ranking`은 **대학(university) 단위 파티션**으로 계산된다 (`scoring.rs:341`).
+`results.ranking`은 **대학(university) 단위 파티션**으로 계산된다 (`scoring.rs::run_calculate_scores_on_conn`).
 
 정렬 키:
 - `universities.prioritize_enrolled=1`이면: `is_enrolled DESC → total_score DESC`
 - `=0`이면: `total_score DESC`
 
-**대학 단위 순위는 `universities.prioritize_enrolled`만 참조한다** (`scoring.rs:353`).  
+**대학 단위 순위는 `universities.prioritize_enrolled`만 참조한다** (`scoring.rs::run_calculate_scores_on_conn`).  
 모집단위의 `univ_tracks.prioritize_enrolled`는 여기서 사용되지 않는다.
 
 ### 3.2 모집단위 순위 (`track_rank`)
 
-`track_rank`는 `results` 테이블에 저장되지 않고 **조회 시 파생**된다 (`scoring.rs:483`):
-
-```sql
-CAST(RANK() OVER (
-    PARTITION BY r.track_id, r.round_id
-    ORDER BY
-        CASE WHEN ut.prioritize_enrolled = 1 THEN s.is_enrolled ELSE NULL END DESC NULLS LAST,
-        r.total_score DESC
-) AS INTEGER) AS track_rank
-```
+`track_rank`는 `results` 테이블에 저장되지 않고 **조회 시 파생**된다. 파생 식의 정의는
+`track_rank_window()` 헬퍼 한 곳에만 존재한다 — SQL 본문은 §3.3 참조 (여기에 다시 옮겨
+적지 않는다. 두 곳에 쓰면 갈라진다).
 
 **모집단위 순위는 `univ_tracks.prioritize_enrolled`만 참조한다**.  
 대학의 `universities.prioritize_enrolled`는 여기서 사용되지 않는다.
@@ -276,35 +283,53 @@ CAST(RANK() OVER (
 헬퍼가 없으면 한 곳만 수정했을 때 나머지가 달라져 가드·화면·자동 추천이 서로 다른 순위를 쓰는 상태가 된다.
 
 ```rust
-fn track_rank_window(r: &str, ut: &str, s: &str, partition_by_round: bool) -> String
+fn track_rank_window(r: &'static str, ut: &'static str, s: &'static str,
+                     partition_by_round: bool) -> String
+```
+
+생성되는 SQL:
+
+```sql
+CAST(RANK() OVER (
+    PARTITION BY {r}.track_id[, {r}.round_id]
+    ORDER BY
+        CASE WHEN {ut}.prioritize_enrolled = 1 THEN {s}.is_enrolled ELSE NULL END DESC NULLS LAST,
+        {r}.total_score DESC
+) AS INTEGER) AS track_rank
 ```
 
 | 파라미터 | 의미 |
 |---------|------|
-| `r`, `ut`, `s` | SQL 테이블 별칭 (results, univ_tracks, students) |
-| `partition_by_round=true` | `PARTITION BY r.track_id, r.round_id` — 다중 라운드 CTE |
-| `partition_by_round=false` | `PARTITION BY r.track_id` — 단일 라운드 인라인 |
+| `r`, `ut`, `s` | SQL 테이블 별칭 (results, univ_tracks, students). 감싸는 쿼리의 FROM·JOIN과 일치해야 하며, 어긋나면 런타임 `no such column` 으로 깨진다. `&'static str` 이므로 호출부는 리터럴만 넘길 수 있다(SQL 조립이라 런타임 값은 인젝션 경로) |
+| `partition_by_round=true` | `PARTITION BY {r}.track_id, {r}.round_id` — **여러 라운드를 걸치는 쿼리** |
+| `partition_by_round=false` | `PARTITION BY {r}.track_id` — `WHERE round_id = ?` 로 **단일 라운드가 고정된 쿼리** |
+
+판단 기준은 **여러 라운드를 걸치는가** 하나뿐이다. CTE인지 인라인인지와는 무관하다 —
+아래 표에서 보듯 두 형태가 `true`/`false` 양쪽에 모두 존재한다.
 
 **사용 위치 7곳**:
 
-| 핸들러 | 용도 | partition_by_round |
-|--------|------|-------------------|
-| `get_results` | 화면 표시 | true |
-| `export_results` | 엑셀 내보내기 | true |
-| `export_round_summary` | 요약 내보내기 CTE | true |
-| `teacher_get_results` (졸업생 분기) | 담임 결과 조회 | true |
-| `teacher_get_results` (재학생 분기) | 담임 결과 조회 | true |
-| `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | false |
-| `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | false |
+| 핸들러 | 용도 | 쿼리 형태 | 라운드 범위 | partition_by_round |
+|--------|------|----------|-----------|-------------------|
+| `get_results` | 화면 표시 | 인라인 | 단일(`WHERE r.round_id = ?`) | true¹ |
+| `export_results` | 엑셀 내보내기 | 인라인 | 단일(`WHERE r.round_id = ?`) | true¹ |
+| `export_round_summary` | 요약 내보내기 | CTE | **다중**(CTE에 라운드 필터 없음) | true |
+| `teacher_get_results` (졸업생 분기) | 담임 결과 조회 | CTE | **다중**(FINALIZED 전체) | true |
+| `teacher_get_results` (재학생 분기) | 담임 결과 조회 | CTE | **다중**(FINALIZED 전체) | true |
+| `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | CTE | 단일 | false |
+| `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | 인라인 | 단일 | false |
+
+¹ 단일 라운드이므로 `round_id` 파티션은 결과에 영향이 없다(무해한 잉여). 리팩터링 이전
+리터럴이 그러했고, 동작 변경을 피하기 위해 그대로 보존했다.
 
 어긋나면: 관리자가 화면에서 보는 순위와 가드·자동 추천이 비교하는 순위가 달라져  
 가드가 잘못된 후보를 막거나 허용하고, 자동 추천이 다른 결과를 낸다.
 
 ### 3.4 동점 처리 — Standard Competition Ranking
 
-같은 순위 값을 가진 학생은 같은 순위를 부여하고 다음 순위를 건너뛴다 (1, 1, 3, 4, …) (`scoring.rs:394`).
+같은 순위 값을 가진 학생은 같은 순위를 부여하고 다음 순위를 건너뛴다 (1, 1, 3, 4, …) (`scoring.rs::run_calculate_scores_on_conn`).
 
-동점 판정 조건 (`scoring.rs:395`):
+동점 판정 조건 (`scoring.rs::run_calculate_scores_on_conn`):
 - `prioritize=true`: `(total_score, is_enrolled)` 둘 다 동일해야 동점.
 - `prioritize=false`: `total_score`만 비교.
 
@@ -327,23 +352,23 @@ OR(`u.prioritize_enrolled=1 OR ut.prioritize_enrolled=1`) 사용 금지.
 
 ### 4.1 `recommend_result` — 전체 검증 절차
 
-`PUT /results/:sid/:tid/:rid/recommend`, `BEGIN IMMEDIATE` (`scoring.rs:1079`).
+`PUT /results/:sid/:tid/:rid/recommend`, `BEGIN IMMEDIATE` (`scoring.rs::recommend_result`).
 
 | 단계 | 검사 내용 | 실패 응답 |
 |------|----------|----------|
 | 1. 라운드 상태 | `status == CLOSED` | 400 (OPEN/FINALIZED), 404 (없음) |
-| 1b. 미선발 체크 | `excluded != 1` | 409 "미선발 처리된 지원" (`scoring.rs:1114`) |
-| 2. 모집단위 정원 | 전 라운드 `recommended=1 AND abandoned=0` 합산 < `unit_quota` | 409 "정원 찼음" (`scoring.rs:1143`) |
-| 3. 대학 정원 | 전 라운드 동일 집계 < `total_quota` | 409 "대학 전체 정원 찼음" (`scoring.rs:1175`) |
-| 4. 트랙 순서 가드 | 같은 모집단위 내 `track_rank` 상위이면서 미결정(미추천·미포기·미선발)인 학생 없음 | 409 "상위 순위 지원자 미결정" (`scoring.rs:1218`) |
+| 1b. 미선발 체크 | `excluded != 1` | 409 "미선발 처리된 지원" (`scoring.rs::recommend_result`) |
+| 2. 모집단위 정원 | 전 라운드 `recommended=1 AND abandoned=0` 합산 < `unit_quota` | 409 "정원 찼음" (`scoring.rs::recommend_result`) |
+| 3. 대학 정원 | 전 라운드 동일 집계 < `total_quota` | 409 "대학 전체 정원 찼음" (`scoring.rs::recommend_result`) |
+| 4. 트랙 순서 가드 | 같은 모집단위 내 `track_rank` 상위이면서 미결정(미추천·미포기·미선발)인 학생 없음 | 409 "상위 순위 지원자 미결정" (`scoring.rs::recommend_result`) |
 | 5. results 갱신 | `UPDATE results SET recommended=1` | rows_affected=0이면 404 (결과 행 없음) |
 
-**정원 집계 기준**: `recommended=1 AND abandoned=0`, 전 라운드 누적 (`scoring.rs:1130, 1162`).  
+**정원 집계 기준**: `recommended=1 AND abandoned=0`, 전 라운드 누적 (`scoring.rs::recommend_result`).  
 `excluded` 상태는 집계에 영향 없다. 이전 라운드에서 추천된 인원도 포함된다.
 
-**unit_quota / total_quota가 NULL이면 무제한** — 정원 체크를 건너뜀 (`scoring.rs:1142, 1160`).
+**unit_quota / total_quota가 NULL이면 무제한** — 정원 체크를 건너뜀 (`scoring.rs::recommend_result`).
 
-### 4.2 트랙 순서 가드 상세 (`scoring.rs:1190`)
+### 4.2 트랙 순서 가드 상세 (`scoring.rs::recommend_result`)
 
 blocker 쿼리 조건:
 ```sql
@@ -357,7 +382,7 @@ WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
 
 ### 4.3 추천 취소 (`unrecommend_result`)
 
-`PUT /results/:sid/:tid/:rid/unrecommend`. 일반 트랜잭션 (`scoring.rs:1266`).
+`PUT /results/:sid/:tid/:rid/unrecommend`. 일반 트랜잭션 (`scoring.rs::unrecommend_result`).
 
 - CLOSED 상태만 허용. FINALIZED이면 400.
 - `UPDATE results SET recommended=0`. ranking 변경 없음.
@@ -382,7 +407,7 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql:76`): 추천 �
 
 `POST /rounds/:id/auto-recommend` — 모든 대학.  
 `POST /rounds/:id/auto-recommend/univ/:id` — 지정 대학만.  
-모두 `run_auto_recommend` 호출 (`scoring.rs:1564`). CLOSED 상태 필수.
+모두 `run_auto_recommend` 호출 (`scoring.rs::run_auto_recommend`). CLOSED 상태 필수.
 
 **2-phase 구조**:
 
@@ -391,8 +416,8 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql:76`): 추천 �
 
 ### 5.2 동점 그룹 원자적 채움 — `fill_by_rank_groups` / `decide_group`
 
-`fill_by_rank_groups(items: &[(rank, T)], remaining: Option<i64>)` (`scoring.rs:1374`).  
-`decide_group(confirmed_len, group_size, rem)` (`scoring.rs:1431`) — 4갈래 판정:
+`fill_by_rank_groups(items: &[(rank, T)], remaining: Option<i64>)` (`scoring.rs::fill_by_rank_groups`).  
+`decide_group(confirmed_len, group_size, rem)` (`scoring.rs::decide_group`) — 4갈래 판정:
 
 | 조건 | 판정 | 의미 |
 |------|------|------|
@@ -400,19 +425,19 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql:76`): 추천 �
 | `rem - confirmed_len == 0` (free=0) | `StopClean` | 정원이 그룹 사이에 딱 떨어짐. 수동 불필요 |
 | `0 < rem - confirmed_len < group_size` | `StopTie{free}` | 동점이 정원을 가름. 그룹 전원 보류, manual |
 
-같은 함수를 1단계(`fill_by_rank_groups`)와 2단계(`merge_univ_cut`)가 공유 (`scoring.rs:1429`) —  
+같은 함수를 1단계(`fill_by_rank_groups`)와 2단계(`merge_univ_cut`)가 공유 (`scoring.rs::decide_group`) —  
 두 경로의 경계 의미가 구조적으로 일치함을 보장한다.
 
-### 5.3 후보 선별 기준 (`scoring.rs:1701`)
+### 5.3 후보 선별 기준 (`scoring.rs::run_auto_recommend`)
 
 각 모집단위 전체 results 행 중 **`recommended=0 AND excluded=0`**인 지원만 후보다:
 
 - 이미 추천된(`recommended=1`) 지원 제외 — 재추천 방지.
 - 미선발된(`excluded=1`) 지원 제외 — 미선발 후보 자동 추천 방지.
-- **순위 계산(`RANK()`)은 excluded 포함 전원으로 계산** (`scoring.rs:1676`):  
+- **순위 계산(`RANK()`)은 excluded 포함 전원으로 계산** (`scoring.rs::run_auto_recommend`):  
   화면(`get_results`)·수동 추천 가드와 동일한 순위를 유지하기 위함.
 
-### 5.4 2단계 — 대학 정원 컷: 전체 재정렬이 아닌 이유 (`merge_univ_cut`, `scoring.rs:1473`)
+### 5.4 2단계 — 대학 정원 컷: 전체 재정렬이 아닌 이유 (`merge_univ_cut`, `scoring.rs::merge_univ_cut`)
 
 단순히 1단계 결과를 평탄화해 대학 전체 순위로 재정렬하면 **트랙 정원이 의미를 잃는다**.
 
@@ -498,16 +523,16 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 ```
 사유 없이 `excluded=1`을 직접 INSERT/UPDATE하면 DB 레벨에서 ABORT.
 
-앱 레벨에서도 `exclude_application` (`applications.rs:258`): `body.reason.trim().is_empty()` 시 400.
+앱 레벨에서도 `exclude_application` (`applications.rs::exclude_application`): `body.reason.trim().is_empty()` 시 400.
 
 ### 6.3 추천과 상호배타 — 양방향 차단
 
 | 경로 | 앱 레벨 가드 | DB 레벨 가드 |
 |------|-------------|-------------|
-| 추천된 지원을 미선발하려는 경우 | `recommended=1`이면 409 (`applications.rs:307`) | `trg_prevent_exclude_recommended` (`applications.sql:76`) |
-| 미선발된 지원을 추천하려는 경우 | `excluded=1`이면 409 (`scoring.rs:1114`) | — |
+| 추천된 지원을 미선발하려는 경우 | `recommended=1`이면 409 (`applications.rs::exclude_application`) | `trg_prevent_exclude_recommended` (`applications.sql:76`) |
+| 미선발된 지원을 추천하려는 경우 | `excluded=1`이면 409 (`scoring.rs::recommend_result`) | — |
 
-### 6.4 미선발 처리 (`exclude_application`, `scoring.rs:252`)
+### 6.4 미선발 처리 (`applications.rs::exclude_application`)
 
 1. 사유 trim + 빈 문자열 거부 (400).
 2. `BEGIN IMMEDIATE` 획득.
@@ -527,7 +552,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 
 ### 7.1 사전 검증 순서
 
-`finalize_round` (`rounds.rs:264`):
+`finalize_round` (`rounds.rs::finalize_round`):
 
 ```
 ① 미결정 지원 확인 → ② 모집단위 정원 초과 확인 → ③ 대학 정원 초과 확인
@@ -538,7 +563,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 
 ### 7.2 "미결정"의 정의
 
-`excluded=0 AND COALESCE(r.recommended, 0)=0` (`rounds.rs:298`):
+`excluded=0 AND COALESCE(r.recommended, 0)=0` (`rounds.rs::finalize_round`):
 
 - `excluded=0`: 아직 "이번 라운드 미추천" 결정이 없는 지원
 - `COALESCE(r.recommended, 0)=0`: results 행이 없거나(LEFT JOIN NULL) recommended=0
@@ -559,7 +584,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
   ]
 }
 ```
-**LIMIT 없음** — 미결정 전원 명단 반환 (`rounds.rs:287`, LIMIT 없이 `fetch_all`).
+**LIMIT 없음** — 미결정 전원 명단 반환 (`rounds.rs::finalize_round`, LIMIT 없이 `fetch_all`).
 
 정원 초과이면:
 ```json
@@ -569,7 +594,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
   "univ_violations": [...]
 }
 ```
-정원 초과는 최대 5건씩 (`rounds.rs:329, 349` LIMIT 5).
+정원 초과는 최대 5건씩 (`rounds.rs::finalize_round, 349` LIMIT 5).
 
 ### 7.4 DB 트리거 이중 방어와 그 이유
 
@@ -678,7 +703,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
    현재 FINALIZED 라운드에서 applications를 삭제하는 정상 경로가 없다고 가정한 것으로 보인다.  
    향후 "과거 라운드 데이터 정리" 기능을 추가할 경우 이 트리거가 막는다. 의도하신 것이 맞습니까?
 
-2. **정원 초과 검증의 LIMIT 5** (`rounds.rs:329, 349`):  
+2. **정원 초과 검증의 LIMIT 5** (`rounds.rs::finalize_round, 349`):  
    미결정 검증은 LIMIT 없이 전원을 반환하지만, 정원 초과 검증은 LIMIT 5를 사용한다.  
    정원 초과 건이 6건 이상 있을 경우 앞 5건만 표시된다. 의도된 것입니까?
 
@@ -701,11 +726,11 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 
 ## 설계 결정 사항 (미결 아님)
 
-1. **`unrecommend_result` 역방향 순위 가드 없음** (`scoring.rs:1266`):  
+1. **`unrecommend_result` 역방향 순위 가드 없음** (`scoring.rs::unrecommend_result`):  
    의도된 동작이다. 1위가 추천 취소된 후 2위만 추천 상태로 남더라도, 1위가 미선발 처리되지 않으면 미결정으로 남아 `finalize_round`에서 차단된다. 1위를 미선발 처리하면 2위만 추천된 상태로 마감이 허용된다. 즉 관리자가 명시적으로 1위를 미선발 처리해야 2위 단독 추천이 적법해지며, 이 책임을 시스템이 강제한다.
 
 2. **재개(`reopen`) 후 excluded 초기화**:  
-   `reopen_round`는 `recommended=0`, `ranking=NULL`과 함께 `excluded=0`, `excluded_reason=NULL`도 초기화한다. 추천 상태와 미선발 상태는 같은 라운드 맥락에 종속되므로 재개 시 함께 리셋한다 (`rounds.rs:211-226`).
+   `reopen_round`는 `recommended=0`, `ranking=NULL`과 함께 `excluded=0`, `excluded_reason=NULL`도 초기화한다. 추천 상태와 미선발 상태는 같은 라운드 맥락에 종속되므로 재개 시 함께 리셋한다 (`rounds.rs::reopen_round-226`).
 
 3. **CLOSED/FINALIZED 라운드 존재 시 전형요소 이름 수정 차단**:  
    `guard_no_closed_round`가 `update_area`에 적용되어 이름 오탈자 수정도 막힌다. 이는 의도된 동작이다. 과거 라운드의 결과를 내보낼 때 점수 기준 명칭이 바뀌면 감사 추적이 불가능해지므로, 이름 포함 모든 전형요소 속성 변경을 차단한다. 다음 라운드에서 수정된 이름이 반영된다.

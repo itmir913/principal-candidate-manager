@@ -115,6 +115,18 @@ pub fn parse_xlsx_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>>
     Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
 }
 
+/// xlsx 특정 시트의 전체 행. 다중 시트 통합문서(내보내기 요약 등) 검증용 —
+/// `parse_xlsx_all_rows_raw` 는 첫 시트만 읽으므로 두 번째 이후 시트에는 쓸 수 없다.
+/// 시트가 없으면 Err (조용히 빈 결과를 돌려주면 검증이 통과해버린다).
+pub fn parse_xlsx_sheet_rows(bytes: &[u8], sheet_name: &str) -> anyhow::Result<Vec<Vec<String>>> {
+    let cursor = Cursor::new(bytes.to_vec());
+    let mut wb: Xlsx<_> = Xlsx::new(cursor)?;
+    let range = wb
+        .worksheet_range(sheet_name)
+        .ok_or_else(|| anyhow::anyhow!("시트 '{}' 를 찾을 수 없습니다", sheet_name))??;
+    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+}
+
 /// xls 전체 행 (빈 행 필터 없음 — 외부 양식 파싱용)
 pub fn parse_xls_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
     use calamine::Xls;

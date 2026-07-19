@@ -7,7 +7,8 @@ use axum::{
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use axum::extract::Query;
 use principal_candidate_manager::handlers::scoring::{
-    calc_area_score, calculate_scores, export_results, get_results, lookup_range_score,
+    calc_area_score, calculate_scores, export_results, export_round_summary, get_results,
+    lookup_range_score,
     recommend_result, teacher_get_results, unrecommend_result,
     AreaRow, ResultQuery, ResultRow, StudentTrackCtx,
 };
@@ -1904,6 +1905,55 @@ async fn export_results_header_contains_univ_rank() {
     let header = &rows[0];
     assert!(header.contains(&"대학 순위".to_string()), "헤더에 '대학 순위' 포함: {:?}", header);
     assert!(header.contains(&"모집단위 순위".to_string()), "헤더에 '모집단위 순위' 포함: {:?}", header);
+}
+
+/// `export_round_summary` 의 "지원자결과" 시트 — track_rank_window() 를 r2/ut2/s2 별칭
+/// CTE로 쓰는 유일한 경로다. 이 핸들러는 리팩터링 전까지 테스트가 전혀 없어서, 헬퍼에
+/// 별칭을 잘못 넘겨도(예: r/ut/s) 전 스위트가 통과했다. SQL이 실제로 실행되는지와
+/// 모집단위 순위가 채워지는지를 확인한다.
+#[tokio::test]
+async fn export_round_summary_applicant_sheet_populates_track_rank() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+
+    // 같은 트랙에 2명 — 순위가 1, 2로 갈려야 파티션이 동작함을 확인할 수 있다
+    let sid2: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S002', '김철수', 1, 1, 2, 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    for (s, v) in [(sid, "900000"), (sid2, "400000")] {
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(s).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, ?)")
+            .bind(s).bind(area_id).bind(v).execute(&pool).await.unwrap();
+    }
+
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    assert!(principal_candidate_manager::excel::is_xlsx(&bytes));
+
+    // 첫 시트가 아니라 "지원자결과" 시트를 직접 열어야 한다
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자결과").unwrap();
+    let header = &rows[0];
+    let rank_col = header.iter().position(|h| h == "모집단위 순위")
+        .expect(&format!("헤더에 '모집단위 순위' 없음: {header:?}"));
+    let name_col = header.iter().position(|h| h == "이름").expect("헤더에 '이름' 없음");
+
+    assert_eq!(rows.len(), 3, "헤더 + 지원자 2행이어야 함: {rows:?}");
+    let hong = rows[1..].iter().find(|r| r[name_col] == "홍길동").expect("홍길동 행");
+    let kim  = rows[1..].iter().find(|r| r[name_col] == "김철수").expect("김철수 행");
+    assert_eq!(hong[rank_col], "1", "고득점자가 모집단위 1위여야 함: {hong:?}");
+    assert_eq!(kim[rank_col], "2", "저득점자가 모집단위 2위여야 함: {kim:?}");
 }
 
 /// 내보내기 용어가 화면·매뉴얼의 "미선발"과 일치해야 한다.

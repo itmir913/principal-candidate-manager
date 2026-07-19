@@ -19,10 +19,21 @@ use crate::{
 type ApiError = (StatusCode, String);
 
 /// 모집단위 track_rank 윈도우 함수 SQL 단편 — 단일 출처.
-/// 테이블 별칭: r(results), ut(univ_tracks), s(students).
-/// partition_by_round=true  → PARTITION BY r.track_id, r.round_id  (다중 라운드 조회)
-/// partition_by_round=false → PARTITION BY r.track_id               (단일 라운드 CTE)
-fn track_rank_window(r: &str, ut: &str, s: &str, partition_by_round: bool) -> String {
+///
+/// 인자는 SQL 테이블 별칭이다: r(results), ut(univ_tracks), s(students).
+/// 호출부마다 별칭이 다르므로(r/ut/s 또는 r2/ut2/s2) 감싸는 쿼리의 FROM·JOIN 절과
+/// 반드시 일치시킬 것. 어긋나면 컴파일은 되고 런타임에 "no such column"으로 깨진다.
+///
+/// `partition_by_round` 의 판단 기준은 **쿼리가 여러 라운드를 걸치는가** 하나뿐이다
+/// (CTE인지 인라인인지와는 무관 — 두 형태 모두 양쪽 값에 존재한다):
+/// - true  → `PARTITION BY {r}.track_id, {r}.round_id`
+///   여러 라운드 행이 섞이는 쿼리. 빠뜨리면 라운드 간 순위가 한 덩어리로 매겨진다.
+/// - false → `PARTITION BY {r}.track_id`
+///   `WHERE round_id = ?` 로 단일 라운드가 이미 고정된 쿼리.
+///
+/// 별칭은 `&'static str` — 호출부에서 반드시 리터럴이어야 한다. 이 함수는 SQL을
+/// 문자열로 조립하므로 런타임 값을 받으면 인젝션 경로가 된다.
+fn track_rank_window(r: &'static str, ut: &'static str, s: &'static str, partition_by_round: bool) -> String {
     let partition = if partition_by_round {
         format!("{r}.track_id, {r}.round_id")
     } else {
