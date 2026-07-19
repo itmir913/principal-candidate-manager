@@ -949,6 +949,7 @@ async function addArea() {
   try {
     await createArea(body)
     showAddForm.value = false
+    selected.value = null
     await load()
   } catch (e) { addError.value = e.response?.data ?? e.message }
 }
