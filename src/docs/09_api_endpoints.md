@@ -142,7 +142,7 @@
 | POST | `/rounds/open` | 새 라운드 오픈 | 409: 진행 중 라운드 있음 |
 | PUT | `/rounds/:id/close` | OPEN→CLOSED + 점수 계산. 기초데이터 누락 시 422+OPEN 유지 | 422: 누락 / 404: 라운드 없음 |
 | PUT | `/rounds/:id/reopen` | CLOSED→OPEN. 추천/순위 초기화 | 404: CLOSED 아님 |
-| PUT | `/rounds/:id/finalize` | CLOSED→FINALIZED. 정원 초과 시 422 | 422: 정원 초과 / 404 |
+| PUT | `/rounds/:id/finalize` | CLOSED→FINALIZED. 미결정 있으면 422 (전원 명단), 정원 초과 있으면 422 (위반 목록) | 422: 미결정 / 422: 정원 초과 / 404 |
 
 ### close_round 상세
 
@@ -156,10 +156,11 @@
 
 트랜잭션 (`BEGIN IMMEDIATE`):
 1. CLOSED 상태 확인
-2. 모집단위 정원 초과 검증 (unit_quota 있는 트랙)
-3. 대학 전체 정원 초과 검증 (total_quota 있는 대학)
-4. 위반 있으면 422 + 위반 목록 JSON 반환
-5. `UPDATE rounds SET status='FINALIZED'`
+2. **미결정 지원 검증**: `excluded=0 AND COALESCE(r.recommended,0)=0`. LIMIT 없음 — 미결정 전원 반환. 있으면 422 + `{"error":..., "undecided":[...]}`
+3. 모집단위 정원 초과 검증 (`unit_quota` 있는 트랙, 최대 5건)
+4. 대학 전체 정원 초과 검증 (`total_quota` 있는 대학, 최대 5건)
+5. 위반 있으면 422 + `{"error":..., "track_violations":[...], "univ_violations":[...]}` JSON 반환
+6. `UPDATE rounds SET status='FINALIZED'`
 
 ---
 
@@ -180,12 +181,14 @@
 ### recommend_result 상세
 
 `BEGIN IMMEDIATE` 트랜잭션:
-1. round status = CLOSED 확인
-2. 모집단위 unit_quota 조회
-3. 전체 라운드 합산 추천 확정 수 (포기 제외) ≥ unit_quota → 409
-4. 대학 total_quota 조회
-5. 대학 전체 추천 확정 수 ≥ total_quota → 409
-6. `UPDATE results SET recommended=1`
+1. round status = CLOSED 확인 (아니면 400/404)
+1b. `excluded=1`이면 → 409 "미선발 처리된 지원은 추천할 수 없습니다"
+2. 모집단위 `unit_quota` 조회
+3. 전체 라운드 합산 추천 확정 수 (`recommended=1 AND abandoned=0`) ≥ `unit_quota` → 409
+4. 대학 `total_quota` 조회
+5. 대학 전체 추천 확정 수 ≥ `total_quota` → 409
+5b. 같은 모집단위 내 `track_rank`가 현재 지원자보다 낮은 순위이면서 미결정(미추천·미포기·미선발)인 학생 있으면 → 409 "상위 순위 지원자 미결정". 동점자(`track_rank` 동일)는 서로 막지 않음
+6. `UPDATE results SET recommended=1`. `rows_affected=0`이면 404 (결과 행 없음 — 점수 미계산)
 
 ---
 
@@ -195,6 +198,8 @@
 |---|---|---|
 | GET | `/applications` | 지원 목록. `?round_id=&track_id=` |
 | PUT | `/applications/:sid/:tid/:rid/abandon` | 포기. FINALIZED에서만. 지원 없으면 404 |
+| PUT | `/applications/:sid/:tid/:rid/exclude` | 미선발 처리. CLOSED에서만. Body: `{"reason":"..."}` 사유 필수. 이미 추천 확정이면 409. 이미 미선발이면 409 |
+| DELETE | `/applications/:sid/:tid/:rid/exclude` | 미선발 해제. CLOSED에서만. 미선발 상태 아니면 409 |
 
 ---
 
@@ -289,6 +294,7 @@ Body:
   "total_score": "85.5",
   "score_detail": {"1": "30", "2": "55.5"},
   "ranking": 1, "recommended": false, "abandoned": false,
+  "excluded": false, "excluded_reason": null,
   "student_code": "A001", "name": "홍길동",
   "grade": 3, "class_no": 2, "seq_no": 5, "is_enrolled": true,
   "univ_name": "서울대", "track_name": "컴퓨터공학부", "department_name": "컴퓨터공학과"

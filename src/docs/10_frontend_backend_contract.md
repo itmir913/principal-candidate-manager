@@ -194,11 +194,13 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 ### ResultRow (백엔드 → 프론트)
 ```
 student_id, track_id, round_id
-total_score     // Score 타입 → JSON: 소수 문자열 or 숫자 (serde로 f64 출력)
-score_detail    // 백: JSON 문자열 "{\"1\": Score, ...}" → 프론트: 객체 {area_id: Score}
-ranking         // null 가능
-recommended     // bool
-abandoned       // bool
+total_score         // Score 타입 → JSON: 소수 문자열 or 숫자 (serde로 f64 출력)
+score_detail        // 백: JSON 문자열 "{\"1\": Score, ...}" → 프론트: 객체 {area_id: Score}
+ranking             // null 가능
+recommended         // bool
+abandoned           // bool
+excluded            // bool (미선발 여부. false면 excluded_reason은 null)
+excluded_reason     // string | null (미선발 사유. excluded=true일 때만 non-null 보장)
 student_code, name, grade, class_no, seq_no, is_enrolled
 univ_name, track_name, department_name
 ```

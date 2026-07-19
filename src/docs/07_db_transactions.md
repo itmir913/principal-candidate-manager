@@ -101,3 +101,26 @@
 - `import_classes`는 기존 학급 데이터를 전체 삭제하지 않고 upsert(교체 안내 예외 사항)하므로 기존 비밀번호가 보존된다.
 
 **모든 Import 핸들러의 공통 정책**: 단 1건이라도 오류가 있으면 전체 거부(rollback + 422). 부분 import 없음.
+
+---
+
+## DB 방어선 (트리거)
+
+핸들러 트랜잭션과 별도로, DB 수준에서도 불변식을 강제하는 트리거가 존재한다.  
+핸들러 우회(직접 SQL, 외부 DB 클라이언트)에서도 동작한다.
+
+| 트리거 | 파일 | 차단 대상 |
+|--------|------|----------|
+| `idx_one_active_round` (UNIQUE 인덱스) | `003-rounds.sql:19` | 비-FINALIZED 라운드 2개 이상 INSERT |
+| `trg_require_all_decided_before_finalize` | `003-rounds.sql:26` | 미결정 지원(`excluded=0 AND COALESCE(recommended,0)=0`) 존재 시 CLOSED→FINALIZED 전환 |
+| `trg_prevent_update_finalized_result` | `009-results.sql:28` | FINALIZED 라운드 `results` 행 UPDATE |
+| `trg_prevent_delete_closed_result` | `009-results.sql:36` | CLOSED/FINALIZED 라운드 `results` 행 DELETE |
+| `trg_prevent_delete_closed_application` | `008-applications.sql:23` | CLOSED/FINALIZED 라운드 `applications` 행 DELETE |
+| `trg_prevent_update_closed_application` | `008-applications.sql:32` | CLOSED 라운드: `excluded`/`excluded_reason` 외 수정. FINALIZED: `abandoned` 0→1 외 수정 |
+| `trg_prevent_exclude_recommended` | `008-applications.sql:76` | `recommended=1`인 지원에 대해 `excluded` 0→1 설정 |
+| `trg_prevent_base_data_delete_for_applied` | `008-applications.sql:60` | CLOSED 라운드 지원자의 `base_data` 삭제 (UPSERT는 허용) |
+
+**앱 레벨 가드와 이중 방어하는 이유**:  
+앱 레벨에서는 오류 명단(누가 미결정인지, 어느 항목이 충돌인지)을 JSON으로 반환할 수 있다.  
+트리거는 `RAISE(ABORT, '문자열')` 만 가능해 상세 정보를 반환할 수 없다.  
+앱 레벨은 UX, 트리거는 무결성 최후 방어선으로 역할을 분리한다.
