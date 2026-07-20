@@ -154,6 +154,9 @@ pub fn lookup_range_score(value: i64, rows: &[(i64, i64)], direction: MatchMode)
     }
 }
 
+/// 확정 점수 계산 — base_data에서 값을 읽어 `compute_area_score` 헬퍼로 위임한다.
+/// 담임 미리보기(`teacher_area_score_preview`)도 반드시 같은 헬퍼를 통과하도록 짜여 있어,
+/// 두 경로의 시맨틱이 갈릴 여지가 없다.
 pub async fn calc_area_score(
     db: &mut sqlx::SqliteConnection,
     student_id: i64,
@@ -168,9 +171,22 @@ pub async fn calc_area_score(
         None
     };
 
-    let raw: i64 = match area.calc_type {
+    let meta = AreaMeta {
+        id: area.id,
+        name: &area.name,
+        max_score: area.max_score,
+        match_mode: area.match_mode,
+        category_agg: area.category_agg,
+    };
+
+    let wrap = |msg: String| format!(
+        "전형요소 '{}': {} {} 지원자 {} ({}) - {}",
+        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, msg,
+    );
+
+    let outcome = match area.calc_type {
         CalcType::Numeric => {
-            let value_str: Option<String> = sqlx::query_scalar(
+            let vs: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM base_data
                  WHERE student_id = ? AND area_id = ?
                    AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
@@ -178,45 +194,18 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
 
-            let vs = value_str.ok_or_else(|| {
-                format!("전형요소 '{}': {} {} 지원자 {} ({})의 NUMERIC base_data가 없습니다",
-                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code)
-            })?;
-            let value: i64 = vs.trim().parse::<i64>().map_err(|_| {
-                format!("전형요소 '{}': {} {} 지원자 {} ({})의 base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
-                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, vs.trim())
-            })?;
-            let mode = area.match_mode
-                .ok_or_else(|| format!("전형요소 '{}': NUMERIC 타입에 match_mode가 설정되지 않았습니다", area.name))?;
+            let s = vs.ok_or_else(|| format!(
+                "전형요소 '{}': {} {} 지원자 {} ({})의 NUMERIC base_data가 없습니다",
+                area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
+            ))?;
+            let value: i64 = s.trim().parse::<i64>().map_err(|_| format!(
+                "전형요소 '{}': {} {} 지원자 {} ({})의 base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
+                area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, s.trim()
+            ))?;
 
-            let mut rows: Vec<(i64, i64)> = sqlx::query(
-                "SELECT threshold, score FROM numeric_table
-                 WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
-                 ORDER BY threshold",
-            )
-            .bind(area.id).bind(lookup_track).bind(lookup_track)
-            .fetch_all(&mut *db).await.map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
-            .collect();
-
-            // 모집단위별 점수 기준이 없으면 공통(track_id IS NULL) 테이블로 폴백
-            if rows.is_empty() && lookup_track.is_some() {
-                rows = sqlx::query(
-                    "SELECT threshold, score FROM numeric_table
-                     WHERE area_id = ? AND track_id IS NULL
-                     ORDER BY threshold",
-                )
-                .bind(area.id)
-                .fetch_all(&mut *db).await.map_err(|e| e.to_string())?
-                .into_iter()
-                .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
-                .collect();
-            }
-
-            lookup_range_score(value, &rows, mode)
-                .map_err(|e| format!("전형요소 '{}': {} {} 지원자 {} ({}) - {}",
-                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, e))?
+            compute_area_score(db, &meta, AreaScoreInput::Numeric(value), lookup_track)
+                .await
+                .map_err(|e| wrap(e.to_string()))?
         }
 
         CalcType::Category => {
@@ -228,52 +217,23 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_all(&mut *db).await.map_err(|e| e.to_string())?;
 
-            let mut scores: Vec<i64> = Vec::new();
-            for cat in &values {
-                let mut sc: Option<i64> = sqlx::query_scalar(
-                    "SELECT score FROM category_map
-                     WHERE area_id = ? AND category = ?
-                       AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
-                )
-                .bind(area.id).bind(cat.as_str()).bind(lookup_track).bind(lookup_track)
-                .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
-
-                // 모집단위별 범주 기준이 없으면 공통(track_id IS NULL) 범주표로 폴백
-                if sc.is_none() && lookup_track.is_some() {
-                    sc = sqlx::query_scalar(
-                        "SELECT score FROM category_map
-                         WHERE area_id = ? AND category = ? AND track_id IS NULL",
-                    )
-                    .bind(area.id).bind(cat.as_str())
-                    .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
-                }
-
-                match sc {
-                    Some(s) => scores.push(s),
-                    None => return Err(format!(
-                        "전형요소 '{}': {} {} 지원자 {} ({})에 대해 범주 '{}' 에 해당하는 category_map 항목이 없습니다",
-                        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, cat
-                    )),
-                }
-            }
-
-            if scores.is_empty() {
+            if values.is_empty() {
                 return Err(format!(
                     "전형요소 '{}': {} {} 지원자 {} ({})의 CATEGORY base_data가 없습니다",
                     area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
                 ));
             }
-            match area.category_agg {
-                Some(CategoryAgg::Sum) => scores
-                    .iter()
-                    .try_fold(0i64, |acc, &s| acc.checked_add(s))
-                    .ok_or_else(|| format!("전형요소 '{}': CATEGORY SUM 점수 합산 오버플로우", area.name))?,
-                Some(CategoryAgg::Max) => *scores.iter().max()
-                    .ok_or_else(|| format!("전형요소 '{}': MAX 집계이지만 점수 목록이 비어 있습니다", area.name))?,
-                None => return Err(format!(
-                    "전형요소 '{}': CATEGORY 타입에 category_agg가 설정되지 않았습니다", area.name
-                )),
-            }
+
+            // CategoryUnknown은 확정 계산 오류 문구를 별도로 유지(범주명 명시).
+            compute_area_score(db, &meta, AreaScoreInput::Category(&values), lookup_track)
+                .await
+                .map_err(|e| match e {
+                    AreaScoreError::CategoryUnknown(cat) => format!(
+                        "전형요소 '{}': {} {} 지원자 {} ({})에 대해 범주 '{}' 에 해당하는 category_map 항목이 없습니다",
+                        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, cat
+                    ),
+                    other => wrap(other.to_string()),
+                })?
         }
 
         CalcType::Manual => {
@@ -285,20 +245,22 @@ pub async fn calc_area_score(
             .bind(student_id).bind(area.id).bind(lookup_track).bind(lookup_track)
             .fetch_optional(&mut *db).await.map_err(|e| e.to_string())?;
 
-            match v {
-                None => return Err(format!(
-                    "전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data가 없습니다",
-                    area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
-                )),
-                Some(s) => s.trim().parse::<i64>().map_err(|_| {
-                    format!("전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
-                        area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, s.trim())
-                })?,
-            }
+            let s = v.ok_or_else(|| format!(
+                "전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data가 없습니다",
+                area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code
+            ))?;
+            let value: i64 = s.trim().parse::<i64>().map_err(|_| format!(
+                "전형요소 '{}': {} {} 지원자 {} ({})의 MANUAL base_data 값 '{}' 을 정수로 파싱할 수 없습니다",
+                area.name, ctx.univ_name, ctx.track_name, ctx.student_name, ctx.student_code, s.trim()
+            ))?;
+
+            compute_area_score(db, &meta, AreaScoreInput::Manual(value), lookup_track)
+                .await
+                .map_err(|e| wrap(e.to_string()))?
         }
     };
 
-    Ok(raw.min(area.max_score))
+    Ok(outcome.raw.min(area.max_score))
 }
 
 // ── Handlers ──────────────────────────────────────────────────────
@@ -1885,4 +1847,220 @@ async fn run_auto_recommend(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(AutoRecommendResponse { confirmed: confirmed_items, manual: manual_items }))
+}
+
+// ── 공용 점수 계산 헬퍼 ─────────────────────────────────────────────
+//
+// 확정 계산(`calc_area_score`)과 담임 미리보기(`teacher_area_score_preview`)가
+// **반드시** 이 헬퍼를 통과하도록 하는 단일 진입점.
+//
+// 이전에는 두 경로가 CalcType 분기·점수표 폴백·집계 규칙을 각자 재구현하고 있어
+// 시맨틱이 갈렸다(2차 감사 A 발견 2: CATEGORY 폴백이 whole-map vs per-category로 달랐음).
+// 그런 부류의 버그를 재발생시키지 않기 위해 값→점수 변환 규칙을 이 헬퍼로 흡수한다.
+//
+// 호출자 책임:
+// - base_data 또는 사용자 입력에서 값을 읽어 `AreaScoreInput`으로 정규화
+// - `AreaScoreOutcome.raw`에 `min(area.max_score)` 캡핑 (raw 초과 여부는 미리보기 warning에 사용)
+// - `AreaScoreError`를 자기 컨텍스트(학생/트랙 정보, HTTP 응답 형태)로 감싸 반환
+//
+// 이 헬퍼가 담당하는 것:
+// - CalcType별 점수 계산 규칙 (NUMERIC 구간 lookup, CATEGORY per-category 폴백·집계, MANUAL 통과)
+// - 점수표(numeric_table / category_map)의 track별 → 공통 폴백
+// - 오버플로 감지, 미설정 메타데이터 감지
+
+pub struct AreaMeta<'a> {
+    pub id: i64,
+    pub name: &'a str,
+    pub max_score: i64,
+    pub match_mode: Option<MatchMode>,
+    pub category_agg: Option<CategoryAgg>,
+}
+
+pub enum AreaScoreInput<'a> {
+    Numeric(i64),           // ×100000 정수
+    Category(&'a [String]),
+    Manual(i64),            // ×100000 정수
+}
+
+pub struct AreaScoreOutcome {
+    /// 만점(max_score) 캡핑을 적용하기 전 raw 점수. 호출자가 캡핑 담당.
+    pub raw: i64,
+    /// NUMERIC일 때 매칭된 threshold (미리보기 하이라이팅용). CATEGORY/MANUAL은 None.
+    pub matched_numeric_threshold: Option<i64>,
+    /// CATEGORY일 때 매칭된 범주들. NUMERIC/MANUAL은 빈 배열.
+    pub matched_categories: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum AreaScoreError {
+    /// NUMERIC 타입인데 area.match_mode가 설정되지 않음
+    NumericMatchModeUnset,
+    /// NUMERIC 점수표(numeric_table)가 track별·공통 모두 비어있음
+    NumericTableEmpty,
+    /// NUMERIC 매칭 실패 (하한 미만, 미등록 값 등). 인자는 lookup_range_score의 상세 오류
+    NumericNoMatch(String),
+    /// CATEGORY 입력 값 배열이 비어있음 (선택된 범주 없음)
+    CategoryEmpty,
+    /// CATEGORY 범주가 점수표에 없음. 인자는 해당 범주명
+    CategoryUnknown(String),
+    /// CATEGORY 타입인데 area.category_agg가 설정되지 않음
+    CategoryAggUnset,
+    /// CATEGORY SUM 집계 중 i64 오버플로
+    CategorySumOverflow,
+    /// DB 접근 오류
+    Db(String),
+}
+
+impl std::fmt::Display for AreaScoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NumericMatchModeUnset => write!(f, "NUMERIC 타입에 match_mode가 설정되지 않았습니다"),
+            Self::NumericTableEmpty => write!(f, "NUMERIC 점수 기준표가 설정되지 않았습니다"),
+            Self::NumericNoMatch(s) => write!(f, "{}", s),
+            Self::CategoryEmpty => write!(f, "선택된 범주가 없습니다"),
+            Self::CategoryUnknown(cat) => write!(f, "점수표에 없는 범주: {}", cat),
+            Self::CategoryAggUnset => write!(f, "CATEGORY 타입에 category_agg가 설정되지 않았습니다"),
+            Self::CategorySumOverflow => write!(f, "CATEGORY SUM 점수 합산 오버플로우"),
+            Self::Db(s) => write!(f, "DB 오류: {}", s),
+        }
+    }
+}
+
+/// 공용 점수 계산. base_data 조회 없이, 이미 정규화된 값(`AreaScoreInput`)만으로 raw 점수를 산출한다.
+///
+/// 확정 계산·미리보기 모두 이 함수를 통과해야 시맨틱이 갈리지 않는다.
+/// max_score 캡핑은 호출자가 `outcome.raw.min(area.max_score)`로 수행한다.
+pub async fn compute_area_score(
+    conn: &mut sqlx::SqliteConnection,
+    area: &AreaMeta<'_>,
+    input: AreaScoreInput<'_>,
+    lookup_track: Option<i64>,
+) -> Result<AreaScoreOutcome, AreaScoreError> {
+    match input {
+        AreaScoreInput::Numeric(value) => {
+            let mode = area.match_mode.ok_or(AreaScoreError::NumericMatchModeUnset)?;
+            let mut rows: Vec<(i64, i64)> = sqlx::query(
+                "SELECT threshold, score FROM numeric_table
+                 WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
+                 ORDER BY threshold",
+            )
+            .bind(area.id).bind(lookup_track).bind(lookup_track)
+            .fetch_all(&mut *conn).await.map_err(|e| AreaScoreError::Db(e.to_string()))?
+            .into_iter()
+            .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
+            .collect();
+
+            // track별 점수표가 비었으면 공통(track_id IS NULL)으로 폴백
+            if rows.is_empty() && lookup_track.is_some() {
+                rows = sqlx::query(
+                    "SELECT threshold, score FROM numeric_table
+                     WHERE area_id = ? AND track_id IS NULL
+                     ORDER BY threshold",
+                )
+                .bind(area.id)
+                .fetch_all(&mut *conn).await.map_err(|e| AreaScoreError::Db(e.to_string()))?
+                .into_iter()
+                .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
+                .collect();
+            }
+
+            if rows.is_empty() {
+                return Err(AreaScoreError::NumericTableEmpty);
+            }
+
+            let raw = lookup_range_score(value, &rows, mode)
+                .map_err(AreaScoreError::NumericNoMatch)?;
+            let matched_threshold = find_numeric_matched_threshold(value, &rows, mode);
+            Ok(AreaScoreOutcome {
+                raw,
+                matched_numeric_threshold: matched_threshold,
+                matched_categories: Vec::new(),
+            })
+        }
+
+        AreaScoreInput::Category(values) => {
+            if values.is_empty() {
+                return Err(AreaScoreError::CategoryEmpty);
+            }
+            let agg = area.category_agg.ok_or(AreaScoreError::CategoryAggUnset)?;
+
+            // per-category 폴백: track별 표에 해당 범주가 없으면 공통(track_id IS NULL) 표에서 찾는다.
+            // 이전에는 확정 계산이 per-category, 미리보기가 whole-map으로 달랐음 (2차 감사 발견 2).
+            let track_map: Vec<(String, i64)> = sqlx::query(
+                "SELECT category, score FROM category_map
+                 WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))",
+            )
+            .bind(area.id).bind(lookup_track).bind(lookup_track)
+            .fetch_all(&mut *conn).await.map_err(|e| AreaScoreError::Db(e.to_string()))?
+            .into_iter()
+            .map(|r| (r.get::<String, _>("category"), r.get::<i64, _>("score")))
+            .collect();
+
+            let fallback_map: Vec<(String, i64)> = if lookup_track.is_some() {
+                sqlx::query(
+                    "SELECT category, score FROM category_map
+                     WHERE area_id = ? AND track_id IS NULL",
+                )
+                .bind(area.id)
+                .fetch_all(&mut *conn).await.map_err(|e| AreaScoreError::Db(e.to_string()))?
+                .into_iter()
+                .map(|r| (r.get::<String, _>("category"), r.get::<i64, _>("score")))
+                .collect()
+            } else {
+                Vec::new()
+            };
+
+            let mut scores: Vec<i64> = Vec::with_capacity(values.len());
+            let mut matched: Vec<String> = Vec::with_capacity(values.len());
+            for cat in values {
+                let found = track_map.iter().find(|(k, _)| k == cat)
+                    .or_else(|| fallback_map.iter().find(|(k, _)| k == cat));
+                match found {
+                    Some((_, sc)) => {
+                        scores.push(*sc);
+                        matched.push(cat.clone());
+                    }
+                    None => return Err(AreaScoreError::CategoryUnknown(cat.clone())),
+                }
+            }
+
+            let raw = match agg {
+                CategoryAgg::Sum => scores.iter()
+                    .try_fold(0i64, |acc, &s| acc.checked_add(s))
+                    .ok_or(AreaScoreError::CategorySumOverflow)?,
+                // scores.len() > 0가 위 loop 진입 조건(values 비어있지 않음)으로 보장됨
+                CategoryAgg::Max => *scores.iter().max().expect("scores non-empty (values checked above)"),
+            };
+            Ok(AreaScoreOutcome {
+                raw,
+                matched_numeric_threshold: None,
+                matched_categories: matched,
+            })
+        }
+
+        AreaScoreInput::Manual(value) => Ok(AreaScoreOutcome {
+            raw: value,
+            matched_numeric_threshold: None,
+            matched_categories: Vec::new(),
+        }),
+    }
+}
+
+/// NUMERIC 매칭 시 실제로 선택된 threshold를 반환한다 (미리보기 하이라이팅용).
+/// `lookup_range_score`와 정확히 대칭 — 후자가 score를, 이 함수가 threshold를 낸다.
+fn find_numeric_matched_threshold(value: i64, rows: &[(i64, i64)], mode: MatchMode) -> Option<i64> {
+    match mode {
+        MatchMode::Upper => rows.iter()
+            .filter(|(th, _)| value >= *th)
+            .max_by_key(|(th, _)| *th)
+            .map(|(th, _)| *th),
+        MatchMode::Lower => rows.iter()
+            .filter(|(th, _)| value <= *th)
+            .min_by_key(|(th, _)| *th)
+            .map(|(th, _)| *th)
+            .or_else(|| rows.iter().max_by_key(|(th, _)| *th).map(|(th, _)| *th)),
+        MatchMode::Exact => rows.iter()
+            .find(|(th, _)| *th == value)
+            .map(|(th, _)| *th),
+    }
 }

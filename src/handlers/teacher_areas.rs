@@ -9,7 +9,10 @@ use sqlx::Row;
 use crate::{
     auth::TeacherClaims,
     enums::{CalcType, CategoryAgg, LookupScope, MatchMode},
-    handlers::{area_data::fmt_score, scoring::lookup_range_score},
+    handlers::{
+        area_data::fmt_score,
+        scoring::{compute_area_score, AreaMeta, AreaScoreInput},
+    },
     score::Score,
     state::AppState,
 };
@@ -303,164 +306,71 @@ pub async fn teacher_area_score_preview(
         None
     };
 
-    let resp = match area.calc_type {
-        CalcType::Numeric => {
-            let raw_value = match parse_display_str(&body.values[0]) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Ok(Json(AreaScorePreviewResponse {
-                        score: None,
-                        matched_keys: vec![],
-                        warning: None,
-                        error: Some(e),
-                    }))
-                }
-            };
-
-            let mut table = load_numeric_raw(&state.db, body.area_id, lookup_track).await?;
-            if table.is_empty() && lookup_track.is_some() {
-                table = load_numeric_raw(&state.db, body.area_id, None).await?;
-            }
-
-            if table.is_empty() {
-                return Ok(Json(AreaScorePreviewResponse {
-                    score: None,
-                    matched_keys: vec![],
-                    warning: None,
-                    error: Some("점수 기준표가 설정되지 않았습니다".into()),
-                }));
-            }
-
-            let mode = area.match_mode.ok_or_else(|| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("전형요소 id={}: match_mode 없음", body.area_id),
-                )
-            })?;
-
-            match lookup_range_score(raw_value, &table, mode) {
-                Ok(raw_score) => {
-                    let capped = raw_score.min(area.max_score);
-                    let matched_threshold = find_numeric_matched_key(raw_value, &table, mode);
-                    AreaScorePreviewResponse {
-                        score: Some(Score::from_raw(capped)),
-                        matched_keys: matched_threshold
-                            .map(|t| vec![serde_json::Value::from(t as f64 / 100_000.0)])
-                            .unwrap_or_default(),
-                        warning: (raw_score > area.max_score).then(|| {
-                            "계산된 점수가 만점을 초과하여 만점으로 처리됩니다".into()
-                        }),
-                        error: None,
-                    }
-                }
-                Err(e) => AreaScorePreviewResponse {
-                    score: None,
-                    matched_keys: vec![],
-                    warning: None,
-                    error: Some(e),
-                },
-            }
-        }
-
-        CalcType::Category => {
-            let agg = area.category_agg.ok_or_else(|| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("전형요소 id={}: category_agg 없음", body.area_id),
-                )
-            })?;
-
-            // 확정 계산(scoring.rs:232-249)과 동일한 per-category 폴백.
-            // track별 표에 해당 범주가 없으면 공통(track_id IS NULL) 표로 범주 단위 폴백한다.
-            // 표 전체 비어있음 검사는 하지 않는다 — 확정 계산에도 그런 검사가 없고,
-            // 범주별 부재는 아래 missing 목록에서 동일한 오류 문구로 잡힌다.
-            let track_map = load_category_raw(&state.db, body.area_id, lookup_track).await?;
-            let fallback_map: Vec<(String, i64)> = if lookup_track.is_some() {
-                load_category_raw(&state.db, body.area_id, None).await?
-            } else {
-                Vec::new()
-            };
-
-            let mut scores: Vec<i64> = Vec::new();
-            let mut matched_keys: Vec<serde_json::Value> = Vec::new();
-            let mut missing: Vec<String> = Vec::new();
-
-            for val in &body.values {
-                let found = track_map
-                    .iter()
-                    .find(|(k, _)| k == val)
-                    .or_else(|| fallback_map.iter().find(|(k, _)| k == val));
-                if let Some((_, sc)) = found {
-                    scores.push(*sc);
-                    matched_keys.push(serde_json::Value::from(val.as_str()));
-                } else {
-                    missing.push(val.clone());
-                }
-            }
-
-            if !missing.is_empty() {
-                return Ok(Json(AreaScorePreviewResponse {
-                    score: None,
-                    matched_keys: vec![],
-                    warning: None,
-                    error: Some(format!("점수표에 없는 범주: {}", missing.join(", "))),
-                }));
-            }
-
-            if scores.is_empty() {
-                return Ok(Json(AreaScorePreviewResponse {
-                    score: None,
-                    matched_keys: vec![],
-                    warning: None,
-                    error: Some("선택된 범주가 없습니다".into()),
-                }));
-            }
-
-            let raw_score = match agg {
-                CategoryAgg::Sum => scores
-                    .iter()
-                    .try_fold(0i64, |acc, &s| acc.checked_add(s))
-                    .ok_or_else(|| {
-                        (StatusCode::INTERNAL_SERVER_ERROR, format!("전형요소 id={}: CATEGORY SUM 점수 합산 오버플로우", body.area_id))
-                    })?,
-                CategoryAgg::Max => *scores.iter().max().unwrap(),
-            };
-            let capped = raw_score.min(area.max_score);
-            AreaScorePreviewResponse {
-                score: Some(Score::from_raw(capped)),
-                matched_keys,
-                warning: (raw_score > area.max_score).then(|| {
-                    "계산된 점수가 만점을 초과하여 만점으로 처리됩니다".into()
-                }),
-                error: None,
-            }
-        }
-
-        CalcType::Manual => {
-            let raw_value = match parse_display_str(&body.values[0]) {
-                Ok(v) => v,
-                Err(e) => {
-                    return Ok(Json(AreaScorePreviewResponse {
-                        score: None,
-                        matched_keys: vec![],
-                        warning: None,
-                        error: Some(e),
-                    }))
-                }
-            };
-            let capped = raw_value.min(area.max_score);
-            AreaScorePreviewResponse {
-                score: Some(Score::from_raw(capped)),
-                matched_keys: vec![],
-                warning: (raw_value > area.max_score).then(|| {
-                    "입력값이 만점을 초과하여 만점으로 처리됩니다".into()
-                }),
-                error: None,
-            }
-        }
+    // 사용자 입력을 CalcType에 맞는 AreaScoreInput으로 정규화한다.
+    // 값 파싱(표시 문자열 → i64) 오류는 preview 응답 형태로 즉시 반환한다.
+    let input: AreaScoreInput = match area.calc_type {
+        CalcType::Numeric => match parse_display_str(&body.values[0]) {
+            Ok(v) => AreaScoreInput::Numeric(v),
+            Err(e) => return Ok(Json(preview_error(e))),
+        },
+        CalcType::Category => AreaScoreInput::Category(&body.values),
+        CalcType::Manual => match parse_display_str(&body.values[0]) {
+            Ok(v) => AreaScoreInput::Manual(v),
+            Err(e) => return Ok(Json(preview_error(e))),
+        },
     };
 
-    Ok(Json(resp))
+    let meta = AreaMeta {
+        id: body.area_id,
+        name: "",  // 미리보기 오류 메시지는 area 이름을 쓰지 않음
+        max_score: area.max_score,
+        match_mode: area.match_mode,
+        category_agg: area.category_agg,
+    };
+
+    let mut conn = state.db.acquire().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let outcome = match compute_area_score(&mut conn, &meta, input, lookup_track).await {
+        Ok(o) => o,
+        Err(e) => return Ok(Json(preview_error(e.to_string()))),
+    };
+
+    let capped = outcome.raw.min(area.max_score);
+    let matched_keys: Vec<serde_json::Value> = if !outcome.matched_categories.is_empty() {
+        outcome.matched_categories.iter()
+            .map(|c| serde_json::Value::from(c.as_str()))
+            .collect()
+    } else if let Some(th) = outcome.matched_numeric_threshold {
+        vec![serde_json::Value::from(th as f64 / 100_000.0)]
+    } else {
+        vec![]
+    };
+
+    let warning = if outcome.raw > area.max_score {
+        let msg = match area.calc_type {
+            CalcType::Manual => "입력값이 만점을 초과하여 만점으로 처리됩니다",
+            _ => "계산된 점수가 만점을 초과하여 만점으로 처리됩니다",
+        };
+        Some(msg.to_string())
+    } else {
+        None
+    };
+    Ok(Json(AreaScorePreviewResponse {
+        score: Some(Score::from_raw(capped)),
+        matched_keys,
+        warning,
+        error: None,
+    }))
+}
+
+fn preview_error(msg: String) -> AreaScorePreviewResponse {
+    AreaScorePreviewResponse {
+        score: None,
+        matched_keys: vec![],
+        warning: None,
+        error: Some(msg),
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -468,76 +378,4 @@ pub async fn teacher_area_score_preview(
 /// 표시값 문자열("30.5") → 내부 정수(3050000). area_data::parse_display_value 동일 로직.
 fn parse_display_str(s: &str) -> Result<i64, String> {
     crate::handlers::area_data::parse_display_value(s)
-}
-
-async fn load_numeric_raw(
-    db: &sqlx::SqlitePool,
-    area_id: i64,
-    track_id: Option<i64>,
-) -> Result<Vec<(i64, i64)>, ApiError> {
-    sqlx::query(
-        "SELECT threshold, score FROM numeric_table
-         WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
-         ORDER BY threshold",
-    )
-    .bind(area_id)
-    .bind(track_id)
-    .bind(track_id)
-    .fetch_all(db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.get::<i64, _>("threshold"), r.get::<i64, _>("score")))
-            .collect()
-    })
-}
-
-async fn load_category_raw(
-    db: &sqlx::SqlitePool,
-    area_id: i64,
-    track_id: Option<i64>,
-) -> Result<Vec<(String, i64)>, ApiError> {
-    sqlx::query(
-        "SELECT category, score FROM category_map
-         WHERE area_id = ? AND (track_id = ? OR (? IS NULL AND track_id IS NULL))
-         ORDER BY category, score",
-    )
-    .bind(area_id)
-    .bind(track_id)
-    .bind(track_id)
-    .fetch_all(db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.get::<String, _>("category"), r.get::<i64, _>("score")))
-            .collect()
-    })
-}
-
-/// NUMERIC 매칭 시 실제로 선택된 threshold 값을 반환한다.
-/// 프론트엔드가 해당 행을 하이라이팅하는 데 사용.
-fn find_numeric_matched_key(
-    value: i64,
-    rows: &[(i64, i64)],
-    mode: MatchMode,
-) -> Option<i64> {
-    match mode {
-        MatchMode::Upper => rows
-            .iter()
-            .filter(|(th, _)| value >= *th)
-            .max_by_key(|(th, _)| *th)
-            .map(|(th, _)| *th),
-        MatchMode::Lower => rows
-            .iter()
-            .filter(|(th, _)| value <= *th)
-            .min_by_key(|(th, _)| *th)
-            .map(|(th, _)| *th)
-            .or_else(|| rows.iter().max_by_key(|(th, _)| *th).map(|(th, _)| *th)),
-        MatchMode::Exact => rows
-            .iter()
-            .find(|(th, _)| *th == value)
-            .map(|(th, _)| *th),
-    }
 }

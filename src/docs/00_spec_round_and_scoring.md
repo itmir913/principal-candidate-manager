@@ -186,7 +186,15 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 
 ### 2.3 CalcType별 계산 로직
 
-#### NUMERIC (구간 점수) — `scoring.rs::calc_area_score`
+> **공용 헬퍼 `scoring.rs::compute_area_score`**
+> CalcType별 점수 계산 규칙·점수표 폴백·오버플로 감지는 이 헬퍼 하나에만 있다.
+> 확정 계산(`calc_area_score`)과 담임 미리보기(`teacher_area_score_preview`)는
+> 각자 값을 정규화(`AreaScoreInput::{Numeric,Category,Manual}`)한 뒤 반드시 이 헬퍼를 통과한다.
+> 두 경로가 시맨틱이 갈리는 부류의 버그(예: 미리보기의 whole-map 폴백 vs 확정의 per-category 폴백)를
+> 컴파일 타임에 차단하기 위한 구조.
+> 등가성은 `tests/handler_teacher_area.rs::preview_and_confirmed_produce_identical_score_category_composite`로 고정.
+
+#### NUMERIC (구간 점수) — `scoring.rs::compute_area_score` (AreaScoreInput::Numeric)
 
 1. `base_data`에서 ×100000 정수 문자열 조회 → `parse::<i64>()`. 없거나 파싱 실패 시 오류.
 2. `numeric_table`에서 `threshold` 오름차순 구간표 조회.  
@@ -197,7 +205,7 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
    - **EXACT**: `threshold == value`인 행. 없으면 오류.
 4. `raw.min(area.max_score)` — 상한 적용 (`scoring.rs::calc_area_score`).
 
-#### CATEGORY (범주 점수) — `scoring.rs::calc_area_score`
+#### CATEGORY (범주 점수) — `scoring.rs::compute_area_score` (AreaScoreInput::Category)
 
 1. `base_data`에서 범주 문자열 복수 행 조회. 0건이면 오류.
 2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지, `scoring.rs::calc_area_score`).  
@@ -210,7 +218,7 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 **CATEGORY 0점 처리**: `category_map` 설계 단계에서 "해당 없음" 범주를 score=0으로 등록하는 방식.  
 `category_map_import` 시 양수 점수 있는 그룹에 score=0 행이 없으면 import 거부(`08_excel_import.md` §4).
 
-#### MANUAL (수동 입력) — `scoring.rs::calc_area_score`
+#### MANUAL (수동 입력) — `scoring.rs::compute_area_score` (AreaScoreInput::Manual)
 
 1. `base_data`에서 ×100000 정수 문자열 1개 조회. 없으면 오류.
 2. `parse::<i64>()` 후 그대로 점수로 사용.

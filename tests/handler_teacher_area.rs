@@ -447,6 +447,87 @@ async fn score_preview_category_falls_back_per_category_matching_confirm_calc() 
     assert_eq!(resp.score.unwrap().raw(), 300000, "X(track 100000) + Y(공통 폴백 200000) = 300000");
 }
 
+/// 등가성 계약: 미리보기 API와 확정 저장(teacher_create_application이 트리거하는
+/// calc_area_score)이 **동일한 입력에 대해 정확히 같은 점수**를 산출해야 한다.
+///
+/// 이 테스트는 두 경로가 공용 헬퍼 `compute_area_score`를 통과한다는 구조적 계약을
+/// 결과값 수준에서 강제한다. 누군가 어느 한쪽에서만 로직을 재구현하면 이 테스트가 깨진다.
+/// 시나리오는 폴백이 실제로 발생하도록 track별·공통 표를 섞어 배치한다.
+#[tokio::test]
+async fn preview_and_confirmed_produce_identical_score_category_composite() {
+    let pool = common::create_test_pool_shared().await;
+    let (sid, _setup_tid, rid, num_aid, cat_aid, man_aid, _) = setup_base(&pool).await;
+
+    // MANUAL(teacher_editable=0)은 관리자 사전 업로드가 필요하다.
+    sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '500000', 0)")
+        .bind(sid).bind(man_aid).execute(&pool).await.unwrap();
+
+    // 별도 트랙 (setup_base의 tid는 재사용하지 않아 category_map이 깨끗)
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('등가대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '자연') RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+
+    // COMPOSITE + CATEGORY + SUM area
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope, category_agg)
+         VALUES ('상장', 1000000, 'CATEGORY', 1, 'COMPOSITE', 'SUM') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // track별 표: 'A'만 (기존 setup_base tid도 배제해야 폴백 발생)
+    sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, ?, 'A', 100000)")
+        .bind(aid).bind(tid).execute(&pool).await.unwrap();
+    // 공통 표: 'B'만
+    sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, 'B', 200000)")
+        .bind(aid).execute(&pool).await.unwrap();
+
+    let values = vec!["A".to_string(), "B".to_string()];
+
+    // (1) 미리보기 점수
+    let preview_resp = teacher_area_score_preview(
+        State(common::make_state(pool.clone())),
+        Json(AreaScorePreviewBody {
+            area_id: aid, track_id: tid, values: values.clone(),
+        }),
+    ).await.unwrap().0;
+    assert!(preview_resp.error.is_none(), "미리보기 오류: {:?}", preview_resp.error);
+    let preview_score = preview_resp.score.unwrap().raw();
+
+    // (2) 확정 저장 (teacher_create_application 안에서 calc_area_score 호출됨)
+    teacher_create_application(
+        State(common::make_state(pool.clone())),
+        Extension(common::teacher_claims(1, 1)),
+        Json(CreateApplicationBody {
+            student_id: sid, track_id: tid, round_id: rid,
+            department_name: "학과".into(),
+            base_data_entries: vec![
+                BaseDataEntry { area_id: num_aid, values: vec!["30".into()] },
+                BaseDataEntry { area_id: cat_aid, values: vec!["회장".into()] },
+                BaseDataEntry { area_id: aid, values },
+            ],
+            ..Default::default()
+        }),
+    ).await.unwrap();
+
+    let score_detail: String = sqlx::query_scalar(
+        "SELECT score_detail FROM results WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    ).bind(sid).bind(tid).bind(rid).fetch_one(&pool).await.unwrap();
+
+    let detail: serde_json::Value = serde_json::from_str(&score_detail).unwrap();
+    // applications.rs:994의 detail은 HashMap<String, i64>로 raw i64 저장 (Score newtype 아님).
+    let confirmed_score = detail[aid.to_string()]
+        .as_i64()
+        .expect("score_detail에서 이 area의 i64 점수를 읽지 못함");
+
+    assert_eq!(
+        preview_score, confirmed_score,
+        "미리보기({})와 확정 저장({})이 갈라졌다 — compute_area_score 공용 헬퍼 계약 위반",
+        preview_score, confirmed_score,
+    );
+}
+
 #[tokio::test]
 async fn score_preview_manual_returns_score_directly() {
     let pool = common::create_test_pool_shared().await;
