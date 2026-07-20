@@ -25,7 +25,7 @@
 | 메서드 | 경로 | 인가 | 설명 |
 |---|---|---|---|
 | GET | `/auth/admin/status` | 공개 | 관리자 계정 존재 여부 및 초기화 필요 여부 |
-| POST | `/auth/admin` | 공개 | 관리자 로그인. Body: `{username, password}`. 응답: `{token}` |
+| POST | `/auth/admin` | 공개 | 관리자 로그인. Body: `{password}`. 응답: `{token}` |
 | POST | `/auth/teacher` | 공개 | 담임 로그인. Body: `{grade, class_no, password}`. 응답: `{token, grade, class_no}` |
 | PUT | `/auth/admin/password` | 관리자 | 관리자 비밀번호 변경. Body: `{current_password, new_password}` |
 | GET | `/db-backup` | 관리자 | DB 파일 다운로드 (blob) |

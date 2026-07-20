@@ -23,6 +23,13 @@
 | `import_classes` | 학급 upsert 반복 | tx.begin() 후 루프 내에서 행마다 bcrypt 계산(tx 커넥션은 사용하지 않는 순수 CPU 단계). upsert_class와 달리 tx 시작 이후 계산 |
 | `upsert_class` | classes INSERT 또는 UPDATE | 신규/기존 분기 처리 원자화 |
 | `daegyo_import` / `univ_import` | INSERT OR REPLACE 반복 (파일에 없는 학생 보존) | `do_import` 함수 공통 사용 |
+| `open_round` | rounds INSERT + audit log | `.begin()`. INSERT ... SELECT ... WHERE NOT EXISTS로 TOCTOU 방지, audit log와 원자화 |
+| `abandon_application` (관리자) | applications UPDATE + audit log | `.begin()`. 두 쓰기(상태 변경 + 로그)를 원자화 |
+| `teacher_abandon_application` | applications UPDATE + audit log | `.begin()`. 두 쓰기를 원자화. 졸업생 담당 분기 포함 |
+| `add_enrolled` | students INSERT OR REPLACE + audit log | `.begin()`. 두 쓰기를 원자화 |
+| `add_graduated` | students INSERT OR REPLACE + audit log | `.begin()`. 두 쓰기를 원자화 |
+| `delete_student` | students DELETE + audit log | `.begin()`. COUNT(참조 검증)와 DELETE를 같은 tx 안에서 실행해 TOCTOU 방지, 로그와 원자화 |
+| `delete_class` | classes DELETE + audit log | `.begin()`. 두 쓰기를 원자화 |
 
 ---
 
@@ -41,18 +48,20 @@
 
 ## 트랜잭션 없이 단일 쿼리로 처리하는 쓰기 작업
 
+이 표는 **audit log를 남기지 않아 쓰기가 실제로 1건뿐인** 핸들러만 다룬다.
+audit log가 함께 기록되는 핸들러(쓰기 2건)는 위 "트랜잭션을 사용하는 핸들러 목록"으로 분류된다.
+
 | 핸들러 | 쓰기 내용 | 단일 쿼리여도 안전한 이유 |
 |--------|-----------|--------------------------|
-| `admin_login` (초기화 시) | `app_configs` 단일 행 INSERT OR UPDATE | 행 하나를 원자적으로 upsert |
-| `change_admin_password` | `app_configs` UPDATE 1건 | 단일 UPDATE는 원자적 |
-| `teacher_change_password` | `classes` UPDATE 1건 | 단일 UPDATE는 원자적 |
-| `open_round` | `rounds` INSERT 1건 | 단일 INSERT는 원자적 |
-| `abandon_application` (관리자) | `applications` UPDATE 1건 | 단일 UPDATE는 원자적 |
-| `teacher_abandon_application` | `applications` UPDATE 1건 | 단일 UPDATE는 원자적 |
-| `add_enrolled_student` | `students` INSERT OR REPLACE 1건 | 위치(학년·반·번호) 기반 upsert. student_code 자동 생성 |
-| `add_graduated_student` | `students` INSERT OR REPLACE 1건 | student_code 기반 upsert |
-| `delete_student` | `students` DELETE 1건 | 단일 DELETE는 원자적 |
-| `delete_class` | `classes` DELETE 1건 | 단일 DELETE는 원자적 |
+| `admin_login` (초기화 시) | `app_configs` 단일 행 INSERT OR UPDATE | 행 하나를 원자적으로 upsert. audit log 없음 |
+| `change_admin_password` | `app_configs` UPDATE 1건 | 단일 UPDATE는 원자적. audit log 없음 |
+| `teacher_change_password` | `classes` UPDATE 1건 | 단일 UPDATE는 원자적. audit log 없음 |
+
+**2026-07-20 정정**: 이전 판본은 `open_round`, `abandon_application`(관리자),
+`teacher_abandon_application`, `add_enrolled`, `add_graduated`, `delete_student`,
+`delete_class` 7개를 여기 단일쿼리로 기재했으나, 실제로는 전부 DB 쓰기 + audit log
+기록의 2단계로 이루어져 tx를 사용한다(2차 감사 세션 E 발견). 코드가 명세보다
+안전한 방향이었으므로 무결성 문제는 없었으나 명세 자체가 낡아 있었다.
 
 `close_round`는 `BEGIN IMMEDIATE` **단일 커넥션·트랜잭션**으로 아래 전 과정을 처리한다.
 
