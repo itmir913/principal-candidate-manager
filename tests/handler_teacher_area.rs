@@ -407,6 +407,46 @@ async fn score_preview_category_unknown_value_returns_error() {
     assert!(resp.score.is_none());
 }
 
+/// COMPOSITE + CATEGORY: track별 표에 일부 범주만 있고 나머지 범주는 공통 표에만 있는 경우.
+/// 미리보기는 확정 계산(scoring.rs:232-249)과 동일하게 **범주 단위**로 공통 표에 폴백해야 한다.
+/// 수정 전에는 "표 전체가 비었을 때만" 폴백해서, 이 시나리오에서 Y가 missing으로 잡히고
+/// "점수표에 없는 범주" 오류가 났다. 저장을 강행하면 확정 계산은 성공하므로 미리보기와
+/// 확정이 갈라졌다.
+#[tokio::test]
+async fn score_preview_category_falls_back_per_category_matching_confirm_calc() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+
+    // 새 COMPOSITE CATEGORY area 생성 (setup_base 것은 SIMPLE이라 폴백 경로 자체가 없음)
+    let comp_aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope, category_agg)
+         VALUES ('COMP', 1000000, 'CATEGORY', 1, 'COMPOSITE', 'SUM') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    // track별 표: X만
+    sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, ?, 'X', 100000)")
+        .bind(comp_aid).bind(tid).execute(&pool).await.unwrap();
+    // 공통 표: Y만
+    sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, 'Y', 200000)")
+        .bind(comp_aid).execute(&pool).await.unwrap();
+
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody {
+            area_id: comp_aid,
+            track_id: tid,
+            values: vec!["X".into(), "Y".into()],
+        }),
+    )
+    .await.unwrap().0;
+
+    assert!(resp.error.is_none(), "per-category 폴백이 없어 오류가 났다: {:?}", resp.error);
+    assert_eq!(resp.score.unwrap().raw(), 300000, "X(track 100000) + Y(공통 폴백 200000) = 300000");
+}
+
 #[tokio::test]
 async fn score_preview_manual_returns_score_directly() {
     let pool = common::create_test_pool_shared().await;

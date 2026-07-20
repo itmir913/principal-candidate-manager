@@ -370,26 +370,27 @@ pub async fn teacher_area_score_preview(
                 )
             })?;
 
-            let mut cat_map = load_category_raw(&state.db, body.area_id, lookup_track).await?;
-            if cat_map.is_empty() && lookup_track.is_some() {
-                cat_map = load_category_raw(&state.db, body.area_id, None).await?;
-            }
-
-            if cat_map.is_empty() {
-                return Ok(Json(AreaScorePreviewResponse {
-                    score: None,
-                    matched_keys: vec![],
-                    warning: None,
-                    error: Some("범주 점수표가 설정되지 않았습니다".into()),
-                }));
-            }
+            // 확정 계산(scoring.rs:232-249)과 동일한 per-category 폴백.
+            // track별 표에 해당 범주가 없으면 공통(track_id IS NULL) 표로 범주 단위 폴백한다.
+            // 표 전체 비어있음 검사는 하지 않는다 — 확정 계산에도 그런 검사가 없고,
+            // 범주별 부재는 아래 missing 목록에서 동일한 오류 문구로 잡힌다.
+            let track_map = load_category_raw(&state.db, body.area_id, lookup_track).await?;
+            let fallback_map: Vec<(String, i64)> = if lookup_track.is_some() {
+                load_category_raw(&state.db, body.area_id, None).await?
+            } else {
+                Vec::new()
+            };
 
             let mut scores: Vec<i64> = Vec::new();
             let mut matched_keys: Vec<serde_json::Value> = Vec::new();
             let mut missing: Vec<String> = Vec::new();
 
             for val in &body.values {
-                if let Some((_, sc)) = cat_map.iter().find(|(k, _)| k == val) {
+                let found = track_map
+                    .iter()
+                    .find(|(k, _)| k == val)
+                    .or_else(|| fallback_map.iter().find(|(k, _)| k == val));
+                if let Some((_, sc)) = found {
                     scores.push(*sc);
                     matched_keys.push(serde_json::Value::from(val.as_str()));
                 } else {
