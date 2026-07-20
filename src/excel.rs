@@ -112,7 +112,15 @@ pub fn parse_xlsx_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>>
     let range = wb
         .worksheet_range(&sheet)
         .ok_or_else(|| anyhow::anyhow!("시트를 열 수 없습니다"))??;
-    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+    range
+        .rows()
+        .map(|row| {
+            row.iter()
+                .map(cell_to_str)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+        .collect()
 }
 
 /// xlsx 특정 시트의 전체 행. 다중 시트 통합문서(내보내기 요약 등) 검증용 —
@@ -124,7 +132,15 @@ pub fn parse_xlsx_sheet_rows(bytes: &[u8], sheet_name: &str) -> anyhow::Result<V
     let range = wb
         .worksheet_range(sheet_name)
         .ok_or_else(|| anyhow::anyhow!("시트 '{}' 를 찾을 수 없습니다", sheet_name))??;
-    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+    range
+        .rows()
+        .map(|row| {
+            row.iter()
+                .map(cell_to_str)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+        .collect()
 }
 
 /// xls 전체 행 (빈 행 필터 없음 — 외부 양식 파싱용)
@@ -140,7 +156,15 @@ pub fn parse_xls_all_rows_raw(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> 
     let range = wb
         .worksheet_range(&sheet)
         .ok_or_else(|| anyhow::anyhow!("시트를 열 수 없습니다"))??;
-    Ok(range.rows().map(|row| row.iter().map(cell_to_str).collect()).collect())
+    range
+        .rows()
+        .map(|row| {
+            row.iter()
+                .map(cell_to_str)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+        .collect()
 }
 
 /// rust_xlsxwriter 셀 쓰기 오류 → 500 ApiError.
@@ -186,12 +210,16 @@ fn parse_xlsx_all_rows(bytes: &[u8]) -> anyhow::Result<Vec<Vec<String>>> {
         .worksheet_range(&sheet)
         .ok_or_else(|| anyhow::anyhow!("시트를 열 수 없습니다"))??;
 
-    let rows = range
+    range
         .rows()
         .filter(|row| !row.iter().all(|c| matches!(c, DataType::Empty)))
-        .map(|row| row.iter().map(cell_to_str).collect())
-        .collect();
-    Ok(rows)
+        .map(|row| {
+            row.iter()
+                .map(cell_to_str)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+        .collect()
 }
 
 /// CSV 전체 행 (헤더 포함)
@@ -230,18 +258,93 @@ pub fn decode_bytes(bytes: &[u8]) -> anyhow::Result<String> {
     Ok(cow.into_owned())
 }
 
-fn cell_to_str(cell: &DataType) -> String {
+/// calamine DataType → 문자열 변환. 예상하지 못한 variant는 오류로 승격한다.
+///
+/// 이전에는 wildcard `_ => String::new()`로 DateTime/Duration/DateTimeIso/DurationIso/Error
+/// variant를 조용히 빈 문자열로 만들었다. 학번·점수·대학명 셀에 사용자가 실수로 날짜
+/// 서식을 적용하거나 `#REF!` 같은 수식 오류가 있으면 downstream `is_empty()` 체크에
+/// 우연히 걸리기만 하고, 특히 `resolve_track`의 `(true, true) => Some(None)` 경로에서는
+/// COMPOSITE 트랙 값이 공통 테이블로 조용히 강등 저장되는 실질 사고까지 났었다
+/// (2차 감사 B 발견 1). CLAUDE.md §2 Fail-Fast 위반이므로 명시 오류로 승격.
+///
+/// Empty는 정당한 "빈 셀" 의미이므로 빈 문자열 반환 (호출자가 헤더 인덱스 정렬을
+/// 유지할 수 있어야 함 — 실제 값 유무는 downstream이 판정).
+fn cell_to_str(cell: &DataType) -> Result<String, String> {
     match cell {
-        DataType::String(s) => s.trim().to_string(),
-        DataType::Float(f) => {
-            if f.fract() == 0.0 {
-                (*f as i64).to_string()
-            } else {
-                f.to_string()
-            }
-        }
-        DataType::Int(i) => i.to_string(),
-        DataType::Bool(b) => if *b { "1" } else { "0" }.to_string(),
-        _ => String::new(),
+        DataType::String(s) => Ok(s.trim().to_string()),
+        DataType::Float(f) => Ok(if f.fract() == 0.0 {
+            (*f as i64).to_string()
+        } else {
+            f.to_string()
+        }),
+        DataType::Int(i) => Ok(i.to_string()),
+        DataType::Bool(b) => Ok(if *b { "1" } else { "0" }.to_string()),
+        DataType::Empty => Ok(String::new()),
+        DataType::DateTime(_) | DataType::DateTimeIso(_) => Err(
+            "날짜 서식 셀은 지원되지 않습니다. 해당 셀을 텍스트나 숫자 서식으로 바꾸고 다시 업로드하세요".to_string()
+        ),
+        DataType::Duration(_) | DataType::DurationIso(_) => Err(
+            "시간(duration) 서식 셀은 지원되지 않습니다. 해당 셀을 텍스트나 숫자 서식으로 바꾸고 다시 업로드하세요".to_string()
+        ),
+        DataType::Error(e) => Err(
+            format!("셀에 수식 오류({:?})가 있습니다. 원본 파일에서 오류를 수정한 후 다시 업로드하세요", e)
+        ),
+    }
+}
+
+#[cfg(test)]
+mod cell_to_str_tests {
+    //! DataType variant fail-fast 검증 (2차 감사 B 발견 1 소유자 라운드 #2).
+    //! `parse_xlsx_all_rows_raw` 경로로는 rust_xlsxwriter가 셀 서식만 지정하고
+    //! 값은 f64로 저장하므로 calamine이 `DataType::DateTime`을 만들 수 없다.
+    //! 따라서 실제 사용자가 만든 xlsx에서 발생하는 DateTime/Error variant는
+    //! `cell_to_str`에 직접 주입해 검증한다.
+    use super::*;
+    use calamine::CellErrorType;
+
+    #[test]
+    fn string_ok() {
+        assert_eq!(cell_to_str(&DataType::String("hi".into())).unwrap(), "hi");
+    }
+
+    #[test]
+    fn integer_float_bool_ok() {
+        assert_eq!(cell_to_str(&DataType::Int(42)).unwrap(), "42");
+        assert_eq!(cell_to_str(&DataType::Float(3.5)).unwrap(), "3.5");
+        assert_eq!(cell_to_str(&DataType::Float(5.0)).unwrap(), "5"); // fract==0 → 정수
+        assert_eq!(cell_to_str(&DataType::Bool(true)).unwrap(), "1");
+        assert_eq!(cell_to_str(&DataType::Bool(false)).unwrap(), "0");
+    }
+
+    #[test]
+    fn empty_returns_empty_string() {
+        // Empty는 "빈 셀" 정당한 의미 — 오류가 아니라 빈 문자열
+        assert_eq!(cell_to_str(&DataType::Empty).unwrap(), "");
+    }
+
+    #[test]
+    fn datetime_variants_return_error() {
+        // 이전에는 wildcard로 조용히 "" 반환 → resolve_track 공통 강등 사고
+        let err = cell_to_str(&DataType::DateTime(45672.0)).unwrap_err();
+        assert!(err.contains("날짜"), "메시지: {}", err);
+        let err = cell_to_str(&DataType::DateTimeIso("2025-01-15".into())).unwrap_err();
+        assert!(err.contains("날짜"), "메시지: {}", err);
+    }
+
+    #[test]
+    fn duration_variants_return_error() {
+        let err = cell_to_str(&DataType::Duration(1.5)).unwrap_err();
+        assert!(err.contains("시간") || err.contains("duration"), "메시지: {}", err);
+        let err = cell_to_str(&DataType::DurationIso("PT1H".into())).unwrap_err();
+        assert!(err.contains("시간") || err.contains("duration"), "메시지: {}", err);
+    }
+
+    #[test]
+    fn cell_error_variant_returns_error() {
+        // #REF!, #DIV/0! 같은 수식 오류 셀
+        let err = cell_to_str(&DataType::Error(CellErrorType::Ref)).unwrap_err();
+        assert!(err.contains("수식") || err.contains("오류"), "메시지: {}", err);
+        let err = cell_to_str(&DataType::Error(CellErrorType::Div0)).unwrap_err();
+        assert!(err.contains("수식") || err.contains("오류"), "메시지: {}", err);
     }
 }
