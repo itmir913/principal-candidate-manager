@@ -349,7 +349,9 @@ async fn numeric_table_import_huge_threshold_rejected() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.rows, 0);
-    assert!(result.errors.iter().any(|e| e.contains("초과") || e.contains("유한")));
+    // 지수 표기(1e300)는 parse_display_value에서 파싱 전에 먼저 거부됨 (2차 감사 A 발견 1).
+    // "초과"/"유한" 검사보다 앞에 있어 지수 표기 오류 메시지가 나온다.
+    assert!(result.errors.iter().any(|e| e.contains("지수") || e.contains("초과") || e.contains("유한")));
 }
 
 #[tokio::test]

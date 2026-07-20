@@ -153,6 +153,43 @@ proptest! {
     }
 }
 
+/// 지수 표기(1e-6, 2E5 등)는 소수 자릿수 검사를 우회할 수 있으므로 파싱 전 거부.
+/// 2차 감사 A 발견 1: "1e-6" → f64 파서 통과 → '.' 없어 자릿수 검사 스킵 →
+/// 0.1 → round() → 0으로 조용히 저장. 동일 값 "0.000001"은 정상 거부되던 것과 비대칭.
+#[test]
+fn parse_rejects_exponent_notation() {
+    for s in [
+        "1e-6", "1E-6", "1e5", "1E5", "1e0", "-1e-3", "2.5e2", "0.5E-1", "3.14e10",
+    ] {
+        let res = parse_display_value(s);
+        assert!(res.is_err(), "지수 표기 '{}'는 거부되어야 함", s);
+        assert!(
+            res.unwrap_err().contains("지수 표기"),
+            "입력 '{}'의 오류 메시지에 '지수 표기'가 포함되어야 함",
+            s
+        );
+    }
+}
+
+/// 확인용 sanity: 지수 표기가 없는 정상 입력은 여전히 통과해야 한다.
+#[test]
+fn parse_accepts_normal_decimal_notation() {
+    // 소수점 자리에 e를 포함하지 않는 일반 표기는 계속 허용
+    for (s, expected) in [
+        ("0", 0i64),
+        ("1", 100_000),
+        ("-1", -100_000),
+        ("0.5", 50_000),
+        ("3.14", 314_000),
+        ("-3.14", -314_000),
+        ("1000000000", 100_000_000_000_000),
+    ] {
+        let res = parse_display_value(s);
+        assert!(res.is_ok(), "정상 표기 '{}'가 거부됨: {:?}", s, res);
+        assert_eq!(res.unwrap(), expected);
+    }
+}
+
 #[test]
 fn parse_rejects_nan_and_infinity() {
     for s in ["nan", "NaN", "-nan", "inf", "-inf", "infinity", "-infinity"] {

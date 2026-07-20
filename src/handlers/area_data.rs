@@ -85,6 +85,18 @@ pub(crate) struct AreaInfo {
 /// pub: tests/invariants.rs의 왕복 불변식 테스트에서 사용 (pub(crate)는 tests/에서 접근 불가)
 pub fn parse_display_value(s: &str) -> Result<i64, String> {
     let trimmed = s.trim();
+    // 지수 표기(1e-6, 2E5 등) 거부.
+    // Rust f64 파서는 지수 표기를 수용하지만, 아래 소수 자릿수 검사가 원본 문자열의
+    // '.' 위치에 의존하므로 지수 표기 입력은 자릿수 검사를 조용히 우회한다.
+    // 예: "1e-6"은 0.1로 계산되어 round()로 0이 저장되지만, 동일 값 "0.000001"은
+    // "소수점 5자리 초과"로 거부된다 — 표기에 따라 다른 결과가 나오는 것 자체가
+    // Fail-Fast 위반. 학교 성적·점수 도메인에 지수 표기가 필요한 정당한 이유도 없다.
+    if trimmed.contains('e') || trimmed.contains('E') {
+        return Err(format!(
+            "'{}' 지수 표기는 지원되지 않습니다. 소수 표기를 사용하세요 (예: 0.000001)",
+            trimmed
+        ));
+    }
     let f: f64 = trimmed
         .parse()
         .map_err(|_| format!("'{}' 숫자 변환 실패", trimmed))?;
