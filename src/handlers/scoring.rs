@@ -1259,13 +1259,20 @@ pub async fn unrecommend_result(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
-    sqlx::query(
+    // rows_affected 확인 — 존재하지 않는 (sid,tid,rid) 조합 호출 시 recommend_result와 대칭하게
+    // 404를 반환한다. 대칭화 전에는 spurious RecommendCanceled 감사 로그가 쌓여 사고 대응 시
+    // 잡음과 실제 취소를 구분하기 어려웠다 (2차 감사 C 발견 O-1 소유자 라운드 #7).
+    let result = sqlx::query(
         "UPDATE results SET recommended = 0 WHERE student_id = ? AND track_id = ? AND round_id = ?",
     )
     .bind(sid).bind(tid).bind(rid)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if result.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "해당 지원자·모집단위·라운드의 결과가 없습니다".into()));
+    }
 
     let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
     crate::audit::log(

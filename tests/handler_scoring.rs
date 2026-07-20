@@ -1555,6 +1555,28 @@ async fn unrecommend_on_open_round_returns_bad_request() {
     assert_eq!(res.unwrap_err().0, StatusCode::BAD_REQUEST);
 }
 
+/// 존재하지 않는 (sid,tid,rid) 조합으로 호출 시 404를 반환한다 — recommend_result와 대칭.
+/// 대칭화 전에는 UPDATE가 rows_affected=0으로 조용히 성공하고 spurious RecommendCanceled
+/// 감사 로그가 남았다 (2차 감사 C 발견 O-1, 소유자 라운드 #7).
+#[tokio::test]
+async fn unrecommend_nonexistent_result_returns_not_found() {
+    let pool = common::create_test_pool().await;
+    let (_sid, _tid, rid) = setup_with_quota(&pool, None, None).await;
+
+    // 존재하지 않는 (sid, tid) 조합을 CLOSED 라운드에 대해 unrecommend 시도.
+    // 대칭화 전에는 rows_affected=0으로 UPDATE가 조용히 성공해 spurious 감사 로그가 남았다.
+    let phantom_sid = 999_999;
+    let phantom_tid = 999_999;
+    let res = unrecommend_result(State(common::make_state(pool.clone())), Path((phantom_sid, phantom_tid, rid))).await;
+    assert_eq!(res.unwrap_err().0, StatusCode::NOT_FOUND);
+
+    // spurious 감사 로그가 남지 않았는지 확인
+    let audit_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_log WHERE action = 'RecommendCanceled'"
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(audit_count, 0, "존재하지 않는 조합에 spurious 감사 로그가 남으면 안 됨");
+}
+
 #[tokio::test]
 async fn unrecommend_on_finalized_round_returns_bad_request() {
     // FINALIZED 상태에서는 추천 취소 불가
