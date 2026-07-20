@@ -22,7 +22,21 @@ pub struct AuditEntry {
 /// 감사 로그 기록. 반드시 본 작업과 같은 트랜잭션에서 `&mut *tx`로 호출할 것
 /// (find_or_create_track과 동일한 커넥션 규칙 — pool 직접 전달 금지).
 /// 실패 시 Err → 호출측 `?` 전파 → 본 작업까지 롤백된다 (fail-fast).
+///
+/// IP를 함께 기록해야 하는 계정 보안 이벤트(백업 다운로드·비밀번호 변경)는
+/// `log_with_ip`를 사용하라.
 pub async fn log(conn: &mut SqliteConnection, entry: AuditEntry) -> Result<(), ApiError> {
+    log_with_ip(conn, entry, None).await
+}
+
+/// IP를 포함해 감사 로그를 기록한다 (2차 감사 소유자 라운드 #5·#6).
+/// `ip`는 Axum의 `ConnectInfo<SocketAddr>` 익스트랙터로 얻은 값의 `to_string()` 등을 넘긴다.
+/// LAN 배포이므로 대개 사설 IP지만, 사고 시 "언제 어느 단말에서 반출·변경됐나"의 추적 근거.
+pub async fn log_with_ip(
+    conn: &mut SqliteConnection,
+    entry: AuditEntry,
+    ip: Option<String>,
+) -> Result<(), ApiError> {
     let (actor_type, grade, class_no) = match entry.actor {
         Actor::Admin => ("ADMIN", None, None),
         Actor::Teacher { grade, class_no } => ("TEACHER", Some(grade), Some(class_no)),
@@ -61,14 +75,15 @@ pub async fn log(conn: &mut SqliteConnection, entry: AuditEntry) -> Result<(), A
 
     sqlx::query(
         "INSERT INTO audit_log \
-         (at, actor_type, actor_grade, actor_class_no, actor_name, action, round_id, student_id, detail) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (at, actor_type, actor_grade, actor_class_no, actor_name, actor_ip, action, round_id, student_id, detail) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(chrono::Utc::now().to_rfc3339())
     .bind(actor_type)
     .bind(grade)
     .bind(class_no)
     .bind(actor_name)
+    .bind(ip)
     .bind(entry.action)
     .bind(entry.round_id)
     .bind(entry.student_id)

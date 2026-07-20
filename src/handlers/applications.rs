@@ -1,13 +1,14 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{ConnectInfo, Path, Query, State},
     http::StatusCode,
     Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::net::SocketAddr;
 
 use crate::{
-    audit::{Actor, AuditEntry},
+    audit::{self, Actor, AuditEntry},
     auth::TeacherClaims,
     enums::{AuditAction, CalcType, CategoryAgg, LookupScope, RoundStatus},
     handlers::area_data::parse_display_value,
@@ -26,6 +27,7 @@ pub struct ChangePasswordBody {
 pub async fn teacher_change_password(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
+    ConnectInfo(client): ConnectInfo<SocketAddr>,
     Json(body): Json<ChangePasswordBody>,
 ) -> Result<StatusCode, ApiError> {
     if is_grad_teacher(&claims) {
@@ -53,12 +55,29 @@ pub async fn teacher_change_password(
     // bcrypt는 CPU 집약 — DB 접근 전 미리 계산
     let new_hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // UPDATE와 audit log를 같은 트랜잭션으로 묶어 원자성 확보 (2차 감사 소유자 라운드 #6)
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     sqlx::query("UPDATE classes SET password_hash = ? WHERE grade = ? AND class_no = ?")
         .bind(&new_hash)
         .bind(claims.grade)
         .bind(claims.class_no)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log_with_ip(
+        &mut tx,
+        AuditEntry {
+            actor: Actor::Teacher { grade: claims.grade, class_no: claims.class_no },
+            action: AuditAction::TeacherPasswordChanged,
+            round_id: None,
+            student_id: None,
+            detail: serde_json::json!({}),
+        },
+        Some(client.ip().to_string()),
+    ).await?;
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }

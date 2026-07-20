@@ -1,7 +1,17 @@
-use axum::{extract::State, http::StatusCode, Extension, Json};
+use axum::{
+    extract::{ConnectInfo, State},
+    http::StatusCode,
+    Extension, Json,
+};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
-use crate::{auth, state::AppState};
+use crate::{
+    audit::{self, Actor, AuditEntry},
+    auth,
+    enums::AuditAction,
+    state::AppState,
+};
 
 #[derive(Deserialize)]
 pub struct AdminLoginBody {
@@ -156,6 +166,7 @@ pub async fn teacher_login(
 pub async fn change_admin_password(
     State(state): State<AppState>,
     Extension(_claims): Extension<auth::AdminClaims>,
+    ConnectInfo(client): ConnectInfo<SocketAddr>,
     Json(body): Json<ChangePasswordBody>,
 ) -> Result<StatusCode, ApiError> {
     let current_hash: String = sqlx::query_scalar(
@@ -179,10 +190,27 @@ pub async fn change_admin_password(
     // bcrypt는 CPU 집약 — DB 접근 전 미리 계산
     let new_hash = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // UPDATE와 audit log를 같은 트랜잭션으로 묶어 원자성 확보 (2차 감사 소유자 라운드 #6)
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     sqlx::query("UPDATE app_configs SET value = ? WHERE key = 'admin_password_hash'")
         .bind(&new_hash)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    audit::log_with_ip(
+        &mut tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::AdminPasswordChanged,
+            round_id: None,
+            student_id: None,
+            detail: serde_json::json!({}),
+        },
+        Some(client.ip().to_string()),
+    ).await?;
+    tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }

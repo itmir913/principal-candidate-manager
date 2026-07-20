@@ -256,7 +256,12 @@ async fn main() -> anyhow::Result<()> {
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("listening on http://{}", addr);
-    axum::serve(listener, app).await?;
+    // ConnectInfo<SocketAddr>를 통해 핸들러가 클라이언트 IP를 추출할 수 있게 한다.
+    // 백업 다운로드·비밀번호 변경 audit log(2차 감사 소유자 라운드 #5·#6)에 사용.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    ).await?;
 
     Ok(())
 }
@@ -377,7 +382,11 @@ fn main() {
                 Ok(listener) => {
                     tracing::info!("listening on http://{}", addr);
                     let _ = ready_tx.send(Ok(()));
-                    if let Err(e) = axum::serve(listener, app).await {
+                    // ConnectInfo<SocketAddr>를 통해 핸들러가 클라이언트 IP를 추출할 수 있게 한다.
+                    // 백업 다운로드·비밀번호 변경 audit log(2차 감사 소유자 라운드 #5·#6)에 사용.
+                    let make_service =
+                        app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+                    if let Err(e) = axum::serve(listener, make_service).await {
                         eprintln!("서버 오류: {}", e);
                     }
                 }

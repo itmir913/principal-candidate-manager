@@ -1,6 +1,11 @@
 mod common;
 
-use axum::{extract::State, http::StatusCode, Extension, Json};
+use axum::{extract::{ConnectInfo, State}, http::StatusCode, Extension, Json};
+use std::net::SocketAddr;
+
+fn test_client() -> ConnectInfo<SocketAddr> {
+    ConnectInfo("127.0.0.1:12345".parse().unwrap())
+}
 use principal_candidate_manager::handlers::auth::{
     admin_login, admin_status, change_admin_password, teacher_login, AdminLoginBody,
     ChangePasswordBody, TeacherLoginBody,
@@ -159,6 +164,7 @@ async fn change_admin_password_wrong_current_returns_bad_request() {
     let res = change_admin_password(
         State(state),
         Extension(common::admin_claims()),
+        test_client(),
         Json(ChangePasswordBody {
             current_password: "wrong_pw".into(),
             new_password: "newpassword123".into(),
@@ -180,6 +186,7 @@ async fn change_admin_password_new_too_short_returns_bad_request() {
     let res = change_admin_password(
         State(state),
         Extension(common::admin_claims()),
+        test_client(),
         Json(ChangePasswordBody {
             current_password: "current_pw".into(),
             new_password: "short".into(),
@@ -201,6 +208,7 @@ async fn change_admin_password_success_allows_new_password() {
     change_admin_password(
         State(state.clone()),
         Extension(common::admin_claims()),
+        test_client(),
         Json(ChangePasswordBody {
             current_password: "old_password".into(),
             new_password: "new_password_123".into(),
@@ -222,4 +230,64 @@ async fn change_admin_password_success_allows_new_password() {
     )
     .await;
     assert_eq!(fail.unwrap_err().0, StatusCode::UNAUTHORIZED);
+}
+
+/// 2차 감사 소유자 라운드 #6: 담임 비밀번호 변경 시 감사 로그와 IP가 기록되어야 한다.
+#[tokio::test]
+async fn teacher_change_password_records_audit_log_with_ip() {
+    use principal_candidate_manager::handlers::applications::{
+        teacher_change_password, ChangePasswordBody as TeacherPwBody,
+    };
+    let pool = common::create_test_pool().await;
+    let old_hash = bcrypt::hash("old_pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&old_hash).execute(&pool).await.unwrap();
+
+    teacher_change_password(
+        State(common::make_state(pool.clone())),
+        Extension(common::teacher_claims(1, 1)),
+        test_client(),
+        Json(TeacherPwBody {
+            current_password: "old_pass".into(),
+            new_password: "new_pass_abcd".into(),
+        }),
+    ).await.unwrap();
+
+    let (action, actor_type, grade, class_no, ip): (String, String, Option<i64>, Option<i64>, Option<String>) =
+        sqlx::query_as(
+            "SELECT action, actor_type, actor_grade, actor_class_no, actor_ip
+             FROM audit_log WHERE action = 'TEACHER_PASSWORD_CHANGED'"
+        ).fetch_one(&pool).await.unwrap();
+    assert_eq!(action, "TEACHER_PASSWORD_CHANGED");
+    assert_eq!(actor_type, "TEACHER");
+    assert_eq!(grade, Some(1));
+    assert_eq!(class_no, Some(1));
+    assert_eq!(ip.as_deref(), Some("127.0.0.1"));
+}
+
+/// 2차 감사 소유자 라운드 #6: 관리자 비밀번호 변경 시 감사 로그와 IP가 기록되어야 한다.
+#[tokio::test]
+async fn change_admin_password_records_audit_log_with_ip() {
+    let state = make_state().await;
+    let _ = admin_login(
+        State(state.clone()),
+        Json(AdminLoginBody { password: "current_pw".into() }),
+    ).await.unwrap();
+
+    change_admin_password(
+        State(state.clone()),
+        Extension(common::admin_claims()),
+        test_client(),
+        Json(ChangePasswordBody {
+            current_password: "current_pw".into(),
+            new_password: "new_password_abcd".into(),
+        }),
+    ).await.unwrap();
+
+    let (action, actor_type, ip): (String, String, Option<String>) = sqlx::query_as(
+        "SELECT action, actor_type, actor_ip FROM audit_log WHERE action = 'ADMIN_PASSWORD_CHANGED'"
+    ).fetch_one(&state.db).await.unwrap();
+    assert_eq!(action, "ADMIN_PASSWORD_CHANGED");
+    assert_eq!(actor_type, "ADMIN");
+    assert_eq!(ip.as_deref(), Some("127.0.0.1"), "감사 로그에 클라이언트 IP가 기록되어야 함");
 }

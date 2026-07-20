@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     actor_grade    INTEGER,            -- TEACHER일 때만
     actor_class_no INTEGER,            -- TEACHER일 때만
     actor_name     TEXT,               -- 행위 시점 담임명 스냅샷 (ADMIN은 NULL)
+    actor_ip       TEXT,               -- 요청 IP (백업 다운로드·비밀번호 변경 등 계정 보안 이벤트에 채움. 나머지는 NULL)
     action         TEXT    NOT NULL,
     round_id       INTEGER,            -- 해당되는 경우만
     student_id     INTEGER,            -- 해당되는 경우만
