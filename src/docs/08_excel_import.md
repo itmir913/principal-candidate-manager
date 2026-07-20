@@ -40,7 +40,7 @@
 
 #### 2a. 전체 학생 import — `/api/students/import`
 - **필수 헤더**: `학생코드`, `이름`, `학년`, `반`, `번호`, `재학여부`
-- **동작**: upsert (student_code 기준 `ON CONFLICT DO UPDATE`) — DELETE 없음
+- **동작**: upsert (student_code 기준 SELECT-후-UPDATE/INSERT 분기, `students.rs:363-395`) — DELETE 없음. tx 안·단일 커넥션에서 실행되므로 SQL 네이티브 `ON CONFLICT DO UPDATE`와 결과 동등, TOCTOU 없음
 - **재학여부**: `재학`/`재학생` → is_enrolled=1, `졸업`/`졸업생` → is_enrolled=0, 그 외(숫자 0/1·빈 값 포함) → 해당 행 오류 (silent default 금지 — 재학/졸업 분류는 우선순위·기초데이터 범위에 영향. 숫자 0/1은 의미가 모호해 배제)
 - **위치 유일성**: 재학생 위치(학년+반+번호)는 학생코드가 달라도 유일해야 함. 파일 내 위치 중복 행 → 오류. DB에 이미 다른 학생코드가 점유한 위치로 upsert 시도 → 행 오류. DB 최후 방어선은 `idx_students_position` 부분 유니크 인덱스 (기초데이터 import의 위치 기반 학생 조회가 임의 학생에게 점수를 귀속시키는 것을 방지)
 
@@ -174,8 +174,8 @@
 ## CLOSED 라운드 guard
 
 `numeric_table_import`, `category_map_import`는 진입 시 `guard_no_closed_round` 호출:
-- CLOSED 상태 라운드가 존재하면 **409 Conflict** 반환
-- 이유: CLOSED 라운드의 점수 기준을 수정하면 저장된 results와 불일치 발생
+- **CLOSED 또는 FINALIZED** 상태 라운드가 존재하면 **409 Conflict** 반환 (`areas.rs:67-82`)
+- 이유: CLOSED/FINALIZED 라운드의 점수 기준을 수정하면 저장된 results와 불일치 발생
 
 `base_data_import`, 외부 import에는 이 guard 없음 (CLOSED 시 base_data 수정은 별도 trigger로 보호).
 
