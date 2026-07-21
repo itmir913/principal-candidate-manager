@@ -24,7 +24,7 @@
                           style="background: #2563eb;">라운드 요약 다운로드</span>
                 </p>
                 <p class="text-slate-600 leading-relaxed">
-                    <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
+                    마감(<span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>)
                     상태에서만 활성화. <strong>라운드결과</strong>(모집단위·대학별 정원·잔여석 요약)와 <strong>지원자결과</strong>(지원자별 점수·추천·포기) 2개 시트를 내려받습니다.
                 </p>
             </div>
@@ -166,41 +166,83 @@
 
     </div>
 
-    <!-- DB 백업 -->
+    <!-- 데이터 백업과 복원 -->
     <div class="space-y-6 break-before-page">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">데이터베이스 백업</h3>
+        <h3 class="text-lg font-bold text-slate-700 mb-3">데이터 백업과 복원</h3>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
             모든 데이터는 실행 파일과 같은 폴더의
-            <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/data.db</code>
-            파일에 저장됩니다. 이 파일을 복사해두는 것만으로 완전한 백업이 됩니다.
+            <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm</code>
+            폴더 안에 있습니다. <strong>백업은 반드시 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm</code> 폴더 전체를 단위로 다루십시오.</strong>
+            <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">data.db</code> 파일 하나만 복사하면
+            프로그램이 강제 종료되거나 정전이 있었던 경우 최근 저장 내용이 빠질 수 있습니다.
         </p>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2">백업 방법</p>
-            <ol class="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside">
-                <li>프로그램이 실행 중인 상태에서 파일 탐색기를 엽니다.</li>
-                <li>실행 파일이 있는 폴더로 이동하여 <code
-                        class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/</code> 폴더를 엽니다.
-                </li>
-                <li><code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">data.db</code> 파일을 외부 드라이브
-                    또는 별도 폴더에 복사합니다.
-                </li>
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">①</span>인앱 백업 다운로드 — 평소 정기 백업용</p>
+            <p class="text-slate-600 leading-relaxed mb-2">
+                관리자 화면의 <span class="font-semibold text-slate-700">업데이트 &amp; 백업</span> 탭에서
+                <span class="font-semibold text-slate-700">DB 백업 다운로드</span> 버튼을 누르면
+                <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm_backup_날짜시각.zip</code>
+                파일이 내려받아집니다. 프로그램을 켠 상태에서, 원격 접속 중에도 사용할 수 있습니다.
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                zip 안에는 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/data.db</code>·
+                <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/config.json</code>과
+                복원 절차가 적힌 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">복원방법.txt</code>가
+                함께 들어 있습니다. 프로그램이 실행 중이더라도 그 시점까지 저장된 내용을 빠짐없이 담은 완전한 스냅샷이므로,
+                가장 안전하고 손쉬운 백업 수단입니다.
+            </p>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">②</span>수동 폴더 압축 — 프로그램이 켜지지 않을 때의 퇴로</p>
+            <p class="text-slate-600 leading-relaxed">
+                위 방법은 프로그램이 실행되고 있을 때만 가능합니다. 프로그램이 고장으로 켜지지 않거나 PC를 교체하는 등
+                프로그램을 쓸 수 없는 상황을 대비해, 다음 절차로도 백업해 두십시오.
+            </p>
+            <ol class="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside mt-2">
+                <li>프로그램을 <span class="font-semibold text-slate-700">완전히 종료</span>합니다 (트레이 아이콘 → 종료. 브라우저 창만 닫는 것으로는 종료되지 않습니다).</li>
+                <li>실행 파일이 있는 폴더로 이동합니다.</li>
+                <li><code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm</code> 폴더 <span class="font-semibold text-slate-700">전체를</span> 압축(zip)하여 외부 드라이브 또는 별도 폴더에 보관합니다. 폴더 안 파일을 골라 담지 말고 폴더째 압축하십시오.</li>
             </ol>
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-slate-700 mb-2">복원 방법</p>
+            <p class="font-bold text-slate-700 mb-2">복원 방법 (①·② 공통)</p>
+            <p class="text-slate-600 leading-relaxed mb-2">두 방법 모두 복원 절차는 같습니다. <span class="font-semibold text-slate-700">"폴더 통째 교체"</span>가 원칙입니다.</p>
+            <ol class="space-y-1 text-slate-600 leading-relaxed list-decimal list-inside">
+                <li>프로그램을 완전히 종료합니다.</li>
+                <li>실행 파일이 있는 폴더를 엽니다.</li>
+                <li>그 폴더에 있는 <span class="font-semibold text-slate-700">기존 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm</code> 폴더의 이름을 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm_old</code>로 바꿉니다</span> (지우지 말고 이름만 바꿉니다 — 복원이 잘못돼도 원본이 남아 있습니다).</li>
+                <li>백업 파일(①은 zip 압축을 푼 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm</code> 폴더, ②는 압축을 푼 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm</code> 폴더)을 2번에서 연 폴더(실행 파일 옆)에 그대로 꺼내 놓습니다.</li>
+                <li>프로그램을 다시 실행합니다.</li>
+                <li>데이터가 정상인지 확인한 뒤 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm_old</code> 폴더를 지웁니다.</li>
+            </ol>
+        </div>
+
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-amber-700 mb-2"><span class="mr-2">⚠️</span>기존 폴더 위에 "덮어쓰기"로 풀지 마십시오</p>
+            <p class="text-amber-800 leading-relaxed">
+                기존 <code class="bg-white border border-amber-200 px-1 rounded print-keep-bg">pcm</code> 폴더를 그대로 둔 채 백업 폴더를 위에 덮어씌우면,
+                예전에 쓰던 파일의 흔적이 새 데이터베이스 파일과 뒤섞여 <strong>복원한 데이터가 손상될 수 있습니다.</strong>
+                반드시 위 3번처럼 <strong>기존 폴더를 먼저 통째로 치운 뒤</strong>에 백업 폴더를 넣으십시오.
+                "붙여넣고 덮어쓰기" 같은 방식은 쓰지 마십시오.
+            </p>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🔒</span>개인정보 보관 주의</p>
             <p class="text-slate-600 leading-relaxed">
-                백업한 <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">data.db</code> 파일을
-                <code class="bg-white border border-slate-200 px-1 rounded print-keep-bg">pcm/</code> 폴더에 덮어씌우면 됩니다.
-                복원 전 프로그램을 종료한 후 진행하십시오.
+                백업 파일에는 <strong>전교생의 개인정보와 성적 자료 전체</strong>가 들어 있습니다. 외부로 유출되지 않도록 보관에
+                주의하고, 필요 없어진 백업 파일은 완전히 삭제하십시오. 인앱 백업 다운로드는 반출 이력이 감사 기록에
+                요청자 IP와 함께 자동으로 남습니다.
             </p>
         </div>
 
         <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-indigo-700 mb-1"><span class="mr-2">💡</span>팁</p>
             <p class="text-indigo-800 leading-relaxed">
-                라운드가 FINALIZED 상태로 전환된 직후 백업을 권장합니다.
+                라운드가 마감(FINALIZED) 상태로 전환된 직후 백업을 권장합니다.
                 최종 추천 결과가 확정된 시점의 데이터가 가장 중요하므로,
                 이 시점에 백업 파일을 별도로 보관해 두면 분쟁 발생 시 근거 자료로 활용할 수 있습니다.
             </p>

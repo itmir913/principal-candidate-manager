@@ -2,6 +2,20 @@
 
     <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">5. 라운드별 역할 안내</h2>
 
+    <!-- 도입 — 첫 페이지 통과용 안내 -->
+    <div class="mb-8 bg-blue-50 border border-blue-200 rounded-xl p-5 text-lg print-keep-bg">
+        <p class="text-slate-700 leading-relaxed">
+            이 장은 라운드 상태 3단계 — <strong>진행중(OPEN) → 종료(CLOSED) → 마감(FINALIZED)</strong> —
+            순서를 따라, 각 단계에서 관리자와 담임교사가 화면에서 실제로 무엇을 눌러야 하는지 안내합니다.
+            상태 이름의 의미와 전체 흐름은 <strong>2장 「라운드 개념 이해」</strong>에서 먼저 확인하십시오.
+        </p>
+        <p class="text-slate-700 leading-relaxed mt-2">
+            <strong>담임교사</strong>는 지금 화면에 표시된 라운드 상태(진행중/종료/마감)를 확인한 뒤,
+            아래 5-1·5-2·5-3 중 해당하는 절의 <span class="font-semibold">👨‍🏫 담임교사 역할</span> 상자만 읽으면
+            됩니다. 관리자가 하는 일까지 모두 읽을 필요는 없습니다.
+        </p>
+    </div>
+
     <!-- ── 5-1 OPEN ── -->
     <div class="mb-10">
         <div class="flex items-center gap-3 mb-4">
@@ -14,7 +28,7 @@
                 <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자
                     역할</p>
                 <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
-                    <li>라운드 생성 및 OPEN 상태로 전환</li>
+                    <li><span class="font-semibold text-slate-700">라운드 관리</span> 탭의 <span class="font-semibold text-slate-700">라운드 열기</span> 버튼으로 라운드 생성 및 진행중(OPEN) 상태로 전환</li>
                     <li>담임교사에게 서버 IP 주소·입력 기간·마감일 공지</li>
                     <li><span class="font-semibold text-slate-700">개요</span> 탭에서 담임교사별 입력 현황(등록 수·입력 확정 여부) 통계 확인</li>
                     <li>전체 지원 현황 모니터링</li>
@@ -83,7 +97,7 @@
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자 역할</p>
             <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
-                <li>라운드를 CLOSED 상태로 전환 (담임교사 입력·수정 즉시 차단)</li>
+                <li><span class="font-semibold text-slate-700">종료하기</span> 버튼으로 라운드를 종료(CLOSED) 상태로 전환 (담임교사 입력·수정 즉시 차단)</li>
                 <li>전환 시 모든 지원 내역의 점수 산출 및 순위 자동 계산</li>
                 <li>산출된 점수·순위를 모집단위별로 검토</li>
                 <li>결과 탭의 <span class="font-semibold text-slate-700">자동 추천 확정</span> 버튼으로 전체 대학 일괄 처리, 대학별 <span class="font-semibold text-slate-700">이 대학 자동 추천</span> 버튼으로 한 대학만 처리, 또는 학생별 <span class="font-semibold text-slate-700">추천 확정</span> 버튼으로 직접 처리</li>
@@ -135,16 +149,16 @@
         </div>
 
         <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
-            <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">🔓</span>CLOSED → OPEN 역전환</p>
-            <p class="text-indigo-800 leading-relaxed mb-2">CLOSED 상태는 다시 OPEN으로 되돌릴 수 있습니다. 라운드 종료 후 담임교사가 입력 누락을 알린 경우, 라운드를 OPEN으로 재전환하여 추가 입력을 허용한 뒤 다시 종료하면 됩니다. 단, FINALIZED(최종 마감) 상태는 어떤 상태로도 되돌릴 수 없습니다.</p>
-            <p class="text-indigo-800 leading-relaxed">라운드가 <span class="font-semibold">마감(CLOSED)된 동안에는</span> 순위의 기준이 되는 설정을 바꿀 수 없습니다 — <span class="font-semibold">재학생 우선 설정</span>(대학·모집단위)과 <span class="font-semibold">학생의 재학/졸업 구분</span>이 그렇습니다. 저장된 순위는 마감 시점 기준으로 계산된 값이라, 기준만 바꾸면 순위와 어긋나기 때문입니다. 바꿔야 한다면 <span class="font-semibold">라운드를 다시 열고 → 설정·명단을 고친 뒤 → 다시 마감</span>하십시오. 마감할 때 순위가 재계산됩니다. (정원 변경은 마감 중에도 가능합니다.)</p>
+            <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">🔓</span>종료(CLOSED) → 진행중(OPEN) 역전환</p>
+            <p class="text-indigo-800 leading-relaxed mb-2">종료(CLOSED) 상태는 다시 진행중(OPEN)으로 되돌릴 수 있습니다. 라운드 종료 후 담임교사가 입력 누락을 알린 경우, 라운드를 진행중(OPEN)으로 재전환하여 추가 입력을 허용한 뒤 다시 종료하면 됩니다. 단, 마감(FINALIZED) 상태는 어떤 상태로도 되돌릴 수 없습니다.</p>
+            <p class="text-indigo-800 leading-relaxed">라운드가 <span class="font-semibold">종료(CLOSED)된 동안에는</span> 순위의 기준이 되는 설정을 바꿀 수 없습니다 — <span class="font-semibold">재학생 우선 설정</span>(대학·모집단위)과 <span class="font-semibold">학생의 재학/졸업 구분</span>이 그렇습니다. 저장된 순위는 종료 시점 기준으로 계산된 값이라, 기준만 바꾸면 순위와 어긋나기 때문입니다. 바꿔야 한다면 <span class="font-semibold">라운드를 다시 열고 → 설정·명단을 고친 뒤 → 다시 종료</span>하십시오. 종료할 때 순위가 재계산됩니다. (정원 변경은 종료 중에도 가능합니다.)</p>
         </div>
 
         <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-amber-700 mb-2"><span class="mr-2">⚠️</span>주의 사항</p>
             <ul class="space-y-1 text-amber-800 leading-relaxed list-disc list-outside pl-5">
                 <li>"종료하기" 버튼을 클릭하면 학급별 <span class="font-semibold">입력 확정 현황</span>이 먼저 표시됩니다. 미확정 학급이 있어도 종료 자체는 가능하지만, 해당 학급의 입력이 완전히 끝났는지 담임교사와 반드시 확인하십시오.</li>
-                <li>점수 산출 중 오류가 발생하면 CLOSED 상태로 전환할 수 없습니다. 라운드 종료 전에 모든 담임교사의 입력 완료 여부를 반드시 확인하십시오.</li>
+                <li>점수 산출 중 오류가 발생하면 종료(CLOSED) 상태로 전환할 수 없습니다. 라운드 종료 전에 모든 담임교사의 입력 완료 여부를 반드시 확인하십시오.</li>
                 <li>시스템은 추천 확정 누락을 자동으로 차단하지 않습니다. 마감하기 버튼을 누르기 전에 관리자가 <span class="font-semibold">모든 모집단위의 추천 확정 버튼을 빠짐없이 눌렀는지 직접 확인</span>하십시오.</li>
                 <li>마감하기 클릭 시 정원을 초과한 모집단위가 있으면 마감이 거부됩니다. 화면에 위반 모집단위 목록(모집단위 정원·추천 확정 수)이 표시되므로, 해당 모집단위의 추천을 정원 이내로 조정한 뒤 다시 마감하십시오.</li>
             </ul>
@@ -162,7 +176,7 @@
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
                 <p class="font-bold text-slate-700 mb-2"><span class="mr-2">🛡️</span>관리자 역할</p>
                 <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5">
-                    <li>라운드를 FINALIZED 상태로 전환</li>
+                    <li><span class="font-semibold text-slate-700">마감하기</span> 버튼으로 라운드를 마감(FINALIZED) 상태로 전환</li>
                     <li><span class="font-semibold text-slate-700">라운드 관리</span> 탭에서 전체 지원자 목록·라운드 결과 엑셀 다운로드</li>
                     <li>엑셀 파일을 장부에 기록 후 잔여석 계산 및 공지</li>
                     <li>포기 발생 시 잔여석 갱신 확인 후 재선발 여부 판단</li>

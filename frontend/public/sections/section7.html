@@ -73,6 +73,8 @@
                 또한 숫자 열(점수 등)에 문자가 섞이거나 필수 값이 비어 있는 경우, 중복 행이 있는 경우에도 전체 업로드가 거부됩니다.
                 오류 메시지에 표시된 행 번호와 항목을 확인하여 원인을 수정한 뒤 다시 업로드하십시오.
                 이 프로그램은 <strong>엑셀(Excel)</strong>에서 테스트되었으므로, 타사 프로그램의 경우 <strong>CSV</strong> 파일로 저장하여 가져오기를 시도하십시오.
+                업로드 파일 크기는 <strong>최대 20MB</strong>이며, 초과하면 "업로드 파일 크기가 너무 큽니다" 오류가 표시됩니다.
+                이 경우 파일에 불필요한 서식·수식·빈 시트가 남아 있지 않은지 확인하고 정리한 뒤 다시 시도하십시오.
             </p>
         </div>
 
@@ -83,15 +85,15 @@
                 담임이 지원 정보를 제출한 후 수정할 수 있나요?
             </p>
             <p class="text-slate-600 leading-relaxed">
-                라운드가
+                라운드가 진행중(
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-green-100 text-green-700 border border-green-300 print-keep-bg">OPEN</span>
-                상태인 동안에는 기존 지원을 취소하고 다시 등록하거나, 점수 데이터를 재제출할 수 있습니다.
-                라운드가
+                ) 상태인 동안에는 기존 지원을 취소하고 다시 등록하거나, 점수 데이터를 재제출할 수 있습니다.
+                라운드가 종료(
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
-                또는
+                ) 또는 마감(
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
-                상태가 되면 담임 교사의 지원 정보 수정·취소가 불가합니다.
-                수정이 필요한 경우 관리자에게 라운드를 OPEN으로 되돌려 달라고 요청하십시오.
+                ) 상태가 되면 담임 교사의 지원 정보 수정·취소가 불가합니다.
+                수정이 필요한 경우 관리자에게 라운드를 진행중(OPEN)으로 되돌려 달라고 요청하십시오.
             </p>
         </div>
 
@@ -99,14 +101,15 @@
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
-                이미 CLOSED 상태인데 점수 기준을 수정해야 한다면?
+                이미 종료(CLOSED) 상태인데 점수 기준을 수정해야 한다면?
             </p>
             <p class="text-slate-600 leading-relaxed">
+                종료(
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-amber-100 text-amber-700 border border-amber-300 print-keep-bg">CLOSED</span>
-                및
+                ) 및 마감(
                 <span class="px-2 py-0.5 rounded-md text-base font-bold bg-indigo-100 text-indigo-700 border border-indigo-300 print-keep-bg">FINALIZED</span>
-                상태에서는 전형요소 설정(이름·점수 기준표)을 수정할 수 없습니다.
-                CLOSED 라운드라면 <strong>라운드 관리 탭에서 다시 열기</strong> 버튼으로 OPEN 상태로 되돌린 뒤 수정할 수 있습니다.
+                ) 상태에서는 전형요소 설정(이름·점수 기준표)을 수정할 수 없습니다.
+                종료(CLOSED) 라운드라면 <strong>라운드 관리 탭에서 다시 열기</strong> 버튼으로 진행중(OPEN) 상태로 되돌린 뒤 수정할 수 있습니다.
                 다만 이미 마감(FINALIZED)된 다른 라운드가 하나라도 있으면 전형요소 설정 변경이 계속 차단되므로,
                 이 경우에는 수정할 수 없습니다. 따라서 점수 기준은 첫 라운드를 열기 전에 충분히 검토하여 확정하시기 바랍니다.
             </p>
@@ -119,10 +122,11 @@
                 동점자가 모집 정원을 초과하면 어떻게 처리하나요?
             </p>
             <p class="text-slate-600 leading-relaxed">
-                시스템은 순위 계산만 수행하며, 추천 확정은 관리자가 직접 판단하여 버튼을 눌러야 합니다.
-                동점자가 발생했을 때는 <strong>라운드 관리 탭 → 결과 탭</strong>의 학생 목록에서 해당 학생을 클릭하면
+                <strong>자동 추천 확정</strong> 버튼은 동점자가 잔여 정원 경계를 가르는 경우에만 해당 동점 그룹을
+                자동 확정하지 않고 <strong>수동 확인 필요</strong> 목록으로 남겨 둡니다. 그 목록에서 학생을 클릭하면
                 전형요소별 세부 점수를 확인할 수 있습니다.
-                이를 바탕으로 학교 내부 동점자 처리 기준을 적용하여 추천 대상자를 결정한 뒤 추천 확정 버튼을 누르십시오.
+                이를 바탕으로 학교 내부 동점자 처리 기준을 적용하여 추천 대상자를 결정한 뒤 학생별 <strong>추천 확정</strong> 버튼을 누르십시오.
+                자세한 절차는 <strong>5-2. 종료(CLOSED) 상태</strong>의 「자동 추천 확정」 항목을 참고하십시오.
             </p>
         </div>
 
@@ -133,10 +137,19 @@
                 데이터 정기 백업은 어떻게 하나요?
             </p>
             <p class="text-slate-600 leading-relaxed">
-                프로그램이 실행 중이 아닐 때 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code>
-                파일을 복사하여 별도 위치(외장 드라이브, 네트워크 공유 폴더 등)에 보관하십시오.
-                중요한 작업(기초데이터 업로드, 라운드 마감 등) 전후로 수동 복사하는 것을 권장합니다.
-                복원이 필요할 때는 프로그램을 종료한 상태에서 백업 파일로 교체한 뒤 재시작하면 됩니다.
+                평소에는 관리자 화면 <strong>업데이트 &amp; 백업</strong> 탭의 <strong>DB 백업 다운로드</strong> 버튼을 쓰십시오.
+                프로그램이 켜져 있어야 하지만, 실행 중이거나 원격 접속 중에도 그 시점까지의 데이터를 빠짐없이 담은
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm_backup_날짜시각.zip</code>을 받을 수 있어 가장 간편하고 안전합니다.
+                프로그램이 켜지지 않는 등 이 방법을 쓸 수 없을 때는, 프로그램을 완전히 종료한 뒤
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code>
+                폴더 <strong>전체</strong>를 압축해 보관하십시오(<code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">data.db</code> 파일 하나만 복사하는 것은 불충분합니다).
+                중요한 작업(기초데이터 업로드, 라운드 마감 등) 전후로도 백업을 권장합니다.
+            </p>
+            <p class="text-slate-600 leading-relaxed mt-2">
+                복원할 때는 기존 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code>
+                폴더에 <strong>절대 덮어쓰지 마십시오.</strong> 기존 폴더의 이름을 바꿔 치운 뒤 백업된
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code> 폴더를 그 자리에 넣어야 합니다.
+                자세한 절차는 <strong>6장 「결과 내보내기 및 백업」</strong>을 참고하십시오.
             </p>
         </div>
 
@@ -147,14 +160,13 @@
                 데이터를 다른 PC로 이전하려면?
             </p>
             <p class="text-slate-600 leading-relaxed">
-                기존 PC의 <code
-                    class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code> 파일을
-                복사하여
-                새 PC의 동일한 위치(<code
-                    class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/</code> 폴더)에
-                붙여넣습니다.
-                새 PC에 프로그램을 먼저 설치한 후, 프로그램을 종료한 상태에서 파일을 교체하십시오.
-                이후 프로그램을 실행하면 기존 데이터가 그대로 복원됩니다.
+                기존 PC에서 프로그램을 <strong>완전히 종료</strong>한 뒤, 실행 파일 옆의
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code> 폴더
+                <strong>전체</strong>를 새 PC로 복사합니다(<code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">data.db</code> 파일 하나만 옮기면 안 됩니다).
+                새 PC에 프로그램을 먼저 설치·실행해 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code> 폴더가 생성되면 프로그램을 종료하고,
+                그 폴더의 이름을 바꿔 치운 뒤 복사해 온 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code> 폴더를 그 자리에 놓습니다.
+                기존 폴더 위에 덮어쓰지 마십시오 — 이유와 상세 절차는 <strong>6장 「결과 내보내기 및 백업」</strong>의 복원 방법과 같습니다.
+                이후 프로그램을 실행하면 기존 데이터가 그대로 이어집니다.
             </p>
         </div>
 
@@ -167,9 +179,25 @@
             <p class="text-slate-600 leading-relaxed">
                 아닙니다. 모든 데이터는 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/data.db</code>
                 파일에 영구 저장됩니다.
+                트레이 아이콘의 <strong>종료</strong>로 정상 종료하면 데이터가 그 파일에 완전히 반영된 채로 남으며,
                 프로그램을 종료하거나 PC를 재시작해도 데이터는 유지됩니다.
                 단, <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">data.db</code> 파일을
                 삭제하면 모든 데이터가 영구적으로 소실되므로 주의하십시오.
+            </p>
+        </div>
+
+        <!-- Q12 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                알 수 없는 오류가 계속 발생합니다. 무엇을 확인해야 하나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed">
+                실행 파일과 같은 폴더의 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/logs</code>
+                폴더에 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm.날짜.log</code> 형식의 로그 파일이 하루 단위로 쌓입니다.
+                오류가 발생한 날짜의 로그 파일을 메모장으로 열어 오류가 발생한 시각 부근의 내용을 확인하십시오.
+                프로그램에는 별도의 콘솔(검은 창)이 뜨지 않으므로, 이 로그 파일이 문제 원인을 확인할 수 있는 사실상 유일한 방법입니다.
+                직접 해결이 어려우면 해당 부분을 캡처하거나 복사해 시스템 담당자에게 문의하십시오.
             </p>
         </div>
 
