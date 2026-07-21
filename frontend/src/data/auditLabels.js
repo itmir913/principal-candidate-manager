@@ -41,4 +41,8 @@ export const AUDIT_ACTION_LABELS = {
   TRACK_CREATED: '모집단위 추가',
   TRACK_UPDATED: '모집단위 수정',
   TRACK_DELETED: '모집단위 삭제',
+  // 인증·백업 (2차 감사 소유자 라운드 #5·#6) — 사고 대응용이라 필터로 좁힐 수 있어야 한다
+  DB_BACKUP_DOWNLOADED:     '백업 파일 다운로드',
+  TEACHER_PASSWORD_CHANGED: '담임 비밀번호 변경',
+  ADMIN_PASSWORD_CHANGED:   '관리자 비밀번호 변경',
 }
