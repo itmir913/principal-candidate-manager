@@ -89,7 +89,9 @@
 **엔드포인트**: `POST /api/areas/:id/category-map/import`
 
 - **기본 필수 헤더**: `범주`, `점수`
-- **COMPOSITE 추가 헤더**: `대학명`, `모집단위명`
+- **COMPOSITE 선택 헤더**: `대학명`, `모집단위명` (numeric_table과 동일하게 **선택 사항**이다 —
+  `require_cols`는 `범주`·`점수`만 강제한다(`area_data.rs:598`). 두 열을 생략하면
+  공통(track_id NULL) 값으로 저장된다. 한 쪽만 채우면 오류)
 - **동작**: 해당 area의 category_map 전체 DELETE 후 INSERT (tx 안에서)
 
 **검증 순서**:

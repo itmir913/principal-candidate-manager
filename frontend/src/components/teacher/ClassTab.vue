@@ -13,6 +13,15 @@
       <span class="text-base" style="color: #64748b;">{{ students.length }}명</span>
     </div>
 
+    <HelpBox
+      :key="helpBox.key"
+      class="mb-5"
+      :storage-key="helpBox.key"
+      :title="helpBox.title"
+      :intro="helpBox.intro"
+      :items="helpBox.items"
+    />
+
     <!-- 빈 상태 -->
     <div
       v-if="students.length === 0"
@@ -82,9 +91,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { dialog } from '../common/dialog.js'
+import HelpBox from '../common/HelpBox.vue'
 import {
   getCurrentRound,
   teacherGetStudents,
@@ -97,6 +107,33 @@ const auth = useAuthStore()
 const currentRound = ref(null)
 const students     = ref([])
 const applications = ref([])
+
+// 이 화면은 조회 전용이라 무엇을 할 수 없는지(학생 추가·지원 등록)를 먼저
+// 알려야 담임이 다른 탭을 찾아 헤매지 않는다.
+const helpBox = computed(() => {
+  if (students.value.length === 0) {
+    return {
+      key: 'class-empty',
+      title: '도움말 — 학생 명단이 비어 있습니다',
+      intro: '학생 명단은 관리자가 일괄 등록합니다. 이 화면에서는 추가할 수 없습니다.',
+      items: [
+        '담당 학급의 학생이 보이지 않으면 관리자(학교장추천 담당 교사)에게 명단 등록을 요청하세요.',
+        '명단이 등록되면 이 화면에 학생과 지원 현황이 표시됩니다.',
+      ],
+    }
+  }
+  return {
+    key: 'class-main',
+    title: '도움말 — 우리 반 지원 현황 보기',
+    intro: '담당 학급 학생과 각자의 지원 대학·모집단위를 한눈에 확인하는 화면입니다.',
+    items: [
+      '지원을 새로 등록하려면 왼쪽 "지원자 등록" 탭으로 이동하세요. 이 화면에서는 등록할 수 없습니다.',
+      '"취소" 버튼은 현재 진행 중인 라운드의 지원에만 나타납니다. 이전 라운드의 지원은 취소할 수 없습니다.',
+      '가로줄이 그어진 지원은 학생이 포기했거나 마감 결과 미선발된 것입니다. 오른쪽 라벨에서 "(포기됨)"·"추천 확정"·"미선발"을 구분할 수 있습니다.',
+      '학생 추가·삭제와 재학/졸업 구분 변경은 관리자만 할 수 있습니다.',
+    ],
+  }
+})
 
 function getStudentApps(studentId) {
   return applications.value.filter(a => a.student_id === studentId)
