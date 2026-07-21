@@ -181,6 +181,44 @@
 
 ---
 
+## 파싱 Fail-Fast 정책
+
+### 지수 표기 거부 (`area_data.rs::parse_display_value`)
+
+표시 문자열 → ×100000 정수 파싱 시 **지수 표기(`1e-6`, `2E5` 등)를 파싱 전 명시적으로
+거부**한다. Rust f64 파서는 지수 표기를 수용하지만, 뒤이은 소수 자릿수 검사가 원본
+문자열의 `'.'` 위치에 의존하므로 지수 표기 입력은 검사를 조용히 우회한다.
+
+- `"0.000001"` → `소수점 5자리 초과` Err (거부)
+- `"1e-6"` → 표기에 따른 갈림 없이 `지수 표기는 지원되지 않습니다` Err (거부)
+
+학교 성적·점수 도메인에 지수 표기가 필요한 정당한 이유가 없으므로 표기 대칭성과
+Fail-Fast를 위해 파싱 진입 시점에 차단한다.
+
+### DataType variant 명시 Err (`excel.rs::cell_to_str`)
+
+calamine `DataType`의 10개 variant 중 처리 가능한 4개(String/Float/Int/Bool)와 정당한
+빈 셀(Empty)만 `Ok`, 나머지 **5개는 명시적 `Err`로 승격**한다.
+
+| variant | 처리 |
+|---|---|
+| `String` / `Float` / `Int` / `Bool` | `Ok(문자열 변환)` |
+| `Empty` | `Ok("")` — 빈 셀은 정당한 값 없음 |
+| `DateTime` / `DateTimeIso` | Err "날짜 서식 셀은 지원되지 않습니다..." |
+| `Duration` / `DurationIso` | Err "시간 서식 셀은 지원되지 않습니다..." |
+| `Error(CellErrorType)` | Err "셀에 수식 오류(...)가 있습니다..." |
+
+**wildcard `_ => String::new()`로 복원 금지.** 이전 wildcard 처리에서 학번·점수 열에
+실수로 날짜 서식이 적용되거나 `#REF!` 같은 수식 오류 셀이 있으면 조용히 빈 문자열이
+되어 downstream `is_empty()` 체크에 우연히 걸리는 fail-safe에 의존했다. 특히
+`resolve_track`의 `(true, true) => Some(None)` 경로에서는 COMPOSITE 트랙 값이 공통
+테이블로 조용히 강등 저장되는 실질 사고 경로였다.
+
+새 variant 추가 시 명시적 `Err`로 처리하거나 `Ok` 처리 근거를 밝힐 것. 회귀 테스트
+`src/excel.rs::cell_to_str_tests`에서 전 variant를 검증한다.
+
+---
+
 ## 오류 응답 형식
 
 ```json
