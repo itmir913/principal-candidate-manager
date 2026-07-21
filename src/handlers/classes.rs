@@ -69,7 +69,7 @@ pub async fn classes_template() -> Result<Response, ApiError> {
     ws.write_number(1, 0, 3.0).map_err(excel::xlsx_err)?;
     ws.write_number(1, 1, 1.0).map_err(excel::xlsx_err)?;
     ws.write_string(1, 2, "홍길동").map_err(excel::xlsx_err)?;
-    ws.write_string(1, 3, "pass1234").map_err(excel::xlsx_err)?;
+    ws.write_string(1, 3, "1234").map_err(excel::xlsx_err)?;
 
     let buf = wb
         .save_to_buffer()
