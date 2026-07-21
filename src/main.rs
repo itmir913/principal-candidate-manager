@@ -111,6 +111,43 @@ fn data_dir() -> anyhow::Result<std::path::PathBuf> {
     Ok(dir)
 }
 
+/// 콘솔 + 파일(일별 롤링, `pcm/logs/pcm.log*`) 이중 로깅을 초기화한다.
+///
+/// release 빌드는 `windows_subsystem = "windows"`라 콘솔이 없어 stdout 로그가
+/// 소멸되므로 파일 로깅이 실질적인 진단 창구다. 로그 디렉토리 생성에 실패해도
+/// 서버 기동 자체를 막으면 안 되므로, 그 경우 콘솔 로그만으로 폴백한다.
+/// 반환된 guard는 non-blocking writer가 살아있는 동안 유지되어야 한다 —
+/// drop되면 이후 파일 로그가 flush되지 않는다.
+fn init_logging(data_dir: &std::path::Path) -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    let logs_dir = data_dir.join("logs");
+    match std::fs::create_dir_all(&logs_dir) {
+        Ok(()) => {
+            let file_appender = tracing_appender::rolling::daily(&logs_dir, "pcm.log");
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+            tracing_subscriber::registry()
+                .with(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| "info".into()),
+                )
+                .with(tracing_subscriber::fmt::layer())
+                .with(tracing_subscriber::fmt::layer().with_writer(non_blocking).with_ansi(false))
+                .init();
+            Some(guard)
+        }
+        Err(e) => {
+            tracing_subscriber::registry()
+                .with(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| "info".into()),
+                )
+                .with(tracing_subscriber::fmt::layer())
+                .init();
+            tracing::warn!("로그 디렉토리 생성 실패 ({}), 콘솔 로그만 사용", e);
+            None
+        }
+    }
+}
+
 /// 데이터 디렉토리의 config.json을 읽는다.
 /// 파일이 없으면 기본값으로 생성한다.
 /// 파싱에 실패하면 경고 로그 후 기본값을 반환한다.
@@ -224,15 +261,9 @@ fn autostart_registry_remove() {
 #[cfg(feature = "dev")]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     let data_dir = data_dir()?;
+    let _log_guard = init_logging(&data_dir);
+
     let config = load_config(&data_dir);
     let db_path = data_dir.join("data.db");
 
@@ -272,18 +303,10 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(not(feature = "dev"))]
 fn main() {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     let data_dir = match data_dir() {
         Ok(d) => d,
         Err(e) => {
-            tracing::error!("데이터 디렉토리 준비 실패: {}", e);
+            eprintln!("데이터 디렉토리 준비 실패: {}", e);
             show_error_dialog(
                 "학교장추천 관리 시스템 — 시작 실패",
                 &format!("데이터 디렉토리를 준비할 수 없습니다:\n{}", e),
@@ -291,6 +314,9 @@ fn main() {
             std::process::exit(1);
         }
     };
+    // 트레이 아이콘과 같은 수명으로 유지 — drop되면 이후 파일 로그가 flush되지 않는다.
+    let _log_guard = init_logging(&data_dir);
+
     let config = load_config(&data_dir);
     let port = config.port;
     let db_path = data_dir.join("data.db");
