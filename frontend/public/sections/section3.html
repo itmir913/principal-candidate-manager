@@ -17,7 +17,7 @@
 
     <p class="text-lg text-slate-500 leading-relaxed mb-8">
         단계 간 선행 조건이 있습니다. <strong class="text-slate-600">전형요소(3-3)</strong>를 먼저 설정한 후 <strong class="text-slate-600">대학·모집단위(3-4)</strong> 설정으로 넘어갑니다.
-        <strong class="text-slate-600">대학별 환산점수 조회</strong> 방식의 전형요소가 있다면 기초 데이터(석차연명부 등)를 먼저 업로드해야 대학명·모집단위명이 자동 생성됩니다.
+        <strong class="text-slate-600">대학별 환산점수</strong> 방식의 전형요소가 있다면 기초 데이터(내신 석차연명부 등)를 먼저 업로드해야 대학명·모집단위명이 자동 생성됩니다.
         해당 방식의 전형요소가 하나도 없다면 <strong class="text-slate-600">대학 설정</strong> 탭에서 대학·모집단위를 직접 추가합니다.
         대학·모집단위가 준비된 이후에 정원과 배점을 설정할 수 있습니다.
     </p>
@@ -251,7 +251,7 @@
                 </div>
                 <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm text-base">
                     <p class="font-bold text-slate-700 mb-1">정확히 일치</p>
-                    <p class="text-slate-500 text-base leading-relaxed">입력된 수치가 지정된 특정 기준값과 정확하게 일치할 때만 해당 점수를 부여합니다. <span class="text-base block text-slate-400 mt-1">(예: 특정 취득 학점 등)</span></p>
+                    <p class="text-slate-500 text-base leading-relaxed">입력된 수치가 지정된 특정 기준값과 정확하게 일치할 때만 해당 점수를 부여합니다. <span class="text-base block text-slate-400 mt-1">(예: 대학별 내신 환산등급 등)</span></p>
                 </div>
             </div>
 
@@ -370,7 +370,7 @@
 
         <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-lg mb-5 print-keep-bg">
             <p class="font-bold text-indigo-700 mb-1"><span class="mr-2">📤</span>기초 데이터 내보내기</p>
-            <p class="text-indigo-800 leading-relaxed">전형요소 설정 탭에서 전형요소를 선택한 뒤 <strong>기초 데이터</strong> 탭을 열면 현재 저장된 데이터를 내보낼 수 있습니다. 재학생·졸업생 구분을 선택하면 해당 구분의 import 양식과 동일한 헤더(재학생: 학년·반·번호·이름·값 / 졸업생: 학생코드·이름·값)로 파일이 내려받아집니다. 내려받은 파일을 수정한 뒤 같은 구분으로 그대로 재업로드할 수 있습니다.</p>
+            <p class="text-indigo-800 leading-relaxed">전형요소 설정 탭에서 전형요소를 선택한 뒤 <strong>기초 데이터</strong> 탭을 열면 현재 저장된 데이터를 내보낼 수 있습니다. 재학생·졸업생 구분을 선택하면 해당 구분의 import 양식과 동일한 헤더로 파일이 내려받아집니다. 내려받은 파일을 수정한 뒤 그대로 재업로드할 수 있습니다.</p>
         </div>
 
         <p class="text-lg text-slate-600 leading-relaxed">
@@ -402,7 +402,7 @@
             <li><strong>모집단위별 전형요소 배점</strong> — 각 모집단위에서 전형요소별 최대 배점을 입력합니다. 배점이 입력되지 않은 모집단위는 지원자의 점수가 계산되지 않습니다.</li>
         </ul>
 
-        <p class="text-lg font-bold text-slate-700 pt-2">정원 설정 케이스</p>
+        <p class="text-lg font-bold text-slate-700 pt-2 break-before-page">정원 설정 케이스</p>
 
         <div class="space-y-3">
             <!-- 케이스 A -->
@@ -509,16 +509,6 @@
                 </table>
             </div>
         </div>
-    </div>
-
-    <!-- K-5: 탈출 경로 -->
-    <div class="mt-10 bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg print-keep-bg">
-        <p class="font-bold text-amber-700 mb-1"><span class="mr-2">⚠️</span>막혔을 때</p>
-        <ul class="space-y-1 text-amber-800 pl-6 list-disc leading-relaxed">
-            <li>오류 메시지가 나오면 화면의 오류 목록을 먼저 확인하고, <strong>7장 자주 묻는 질문</strong>을 참고하십시오.</li>
-            <li>오류를 해결한 뒤에도 이상하면 <code class="bg-white px-1 rounded border border-amber-200">pcm/logs/</code> 폴더의 그날 날짜 기록 파일을 확인하십시오.</li>
-            <li>3장 설정이 모두 끝났다면 <strong>5장 라운드별 역할 안내</strong>로 넘어가십시오.</li>
-        </ul>
     </div>
 
 </section>
