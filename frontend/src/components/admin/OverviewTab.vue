@@ -138,7 +138,7 @@
               ? { background: '#dcfce7', color: '#15803d' }
               : { background: '#dbeafe', color: '#1d4ed8' }"
           >
-            {{ data.round.status === 'OPEN' ? '진행중' : '종료' }}
+            {{ roundStatusLabel(data.round.status) }}
           </span>
           <span class="text-base ml-auto" style="color: #94a3b8;">개시일 {{ data.round.opened_at.slice(0, 10) }}</span>
         </div>
@@ -390,6 +390,7 @@
 import { ref, computed, onMounted, inject, h } from 'vue'
 import { Copy, Check, AlertTriangle, CheckCircle2, XCircle, ArrowRight } from 'lucide-vue-next'
 import { getOverview, getClasses, getStudents, getAreas, getUniversities } from '../../api/admin.js'
+import { roundStatusLabel } from '../../data/roundStatus.js'
 import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
 

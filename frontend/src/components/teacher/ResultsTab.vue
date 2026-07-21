@@ -93,15 +93,15 @@
               : round.status === 'CLOSED'
                 ? { background: '#dbeafe', color: '#1d4ed8' }
                 : { background: '#dcfce7', color: '#15803d' }"
-          >{{ round.status === 'FINALIZED' ? '마감완료' : round.status === 'CLOSED' ? '집계중' : '진행중' }}</span>
+          >{{ roundStatusLabel(round.status) }}</span>
         </div>
 
-        <!-- 진행중/집계중 -->
+        <!-- 진행중/종료 -->
         <div v-if="round.status === 'OPEN'" class="flex items-center justify-center" style="height: 120px;">
           <p class="text-base" style="color: #94a3b8;">현재 진행중인 라운드입니다.</p>
         </div>
         <div v-else-if="round.status === 'CLOSED'" class="flex items-center justify-center" style="height: 120px;">
-          <p class="text-base" style="color: #94a3b8;">현재 집계중인 라운드입니다.</p>
+          <p class="text-base" style="color: #94a3b8;">접수가 종료되어 관리자가 결과를 확정하는 중입니다.</p>
         </div>
 
         <!-- FINALIZED 결과 -->
@@ -179,6 +179,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
+import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'
 
@@ -221,7 +222,7 @@ const helpBox = computed(() => {
     title: '도움말 — 결과는 마감 후 공개됩니다',
     intro: '라운드 결과는 관리자가 라운드를 "마감"한 뒤에만 표시됩니다.',
     items: [
-      '"진행중" 또는 "집계중"으로 표시된 라운드는 아직 결과가 공개되지 않은 것입니다.',
+      '"진행중" 또는 "종료"로 표시된 라운드는 아직 결과가 공개되지 않은 것입니다.',
       '마감되면 이 화면에 우리 반 학생들의 순위·총점·추천 여부가 표시됩니다.',
     ],
   }

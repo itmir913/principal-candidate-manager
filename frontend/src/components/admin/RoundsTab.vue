@@ -54,7 +54,7 @@
                     color:      r.status === 'OPEN' ? '#15803d' : r.status === 'CLOSED' ? '#1d4ed8' : '#7c3aed',
                   }"
                 >
-                  {{ { OPEN: '진행중', CLOSED: '종료', FINALIZED: '마감' }[r.status] || r.status }}
+                  {{ roundStatusLabel(r.status) }}
                 </span>
 
                 <span class="text-base" style="color: #94a3b8;">
@@ -93,7 +93,7 @@
                     borderColor: selected.status === 'OPEN' ? '#bbf7d0' : selected.status === 'CLOSED' ? '#bfdbfe' : '#e9d5ff'
                   }"
               >
-                {{ { OPEN: '진행중', CLOSED: '종료', FINALIZED: '마감 완료' }[selected.status] || selected.status }}</span>
+                {{ roundStatusLabel(selected.status) }}</span>
 
               <!-- 상태 액션 버튼 -->
               <template v-if="selected.status === 'OPEN'">
@@ -626,6 +626,7 @@ import {
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
+import { roundStatusLabel } from '../../data/roundStatus.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
