@@ -8,7 +8,9 @@ use serde::Serialize;
 use crate::{
     audit::{self, Actor, AuditEntry},
     enums::AuditAction,
-    excel, state::AppState,
+    excel,
+    middleware::multipart_err,
+    state::AppState,
 };
 use super::area_data::{find_or_create_track, get_area, parse_display_value, ImportResult};
 
@@ -128,13 +130,13 @@ async fn read_file_only(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        .map_err(multipart_err)?
     {
         return field
             .bytes()
             .await
             .map(|b| b.to_vec())
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()));
+            .map_err(multipart_err);
     }
     Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into()))
 }
@@ -149,7 +151,7 @@ async fn read_import_multipart(
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        .map_err(multipart_err)?
     {
         match field.name() {
             Some("file") => {
@@ -158,20 +160,20 @@ async fn read_import_multipart(
                         .bytes()
                         .await
                         .map(|b| b.to_vec())
-                        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+                        .map_err(multipart_err)?,
                 );
             }
             Some("univ_name") => {
                 univ_name = field
                     .text()
                     .await
-                    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                    .map_err(multipart_err)?;
             }
             Some("track_name") => {
                 track_name = field
                     .text()
                     .await
-                    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                    .map_err(multipart_err)?;
             }
             _ => {}
         }

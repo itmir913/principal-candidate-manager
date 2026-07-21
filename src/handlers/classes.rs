@@ -11,7 +11,9 @@ use sqlx::FromRow;
 use crate::{
     audit::{self, Actor, AuditEntry},
     enums::AuditAction,
-    excel, state::AppState,
+    excel,
+    middleware::multipart_err,
+    state::AppState,
 };
 
 type ApiError = (StatusCode, String);
@@ -82,12 +84,12 @@ pub async fn import_classes(
     let field = multipart
         .next_field()
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        .map_err(multipart_err)?
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "파일이 없습니다".to_string()))?;
     let bytes = field
         .bytes()
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(multipart_err)?;
 
     let (headers, rows) = excel::parse_file_rows_with_headers(&bytes)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;

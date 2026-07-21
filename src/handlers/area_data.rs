@@ -16,7 +16,7 @@ use sqlx::Row;
 use crate::{
     audit::{self, Actor, AuditEntry},
     enums::{AuditAction, CalcType, LookupScope, MatchMode},
-    excel, score::Score, state::AppState,
+    excel, middleware::multipart_err, score::Score, state::AppState,
     handlers::areas::guard_no_closed_round,
 };
 
@@ -203,13 +203,13 @@ async fn read_file(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
     match multipart
         .next_field()
         .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        .map_err(multipart_err)?
     {
         Some(f) => f
             .bytes()
             .await
             .map(|b| b.to_vec())
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string())),
+            .map_err(multipart_err),
         None => Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
     }
 }

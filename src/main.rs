@@ -702,8 +702,7 @@ fn build_router(state: AppState) -> Router {
         .merge(admin_routes)
         .nest("/teacher", teacher_routes);
 
-    let app = Router::new()
-        .nest("/api", api)
+    let app = middleware::with_upload_guards(Router::new().nest("/api", api))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

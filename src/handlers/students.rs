@@ -11,7 +11,9 @@ use sqlx::FromRow;
 use crate::{
     audit::{self, Actor, AuditEntry},
     enums::AuditAction,
-    excel, state::AppState,
+    excel,
+    middleware::multipart_err,
+    state::AppState,
 };
 
 #[derive(Deserialize)]
@@ -194,10 +196,10 @@ pub async fn import_students(
         match multipart
             .next_field()
             .await
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+            .map_err(multipart_err)?
         {
             Some(f) => break f.bytes().await
-                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+                .map_err(multipart_err)?
                 .to_vec(),
             None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
         }
@@ -518,8 +520,8 @@ pub async fn import_enrolled(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let bytes = loop {
-        match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
-            Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
+        match multipart.next_field().await.map_err(multipart_err)? {
+            Some(f) => break f.bytes().await.map_err(multipart_err)?.to_vec(),
             None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
         }
     };
@@ -596,8 +598,8 @@ pub async fn import_graduated(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ImportResult>), ApiError> {
     let bytes = loop {
-        match multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
-            Some(f) => break f.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?.to_vec(),
+        match multipart.next_field().await.map_err(multipart_err)? {
+            Some(f) => break f.bytes().await.map_err(multipart_err)?.to_vec(),
             None => return Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
         }
     };
