@@ -1,9 +1,12 @@
 <section class="page-break print-keep-bg" style="padding: 40px 0;">
 
     <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-2">4. 전형요소 예시</h2>
-    <p class="text-lg text-slate-500 leading-relaxed mb-8">
+    <p class="text-lg text-slate-500 leading-relaxed mb-4">
         전형요소 추가 화면에서 제공하는 6개의 기본 템플릿을 예시로 설명합니다.
         실제 학교 상황에 맞게 만점·기준값 등을 수정하여 사용하십시오.
+    </p>
+    <p class="text-lg text-slate-500 leading-relaxed mb-8">
+        각 예시의 <strong>점수 기준 예시</strong> 표는 실제 엑셀 파일의 열 이름으로 그대로 사용할 수 있습니다. 수치형 입력은 <code class="bg-slate-100 px-1 rounded">기준값</code>·<code class="bg-slate-100 px-1 rounded">점수</code> 열로, 선택형 입력은 <code class="bg-slate-100 px-1 rounded">범주</code>·<code class="bg-slate-100 px-1 rounded">점수</code> 열로 파일을 만들어 전형요소 상세 화면의 <strong>점수 기준</strong> 탭에서 <strong>가져오기</strong>로 올리십시오. 업로드 절차는 <strong>3장 「점수 기준표 업로드 방법」</strong>을 참고하십시오.
     </p>
 
     <!-- ── 4-1 교과 내신 ── -->
@@ -13,10 +16,17 @@
             대학별 내신 환산등급을 기준으로 점수를 산출합니다. 정확한 환산을 위해 반드시 <strong class="text-slate-700">대학별 환산점수 조회</strong> 방식을 선택하십시오.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            기초 데이터 탭에서 석차연명부 파일을 업로드하면 대학명·모집단위명이 자동으로 등록됩니다. 보통 자연계열·인문계열 석차연명부를 각 대학별로 내려받아 업로드합니다.
+            기초 데이터 탭에서 <strong>석차연명부</strong>(대학이 내신 등급 환산에 사용하는 성적 파일) 파일을 업로드하면 대학명·모집단위명이 자동으로 등록됩니다. 보통 자연계열·인문계열 석차연명부를 각 대학별로 내려받아 업로드합니다.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            석차연명부 업로드는 재학생에만 적용됩니다. 졸업생의 내신 환산등급은 관리자가 직접 계산하여 입력하십시오. 석차연명부를 내려받는 방법은 대교협·유니브 프로그램 매뉴얼을 참고하십시오.
+            석차연명부는 발급 프로그램에 따라 파일 형식과 업로드 버튼이 다릅니다. 기초 데이터 탭의 파일 선택 버튼 중 파일 출처에 맞는 것을 사용하십시오.
+        </p>
+        <ul class="space-y-1 text-lg text-slate-600 pl-6 list-disc leading-relaxed mb-4">
+            <li><strong>대교협 유니웨이</strong>에서 받은 파일 — <code class="bg-slate-100 px-1 rounded">.xlsx</code> 형식. <strong>대교협 석차연명부</strong> 버튼으로 업로드하십시오.</li>
+            <li><strong>유니브</strong>에서 받은 파일 — <code class="bg-slate-100 px-1 rounded">.xls</code>(구형 엑셀) 형식. <strong>유니브 석차연명부</strong> 버튼으로 업로드하십시오.</li>
+        </ul>
+        <p class="text-lg text-slate-600 leading-relaxed mb-4">
+            형식이 맞지 않는 버튼으로 올리면 업로드가 거부됩니다. 석차연명부 업로드는 재학생에만 적용됩니다. 졸업생의 내신 환산등급은 관리자가 직접 계산하여 입력하십시오. 석차연명부를 내려받는 방법은 대교협·유니브 프로그램 자체 매뉴얼을 참고하십시오.
         </p>
 
         <!-- 설정 정보 -->
@@ -99,6 +109,7 @@
                 <span><span class="font-bold text-slate-700 mr-2">구간 탐색 방향</span>기준값 이하 (작을수록 만점)</span>
                 <span><span class="font-bold text-slate-700 mr-2">데이터 조회 기준</span>기본 조회</span>
                 <span><span class="font-bold text-slate-700 mr-2">담임교사 입력</span>허용</span>
+                <span><span class="font-bold text-slate-700 mr-2">기준값 단위 예시</span>일</span>
                 <span><span class="font-bold text-slate-700 mr-2">만점 예시</span>10점</span>
             </div>
         </div>
@@ -205,6 +216,7 @@
                 <span><span class="font-bold text-slate-700 mr-2">구간 탐색 방향</span>기준값 이상 (클수록 만점)</span>
                 <span><span class="font-bold text-slate-700 mr-2">데이터 조회 기준</span>기본 조회</span>
                 <span><span class="font-bold text-slate-700 mr-2">담임교사 입력</span>허용</span>
+                <span><span class="font-bold text-slate-700 mr-2">기준값 단위 예시</span>시간</span>
                 <span><span class="font-bold text-slate-700 mr-2">만점 예시</span>5점</span>
             </div>
         </div>

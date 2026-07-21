@@ -3,7 +3,24 @@
     <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-2">3. 관리자 사전 설정</h2>
     <p class="text-lg text-slate-500 leading-relaxed mb-3">라운드를 열기 전 학교장추천 담당자가 반드시 완료해야 하는 설정입니다. 아래 항목을 순서대로
         진행하십시오.</p>
-    <p class="text-lg text-slate-500 leading-relaxed mb-8">단계 간 선행 조건이 있습니다. <strong class="text-slate-600">전형요소(3-3)</strong>를 먼저 설정한 후, COMPOSITE 전형요소가 있다면 기초 데이터를 업로드해야 <strong class="text-slate-600">대학·모집단위(3-4)</strong>가 자동 생성됩니다. 대학·모집단위가 생성된 이후에 정원과 배점을 설정할 수 있습니다.</p>
+
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-5 print-keep-bg">
+        <p class="font-bold text-slate-700 mb-2">시작하기 전에 다음을 준비하십시오.</p>
+        <ul class="space-y-1 text-slate-600 pl-6 list-disc leading-relaxed">
+            <li>학교장추천전형 <strong>선발 기준 문서</strong> — 전형요소 항목과 만점, 기준표가 확정된 것</li>
+            <li><strong>학급·담임 명단</strong> — 학년·반·담임명 (3-1에서 사용)</li>
+            <li><strong>학생 명렬표</strong> — 재학생: 학년·반·번호·이름 / 졸업생: 학생코드·이름 (3-2에서 사용)</li>
+            <li>각 전형요소의 <strong>기초 데이터</strong> — 봉사 시간, 미인정 출결 횟수 등 학생별 자료 (3-3에서 사용)</li>
+        </ul>
+        <p class="text-slate-600 leading-relaxed mt-2">선발 기준이 확정되지 않은 상태에서 라운드를 열면 전형요소를 수정할 수 없습니다.</p>
+    </div>
+
+    <p class="text-lg text-slate-500 leading-relaxed mb-8">
+        단계 간 선행 조건이 있습니다. <strong class="text-slate-600">전형요소(3-3)</strong>를 먼저 설정한 후 <strong class="text-slate-600">대학·모집단위(3-4)</strong> 설정으로 넘어갑니다.
+        <strong class="text-slate-600">대학별 환산점수 조회</strong> 방식의 전형요소가 있다면 기초 데이터(석차연명부 등)를 먼저 업로드해야 대학명·모집단위명이 자동 생성됩니다.
+        해당 방식의 전형요소가 하나도 없다면 <strong class="text-slate-600">대학 설정</strong> 탭에서 대학·모집단위를 직접 추가합니다.
+        대학·모집단위가 준비된 이후에 정원과 배점을 설정할 수 있습니다.
+    </p>
 
     <!-- ── 3-1 ── -->
     <div class="mb-10">
@@ -67,9 +84,9 @@
             같은 식별자(재학생: 학년·반·번호, 졸업생: 학생코드)가 이미 있으면 이름 등 정보를 업데이트하고, 없으면 새로 추가합니다.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
-            단, 라운드가 <strong>마감(CLOSED)된 동안에는</strong> 이미 그 라운드에 결과가 있는 학생의 <strong>재학/졸업 구분을 바꿀 수 없습니다</strong>(가져오기 전체가 거부됩니다).
-            저장된 순위가 마감 시점의 재학/졸업 구분을 기준으로 계산된 값이기 때문입니다. 바꾸려면 라운드를 다시 열고 명단을 반영한 뒤 다시 마감하십시오.
-            이름 수정과 신규 학생 추가는 마감 중에도 가능합니다.
+            단, 라운드가 <strong>종료(CLOSED)된 동안에는</strong> 이미 그 라운드에 결과가 있는 학생의 <strong>재학/졸업 구분을 바꿀 수 없습니다</strong>(가져오기 전체가 거부됩니다).
+            저장된 순위가 종료 시점의 재학/졸업 구분을 기준으로 계산된 값이기 때문입니다. 바꾸려면 라운드를 다시 열고 명단을 반영한 뒤 다시 종료하십시오.
+            이름 수정과 신규 학생 추가는 종료 중에도 가능합니다.
         </p>
 
         <!-- 재학생 -->
@@ -134,6 +151,24 @@
             </tr>
             </tbody>
         </table>
+
+        <!-- G-1 · G-4: 가져오기 공통 주의사항 -->
+        <p class="text-lg font-bold text-slate-700 mb-2">가져오기 공통 주의사항</p>
+        <p class="text-lg text-slate-600 leading-relaxed mb-3">아래 두 가지는 3-1·3-2·3-3의 모든 엑셀 가져오기에 공통으로 적용됩니다.</p>
+        <div class="space-y-3 mb-4">
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-lg print-keep-bg">
+                <p class="font-bold text-amber-700 mb-1">업로드 파일 크기 제한</p>
+                <p class="text-amber-800 leading-relaxed">한 번에 올릴 수 있는 파일 크기는 최대 <strong>20MB</strong>입니다. 초과하면 "업로드 파일 크기가 너무 큽니다 (최대 20MB)" 메시지가 표시됩니다. 석차연명부처럼 대용량 파일은 학교(학년)별로 나눠 업로드하십시오.</p>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-lg print-keep-bg">
+                <p class="font-bold text-amber-700 mb-1">가져오기 실패 시 대처</p>
+                <p class="text-amber-800 leading-relaxed">
+                    가져오기는 한 건이라도 오류가 있으면 전체를 저장하지 않고 원래 상태로 되돌립니다. 화면에 오류 목록(행 번호·오류 내용)이 표시됩니다.
+                    오류 목록에서 해당 행을 찾아 수정한 뒤 <strong>파일 전체를 다시 업로드</strong>하십시오. 오류가 난 행만 별도로 업로드할 수 없습니다.
+                    흔한 오류 예시: 헤더 열 이름이 다름, 동일 행 중복, 숫자 칸에 문자 입력, 날짜 서식 셀.
+                </p>
+            </div>
+        </div>
     </div>
 
     <!-- ── 3-3 ── -->
@@ -143,18 +178,30 @@
             관리자 화면의 <strong>전형요소 설정</strong> 탭에서 점수 산출에 사용할 전형요소를 정의합니다. 유형과 적용 범위의 조합에 따라 아래와 같이 구분됩니다.
         </p>
 
+        <!-- K-3: 3-3 설정 순서 요약 -->
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg mb-6 print-keep-bg">
+            <p class="font-bold text-indigo-700 mb-2">3-3 설정 순서 요약</p>
+            <ol class="space-y-1 text-indigo-800 pl-6 list-decimal leading-relaxed">
+                <li>전형요소 추가 — 유형·적용 범위 선택, 만점 입력</li>
+                <li>점수 기준표 입력 — 기준값(또는 범주)별 점수 등록</li>
+                <li>기초 데이터 업로드 — 담임교사 직접 입력 전형요소는 생략 가능</li>
+                <li>점수 계산 테스트로 검증</li>
+            </ol>
+            <p class="text-indigo-800 leading-relaxed mt-2">아래에서 각 단계를 순서대로 설명합니다.</p>
+        </div>
+
         <!-- 입력 유형 요약 -->
         <div class="grid grid-cols-3 gap-3 mb-6">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">NUMERIC</p>
+                <p class="font-bold text-slate-700 mb-1">수치형 입력</p>
                 <p class="text-slate-500 text-base leading-relaxed">담임교사가 숫자를 입력하면 시스템이 구간 기준에 따라 점수를 자동 계산합니다.</p>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">CATEGORY</p>
+                <p class="font-bold text-slate-700 mb-1">선택형 입력</p>
                 <p class="text-slate-500 text-base leading-relaxed">미리 정의된 선택지 중 하나 또는 여러 개를 고르면 해당 배점을 합산합니다.</p>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">MANUAL</p>
+                <p class="font-bold text-slate-700 mb-1">점수 직접 입력</p>
                 <p class="text-slate-500 text-base leading-relaxed">담임교사가 전형요소 점수를 직접 숫자로 입력합니다.</p>
             </div>
         </div>
@@ -162,13 +209,24 @@
         <!-- 적용 범위 요약 -->
         <div class="grid grid-cols-2 gap-3 mb-6">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">SIMPLE — 공통 기준</p>
+                <p class="font-bold text-slate-700 mb-1">기본 조회</p>
                 <p class="text-slate-500 text-base leading-relaxed">모든 지원자에게 동일한 기준을 적용합니다. 대부분의 전형요소에 사용합니다.</p>
             </div>
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">COMPOSITE — 조합별 기준</p>
+                <p class="font-bold text-slate-700 mb-1">대학별 환산점수 조회</p>
                 <p class="text-slate-500 text-base leading-relaxed">지원한 대학·모집단위 조합별로 서로 다른 기준을 적용합니다. 대학의 모집단위마다 내신 등급이나 점수가 다를 때 활용합니다.</p>
             </div>
+        </div>
+
+        <!-- G-5: 전형요소 추가 절차 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-6 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">전형요소 추가 절차</p>
+            <ol class="space-y-1 text-slate-600 pl-6 list-decimal leading-relaxed">
+                <li>관리자 화면 왼쪽 사이드바에서 <strong>전형요소 설정</strong> 탭을 클릭합니다.</li>
+                <li><strong>+ 전형요소 추가</strong> 버튼을 클릭하면 오른쪽에 추가 폼이 표시됩니다.</li>
+                <li>이름을 입력하고, <strong>입력 유형</strong>(수치형 입력/선택형 입력/점수 직접 입력)과 <strong>데이터 조회 기준</strong>(기본 조회/대학별 환산점수 조회)을 선택한 뒤 만점을 입력하고 저장합니다.</li>
+                <li>추가된 전형요소를 클릭하면 상세 화면(<strong>점수 기준</strong> 탭 / <strong>기초 데이터</strong> 탭)이 열립니다. 여기서 점수 기준표와 기초 데이터를 입력합니다.</li>
+            </ol>
         </div>
 
         <!-- 입력 유형 상세 -->
@@ -176,8 +234,9 @@
         <p class="text-lg text-slate-600 leading-relaxed mb-4">각 입력 유형에 따라 점수 산출 방식을 세부적으로 설정합니다.</p>
         <div class="space-y-3 mb-6">
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">NUMERIC — 수치형 입력</p>
+                <p class="font-bold text-slate-700 mb-1">수치형 입력</p>
                 <p class="text-slate-600 leading-relaxed mb-4">담임교사가 숫자를 직접 입력합니다. 이 숫자는 <strong>내신 등급, 미인정 결석일수, 봉사 시간</strong> 등 실제 점수 계산에 활용되는 수치입니다.</p>
+                <p class="text-slate-600 leading-relaxed mb-4"><strong>기준값 단위(선택)</strong> — 수치형 입력에만 나타나는 항목입니다. 담임교사가 기초 데이터를 입력할 때 화면에 표시할 단위를 지정합니다(예: "시간"으로 설정하면 입력란에 "데이터 입력 (시간)"이 표시됩니다). 비워 두면 단위가 표시되지 않습니다. 점수 직접 입력의 단위는 프로그램이 '점'으로 자동 고정하므로 입력할 수 없고, 선택형 입력에는 이 항목 자체가 없습니다.</p>
 
                 <p class="text-base font-bold text-slate-400 uppercase tracking-wider mb-2">⚙️ 구간 탐색 방향 설정</p>
                 <div class="grid grid-cols-2 gap-3 text-base mb-3">
@@ -197,7 +256,7 @@
             </div>
 
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">CATEGORY — 선택형 입력</p>
+                <p class="font-bold text-slate-700 mb-1">선택형 입력</p>
                 <p class="text-slate-600 leading-relaxed mb-4">담임교사가 미리 정의된 선택지 중 하나를 고릅니다. 이 선택지는 <strong>학생회 임원, 동아리 회장</strong> 등 범주형 활동입니다.</p>
 
                 <p class="text-base font-bold text-slate-400 uppercase tracking-wider mb-2">⚙️ 복수 활동 처리 방식</p>
@@ -214,9 +273,41 @@
             </div>
 
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-                <p class="font-bold text-slate-700 mb-1">MANUAL — 교사 직접 입력</p>
+                <p class="font-bold text-slate-700 mb-1">점수 직접 입력</p>
                 <p class="text-slate-600 leading-relaxed">담임교사가 전형요소 점수를 직접 숫자로 입력합니다. 구간 기준이나 선택지 없이 점수 자체를 입력하므로, <strong>면접 점수, 포트폴리오 평가</strong> 등 담임교사가 자체적으로 판단해 부여하는 항목에 사용합니다.</p>
             </div>
+        </div>
+
+        <!-- G-6: 점수 기준표 업로드 방법 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-6 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">점수 기준표 업로드 방법</p>
+            <p class="text-slate-600 leading-relaxed mb-3">
+                전형요소 상세 화면의 <strong>점수 기준</strong> 탭에서 <strong>가져오기</strong> 버튼으로 엑셀 파일을 올리거나, 행을 직접 추가할 수 있습니다.
+                엑셀 파일의 필수 열 이름은 아래와 같습니다.
+            </p>
+            <ul class="space-y-1 text-slate-600 pl-6 list-disc leading-relaxed mb-3">
+                <li>수치형 입력: <code class="bg-white px-1 rounded border border-slate-200">기준값</code>, <code class="bg-white px-1 rounded border border-slate-200">점수</code></li>
+                <li>선택형 입력: <code class="bg-white px-1 rounded border border-slate-200">범주</code>, <code class="bg-white px-1 rounded border border-slate-200">점수</code></li>
+                <li>
+                    대학별 환산점수 조회 방식이면 <code class="bg-white px-1 rounded border border-slate-200">대학명</code>,
+                    <code class="bg-white px-1 rounded border border-slate-200">모집단위명</code> 열을 <strong>더 넣을 수 있습니다(선택)</strong>.
+                    넣으면 대학·모집단위마다 다른 기준이 적용되고, <strong>넣지 않으면 모든 대학에 같은 기준</strong>이 적용됩니다.
+                    두 열 중 하나만 채우면 오류가 납니다.
+                </li>
+            </ul>
+            <p class="text-slate-600 leading-relaxed">
+                <strong>4. 전형요소 예시</strong> 절의 점수 기준 예시 표는 이 양식을 그대로 엑셀로 옮겨 사용할 수 있습니다.
+                단, 종료(CLOSED) 또는 마감(FINALIZED) 상태의 라운드가 이미 존재하면 점수 기준 수정이 차단됩니다.
+            </p>
+        </div>
+
+        <!-- G-3: 점수 계산 테스트 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-6 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">점수 계산 테스트</p>
+            <p class="text-slate-600 leading-relaxed">
+                점수 기준을 입력한 뒤, 전형요소 상세 화면 우측의 <strong>"점수 계산 테스트"</strong> 카드에 값을 넣으면 실제 계산될 점수를 즉시 확인할 수 있습니다. 저장되지 않으므로 여러 값을 시험해 볼 수 있습니다.
+                대학별 환산점수 조회 방식이라면 대학·모집단위를 먼저 선택한 뒤 값을 입력합니다.
+            </p>
         </div>
     </div>
 
@@ -245,6 +336,38 @@
             </li>
         </ol>
 
+        <!-- G-7: 기초 데이터 첫 업로드 양식 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-5 print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">기초 데이터 첫 업로드 양식</p>
+            <p class="text-slate-600 leading-relaxed mb-3">
+                처음 업로드할 때는 아래 열 이름으로 엑셀 파일을 만들어 전형요소 상세 화면의 <strong>기초 데이터</strong> 탭에서 <strong>가져오기</strong> 버튼으로 올립니다.
+            </p>
+            <table class="w-full text-base border-collapse mb-3">
+                <thead>
+                <tr class="bg-slate-100 text-slate-700 font-bold print-keep-bg">
+                    <th class="border border-slate-200 px-3 py-2 text-left">구분</th>
+                    <th class="border border-slate-200 px-3 py-2 text-left">필수 열</th>
+                    <th class="border border-slate-200 px-3 py-2 text-left">대학별 환산점수 조회 추가 열</th>
+                </tr>
+                </thead>
+                <tbody class="text-slate-600">
+                <tr>
+                    <td class="border border-slate-200 px-3 py-2">재학생</td>
+                    <td class="border border-slate-200 px-3 py-2">학년, 반, 번호, 이름, 값</td>
+                    <td class="border border-slate-200 px-3 py-2">대학명, 모집단위명</td>
+                </tr>
+                <tr class="bg-slate-50 print-keep-bg">
+                    <td class="border border-slate-200 px-3 py-2">졸업생</td>
+                    <td class="border border-slate-200 px-3 py-2">학생코드, 이름, 값</td>
+                    <td class="border border-slate-200 px-3 py-2">대학명, 모집단위명</td>
+                </tr>
+                </tbody>
+            </table>
+            <p class="text-slate-600 leading-relaxed">
+                이미 등록된 데이터가 있다면 아래 <strong>기초 데이터 내보내기</strong>로 내려받은 파일의 헤더를 참고해도 됩니다. 단, 데이터가 한 건도 없으면 내보낼 파일이 없으므로 위 표를 직접 참고하십시오.
+            </p>
+        </div>
+
         <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-lg mb-5 print-keep-bg">
             <p class="font-bold text-indigo-700 mb-1"><span class="mr-2">📤</span>기초 데이터 내보내기</p>
             <p class="text-indigo-800 leading-relaxed">전형요소 설정 탭에서 전형요소를 선택한 뒤 <strong>기초 데이터</strong> 탭을 열면 현재 저장된 데이터를 내보낼 수 있습니다. 재학생·졸업생 구분을 선택하면 해당 구분의 import 양식과 동일한 헤더(재학생: 학년·반·번호·이름·값 / 졸업생: 학생코드·이름·값)로 파일이 내려받아집니다. 내려받은 파일을 수정한 뒤 같은 구분으로 그대로 재업로드할 수 있습니다.</p>
@@ -261,7 +384,8 @@
         <h3 class="text-lg font-bold text-slate-700 mb-3">3-4. 대학·모집단위 설정</h3>
         <p class="text-lg text-slate-600 leading-relaxed">
             관리자 화면의 <strong>대학 설정</strong> 탭에서 추천 대상 대학·모집단위를 관리합니다.
-            대학명과 모집단위명은 COMPOSITE 전형요소의 기초 데이터(석차연명부 등)를 업로드하면 자동으로 생성됩니다.
+            대학명과 모집단위명은 <strong>대학별 환산점수 조회</strong> 방식으로 설정된 전형요소의 기초 데이터(석차연명부 등)를 업로드하면 자동으로 생성됩니다.
+            해당 방식의 전형요소가 없다면 이 탭에서 대학·모집단위를 직접 추가할 수 있습니다.
             자세한 내용은 <strong>4-1. 교과 내신</strong> 전형요소 예시를 참고하십시오.
         </p>
         <p class="text-lg text-slate-600 leading-relaxed">관리자는 대학·모집단위 설정에서 다음 항목을 직접 설정해야 합니다.</p>
@@ -272,7 +396,7 @@
                 <ul class="space-y-1 pl-6 list-disc mt-1">
                     <li><strong>대학</strong>에 설정하면 그 대학 전체 순위에 적용되며, 그 대학의 <strong>모든 모집단위도 함께 켜집니다</strong>. 대학 설정을 다시 끄면 모집단위 설정도 함께 꺼집니다.</li>
                     <li><strong>모집단위</strong>에만 설정하면(대학은 끔) 그 모집단위 안에서만 재학생이 먼저 추천됩니다. 대학 전체 정원으로 인원을 줄일 때도 그 모집단위 내부 순서는 유지되며, 다른 모집단위 지원자와의 비교는 대학 설정을 따릅니다.</li>
-                    <li>라운드가 <strong>마감(CLOSED)된 동안에는 변경할 수 없습니다.</strong> 저장된 순위가 마감 시점의 설정을 기준으로 계산된 값이기 때문입니다. 바꾸려면 라운드를 다시 열고 설정을 고친 뒤 다시 마감하십시오(마감 시 순위가 재계산됩니다). 정원 변경은 마감 중에도 가능합니다.</li>
+                    <li>라운드가 <strong>종료(CLOSED)된 동안에는 변경할 수 없습니다.</strong> 저장된 순위가 종료 시점의 설정을 기준으로 계산된 값이기 때문입니다. 바꾸려면 라운드를 다시 열고 설정을 고친 뒤 다시 종료하십시오(종료 시 순위가 재계산됩니다). 정원 변경은 종료 중에도 가능합니다.</li>
                 </ul>
             </li>
             <li><strong>모집단위별 전형요소 배점</strong> — 각 모집단위에서 전형요소별 최대 배점을 입력합니다. 배점이 입력되지 않은 모집단위는 지원자의 점수가 계산되지 않습니다.</li>
@@ -385,6 +509,16 @@
                 </table>
             </div>
         </div>
+    </div>
+
+    <!-- K-5: 탈출 경로 -->
+    <div class="mt-10 bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-lg print-keep-bg">
+        <p class="font-bold text-amber-700 mb-1"><span class="mr-2">⚠️</span>막혔을 때</p>
+        <ul class="space-y-1 text-amber-800 pl-6 list-disc leading-relaxed">
+            <li>오류 메시지가 나오면 화면의 오류 목록을 먼저 확인하고, <strong>7장 자주 묻는 질문</strong>을 참고하십시오.</li>
+            <li>오류를 해결한 뒤에도 이상하면 <code class="bg-white px-1 rounded border border-amber-200">pcm/logs/</code> 폴더의 그날 날짜 기록 파일을 확인하십시오.</li>
+            <li>3장 설정이 모두 끝났다면 <strong>5장 라운드별 역할 안내</strong>로 넘어가십시오.</li>
+        </ul>
     </div>
 
 </section>
