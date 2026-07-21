@@ -111,7 +111,7 @@ fn data_dir() -> anyhow::Result<std::path::PathBuf> {
     Ok(dir)
 }
 
-/// 콘솔 + 파일(일별 롤링, `pcm/logs/pcm.log*`) 이중 로깅을 초기화한다.
+/// 콘솔 + 파일(일별 롤링, `pcm/logs/pcm.yyyy-MM-dd.log`) 이중 로깅을 초기화한다.
 ///
 /// release 빌드는 `windows_subsystem = "windows"`라 콘솔이 없어 stdout 로그가
 /// 소멸되므로 파일 로깅이 실질적인 진단 창구다. 로그 디렉토리 생성에 실패해도
@@ -120,9 +120,19 @@ fn data_dir() -> anyhow::Result<std::path::PathBuf> {
 /// drop되면 이후 파일 로그가 flush되지 않는다.
 fn init_logging(data_dir: &std::path::Path) -> Option<tracing_appender::non_blocking::WorkerGuard> {
     let logs_dir = data_dir.join("logs");
-    match std::fs::create_dir_all(&logs_dir) {
-        Ok(()) => {
-            let file_appender = tracing_appender::rolling::daily(&logs_dir, "pcm.log");
+    let file_appender = std::fs::create_dir_all(&logs_dir)
+        .map_err(|e| e.to_string())
+        .and_then(|()| {
+            tracing_appender::rolling::Builder::new()
+                .rotation(tracing_appender::rolling::Rotation::DAILY)
+                .filename_prefix("pcm")
+                .filename_suffix("log")
+                .build(&logs_dir)
+                .map_err(|e| e.to_string())
+        });
+
+    match file_appender {
+        Ok(file_appender) => {
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
             tracing_subscriber::registry()
                 .with(
@@ -142,7 +152,7 @@ fn init_logging(data_dir: &std::path::Path) -> Option<tracing_appender::non_bloc
                 )
                 .with(tracing_subscriber::fmt::layer())
                 .init();
-            tracing::warn!("로그 디렉토리 생성 실패 ({}), 콘솔 로그만 사용", e);
+            tracing::warn!("파일 로깅 초기화 실패 ({}), 콘솔 로그만 사용", e);
             None
         }
     }
