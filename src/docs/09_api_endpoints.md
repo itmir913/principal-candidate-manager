@@ -28,7 +28,7 @@
 | POST | `/auth/admin` | 공개 | 관리자 로그인. Body: `{password}`. 응답: `{token}` |
 | POST | `/auth/teacher` | 공개 | 담임 로그인. Body: `{grade, class_no, password}`. 응답: `{token, grade, class_no}` |
 | PUT | `/auth/admin/password` | 관리자 | 관리자 비밀번호 변경. Body: `{current_password, new_password}` |
-| GET | `/db-backup` | 관리자 | DB 파일 다운로드 (blob) |
+| GET | `/db-backup` | 관리자 | 백업 zip 다운로드 (blob). `pcm_backup_<YYYYMMDD_HHMMSS>.zip`, 내부 구조는 `pcm/data.db`(VACUUM INTO 스냅샷) + `pcm/config.json`(있을 때) |
 
 ---
 
@@ -208,7 +208,7 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/version` | 앱 버전 (공개) |
-| GET | `/db-backup` | DB 파일 다운로드 |
+| GET | `/db-backup` | 백업 zip 다운로드 (`pcm/` 폴더 모양) |
 
 ---
 

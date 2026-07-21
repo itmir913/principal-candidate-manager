@@ -5,6 +5,7 @@ pub mod enums;
 pub mod excel;
 pub mod handlers;
 pub mod middleware;
+pub mod paths;
 pub mod score;
 pub mod score_templates;
 pub mod state;

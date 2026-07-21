@@ -1,6 +1,7 @@
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
 use principal_candidate_manager::{db, handlers, middleware};
+use principal_candidate_manager::paths::{CONFIG_FILENAME, DATA_DIR_NAME, DB_FILENAME};
 use principal_candidate_manager::state::AppState;
 
 use axum::{
@@ -83,7 +84,6 @@ fn detect_lan_ip() -> String {
     }
     "127.0.0.1".to_string()
 }
-const CONFIG_FILENAME: &str = "config.json";
 
 #[derive(Serialize, Deserialize)]
 struct Config {
@@ -106,7 +106,7 @@ fn data_dir() -> anyhow::Result<std::path::PathBuf> {
         .ok_or_else(|| {
             anyhow::anyhow!("실행 파일 경로에 상위 디렉토리가 없습니다: {}", exe.display())
         })?
-        .join("pcm");
+        .join(DATA_DIR_NAME);
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
@@ -316,7 +316,7 @@ async fn main() -> anyhow::Result<()> {
     let _log_guard = init_logging(&data_dir);
 
     let config = load_config(&data_dir);
-    let db_path = data_dir.join("data.db");
+    let db_path = data_dir.join(DB_FILENAME);
 
     // 경로가 UTF-8이 아니면 CWD 상대 "data.db"로 폴백하지 않고 즉시 중단 —
     // 조용히 다른 위치에 새 DB가 생기면 데이터가 두 파일로 갈라진다.
@@ -370,7 +370,7 @@ fn main() {
 
     let config = load_config(&data_dir);
     let port = config.port;
-    let db_path = data_dir.join("data.db");
+    let db_path = data_dir.join(DB_FILENAME);
 
     // tokio 런타임을 수동 생성 (메인 스레드를 tokio에 넘기지 않기 위해)
     let rt = tokio::runtime::Builder::new_multi_thread()

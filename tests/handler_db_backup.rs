@@ -69,6 +69,21 @@ fn state_for(pool: SqlitePool, db_path: &Path) -> AppState {
     }
 }
 
+/// zip 산출물에서 특정 엔트리를 꺼낸다. 없으면 None.
+fn zip_entry(zip_bytes: &[u8], name: &str) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).unwrap();
+    let mut file = archive.by_name(name).ok()?;
+    let mut out = Vec::new();
+    file.read_to_end(&mut out).unwrap();
+    Some(out)
+}
+
+fn zip_entry_names(zip_bytes: &[u8]) -> Vec<String> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).unwrap();
+    (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().to_owned()).collect()
+}
+
 async fn backup_bytes(state: &AppState) -> Vec<u8> {
     let resp = download_db_backup(State(state.clone()), Extension(admin_claims()), test_client())
         .await
@@ -76,11 +91,12 @@ async fn backup_bytes(state: &AppState) -> Vec<u8> {
     to_bytes(resp.into_body(), usize::MAX).await.unwrap().to_vec()
 }
 
-/// 백업 산출물을 독립 파일로 열어 값을 읽는다.
+/// 백업 zip에서 `pcm/data.db`를 꺼내 독립 파일로 열어 값을 읽는다.
 /// `-wal` 없이 단독으로 완결되어 있어야 성공한다.
-async fn read_key_from_backup(dir: &Path, bytes: &[u8], key: &str) -> Option<String> {
+async fn read_key_from_backup(dir: &Path, zip_bytes: &[u8], key: &str) -> Option<String> {
+    let db = zip_entry(zip_bytes, "pcm/data.db").expect("zip에 pcm/data.db가 없다");
     let restored = dir.join("restored.db");
-    std::fs::write(&restored, bytes).unwrap();
+    std::fs::write(&restored, &db).unwrap();
 
     let opts = SqliteConnectOptions::new().filename(&restored).foreign_keys(true);
     let pool = SqlitePoolOptions::new().max_connections(1).connect_with(opts).await.unwrap();
@@ -178,6 +194,75 @@ async fn two_backups_within_same_second_both_succeed() {
         );
     }
     assert!(temp_files_in(&dir).is_empty(), "임시 파일이 남았다");
+
+    pool.close().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 복원 절차를 "폴더 통째 교체" 하나로 유지하려면 압축을 푼 모습이 실제
+/// 데이터 폴더와 같아야 한다. 엔트리 경로가 `pcm/` 아래가 아니면 사용자가
+/// 파일을 골라 옮겨야 하고, 그 순간 매뉴얼의 복원 절차가 무너진다.
+#[tokio::test]
+async fn backup_zip_mirrors_pcm_folder_layout() {
+    let dir = temp_dir();
+    let db_path = dir.join("data.db");
+    let pool = wal_pool(&db_path).await;
+    std::fs::write(dir.join("config.json"), br#"{"port":9090}"#).unwrap();
+
+    let state = state_for(pool.clone(), &db_path);
+    let bytes = backup_bytes(&state).await;
+
+    let mut names = zip_entry_names(&bytes);
+    names.sort();
+    assert_eq!(
+        names,
+        vec!["pcm/config.json".to_string(), "pcm/data.db".to_string()],
+        "zip 구조가 pcm 폴더 모양이 아니다"
+    );
+
+    assert_eq!(
+        zip_entry(&bytes, "pcm/config.json").as_deref(),
+        Some(&br#"{"port":9090}"#[..]),
+        "config.json 내용이 원본과 다르다"
+    );
+
+    // 진단용 로그는 복원 대상이 아니므로 넣지 않는다.
+    assert!(
+        !names.iter().any(|n| n.contains("logs")),
+        "logs가 백업에 포함됐다: {:?}",
+        names
+    );
+
+    pool.close().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `config.json`은 포트 설정뿐이라 없어도 데이터 복원은 가능하다.
+/// 파일이 없다는 이유로 백업 전체가 실패하면 안 된다.
+#[tokio::test]
+async fn backup_succeeds_without_config_json() {
+    let dir = temp_dir();
+    let db_path = dir.join("data.db");
+    let pool = wal_pool(&db_path).await;
+
+    sqlx::query("INSERT INTO app_configs (key, value) VALUES ('backup_probe', 'no_config')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let state = state_for(pool.clone(), &db_path);
+    let bytes = backup_bytes(&state).await;
+
+    assert_eq!(
+        zip_entry_names(&bytes),
+        vec!["pcm/data.db".to_string()],
+        "config.json이 없을 때는 data.db만 들어가야 한다"
+    );
+    assert_eq!(
+        read_key_from_backup(&dir, &bytes, "backup_probe").await.as_deref(),
+        Some("no_config"),
+        "config.json 부재가 DB 백업을 망가뜨렸다"
+    );
 
     pool.close().await;
     let _ = std::fs::remove_dir_all(&dir);

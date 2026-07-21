@@ -365,7 +365,7 @@ async function downloadBackup() {
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
-    a.download = res.headers['content-disposition']?.match(/filename="(.+)"/)?.[1] ?? 'data_backup.db'
+    a.download = res.headers['content-disposition']?.match(/filename="(.+)"/)?.[1] ?? 'pcm_backup.zip'
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
