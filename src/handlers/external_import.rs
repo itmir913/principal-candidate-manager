@@ -236,6 +236,8 @@ async fn do_import(
 
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
+    // 석차 값이 없어 건너뛴 행 — rollback 시에도 사유를 보여줘야 하므로 warnings와 분리
+    let mut skipped: Vec<String> = Vec::new();
     // 파일 내 동일 학생 중복 행 감지 — 마지막 행이 조용히 이기면 중복=error 정책 위반
     let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
@@ -307,8 +309,15 @@ async fn do_import(
             ));
         }
 
-        if val_s.is_empty() {
-            errors.push(format!("{}행: 값 누락", row_num));
+        // 석차 값 누락·변환 실패는 해당 학생만 건너뛰고 warning — 전출·자퇴 학생은
+        // 외부 프로그램이 등급을 '-'/공백으로 내보낸다. 이를 error로 처리하면 관리자가
+        // 매 업로드마다 석차연명부 원본을 손봐야 한다 (silent_fallback_allowed.md #29).
+        // 건너뛴 학생은 base_data가 없어 점수 계산 단계에서 별도로 드러난다.
+        if val_s.trim().is_empty() {
+            skipped.push(format!(
+                "{}행: {}학년 {}반 {}번 {} — 석차 값이 비어 있어 건너뜀",
+                row_num, grade, class_no, seq_no, name
+            ));
             continue;
         }
 
@@ -317,7 +326,10 @@ async fn do_import(
                 match parse_display_value(val_s) {
                     Ok(v) => v.to_string(),
                     Err(e) => {
-                        errors.push(format!("{}행: 값 — {}", row_num, e));
+                        skipped.push(format!(
+                            "{}행: {}학년 {}반 {}번 {} — 석차 값 {} → 건너뜀",
+                            row_num, grade, class_no, seq_no, name, e
+                        ));
                         continue;
                     }
                 }
@@ -345,9 +357,24 @@ async fn do_import(
     if !errors.is_empty() {
         return Ok((
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ImportResult { rows: 0, errors, warnings: vec![] }),
+            Json(ImportResult { rows: 0, errors, warnings: skipped }),
         ));
     }
+    // 모든 행이 건너뛰어졌으면 트랙만 생성되는 no-op — 데이터 0행과 동일하게 거부.
+    // 값 열을 잘못 고른 파일이 "완료 — 0건"으로 조용히 넘어가는 것을 막는다
+    if rows == 0 {
+        return Ok((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ImportResult {
+                rows: 0,
+                errors: vec![
+                    "저장된 행이 없습니다 — 모든 행의 석차 값이 비어 있거나 숫자로 변환할 수 없습니다".into(),
+                ],
+                warnings: skipped,
+            }),
+        ));
+    }
+    warnings.extend(skipped);
     let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
         .bind(area_id)
         .fetch_one(&mut *tx)

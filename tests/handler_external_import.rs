@@ -345,15 +345,163 @@ async fn daegyo_import_missing_header_returns_bad_request() {
     assert_no_side_effects(&pool, aid).await;
 }
 
+// ── 석차 값 없음/변환 실패 = 행 건너뛰기 + warning ─────────────────
+// 전출·자퇴 학생은 외부 프로그램이 등급을 '-'/공백으로 내보낸다.
+// 전체 거부하면 관리자가 매 업로드마다 원본을 손봐야 하므로 해당 행만 건너뛴다.
+
+/// 실제 대교협 파일 재현: 전출 학생 행은 점수·등급 4개 열이 모두 `'-`(아포스트로피 포함),
+/// `석차` 열에는 숫자가 남아 있다. 미사용 열(`일반점수`·`석차`)도 실제 파일대로 넣는다.
+fn build_daegyo_xlsx_real_transfer_row() -> Vec<u8> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write_string(0, 0, "서울-테스트대(본교)-학교장추천-2026").unwrap();
+    let headers = [
+        "학년", "반", "번호", "이름", "일반점수", "일반등급", "내점수(환산)", "내등급(환산)", "석차",
+    ];
+    for (i, h) in headers.iter().enumerate() {
+        ws.write_string(1, i as u16, *h).unwrap();
+    }
+    // 3행: 정상 학생
+    ws.write_number(2, 0, 3.0).unwrap();
+    ws.write_number(2, 1, 6.0).unwrap();
+    ws.write_number(2, 2, 1.0).unwrap();
+    ws.write_string(2, 3, "홍길동").unwrap();
+    ws.write_string(2, 4, "912.5").unwrap();
+    ws.write_string(2, 5, "2.0").unwrap();
+    ws.write_string(2, 6, "915.0").unwrap();
+    ws.write_string(2, 7, "1.5").unwrap();
+    ws.write_number(2, 8, 12.0).unwrap();
+    // 4행: 전출 학생 — 사용자 제공 샘플 그대로
+    ws.write_number(3, 0, 3.0).unwrap();
+    ws.write_number(3, 1, 6.0).unwrap();
+    ws.write_number(3, 2, 20.0).unwrap();
+    ws.write_string(3, 3, "홍길동").unwrap();
+    for c in 4..8u16 {
+        ws.write_string(3, c, "'-").unwrap();
+    }
+    ws.write_number(3, 8, 335.0).unwrap();
+    wb.save_to_buffer().unwrap()
+}
+
 #[tokio::test]
-async fn daegyo_import_value_parse_error_rejects_all() {
+async fn daegyo_import_real_transfer_row_skips_only_that_student() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 6).await;
+    insert_enrolled_student(&pool, "E001", 3, 6, 1, "홍길동").await;
+    insert_enrolled_student(&pool, "E002", 3, 6, 20, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&build_daegyo_xlsx_real_transfer_row(), "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "전출 학생 1명 때문에 전체 거부되면 안 됨");
+    assert_eq!(result.rows, 1);
+    assert!(result.errors.is_empty(), "실제 오류: {:?}", result.errors);
+
+    let skip = result
+        .warnings
+        .iter()
+        .find(|w| w.contains("건너뜀"))
+        .unwrap_or_else(|| panic!("건너뜀 경고 없음: {:?}", result.warnings));
+    assert!(skip.starts_with("4행"), "실제 경고: {}", skip);
+    assert!(skip.contains("3학년 6반 20번 홍길동"), "실제 경고: {}", skip);
+    // 아포스트로피가 셀 값에 포함된 원본 그대로 표시되어야 관리자가 파일에서 찾을 수 있다
+    assert!(skip.contains("'-"), "원본 값이 경고에 없음: {}", skip);
+
+    let saved: Vec<(i64, String)> =
+        sqlx::query_as("SELECT student_id, value FROM base_data WHERE area_id = ?")
+            .bind(aid)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(saved.len(), 1, "정상 학생만 저장");
+    assert_eq!(saved[0].1, "150000", "내등급(환산) 1.5 → ×100000");
+}
+
+#[tokio::test]
+async fn daegyo_import_value_parse_error_skips_row_only() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    insert_enrolled_student(&pool, "E002", 3, 1, 2, "전출생").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5"), (3, 1, 2, "전출생", "-")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 1, "정상 행만 저장");
+    assert!(result.errors.is_empty(), "실제 오류: {:?}", result.errors);
+
+    let skip = result
+        .warnings
+        .iter()
+        .find(|w| w.contains("건너뜀"))
+        .unwrap_or_else(|| panic!("건너뜀 경고 없음: {:?}", result.warnings));
+    assert!(skip.starts_with("4행"), "실제 경고: {}", skip);
+    assert!(skip.contains("3학년 1반 2번 전출생"), "실제 경고: {}", skip);
+    assert!(skip.contains("숫자 변환 실패"), "실제 경고: {}", skip);
+
+    let saved: Vec<String> = sqlx::query_scalar("SELECT value FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(saved, vec!["150000".to_string()], "건너뛴 학생 행은 저장되지 않음");
+}
+
+#[tokio::test]
+async fn daegyo_import_missing_value_skips_row_only() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    insert_enrolled_student(&pool, "E002", 3, 1, 2, "자퇴생").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5"), (3, 1, 2, "자퇴생", "")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.rows, 1);
+    let skip = result
+        .warnings
+        .iter()
+        .find(|w| w.contains("건너뜀"))
+        .unwrap_or_else(|| panic!("건너뜀 경고 없음: {:?}", result.warnings));
+    assert!(skip.starts_with("4행"), "실제 경고: {}", skip);
+    assert!(skip.contains("석차 값이 비어 있어"), "실제 경고: {}", skip);
+}
+
+#[tokio::test]
+async fn daegyo_import_all_rows_skipped_rejects() {
+    // 값 열을 잘못 고른 파일이 "완료 — 0건"으로 조용히 넘어가면 안 됨
     let pool = common::create_test_pool_shared().await;
     common::insert_class(&pool, 3, 1).await;
     insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
     let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
     let state = common::make_state(pool.clone());
 
-    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "등급아님")]);
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "-")]);
     let (status, axum::Json(result)) = daegyo_import(
         State(state),
         Path(aid),
@@ -364,31 +512,9 @@ async fn daegyo_import_value_parse_error_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.rows, 0);
-    assert!(result.errors[0].starts_with("3행"), "실제 오류: {}", result.errors[0]);
-    assert!(result.errors[0].contains("숫자 변환 실패"), "실제 오류: {}", result.errors[0]);
-    assert_no_side_effects(&pool, aid).await;
-}
-
-#[tokio::test]
-async fn daegyo_import_missing_value_rejects_all() {
-    let pool = common::create_test_pool_shared().await;
-    common::insert_class(&pool, 3, 1).await;
-    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
-    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
-    let state = common::make_state(pool.clone());
-
-    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "")]);
-    let (status, axum::Json(result)) = daegyo_import(
-        State(state),
-        Path(aid),
-        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(result.errors[0].starts_with("3행"), "실제 오류: {}", result.errors[0]);
-    assert!(result.errors[0].contains("값 누락"), "실제 오류: {}", result.errors[0]);
+    assert!(result.errors[0].contains("저장된 행이 없습니다"), "실제 오류: {}", result.errors[0]);
+    // 건너뛴 사유는 rollback 시에도 관리자에게 보여야 한다
+    assert!(result.warnings.iter().any(|w| w.contains("건너뜀")), "실제 경고: {:?}", result.warnings);
     assert_no_side_effects(&pool, aid).await;
 }
 

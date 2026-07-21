@@ -121,3 +121,17 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 ### 28. `src/main.rs` — `.unwrap_or(true)` (`get_autostart` 행 없음 기본값)
 `app_configs`에 autostart 행이 없는 것은 오류가 아니라 "최초 실행 미설정" 상태 — 기본값 활성화가 올바른 값. DB 조회 **오류**는 별도로 `Err`로 전파되어 호출자가 레지스트리를 변경하지 않는다 (#1 admin_status와 동일 패턴).  
 **조건**: 쿼리 성공 후 `Option::unwrap_or`에만 적용. `Result`에 대한 fallback으로 확장 시 위반.
+
+### 29. `src/handlers/external_import.rs` — 석차 값 누락·변환 실패 시 행 skip (`do_import`)
+석차연명부(대교협·유니브)에서 **석차 값 열이 비어 있거나 `parse_display_value`가 실패**하면 error(전체 422)가 아니라 warning + 해당 행 skip으로 처리한다. 전출·자퇴 학생은 외부 프로그램이 등급을 `-`/공백으로 내보내며, 이를 전체 거부로 다루면 관리자가 매 업로드마다 원본 파일을 손대야 하고 그 과정에서 정상 행을 지울 위험이 생긴다.
+
+**은폐가 아닌 근거**:
+- skip된 학생은 잘못된 값이 저장되는 것이 아니라 **base_data가 존재하지 않는 상태**로 남는다. 값 오염 경로가 아니다.
+- 건너뛴 행은 학년·반·번호·이름과 원본 값이 포함된 warning으로 **매 업로드마다 관리자에게 전량 표시**된다 (`ImportResultBox`).
+- 그 학생이 실제로 지원하면 `close_round`의 base_data 누락 검증(`rounds.rs:113-146`)에서 422로 다시 막힌다 — 점수가 조용히 0으로 계산되는 경로가 없다.
+- 모든 행이 skip되어 저장 행이 0건이면 422로 거부한다 (값 열을 잘못 고른 파일이 "완료 — 0건"으로 통과하는 것 방지).
+
+**조건**:
+- `external_import.rs::do_import`의 **석차 값 한 곳에서만**. 학년·반·번호 변환 실패, 미등록 학생, 파일 내 중복 행은 종전대로 error → 전체 422 (학생 식별 실패는 skip 대상이 아님).
+- 기초 데이터 업로드(`area_data.rs::base_data_import`)와 점수 기준 import로 확장 금지 — 그 경로들은 값 누락이 곧 관리자 입력 실수다.
+- skip 사유 warning을 응답에서 빼면 위반. 명세: `08_excel_import.md` §7-1
