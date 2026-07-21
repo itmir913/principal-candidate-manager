@@ -394,6 +394,10 @@ WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
 
 - CLOSED 상태만 허용. FINALIZED이면 400.
 - `UPDATE results SET recommended=0`. ranking 변경 없음.
+- **`rows_affected == 0` 시 404** — 존재하지 않는 (sid,tid,rid) 조합 호출 시
+  `recommend_result`와 대칭하게 404 반환하고 `RecommendCanceled` 감사 로그도 남기지 않는다
+  (`scoring.rs::unrecommend_result`). 대칭화 전에는 spurious 감사 로그가 쌓여 사고 대응 시
+  잡음과 실제 취소를 구분하기 어려웠다.
 - **역방향 순위 가드 없음**: 1위가 취소되어도 2위가 추천 상태인 채로 남는다 — §알려진 미결 사항 1 참조.
 
 ### 4.4 TOCTOU 방지
