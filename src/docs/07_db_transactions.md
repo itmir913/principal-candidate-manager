@@ -13,6 +13,9 @@
 | `teacher_create_application` | 라운드 OPEN 재확인 + base_data 저장 + applications upsert + 점수 계산 + results 저장 | `BEGIN IMMEDIATE`. 시작 시점 쓰기 잠금으로 재확인이 확정적 — close_round와 race 시 깨끗한 400 |
 
 **`BEGIN IMMEDIATE` 구현 방식**: `Pool::begin_with("BEGIN IMMEDIATE")` (sqlx 0.8) 사용. sqlx가 트랜잭션 상태를 추적하므로 오류 경로에서 tx drop 시 자동 ROLLBACK되고, COMMIT/ROLLBACK 실패 시에도 커넥션이 열린 tx 상태로 풀에 반환되지 않는다. 과거의 수동 `sqlx::query("BEGIN IMMEDIATE")` + `COMMIT`/`ROLLBACK` 문자열 실행 패턴은 sqlx가 tx를 인지하지 못해 커넥션 오염 위험이 있어 2026-07-15에 전면 교체했다. **신규 코드에서 수동 BEGIN 문자열 실행 금지.**
+
+| 핸들러 | 트랜잭션 범위 | 비고 |
+|--------|---------------|------|
 | `teacher_delete_application` | results 삭제 + applications 삭제 | FK 제약 순서(results 먼저 삭제) 보장. 졸업생 담당 분기 포함(is_enrolled=0 검증). |
 | `numeric_table_import` | 전체 삭제 + 행 삽입 반복 | 오류 시 tx drop으로 자동 롤백 |
 | `category_map_import` | 전체 삭제 + 행 삽입 반복 + 0점 검증 | 오류 시 tx drop으로 자동 롤백 |
