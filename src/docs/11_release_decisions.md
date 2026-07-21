@@ -51,13 +51,16 @@ sqlx 버전 업그레이드 시 기본값이 조용히 바뀌는 것을 방지�
 
 ## 3. 파일 로깅
 
-**결정**: `pcm/logs/pcm.log*` 일별 롤링, 무제한 보관, `info` 이상 레벨.
+**결정**: `pcm/logs/pcm.<yyyy-MM-dd>.log` 일별 롤링, 무제한 보관, `info` 이상 레벨.
 
 **구현**: `src/main.rs::init_logging`
 - crate: `tracing-appender 0.2`
 - 경로: `data_dir()/logs/` (즉 `exe_dir/pcm/logs/`)
-- 롤링: `tracing_appender::rolling::daily`
-- 파일명 prefix: `pcm.log`
+- 롤링: `tracing_appender::rolling::Builder` + `Rotation::DAILY`
+  (`rolling::daily` 헬퍼가 아니다 — prefix/suffix를 따로 지정하기 위해 Builder를 쓴다)
+- 파일명: prefix `pcm` + suffix `log` → `pcm.2026-07-21.log`
+  (확장자가 뒤에 오도록 커밋 `7d35d44`에서 `pcm.log.<날짜>`에서 바꿨다.
+  `.log` 연결 프로그램으로 바로 열리게 하기 위함)
 - dev·release 둘 다 콘솔 + 파일 이중 로깅
 - 로그 디렉토리 생성 실패 시 콘솔 로그만으로 폴백 (서버 기동은 계속)
 
