@@ -127,7 +127,7 @@ async fn create_area_empty_name_rejected() {
 async fn create_area_with_unit_stored_and_returned() {
     // NUMERIC + unit "시간" 생성 → list_areas에서 unit 반환
     let pool = common::create_test_pool().await;
-    create_area(
+    let _ = create_area(
         State(common::make_state(pool.clone())),
         Json(CreateAreaBody {
             name: "봉사".into(),
@@ -153,7 +153,7 @@ async fn create_area_with_unit_stored_and_returned() {
 async fn create_area_unit_whitespace_trimmed_to_null() {
     // unit "  " → NULL 저장
     let pool = common::create_test_pool().await;
-    create_area(
+    let _ = create_area(
         State(common::make_state(pool.clone())),
         Json(CreateAreaBody {
             name: "출결".into(),
@@ -179,7 +179,7 @@ async fn create_area_unit_whitespace_trimmed_to_null() {
 async fn create_area_unit_trimmed_stored() {
     // unit "  등급  " → "등급" 저장
     let pool = common::create_test_pool().await;
-    create_area(
+    let _ = create_area(
         State(common::make_state(pool.clone())),
         Json(CreateAreaBody {
             name: "내신".into(),

@@ -79,10 +79,6 @@ async fn insert_graduated_student(pool: &sqlx::SqlitePool, code: &str) -> i64 {
     .unwrap()
 }
 
-fn enrolled_csv() -> &'static str {
-    "학년,반,담임명,비밀번호\n1,1,홍길동,pass1234\n"
-}
-
 fn audit_count_action<'a>(pool: &'a sqlx::SqlitePool, action: &'a str) -> impl std::future::Future<Output = i64> + 'a {
     async move {
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_log WHERE action = ?")
@@ -257,7 +253,7 @@ async fn students_imported_graduated_success_writes_log_with_source() {
 async fn student_added_enrolled_writes_one_log() {
     let pool = common::create_test_pool_shared().await;
     common::insert_class(&pool, 1, 1).await;
-    add_enrolled(
+    let _ = add_enrolled(
         State(common::make_state(pool.clone())),
         Json(AddEnrolledBody { name: "홍길동".into(), grade: 1, class_no: 1, seq_no: 1 }),
     )
@@ -269,7 +265,7 @@ async fn student_added_enrolled_writes_one_log() {
 #[tokio::test]
 async fn student_added_graduated_writes_one_log() {
     let pool = common::create_test_pool_shared().await;
-    add_graduated(
+    let _ = add_graduated(
         State(common::make_state(pool.clone())),
         Json(AddGraduatedBody {
             student_code: "GR001".into(),
@@ -313,7 +309,7 @@ async fn student_deleted_detail_has_pre_delete_name() {
 #[tokio::test]
 async fn area_created_writes_one_log() {
     let pool = common::create_test_pool().await;
-    create_area(
+    let _ = create_area(
         State(common::make_state(pool.clone())),
         Json(CreateAreaBody {
             name: "교과".into(),
@@ -471,7 +467,7 @@ async fn base_data_imported_failure_writes_no_log() {
 #[tokio::test]
 async fn university_created_writes_one_log() {
     let pool = common::create_test_pool().await;
-    create_university(
+    let _ = create_university(
         State(common::make_state(pool.clone())),
         Json(CreateUnivBody {
             univ_name: "한국대".into(),
@@ -536,7 +532,7 @@ async fn university_deleted_detail_has_pre_delete_name() {
 async fn track_created_writes_one_log() {
     let pool = common::create_test_pool().await;
     let uid = insert_univ(&pool, "한국대").await;
-    create_track(
+    let _ = create_track(
         State(common::make_state(pool.clone())),
         Path(uid),
         Json(CreateTrackBody {

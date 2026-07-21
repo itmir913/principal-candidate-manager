@@ -1246,7 +1246,7 @@ async fn reopen_change_prioritize_reclose_recalculates_ranking() {
     };
 
     // 1차 마감: 재학생 우선 OFF → 점수 높은 졸업생이 1위
-    close_round(st(), Path(rid)).await.unwrap();
+    let _ = close_round(st(), Path(rid)).await.unwrap();
     assert_eq!(ranking(graduated).await, Some(1), "우선 OFF: 고득점 졸업생이 1위");
     assert_eq!(ranking(enrolled).await, Some(2));
 
@@ -1254,7 +1254,7 @@ async fn reopen_change_prioritize_reclose_recalculates_ranking() {
     reopen_round(st(), Path(rid)).await.unwrap();
     sqlx::query("UPDATE universities SET prioritize_enrolled = 1 WHERE id = ?")
         .bind(uid).execute(&pool).await.unwrap();
-    close_round(st(), Path(rid)).await.unwrap();
+    let _ = close_round(st(), Path(rid)).await.unwrap();
 
     assert_eq!(ranking(enrolled).await, Some(1), "재마감 후 재학생 우선이 반영되어야 한다");
     assert_eq!(ranking(graduated).await, Some(2));

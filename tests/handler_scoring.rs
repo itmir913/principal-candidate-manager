@@ -1793,7 +1793,7 @@ async fn univ_ranking_crosses_track_boundary() {
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
 
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let rank_cs: Option<i64> = sqlx::query_scalar(
         "SELECT ranking FROM results WHERE student_id = ? AND round_id = ?",
@@ -1842,7 +1842,7 @@ async fn univ_ranking_ties_get_same_rank() {
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
 
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let r1: Option<i64> = sqlx::query_scalar("SELECT ranking FROM results WHERE student_id = ? AND round_id = ?")
         .bind(sid1).bind(rid).fetch_one(&pool).await.unwrap();
@@ -1889,7 +1889,7 @@ async fn get_results_returns_track_rank() {
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
 
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let axum::Json(rows) = get_results(
         State(common::make_state(pool)),
@@ -1919,7 +1919,7 @@ async fn export_results_header_contains_univ_rank() {
         .bind(sid).bind(area_id).execute(&pool).await.unwrap();
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
@@ -1958,7 +1958,7 @@ async fn export_round_summary_applicant_sheet_populates_track_rank() {
 
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
@@ -1995,7 +1995,7 @@ async fn export_results_uses_unselected_terminology() {
         .bind(sid).bind(area_id).execute(&pool).await.unwrap();
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     // 미선발 처리 — 셀 값 확인용
     sqlx::query(
@@ -2057,7 +2057,7 @@ async fn each_scope_own_prioritize_flag_no_silent_or() {
     sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02T00:00:00Z' WHERE id = ?")
         .bind(rid).execute(&pool).await.unwrap();
 
-    calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
     let rank_grad: Option<i64> = sqlx::query_scalar(
         "SELECT ranking FROM results WHERE student_id = ? AND round_id = ?",
