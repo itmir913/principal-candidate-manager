@@ -111,6 +111,47 @@ fn data_dir() -> anyhow::Result<std::path::PathBuf> {
     Ok(dir)
 }
 
+/// 종료 직전 SQLite를 `data.db` 하나로 완결된 상태로 만든다.
+///
+/// `std::process::exit`는 Drop을 실행하지 않아 `sqlite3_close()`가 호출되지
+/// 않는다. WAL 모드에서 그대로 종료하면 커밋된 데이터가 `data.db-wal`에 남은
+/// 채 프로세스가 사라진다. 데이터 자체가 유실되지는 않지만(다음 실행 시 WAL을
+/// 재생한다) **사용자가 `data.db`만 복사해 백업하면 그 데이터가 빠진다.**
+/// TRUNCATE 체크포인트로 WAL 내용을 본 파일에 반영한 뒤 풀을 닫는다.
+///
+/// 응답이 오래 걸리는 요청 때문에 트레이 `종료`가 멈춘 것처럼 보이면 안 되므로
+/// 제한 시간을 두고, 초과하면 로그만 남기고 그대로 종료한다.
+#[cfg(not(feature = "dev"))]
+fn shutdown_db(rt: &tokio::runtime::Handle, pool: &sqlx::SqlitePool) {
+    const SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let outcome = rt.block_on(async {
+        tokio::time::timeout(SHUTDOWN_TIMEOUT, async {
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .execute(pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            pool.close().await;
+            Ok::<(), String>(())
+        })
+        .await
+    });
+
+    match outcome {
+        Ok(Ok(())) => tracing::info!("database closed cleanly"),
+        Ok(Err(e)) => tracing::error!(
+            "종료 시 WAL 체크포인트 실패 — data.db-wal이 남습니다 \
+             (데이터는 다음 실행 시 복구되지만, 지금 data.db만 복사하면 최근 내용이 빠집니다): {}",
+            e
+        ),
+        Err(_) => tracing::error!(
+            "종료 시 데이터베이스 정리가 {}초 안에 끝나지 않아 건너뜁니다 — data.db-wal이 남습니다 \
+             (데이터는 다음 실행 시 복구되지만, 지금 data.db만 복사하면 최근 내용이 빠집니다)",
+            SHUTDOWN_TIMEOUT.as_secs()
+        ),
+    }
+}
+
 /// 콘솔 + 파일(일별 롤링, `pcm/logs/pcm.yyyy-MM-dd.log`) 이중 로깅을 초기화한다.
 ///
 /// release 빌드는 `windows_subsystem = "windows"`라 콘솔이 없어 stdout 로그가
@@ -443,6 +484,10 @@ fn main() {
                 port, e
             );
             show_error_dialog("학교장추천 관리 시스템 — 시작 실패", &msg);
+            // 여기서 shutdown_db를 부르지 않는다: 이 시점의 서버 스레드는 이미
+            // 종료 중이라 tokio 런타임(rt)이 곧 drop되고, 죽은 런타임에
+            // block_on을 걸면 패닉한다. 기동 실패라 쓰기도 마이그레이션뿐이며
+            // WAL은 다음 실행에서 재생된다.
             std::process::exit(1);
         }
         Err(_) => {
@@ -450,6 +495,8 @@ fn main() {
                 "학교장추천 관리 시스템 — 시작 실패",
                 "서버 스레드가 비정상 종료되었습니다.",
             );
+            // 위와 같은 이유로 shutdown_db를 부르지 않는다 (서버 스레드 사망 =
+            // 런타임 drop).
             std::process::exit(1);
         }
     }
@@ -550,6 +597,9 @@ fn main() {
                 if event.id == *open_item.id() {
                     let _ = webbrowser::open(&url);
                 } else if event.id == *quit_item.id() {
+                    if let Some(ref pool) = opt_db {
+                        shutdown_db(&rt_handle, pool);
+                    }
                     std::process::exit(0);
                 }
             }
