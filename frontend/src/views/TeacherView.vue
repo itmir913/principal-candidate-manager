@@ -63,6 +63,38 @@
           </span>
           <span v-if="!collapsed" class="whitespace-nowrap">{{ item.label }}</span>
         </button>
+
+        <div style="margin: 8px 0; border-top: 1px solid #f1f5f9;" />
+
+        <a
+          href="/manual.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="매뉴얼 (새 창)"
+          class="w-full rounded-lg text-base transition-all duration-150"
+          :style="{
+            display: 'flex',
+            alignItems: 'center',
+            gap: collapsed ? '0' : '12px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '10px 0' : '10px 14px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: '400',
+            color: '#64748b',
+            background: 'transparent',
+            textDecoration: 'none',
+            boxSizing: 'border-box',
+          }"
+        >
+          <span class="relative flex-shrink-0 flex">
+            <BookOpen :size="20" />
+          </span>
+          <span v-if="!collapsed" class="whitespace-nowrap flex items-center gap-1">
+            매뉴얼
+            <ExternalLink :size="14" />
+          </span>
+        </a>
       </nav>
 
       <!-- 하단 사용자 카드 -->
@@ -193,7 +225,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
 import { dialog } from '../components/common/dialog.js'
-import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu } from 'lucide-vue-next'
+import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu, BookOpen, ExternalLink } from 'lucide-vue-next'
 
 const router = useRouter()
 const auth   = useAuthStore()
