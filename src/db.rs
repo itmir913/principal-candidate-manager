@@ -71,7 +71,9 @@ pub async fn init_pool(db_path: &str) -> Result<SqlitePool> {
         .filename(db_path)
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
-        .foreign_keys(true);
+        .foreign_keys(true)
+        // sqlx 기본값 명시 (버전 업그레이드 시 조용한 변경 방지)
+        .busy_timeout(std::time::Duration::from_secs(5));
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
