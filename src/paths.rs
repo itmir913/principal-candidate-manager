@@ -13,3 +13,7 @@ pub const DB_FILENAME: &str = "data.db";
 
 /// 포트 설정 파일 이름.
 pub const CONFIG_FILENAME: &str = "config.json";
+
+/// 백업 zip에 동봉하는 복원 안내문 이름. zip 최상위에 둔다 —
+/// 데이터 폴더 안에 넣으면 복원한 폴더에까지 따라 들어가 남는다.
+pub const README_FILENAME: &str = "복원방법.txt";

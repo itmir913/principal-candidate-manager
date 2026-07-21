@@ -216,8 +216,12 @@ async fn backup_zip_mirrors_pcm_folder_layout() {
     names.sort();
     assert_eq!(
         names,
-        vec!["pcm/config.json".to_string(), "pcm/data.db".to_string()],
-        "zip 구조가 pcm 폴더 모양이 아니다"
+        vec![
+            "pcm/config.json".to_string(),
+            "pcm/data.db".to_string(),
+            "복원방법.txt".to_string(),
+        ],
+        "zip 구조가 pcm 폴더 모양 + 복원 안내가 아니다"
     );
 
     assert_eq!(
@@ -253,16 +257,51 @@ async fn backup_succeeds_without_config_json() {
     let state = state_for(pool.clone(), &db_path);
     let bytes = backup_bytes(&state).await;
 
+    let mut names = zip_entry_names(&bytes);
+    names.sort();
     assert_eq!(
-        zip_entry_names(&bytes),
-        vec!["pcm/data.db".to_string()],
-        "config.json이 없을 때는 data.db만 들어가야 한다"
+        names,
+        vec!["pcm/data.db".to_string(), "복원방법.txt".to_string()],
+        "config.json이 없을 때는 data.db와 복원 안내만 들어가야 한다"
     );
     assert_eq!(
         read_key_from_backup(&dir, &bytes, "backup_probe").await.as_deref(),
         Some("no_config"),
         "config.json 부재가 DB 백업을 망가뜨렸다"
     );
+
+    pool.close().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 복원 안내는 백업본과 함께 이동하는 유일한 문서다. 매뉴얼을 잃어버린
+/// 담당자가 이 파일만 보고 복원할 수 있어야 하며, 무엇보다 "덮어쓰지 말 것"
+/// 경고가 들어 있어야 한다 — 덮어쓰면 옛 data.db-wal이 남아 복원한 데이터가
+/// 손상될 수 있다.
+#[tokio::test]
+async fn backup_zip_includes_restore_readme() {
+    let dir = temp_dir();
+    let db_path = dir.join("data.db");
+    let pool = wal_pool(&db_path).await;
+    let state = state_for(pool.clone(), &db_path);
+
+    let bytes = backup_bytes(&state).await;
+    let readme_raw = zip_entry(&bytes, "복원방법.txt").expect("복원방법.txt가 없다");
+
+    // 메모장에서 깨지지 않도록 UTF-8 BOM + CRLF.
+    assert_eq!(&readme_raw[..3], b"\xEF\xBB\xBF", "UTF-8 BOM이 없다");
+    let text = String::from_utf8(readme_raw[3..].to_vec()).expect("UTF-8이 아니다");
+    assert!(text.contains("\r\n"), "줄바꿈이 CRLF가 아니다");
+
+    for must in [
+        "복원 방법",
+        "덮어쓰기",          // 하지 말라는 경고
+        "pcm_old",           // 지우지 말고 이름만 바꾸라는 안내
+        "개인정보",          // 보관 주의
+        env!("CARGO_PKG_VERSION"), // 스키마 호환 판단용 버전
+    ] {
+        assert!(text.contains(must), "복원 안내에 '{must}'가 없다:\n{text}");
+    }
 
     pool.close().await;
     let _ = std::fs::remove_dir_all(&dir);
