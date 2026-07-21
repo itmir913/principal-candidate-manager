@@ -473,6 +473,22 @@
               </label>
             </div>
 
+            <!-- 잘못된 파일을 올렸을 때 되돌리는 방법.
+                 석차연명부 가져오기는 파일에 있는 대학·모집단위를 자동 생성하므로 파일을
+                 잘못 고르면 엉뚱한 모집단위가 남는다. 올바른 파일을 다시 올려도 그 모집단위는
+                 지워지지 않아(다른 track_id로 들어간다) 여기서 정리 경로를 알려 준다. -->
+            <div v-if="selected.lookup_scope === 'COMPOSITE'"
+                 v-show="baseStudentType === 'enrolled'"
+                 class="mt-3 rounded-lg text-base"
+                 style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+              석차연명부를 가져오면 파일에 들어 있는 <strong>대학·모집단위가 자동으로 생성</strong>됩니다.
+              파일을 잘못 골랐다면 올바른 파일을 다시 올리는 것만으로는 지워지지 않으므로,
+              <strong>대학 설정</strong> 탭에서 잘못 생긴 모집단위(또는 대학)를 삭제하십시오.
+              삭제하면 <strong>거기에 딸린 기초 데이터도 함께 지워집니다.</strong>
+              다만 그 모집단위에 <strong>지원 기록이 하나라도 있으면 삭제할 수 없으니
+              라운드를 열기 전에 정리</strong>하십시오.
+            </div>
+
             <ImportResultBox v-if="baseResult" :result="baseResult" class="mt-3" />
 
             <!-- 기초 데이터 목록 -->
