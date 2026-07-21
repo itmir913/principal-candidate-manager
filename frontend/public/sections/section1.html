@@ -2,123 +2,251 @@
 
     <h2 class="text-xl font-bold text-slate-800 border-b-2 border-indigo-500 pb-2 mb-8">1. 시작하기 전에</h2>
 
-    <!-- 시스템 요구 환경 -->
+    <!-- K-3: 시작하기 전에 준비할 것 -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">시작하기 전에 준비할 것</h3>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <ul class="space-y-2 text-slate-600">
+                <li>선발 기간 내내 <strong>켜 둘 수 있는 Windows 컴퓨터</strong> 한 대 (학내 네트워크에 연결되어 있어야 합니다)</li>
+                <li>학교의 <strong>학교장추천 선발 기준</strong> — 어떤 항목을 몇 점으로 반영하는지 확정된 문서</li>
+                <li><strong>학급·담임 명단</strong> (학년·반·담임명)</li>
+                <li><strong>학생 명렬표</strong> (재학생: 학년·반·번호·이름 / 졸업생: 학생코드·이름)</li>
+                <li>각 평가 항목의 <strong>학생별 자료</strong> (내신 등급, 봉사 시간 등)</li>
+            </ul>
+            <p class="text-slate-600 leading-relaxed mt-3">
+                필요한 컴퓨터 지식은 <strong>파일 압축 풀기</strong>와 <strong>브라우저 사용</strong>뿐입니다.
+                서버·IP 같은 용어를 몰라도 이 매뉴얼의 순서대로 따라 하면 됩니다.
+            </p>
+        </div>
+    </div>
+
+    <!-- 시스템 요구 환경 (D-6 반영) -->
     <div class="mb-10">
         <h3 class="text-lg font-bold text-slate-700 mb-3">시스템 요구 환경</h3>
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <ul class="space-y-2 text-slate-600">
-                <li><span class="mr-2">🖥️</span>운영체제: <strong>Windows 10 / 11 (x64)</strong>
-                </li>
+                <li><span class="mr-2">🖥️</span>운영체제: <strong>Windows 10 / 11 (x64)</strong></li>
                 <li><span class="mr-2">🌐</span>브라우저: Chrome, Edge, Firefox 최신 버전 권장</li>
-                <li><span class="mr-2">🔌</span>네트워크: 학내 LAN (인터넷 연결 불필요)</li>
+                <li><span class="mr-2">🔌</span>네트워크: 학내 LAN (선발 업무에는 인터넷 연결이 필요하지 않습니다. 새 버전 확인·내려받기에만 인터넷이 필요합니다.)</li>
             </ul>
         </div>
     </div>
 
-    <!-- 설치 및 첫 실행 -->
+    <!-- 설치하고 처음 켜기 (T-1 구조 / G-2 / D-1 / D-2 / D-3 / K-6 반영) -->
     <div class="mb-10">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">설치 및 첫 실행</h3>
-        <ol class="space-y-3 text-lg text-slate-600 leading-relaxed">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">설치하고 처음 켜기</h3>
+        <ol class="space-y-4 text-lg text-slate-600 leading-relaxed">
             <li class="flex gap-3">
                 <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">1</span>
-                <span>공식 홈페이지(<code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">https://luminousky.com/teacher-utility-kit/principal-candidate-manager/</code>)에서 최신 버전의 <code
-                        class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">.zip</code> 파일을 다운로드합니다.</span>
+                <span>공식 홈페이지(<code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">https://luminousky.com/teacher-utility-kit/principal-candidate-manager/</code>)에서
+                    최신 버전의 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">.zip</code> 파일을 다운로드합니다.</span>
             </li>
             <li class="flex gap-3">
                 <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">2</span>
-                <span>다운로드한 압축 파일을 <strong>바탕화면</strong>에 압축 해제합니다.</span>
+                <span>다운로드한 압축 파일을 원하는 폴더에 압축 해제합니다. 압축을 풀면 exe 파일 하나가 나옵니다.
+                    이 파일이 있는 자리에 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm</code> 폴더가 생성되고 모든 데이터가 그 안에 저장되므로,
+                    <strong>바탕화면보다는 별도 폴더</strong>를 만들어 두는 것을 권장합니다.</span>
             </li>
             <li class="flex gap-3">
                 <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">3</span>
-                <span><code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">principal-candidate-manager.exe</code>를 실행하면 윈도우 <strong>시스템 트레이</strong>(화면 우측 하단)에 아이콘이 나타납니다.</span>
+                <div class="flex-1">
+                    <p class="mb-3"><code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">principal-candidate-manager.exe</code>를 실행합니다.</p>
+                    <!-- G-2: Windows 보안 경고·방화벽 -->
+                    <div class="bg-amber-50 border border-amber-300 rounded-xl p-5 print-keep-bg">
+                        <p class="font-bold text-amber-700 text-lg mb-3"><span class="mr-2">⚠️</span>처음 실행할 때 나타나는 창 두 가지</p>
+                        <ul class="space-y-3 text-amber-800 text-lg">
+                            <li><strong>"Windows의 PC 보호"</strong> 파란 창이 뜨면 → <strong>추가 정보</strong>를 누른 뒤 <strong>실행</strong> 버튼을 누릅니다.
+                                인터넷에서 내려받은 프로그램에 Windows가 표시하는 일반적인 안내입니다.</li>
+                            <li><strong>"Windows Defender 방화벽에서 이 앱의 일부 기능을 차단했습니다"</strong> 창이 뜨면 →
+                                <strong>개인 네트워크</strong> 항목에 체크하고 <strong>액세스 허용</strong>을 누릅니다.
+                                <strong>이 창에서 취소를 누르면 다른 교사가 접속할 수 없습니다.</strong>
+                                실수로 취소했다면 프로그램을 종료한 뒤 다시 실행하십시오.</li>
+                        </ul>
+                    </div>
+                </div>
             </li>
             <li class="flex gap-3">
+                <!-- D-1: 트레이 메뉴 3개 항목 + ∧ 숨김 안내 -->
                 <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">4</span>
-                <span>시스템 트레이 아이콘을 클릭한 후 <strong>열기</strong>를 선택하면 브라우저가 자동으로 열립니다.</span>
+                <div class="flex-1">
+                    <p class="mb-3">실행하면 윈도우 <strong>시스템 트레이</strong>(화면 우측 하단)에 아이콘이 나타납니다.</p>
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg mb-3">
+                        <p class="text-slate-600 text-lg leading-relaxed mb-3">트레이 아이콘을 <strong>오른쪽 클릭</strong>하면 메뉴가 나타납니다. 항목은 세 개입니다.</p>
+                        <ul class="space-y-2 text-slate-600 text-lg">
+                            <li><strong>시작 시 자동 실행</strong> — 체크되어 있으면 컴퓨터를 켤 때 프로그램이 자동으로 시작됩니다.
+                                <strong>처음 설치하면 체크된 상태</strong>이며, 클릭할 때마다 켜고 끌 수 있습니다.</li>
+                            <li><strong>열기</strong> — 이 컴퓨터의 브라우저에서 시스템 화면을 엽니다.</li>
+                            <li><strong>종료</strong> — 프로그램을 완전히 종료합니다. 종료하면 <strong>다른 교사도 접속할 수 없습니다.</strong></li>
+                        </ul>
+                        <p class="text-slate-500 text-lg mt-3">트레이 아이콘이 보이지 않으면 시계 왼쪽의 <strong>∧(숨겨진 아이콘 표시)</strong>를 눌러 확인하십시오.</p>
+                    </div>
+                    <p class="text-slate-600 text-lg">트레이 아이콘을 오른쪽 클릭한 후 <strong>열기</strong>를 선택하면 브라우저가 자동으로 열립니다.</p>
+                </div>
             </li>
             <li class="flex gap-3">
                 <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">5</span>
                 <div class="flex-1">
                     <p class="mb-4">브라우저가 열리면 다음 순서로 초기 설정이 진행됩니다.</p>
                     <div class="space-y-4">
-                        <!-- 라이선스 동의 -->
+                        <!-- D-2: 이용 안내 동의 -->
                         <div class="flex gap-4 items-start bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg">
                             <span class="shrink-0 w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-base flex items-center justify-center print-keep-bg">①</span>
                             <div>
-                                <p class="font-bold text-slate-700 text-lg mb-1">라이선스 동의</p>
-                                <p class="text-slate-600 text-lg leading-relaxed">이용 약관을 확인하고 동의합니다.</p>
+                                <p class="font-bold text-slate-700 text-lg mb-1">이용 안내 동의</p>
+                                <p class="text-slate-600 text-lg leading-relaxed"><strong>프로그램 이용 안내</strong>와 <strong>라이선스 안내</strong>가 표시됩니다.
+                                    이 프로그램은 선발 업무를 돕는 보조 도구이며, 최종 선발 결과의 확인과 결정 책임은 학교에 있습니다.
+                                    라이선스는 <strong>PolyForm Noncommercial 1.0.0</strong>으로, 학교·교육청 등 비영리 목적에 한해 무료로 사용할 수 있습니다.
+                                    화면 아래 <strong>"위 내용을 확인하였으며, 이에 동의합니다."</strong> 체크박스를 선택한 뒤
+                                    <strong>동의하고 계속하기</strong> 버튼을 누릅니다.</p>
                             </div>
                         </div>
 
-                        <!-- 관리자 비밀번호 설정 -->
+                        <!-- D-3 / K-6: 관리자 비밀번호 설정 -->
                         <div class="flex gap-4 items-start bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg">
                             <span class="shrink-0 w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-base flex items-center justify-center print-keep-bg">②</span>
                             <div>
                                 <p class="font-bold text-slate-700 text-lg mb-1">관리자 비밀번호 설정</p>
-                                <p class="text-slate-600 text-lg leading-relaxed mb-3">관리자 계정의 비밀번호를 설정합니다. 이 비밀번호는 성적 입력·라운드 관리 등 핵심 기능에 사용됩니다.</p>
-                                <div class="mt-4 bg-amber-50 border border-amber-300 rounded-xl p-4 flex gap-3 items-start print-keep-bg">
+                                <p class="text-slate-600 text-lg leading-relaxed mb-3"><strong>새 비밀번호</strong>와 <strong>비밀번호 확인</strong>에 같은 값을 입력하고
+                                    <strong>시작하기</strong>를 누릅니다. 비밀번호는 <strong>8자 이상</strong>이어야 하며, 두 칸이 다르면 버튼이 눌리지 않습니다.
+                                    이 비밀번호는 성적 확인·라운드 관리 등 관리자 기능 전체에 사용됩니다.</p>
+                                <div class="bg-amber-50 border border-amber-300 rounded-xl p-4 flex gap-3 items-start print-keep-bg">
                                     <span class="text-lg mt-0.5 shrink-0">⚠️</span>
                                     <p class="text-amber-800 text-lg leading-relaxed">
-                                        <strong>관리자 비밀번호를 분실하면 복구가 불가능합니다.</strong> 반드시 안전한 곳에 기록해 두십시오.
-                                        분실 시 데이터베이스 파일(<code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 print-keep-bg">pcm/data.db</code>)을
-                                        삭제하고 프로그램을 재시작하면 초기화할 수 있으나, <strong>모든 입력 데이터가 삭제</strong>됩니다.
+                                        <strong>관리자 비밀번호는 안전한 곳에 기록해 두십시오.</strong>
+                                        다른 계정으로 초기화할 수 없습니다. 분실했을 때 데이터를 지우지 않고 되살리는 방법이
+                                        <strong>7장 자주 묻는 질문</strong>에 있습니다.
+                                        <strong><code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 print-keep-bg">data.db</code> 파일은 절대 먼저 삭제하지 마십시오 —
+                                        입력한 모든 데이터가 함께 사라집니다.</strong>
                                     </p>
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- 성공 판정 (T-1) -->
+                    <div class="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-5 print-keep-bg">
+                        <p class="font-bold text-emerald-700 text-lg mb-1">✅ 성공 확인</p>
+                        <p class="text-slate-600 text-lg leading-relaxed">관리자 화면 왼쪽에 <strong>개요·학급 관리·학생 관리</strong> 등 메뉴가 보이면 설치가 완료된 것입니다.</p>
                     </div>
                 </div>
             </li>
         </ol>
     </div>
 
-    <!-- 실행 환경별 접속 방법 -->
+    <!-- D-4 / G-3: 다른 교사에게 알려줄 주소 확인하기 -->
     <div class="mb-10 break-before-page">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">실행 환경별 접속 방법</h3>
-        <div class="space-y-4">
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg">
-                <p class="font-bold text-slate-700 text-lg mb-1"><span class="mr-2">👤</span>담당자
-                    컴퓨터에서 실행하는 경우</p>
-                <p class="text-slate-600 text-lg leading-relaxed">
-                    담당자 PC가 켜져 있는 동안, 다른 담임 교사는 담당자 컴퓨터의 <strong>IP 주소</strong>를 브라우저에 입력하여 접속할 수 있습니다.
-                    학교 내부 네트워크(LAN)를 이용하므로 인터넷 연결은 필요하지 않습니다.
-                </p>
-            </div>
-            <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 print-keep-bg">
-                <p class="font-bold text-indigo-800 text-lg mb-1"><span class="mr-2">🖥️</span>별도 데스크톱 컴퓨터에서 실행하는 경우</p>
-                <p class="text-slate-600 text-lg leading-relaxed">
-                    해당 컴퓨터가 켜져 있는 동안 언제든지 접근 가능합니다. 대교협 진학 컴퓨터 등 <strong>교사망에 연결된 전용 컴퓨터</strong>에 설치하면 담당자 PC 종료 여부에
-                    관계없이 안정적으로 운영할 수 있습니다.
-                </p>
-            </div>
+        <h3 class="text-lg font-bold text-slate-700 mb-3">다른 교사에게 알려줄 주소 확인하기</h3>
+        <ol class="space-y-3 text-lg text-slate-600 leading-relaxed mb-4">
+            <li class="flex gap-3">
+                <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">1</span>
+                <span>담당자 컴퓨터에서 트레이 아이콘 → <strong>열기</strong>로 화면을 엽니다.</span>
+            </li>
+            <li class="flex gap-3">
+                <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">2</span>
+                <span><strong>관리자</strong>로 로그인합니다.</span>
+            </li>
+            <li class="flex gap-3">
+                <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">3</span>
+                <span>왼쪽 사이드바에서 <strong>개요</strong>를 클릭하면 <strong>서버 접속 정보</strong> 칸에
+                    <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">http://192.168.0.10:8080</code> 형태의 주소가 표시됩니다.
+                    숫자는 학교마다 다릅니다.</span>
+            </li>
+            <li class="flex gap-3">
+                <span class="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-base flex items-center justify-center print-keep-bg">4</span>
+                <span>오른쪽 <strong>복사</strong> 버튼을 누르면 주소가 복사됩니다. 이 주소를 그대로 담임교사에게 전달하십시오.</span>
+            </li>
+        </ol>
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="text-amber-800 leading-relaxed mb-2">주소 뒤의
+                <code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 print-keep-bg">:8080</code>까지 포함해야 접속됩니다.
+                앞부분 숫자만 전달하면 담임교사 화면에 아무것도 열리지 않습니다.</p>
+            <p class="text-amber-800 leading-relaxed">표시된 주소가
+                <code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 print-keep-bg">http://127.0.0.1:8080</code>이면
+                네트워크에서 이 컴퓨터의 주소를 찾지 못한 것입니다. 이 주소는 담당자 컴퓨터에서만 열립니다.
+                유선 랜선 연결 여부를 확인한 뒤 프로그램을 재시작하십시오.</p>
         </div>
     </div>
 
-    <!-- 데이터 저장 위치 -->
+    <!-- G-7: 켜 두어야 하는 이유 (O-3: 절전 모드 언급 제외 / 기존 실행 환경별 접속 방법 흡수) -->
     <div class="mb-10">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">데이터 저장 위치</h3>
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
-            <p class="text-slate-600 leading-relaxed">
-                모든 데이터는 실행 파일과 같은 폴더의
-                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/data.db</code>
-                파일에 저장됩니다. 프로그램을 종료하거나 PC를 재시작해도 데이터는 유지됩니다.
-                정기적으로 이 파일을 백업해 두는 것을 권장합니다.
-            </p>
+        <h3 class="text-lg font-bold text-slate-700 mb-3">켜 두어야 하는 이유</h3>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg mb-4">
+            <p class="text-slate-600 leading-relaxed mb-3">이 프로그램은 담당자 컴퓨터를 서버로 사용합니다. 프로그램을 종료하거나 컴퓨터를 끄면
+                그 순간부터 담임교사는 접속할 수 없습니다(입력한 데이터는 사라지지 않습니다).
+                담임교사 입력 기간에는 컴퓨터를 켜 두십시오.</p>
+            <p class="text-slate-600 leading-relaxed mb-3">컴퓨터를 껐다 켜도 트레이의 <strong>시작 시 자동 실행</strong>이 켜져 있으면
+                프로그램이 자동으로 다시 시작됩니다.</p>
+            <p class="text-slate-600 leading-relaxed">프로그램을 완전히 끄려면 트레이 아이콘 → <strong>종료</strong>를 사용하십시오.
+                <strong>창을 닫는 것만으로는 종료되지 않습니다.</strong></p>
+        </div>
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-indigo-800 mb-1"><span class="mr-2">🖥️</span>별도 데스크톱 컴퓨터에서 실행하는 경우</p>
+            <p class="text-slate-600 leading-relaxed">대교협 진학 컴퓨터 등 <strong>교사망에 연결된 전용 컴퓨터</strong>에 설치하면
+                담당자 PC 종료 여부에 관계없이 안정적으로 운영할 수 있습니다.</p>
         </div>
     </div>
 
-    <!-- 포트 변경 -->
-    <div class="space-y-6">
-        <h3 class="text-lg font-bold text-slate-700 mb-3">포트 변경</h3>
-        <p class="text-lg text-slate-600 leading-relaxed mb-3">
-            기본 포트는 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">8080</code>입니다.
-            다른 포트로 변경하려면 실행 파일과 같은 폴더의 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/config.json</code>을
-            텍스트 편집기로 열어 수정합니다.
-        </p>
-        <pre class="bg-slate-100 text-slate-800 rounded-xl p-4 text-lg leading-relaxed overflow-x-auto print-keep-bg border border-slate-300"><code>{
+    <!-- G-1 / G-6: 데이터가 저장되는 곳 -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">데이터가 저장되는 곳</h3>
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="text-slate-600 leading-relaxed mb-3">모든 데이터는 실행 파일과 같은 폴더의
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/data.db</code>
+                파일에 저장됩니다. 프로그램을 종료하거나 PC를 재시작해도 데이터는 유지됩니다.</p>
+            <p class="text-slate-600 leading-relaxed mb-4">정기적으로 백업해 두십시오. 가장 간단한 방법은 관리자 화면 왼쪽 사이드바의
+                <strong>업데이트 &amp; 백업</strong> 탭에서 <strong>DB 백업 다운로드</strong> 버튼을 누르는 것입니다.
+                내려받은 파일을 외장 드라이브 등 다른 곳에 보관하십시오. 자세한 내용은 <strong>6장</strong>을 참고하십시오.</p>
+            <p class="font-bold text-slate-700 text-lg mb-1">기록(로그) 파일</p>
+            <p class="text-slate-600 leading-relaxed">프로그램의 동작 기록은
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/logs/</code>
+                폴더에 날짜별로 저장됩니다 (예:
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm.2026-07-21.log</code>).
+                화면에 원인을 알 수 없는 오류가 계속 나타나면 <strong>그날 날짜의 파일</strong>을 열어 마지막 부분을 확인하거나,
+                문의 시 이 파일을 함께 보내십시오. 이 파일은 지워도 프로그램 동작에는 영향이 없습니다.</p>
+        </div>
+    </div>
+
+    <!-- G-5: 문제가 생겼을 때 (포트 변경 흡수) -->
+    <div class="mb-10">
+        <h3 class="text-lg font-bold text-slate-700 mb-3">문제가 생겼을 때</h3>
+        <div class="space-y-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+                <p class="font-bold text-slate-700 text-lg mb-2">"포트 8080에 서버를 시작할 수 없습니다" 창이 뜬다면</p>
+                <p class="text-slate-600 leading-relaxed mb-4">다른 프로그램이 같은 번호를 쓰고 있는 것입니다.
+                    아래 포트 변경 방법대로
+                    <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/config.json</code>의
+                    숫자를 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">8081</code>처럼 바꾸고
+                    다시 실행하십시오. 포트 번호를 바꾸면 담임교사에게 알려줄 주소의 뒷자리도 함께 바뀝니다.</p>
+                <p class="font-bold text-slate-700 text-lg mb-2">트레이 아이콘 위에 "(서버 오류)"가 표시된다면</p>
+                <p class="text-slate-600 leading-relaxed">데이터 파일을 열지 못한 상태입니다. 화면을 열면 오류 내용이 표시됩니다.
+                    <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/logs/</code>의
+                    그날 기록 파일과 함께 문의하십시오.</p>
+            </div>
+            <div>
+                <p class="text-lg font-semibold text-slate-700 mb-2">포트 변경</p>
+                <p class="text-lg text-slate-600 leading-relaxed mb-3">기본 포트는
+                    <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">8080</code>입니다.
+                    다른 포트로 변경하려면 실행 파일과 같은 폴더의
+                    <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 print-keep-bg">pcm/config.json</code>을
+                    텍스트 편집기로 열어 수정합니다.</p>
+                <pre class="bg-slate-100 text-slate-800 rounded-xl p-4 text-lg leading-relaxed overflow-x-auto print-keep-bg border border-slate-300"><code>{
   "port": 8080
 }</code></pre>
-        <p class="text-lg text-slate-700 mt-2">수정 후 프로그램을 재시작해야 반영됩니다.</p>
+                <p class="text-lg text-slate-700 mt-2">수정 후 프로그램을 재시작해야 반영됩니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- K-5: 여기까지 됐다면 / 막혔을 때 (O-4: 문의 이메일 3단계 제외) -->
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+        <p class="font-bold text-slate-700 text-lg mb-3">여기까지 됐다면</p>
+        <p class="text-slate-600 leading-relaxed mb-4">담당 교사는 이어서 <strong>3장 「관리자 사전 설정」</strong>으로 넘어가십시오.
+            학급·담임 계정을 만들어야 담임교사가 로그인할 수 있습니다.</p>
+        <p class="font-bold text-slate-700 text-lg mb-2">막혔을 때</p>
+        <ol class="space-y-2 text-slate-600 text-lg list-none">
+            <li>1. 화면 위쪽의 파란 <strong>도움말</strong> 박스를 먼저 확인하십시오. 지금 화면에서 할 일이 표시됩니다.</li>
+            <li>2. <strong>7장 자주 묻는 질문</strong>에 비밀번호 분실·업로드 오류·백업 등 자주 겪는 문제의 해결 방법이 있습니다.</li>
+        </ol>
     </div>
 
 </section>
