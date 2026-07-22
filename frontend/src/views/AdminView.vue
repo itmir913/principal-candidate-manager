@@ -164,12 +164,17 @@
         class="flex-1 overflow-y-auto"
         style="scrollbar-gutter: stable;"
     >
-      <Suspense v-if="currentTab">
-        <component :is="currentTab" />
-      </Suspense>
-      <div v-else class="flex items-center justify-center" style="height: 320px;">
-        <p class="text-base" style="color: #94a3b8;">{{ currentMenuItem?.label ?? '' }} 탭 준비 중</p>
-      </div>
+      <!-- 탭 전환 페이드. key를 active로 잡아야 탭이 바뀔 때 트랜지션이 걸린다 -->
+      <Transition name="tab-fade" mode="out-in">
+        <div :key="active">
+          <Suspense v-if="currentTab">
+            <component :is="currentTab" />
+          </Suspense>
+          <div v-else class="flex items-center justify-center" style="height: 320px;">
+            <p class="text-base" style="color: #94a3b8;">{{ currentMenuItem?.label ?? '' }} 탭 준비 중</p>
+          </div>
+        </div>
+      </Transition>
     </main>
 
     <!-- 비밀번호 변경 모달 -->
@@ -377,3 +382,12 @@ function logout() {
   router.push('/login')
 }
 </script>
+
+<style scoped>
+/* 탭 전환이 뚝 끊겨 보이지 않도록 아주 짧은 페이드만 준다.
+   나가는 쪽을 더 짧게 잡아야 클릭 반응이 굼떠 보이지 않는다. */
+.tab-fade-enter-active { transition: opacity 0.18s ease; }
+.tab-fade-leave-active { transition: opacity 0.1s ease; }
+.tab-fade-enter-from,
+.tab-fade-leave-to { opacity: 0; }
+</style>
