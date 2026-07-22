@@ -126,6 +126,25 @@ npm run build
 npm run test
 ```
 
+> CI(`.github/workflows/publish.yml`)는 릴리스 빌드 전용이며 **테스트를 실행하지 않습니다.**
+> 변경 사항 검증은 로컬 `npm run test`가 유일한 관문입니다.
+
+---
+
+## 기여
+
+이 프로젝트는 실제 고등학교의 입시 자료를 다루므로, 점수·순위 계산에 관한 규칙이
+엄격합니다. PR을 보내기 전에 [기여 안내(CONTRIBUTING.md)](CONTRIBUTING.md)를 읽어 주세요.
+
+- **기여 라이선스**: 기여물의 저작권은 프로젝트 소유자에게 양도됩니다 (CONTRIBUTING.md 참조)
+- **절대 규칙**: Float-Free(점수 ×100000 정수), Fail-Fast(silent fallback 금지),
+  점수 계산 백엔드 전담, Import All-or-Nothing 등 8개
+- **커밋**: GPG 서명 필수, Conventional Commits
+- **행동 규범**: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
+이슈·PR에 **학생 개인정보(이름·학번·성적)를 그대로 올리지 마세요.**
+재현용 자료는 가명 처리해 주시기 바랍니다.
+
 ---
 
 ## 라이선스
