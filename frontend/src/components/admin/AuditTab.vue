@@ -68,10 +68,10 @@
         <table class="min-w-max w-full" style="border-collapse: collapse;">
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">시각</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 130px;">시각</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">행위자</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">행위</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 200px;">대상</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 230px;">대상</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 200px;">상세</th>
             </tr>
           </thead>
