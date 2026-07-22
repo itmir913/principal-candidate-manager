@@ -269,8 +269,14 @@ const roleLabel = computed(() => {
 
 // ── 현재 라운드 ───────────────────────────────────────────────
 const currentRound = ref(null)
+// AdminView.vue::refreshRound 와 같은 가드 — 조회 실패를 사이드바의
+// "진행 중인 라운드 없음" 표시로 위장하지 않도록 명시적으로 폴백한다.
 onMounted(async () => {
-  currentRound.value = await getCurrentRound()
+  try {
+    currentRound.value = await getCurrentRound()
+  } catch {
+    currentRound.value = null
+  }
 })
 
 // ── 비밀번호 변경 ─────────────────────────────────────────────

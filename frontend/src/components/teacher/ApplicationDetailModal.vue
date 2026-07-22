@@ -45,6 +45,14 @@
           로딩 중...
         </div>
 
+        <div
+          v-else-if="loadError"
+          class="rounded-xl text-base text-center"
+          style="background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 1.5rem 1rem;"
+        >
+          전형요소를 불러오지 못했습니다: {{ loadError }}
+        </div>
+
         <template v-else-if="areaContext.length > 0">
           <p class="text-base font-semibold mb-3" style="color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">
             전형요소
@@ -147,6 +155,7 @@ const emit = defineEmits(['close', 'edit', 'deleted'])
 
 const loading   = ref(true)
 const deleting  = ref(false)
+const loadError = ref('')
 const areaContext   = ref([])
 const scorePreviews = ref({})
 
@@ -166,6 +175,10 @@ onMounted(async () => {
         }
       }
     }
+  } catch (e) {
+    // 전형요소 조회 실패를 "전형요소 없음" 빈 표로 위장하지 않는다
+    areaContext.value = []
+    loadError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
   } finally {
     loading.value = false
   }

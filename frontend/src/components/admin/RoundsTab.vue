@@ -67,7 +67,11 @@
             </div>
           </div>
 
-          <div v-if="rounds.length === 0" class="text-base text-center" style="padding: 32px 0; color: #94a3b8;">
+          <!-- 로드 오류 — 서버 오류를 "라운드 없음" 빈 상태로 위장하지 않는다 -->
+          <div v-if="roundsLoadError" class="text-base text-center" style="padding: 32px 12px; color: #991b1b;">
+            라운드 목록을 불러오지 못했습니다:<br>{{ roundsLoadError }}
+          </div>
+          <div v-else-if="rounds.length === 0" class="text-base text-center" style="padding: 32px 0; color: #94a3b8;">
             라운드 없음
           </div>
         </div>
@@ -656,6 +660,7 @@ const apps    = ref([])
 const results = ref([])
 const areas   = ref([])
 
+const roundsLoadError    = ref('')
 const roundActing        = ref(false)
 const calcLoading        = ref(false)
 const calcMsg            = ref(null)
@@ -895,7 +900,13 @@ function getAreaScore(r, areaId) {
 }
 
 async function loadRounds() {
-  rounds.value = await getRounds()
+  roundsLoadError.value = ''
+  try {
+    rounds.value = await getRounds()
+  } catch (e) {
+    rounds.value = []
+    roundsLoadError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
+  }
 }
 
 function classLabel(c) {

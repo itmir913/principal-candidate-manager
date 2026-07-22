@@ -22,9 +22,18 @@
       :items="helpBox.items"
     />
 
+    <!-- 로드 오류 — 서버 오류를 "학생 없음" 빈 상태로 위장하지 않는다 -->
+    <div
+      v-if="loadError"
+      class="rounded-xl flex items-center justify-center"
+      style="background: #fef2f2; box-shadow: 0 0 0 1px #fca5a5; height: 240px;"
+    >
+      <p class="text-base" style="color: #991b1b;">학급 현황을 불러오지 못했습니다: {{ loadError }}</p>
+    </div>
+
     <!-- 빈 상태 -->
     <div
-      v-if="students.length === 0"
+      v-else-if="students.length === 0"
       class="rounded-xl flex items-center justify-center"
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
     >
@@ -107,6 +116,7 @@ const auth = useAuthStore()
 const currentRound = ref(null)
 const students     = ref([])
 const applications = ref([])
+const loadError    = ref('')
 
 // 이 화면은 조회 전용이라 무엇을 할 수 없는지(학생 추가·지원 등록)를 먼저
 // 알려야 담임이 다른 탭을 찾아 헤매지 않는다.
@@ -140,14 +150,22 @@ function getStudentApps(studentId) {
 }
 
 async function loadAll() {
-  const [round, sts, apps] = await Promise.all([
-    getCurrentRound(),
-    teacherGetStudents(),
-    teacherGetApplications(),
-  ])
-  currentRound.value = round
-  students.value = sts
-  applications.value = apps
+  loadError.value = ''
+  try {
+    const [round, sts, apps] = await Promise.all([
+      getCurrentRound(),
+      teacherGetStudents(),
+      teacherGetApplications(),
+    ])
+    currentRound.value = round
+    students.value = sts
+    applications.value = apps
+  } catch (e) {
+    currentRound.value = null
+    students.value = []
+    applications.value = []
+    loadError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
+  }
 }
 
 async function removeApplication(app) {

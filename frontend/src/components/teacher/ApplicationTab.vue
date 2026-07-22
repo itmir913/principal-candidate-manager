@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <div v-if="loaded" class="px-4 sm:px-10 pb-5">
+    <div v-if="loaded && !loadError" class="px-4 sm:px-10 pb-5">
       <HelpBox
         :key="helpBox.key"
         :storage-key="helpBox.key"
@@ -47,8 +47,18 @@
       />
     </div>
 
+    <!-- 로드 오류 — 서버 오류를 "라운드 없음" 빈 상태로 위장하지 않는다 -->
+    <div v-if="loadError" class="px-4 sm:px-10 pb-8">
+      <div
+        class="rounded-xl flex items-center justify-center"
+        style="background: #fef2f2; box-shadow: 0 0 0 1px #fca5a5; height: 240px;"
+      >
+        <p class="text-base" style="color: #991b1b;">지원자 정보를 불러오지 못했습니다: {{ loadError }}</p>
+      </div>
+    </div>
+
     <!-- 진행 중 라운드 없음 — currentRound 접근 전에 차단 (렌더 오류 방지) -->
-    <div v-if="!currentRound" class="px-4 sm:px-10 pb-8">
+    <div v-else-if="!currentRound" class="px-4 sm:px-10 pb-8">
       <div
         class="rounded-xl flex items-center justify-center"
         style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); height: 240px;"
@@ -459,6 +469,7 @@ const applications  = ref([])
 const universities  = ref([])
 const allRounds     = ref([])
 const loaded        = ref(false)
+const loadError     = ref('')
 const confirmation  = ref(null)   // { confirmed, confirmed_at } | null
 const confirmActing = ref(false)
 
@@ -582,22 +593,34 @@ async function loadConfirmation() {
 
 // ── 초기 로드 ─────────────────────────────────────────────────────
 async function loadAll() {
-  const [round, sts, univs, resultsData] = await Promise.all([
-    getCurrentRound(),
-    teacherGetStudents(),
-    teacherGetUniversities(),
-    teacherGetResults(),
-  ])
-  currentRound.value = round
-  students.value     = sts
-  universities.value = univs
-  allRounds.value    = resultsData.rounds
+  loadError.value = ''
+  try {
+    const [round, sts, univs, resultsData] = await Promise.all([
+      getCurrentRound(),
+      teacherGetStudents(),
+      teacherGetUniversities(),
+      teacherGetResults(),
+    ])
+    currentRound.value = round
+    students.value     = sts
+    universities.value = univs
+    allRounds.value    = resultsData.rounds
 
-  if (round) {
-    applications.value = await teacherGetApplications(round.id)
-    await loadConfirmation()
+    if (round) {
+      applications.value = await teacherGetApplications(round.id)
+      await loadConfirmation()
+    }
+  } catch (e) {
+    // 서버 오류를 "진행 중인 라운드 없음" 빈 상태로 위장하지 않는다
+    currentRound.value = null
+    students.value     = []
+    applications.value = []
+    universities.value = []
+    allRounds.value    = []
+    loadError.value = e.response?.data ?? e.message ?? '오류가 발생했습니다'
+  } finally {
+    loaded.value = true
   }
-  loaded.value = true
 }
 
 const latestRoundStatus = computed(() => {
