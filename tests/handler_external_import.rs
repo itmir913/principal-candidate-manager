@@ -7,7 +7,7 @@ use axum::{
     extract::{FromRequest, Multipart, Path, State},
     http::{Request, StatusCode},
 };
-use principal_candidate_manager::handlers::external_import::{daegyo_import, univ_import};
+use principal_candidate_manager::handlers::external_import::{daegyo_import, daegyo_preview, univ_import};
 use rust_xlsxwriter::Workbook;
 
 /// 대교협 양식 xlsx 생성: 1행 대학 정보, 2행 헤더, 3행~ 데이터
@@ -57,6 +57,31 @@ async fn import_multipart(xlsx: &[u8], univ_name: &str, track_name: &str) -> Mul
         )
         .as_bytes(),
     );
+    let req = Request::builder()
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(body))
+        .unwrap();
+    Multipart::from_request(req, &()).await.unwrap()
+}
+
+/// file 필드 하나만 담은 multipart 요청 생성 (미리보기용)
+async fn file_only_multipart(xlsx: &[u8]) -> Multipart {
+    let boundary = "boundary43";
+    let mut body: Vec<u8> = Vec::new();
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"file\"; filename=\"data.xlsx\"\r\n\
+             Content-Type: application/octet-stream\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(xlsx);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     let req = Request::builder()
         .method("POST")
         .header(
@@ -591,5 +616,26 @@ async fn univ_import_non_xls_file_returns_bad_request() {
 
     assert_eq!(err.0, StatusCode::BAD_REQUEST);
     assert!(err.1.contains(".xls"), "실제 오류: {}", err.1);
+    assert_no_side_effects(&pool, aid).await;
+}
+
+#[tokio::test]
+async fn daegyo_preview_returns_first_row_header_info() {
+    // 미리보기는 1행 A1 원문을 그대로 돌려준다 — 사용자가 올린 파일이 맞는지 확인하는 용도
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "홍길동", "1.5")]);
+    let axum::Json(preview) = daegyo_preview(State(state), Path(aid), file_only_multipart(&xlsx).await)
+        .await
+        .unwrap();
+
+    assert_eq!(preview.header_info, "서울-테스트대(본교)-학교장추천-2026");
+    assert_eq!(preview.univ_name, "테스트대(본교)");
+    assert_eq!(preview.total, 1);
+    // 미리보기는 DB를 건드리지 않는다
     assert_no_side_effects(&pool, aid).await;
 }

@@ -23,6 +23,8 @@ type Db = sqlx::SqlitePool;
 pub struct ExternalPreview {
     pub univ_name: String,
     pub value_header: String,
+    /// 파일 상단 정보 행을 한 줄로 직렬화한 문구 — 올린 파일이 맞는지 눈으로 확인용
+    pub header_info: String,
     pub preview: Vec<Vec<String>>, // [학년, 반, 번호, 이름, 값] 상위 5행
     pub total: usize,
 }
@@ -30,6 +32,7 @@ pub struct ExternalPreview {
 struct ParsedFile {
     univ_name: String,
     value_header: String,
+    header_info: String,
     records: Vec<(usize, Vec<String>)>, // (엑셀 행 번호 1-based, [학년, 반, 번호, 이름, 값])
 }
 
@@ -79,7 +82,12 @@ fn parse_daegyo(bytes: &[u8]) -> Result<ParsedFile, String> {
         })
         .collect();
 
-    Ok(ParsedFile { univ_name, value_header: "내등급(환산)".into(), records })
+    Ok(ParsedFile {
+        univ_name,
+        value_header: "내등급(환산)".into(),
+        header_info: info.trim().to_string(),
+        records,
+    })
 }
 
 fn parse_univ(bytes: &[u8]) -> Result<ParsedFile, String> {
@@ -94,6 +102,22 @@ fn parse_univ(bytes: &[u8]) -> Result<ParsedFile, String> {
         .and_then(|r| r.get(1))
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
+
+    // 1~3행 A·B열: 대학/학과/전형 정보 — 한 줄로 직렬화
+    let header_info = (0..3)
+        .filter_map(|i| {
+            let row = rows.get(i)?;
+            let label = row.first().map(|s| s.trim()).unwrap_or("");
+            let value = row.get(1).map(|s| s.trim()).unwrap_or("");
+            match (label.is_empty(), value.is_empty()) {
+                (true, true) => None,
+                (true, false) => Some(value.to_string()),
+                (false, true) => Some(label.to_string()),
+                (false, false) => Some(format!("{}: {}", label, value)),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ");
 
     // 6행(index 5): 헤더
     let header_row = rows.get(5).cloned().unwrap_or_default();
@@ -121,7 +145,7 @@ fn parse_univ(bytes: &[u8]) -> Result<ParsedFile, String> {
         })
         .collect();
 
-    Ok(ParsedFile { univ_name, value_header: "등급".into(), records })
+    Ok(ParsedFile { univ_name, value_header: "등급".into(), header_info, records })
 }
 
 // ── 멀티파트 읽기 ─────────────────────────────────────────────────
@@ -414,6 +438,7 @@ pub async fn daegyo_preview(
     Ok(Json(ExternalPreview {
         univ_name: parsed.univ_name,
         value_header: parsed.value_header,
+        header_info: parsed.header_info,
         preview,
         total,
     }))
@@ -442,6 +467,7 @@ pub async fn univ_preview(
     Ok(Json(ExternalPreview {
         univ_name: parsed.univ_name,
         value_header: parsed.value_header,
+        header_info: parsed.header_info,
         preview,
         total,
     }))

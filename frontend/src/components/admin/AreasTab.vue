@@ -563,7 +563,11 @@
       <div class="bg-white flex flex-col"
         style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 540px; max-height: 90vh; overflow-y: auto; padding: 1.75rem;">
         <h3 class="text-lg font-semibold mb-1" style="color: #1e293b;">{{ extModal.title }}</h3>
-        <p class="text-base mb-5" style="color: #475569;">{{ extModal.fileName }}</p>
+        <p class="text-base" :class="extModal.headerInfo ? 'mb-2' : 'mb-5'" style="color: #475569;">{{ extModal.fileName }}</p>
+        <p v-if="extModal.headerInfo" class="text-base mb-5"
+          style="color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; word-break: break-all;">
+          {{ extModal.headerInfo }}
+        </p>
 
         <div class="space-y-4 mb-5">
           <div>
@@ -575,6 +579,12 @@
           </div>
           <div>
             <label class="block text-base font-medium mb-1.5" style="color: #64748b;">모집단위명 <span style="color: #ef4444;">*</span></label>
+            <div class="flex gap-2 mb-1.5">
+              <button v-for="p in TRACK_PRESETS" :key="p" type="button"
+                class="text-base rounded-lg"
+                style="padding: 6px 14px; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; cursor: pointer;"
+                @click="extModal.trackName = p">{{ p }}</button>
+            </div>
             <input v-model="extModal.trackName" type="text"
               class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
               style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;"
@@ -1048,9 +1058,12 @@ async function dlScoreTemplate(tpl) {
 }
 
 // ── 외부 가져오기 모달 ────────────────────────────────────────────
+// 모집단위명 빠른 입력 — 매번 손으로 치는 수고를 줄이는 단순 채우기 버튼
+const TRACK_PRESETS = ['인문계열', '자연계열']
+
 const extModal = ref({
   open: false, format: '', title: '', file: null, fileName: '',
-  univName: '', trackName: '', valueHeader: '',
+  univName: '', trackName: '', valueHeader: '', headerInfo: '',
   preview: [], total: 0, importing: false, error: '',
 })
 
@@ -1071,6 +1084,7 @@ async function onExternalFile(format, evt) {
       univName: data.univ_name,
       trackName: '',
       valueHeader: data.value_header,
+      headerInfo: data.header_info,
       preview: data.preview,
       total: data.total,
       importing: false,
