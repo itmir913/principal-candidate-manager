@@ -1695,6 +1695,59 @@ async fn teacher_get_results_regular_teacher_does_not_see_graduated_students() {
     assert_eq!(res.0.results.len(), 0);
 }
 
+/// 담임 결과 조회의 학급 격리. 졸업생 배제 테스트만으로는 `class_no` 필터가
+/// 소실되는 회귀를 잡을 수 없다 — 졸업생은 grade 가 NULL 이라 grade 조건만
+/// 남아도 계속 배제되기 때문이다. 같은 학년의 다른 학급을 픽스처에 넣어
+/// 타 학급 학생의 점수·순위가 새지 않는지 확인한다.
+#[tokio::test]
+async fn teacher_get_results_excludes_other_class_same_grade() {
+    let pool = common::create_test_pool().await;
+    let (_grad_sid, tid, rid) = setup_grad_result(&pool).await;
+
+    // 1학년 1반 / 1학년 2반 학생 각 1명 — 같은 모집단위, 같은 라운드
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    for (grade, class_no) in [(1, 1), (1, 2)] {
+        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (?, ?, ?)")
+            .bind(grade).bind(class_no).bind(&hash)
+            .execute(&pool).await.unwrap();
+    }
+    let mut sids = Vec::new();
+    for (code, name, class_no) in [("S001", "홍길동", 1), ("S002", "이순신", 2)] {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, ?, 1, 1) RETURNING id",
+        )
+        .bind(code).bind(name).bind(class_no)
+        .fetch_one(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)",
+        )
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results \
+             (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 0, 1, 0, '2025-01-09T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sids.push(sid);
+    }
+
+    let res = teacher_get_results(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        res.0.results.len(), 1,
+        "1반 담임에게는 1반 학생 1명만 보여야 함: {:?}",
+        res.0.results.iter().map(|r| (&r.name, r.class_no)).collect::<Vec<_>>(),
+    );
+    assert_eq!(res.0.results[0].student_id, sids[0], "1반 학생이어야 함");
+    assert_eq!(res.0.results[0].class_no, Some(1));
+}
+
 // ── Score 산술 연산 ───────────────────────────────────────────────
 
 #[test]
@@ -1927,6 +1980,20 @@ async fn export_results_header_contains_univ_rank() {
     let header = &rows[0];
     assert!(header.contains(&"대학 순위".to_string()), "헤더에 '대학 순위' 포함: {:?}", header);
     assert!(header.contains(&"모집단위 순위".to_string()), "헤더에 '모집단위 순위' 포함: {:?}", header);
+
+    // 전형요소 점수가 "어느 열 아래에" 실리는지까지 고정한다. 헤더는 areas ORDER BY id
+    // 루프로, 데이터는 별도 루프로 쓰므로 두 루프의 순서 일치가 곧 정합성인데,
+    // 집합 소속 단언만으로는 그 일치가 깨져도 통과한다.
+    let data = &rows[1];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    for (h, want) in [("점수", "5"), ("총점", "5")] {
+        let c = col_of(h);
+        assert_eq!(
+            data.get(c).map(String::as_str), Some(want),
+            "'{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, data,
+        );
+    }
 }
 
 /// `export_round_summary` 의 "지원자결과" 시트 — track_rank_window() 를 r2/ut2/s2 별칭
@@ -2013,9 +2080,18 @@ async fn export_results_uses_unselected_terminology() {
     assert!(header.contains(&"미선발사유".to_string()), "헤더에 '미선발사유' 포함: {:?}", header);
     assert!(!header.iter().any(|h| h.contains("제외")), "옛 용어 '제외'가 헤더에 남아 있음: {:?}", header);
 
+    // 값이 "어느 열 아래에" 있는지까지 단언 — 여부/사유 두 열이 뒤바뀌어도
+    // 집합 소속 단언만으로는 통과한다.
     let data = &rows[1];
-    assert!(data.contains(&"미선발".to_string()), "셀 값이 '미선발'이어야 함: {:?}", data);
-    assert!(data.contains(&"정원 미달".to_string()), "미선발 사유가 기록되어야 함: {:?}", data);
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    for (h, want) in [("미선발여부", "미선발"), ("미선발사유", "정원 미달")] {
+        let c = col_of(h);
+        assert_eq!(
+            data.get(c).map(String::as_str), Some(want),
+            "'{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, data,
+        );
+    }
 }
 
 #[tokio::test]

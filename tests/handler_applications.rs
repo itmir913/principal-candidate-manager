@@ -529,6 +529,48 @@ async fn teacher_list_applications_includes_univ_id() {
     assert!(rows[0].univ_id > 0);
 }
 
+// ── 학급 간 격리 (읽기 경로) ──────────────────────────────────────
+
+/// 담임 **조회** API의 학급 격리. 쓰기 경로(create/delete/abandon)는 타 학급 403을
+/// 검증하지만, 읽기 경로는 픽스처에 학급이 하나뿐이라 `WHERE s.grade = ? AND
+/// s.class_no = ?` 에서 `class_no` 가 소실되는 회귀를 잡지 못했다. 졸업생은
+/// grade 가 NULL 이라 기존의 졸업생 배제 테스트도 그 회귀를 통과시킨다.
+#[tokio::test]
+async fn teacher_list_applications_excludes_other_class_same_grade() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup(&pool).await;
+    insert_application(&pool, sid, tid, rid).await;
+
+    // 같은 학년의 다른 학급(1학년 2반) 학생도 같은 모집단위에 지원
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 2, ?)")
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let other_sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S002', '이순신', 1, 2, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    insert_application(&pool, other_sid, tid, rid).await;
+
+    let Json(rows) = teacher_list_applications(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+        Query(TeacherAppListQuery { round_id: Some(rid) }),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(rows.len(), 1, "1반 담임에게는 1반 지원 1건만 보여야 함: {:?}",
+        rows.iter().map(|r| (&r.name, r.class_no)).collect::<Vec<_>>());
+    assert_eq!(rows[0].student_id, sid, "1반 학생의 지원이어야 함");
+    assert_eq!(rows[0].class_no, Some(1));
+}
+
 #[tokio::test]
 async fn admin_list_applications_includes_univ_id() {
     let pool = common::create_test_pool().await;

@@ -329,9 +329,17 @@ async fn full_two_round_lifecycle() {
     for h in ["대학 순위", "모집단위 순위", "대학", "모집단위", "학생명", "내신", "면접", "총점", "추천", "포기"] {
         assert!(header.iter().any(|c| c == h), "export 헤더에 '{}' 누락: {:?}", h, header);
     }
-    // 홍길동 행: 총점 145, 추천 + 포기 표기
+    // 홍길동 행: 각 값이 "어느 열 아래에" 있는지까지 단언한다.
+    // 집합 소속(`any(|c| c == "145")`)만 보면 헤더 루프와 데이터 루프의 순서가
+    // 어긋나는 회귀 — 내신 열에 면접 점수가 실리는 종류 — 를 잡지 못한다.
     let hong = rows.iter().find(|r| r.iter().any(|c| c == "홍길동")).expect("홍길동 행");
-    assert!(hong.iter().any(|c| c == "145"), "총점 145 표기: {:?}", hong);
-    assert!(hong.iter().any(|c| c == "추천"), "추천 표기: {:?}", hong);
-    assert!(hong.iter().any(|c| c == "포기"), "포기 표기: {:?}", hong);
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("export 헤더에 '{}' 없음: {:?}", h, header));
+    for (h, want) in [("내신", "100"), ("면접", "45"), ("총점", "145"), ("추천", "추천"), ("포기", "포기")] {
+        let c = col_of(h);
+        assert_eq!(
+            hong.get(c).map(String::as_str), Some(want),
+            "'{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, hong,
+        );
+    }
 }
