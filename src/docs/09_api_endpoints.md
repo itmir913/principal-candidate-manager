@@ -28,7 +28,10 @@
 | POST | `/auth/admin` | 공개 | 관리자 로그인. Body: `{password}`. 응답: `{token}` |
 | POST | `/auth/teacher` | 공개 | 담임 로그인. Body: `{grade, class_no, password}`. 응답: `{token, grade, class_no}` |
 | PUT | `/auth/admin/password` | 관리자 | 관리자 비밀번호 변경. Body: `{current_password, new_password}` |
-| GET | `/db-backup` | 관리자 | 백업 zip 다운로드 (blob). `pcm_backup_<YYYYMMDD_HHMMSS>.zip`, 내부 구조는 `pcm/data.db`(VACUUM INTO 스냅샷) + `pcm/config.json`(있을 때) |
+| GET | `/auth/db-backup` | 관리자 | 백업 zip 다운로드 (blob). `pcm_backup_<YYYYMMDD_HHMMSS>.zip`, 내부 구조는 `pcm/data.db`(VACUUM INTO 스냅샷) + `pcm/config.json`(있을 때) |
+
+> `protected_auth`(`/db-backup` 포함)가 `auth_routes`에 merge된 뒤 `.nest("/auth", ...)`로
+> 마운트되므로 전체 경로는 `/api/auth/db-backup`이다.
 
 ---
 
@@ -48,8 +51,8 @@
 
 | 메서드 | 경로 | 설명 | 응답 |
 |---|---|---|---|
-| GET | `/students` | 전체 학생 목록. `?grade=&class_no=&is_enrolled=` 쿼리 | `[StudentRow]` |
-| GET | `/students/grade-options` | 학년 옵션 목록 | `[{grade}]` |
+| GET | `/students` | 학생 목록(페이지네이션). `?grade=&class_no=&is_enrolled=&page=&per_page=` 쿼리 | `StudentPage {rows, total, page, per_page}` |
+| GET | `/students/grade-options` | 학년 옵션 목록 | `GradeOptions {grades, by_grade}` |
 | GET | `/students/template` | 전체 학생 xlsx 양식 | blob |
 | GET | `/students/export` | 전체 학생 내보내기 | blob |
 | POST | `/students/import` | 전체 학생 upsert import | `ImportResult` |
@@ -143,6 +146,7 @@
 | PUT | `/rounds/:id/close` | OPEN→CLOSED + 점수 계산. 기초데이터 누락 시 422+OPEN 유지 | 422: 누락 / 404: 라운드 없음 |
 | PUT | `/rounds/:id/reopen` | CLOSED→OPEN. 추천/순위 초기화 | 404: CLOSED 아님 |
 | PUT | `/rounds/:id/finalize` | CLOSED→FINALIZED. 미결정 있으면 422 (전원 명단), 정원 초과 있으면 422 (위반 목록) | 422: 미결정 / 422: 정원 초과 / 404 |
+| GET | `/rounds/:id/confirmation-status` | 담임 입력 확정 현황. 응답: `{classes: [{grade, class_no, teacher_name, confirmed, confirmed_at}]}` | 404: 라운드 없음 |
 
 ### close_round 상세
 
@@ -208,7 +212,9 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/version` | 앱 버전 (공개) |
-| GET | `/db-backup` | 백업 zip 다운로드 (`pcm/` 폴더 모양) |
+| GET | `/auth/db-backup` | 백업 zip 다운로드 (`pcm/` 폴더 모양) |
+| GET | `/audit-logs` | 감사 기록 목록. `?page=&per_page=&round_id=&action=&grade=&class_no=`. 응답: `AuditPage {rows, total, page, per_page}` — `AuditRow`에 `actor_ip` 포함 |
+| GET | `/audit-logs/export` | 감사 기록 xlsx 내보내기 (blob) |
 
 ---
 
@@ -226,8 +232,11 @@
 | PUT | `/teacher/applications/:sid/:tid/:rid/abandon` | 포기 (FINALIZED에서만). 지원 없으면 404 | 담당 학생 검증 |
 | PUT | `/teacher/password` | 담임 비밀번호 변경 | 졸업생 담임 불가 |
 | GET | `/teacher/area-context` | 전형요소+저장된 기초데이터. `?student_id=&track_id=` | |
-| POST | `/teacher/area-score-preview` | 입력값 기반 점수 미리보기 (비저장) | |
+| POST | `/teacher/area-score-preview` | 입력값 기반 점수 미리보기 (비저장). 응답: `{score, matched_keys, warning, error}` | |
 | GET | `/teacher/results` | FINALIZED 라운드 결과 (담당 학생) | |
+| GET | `/teacher/rounds/:id/confirm` | 우리 학급 입력 확정 상태. 응답: `{confirmed, confirmed_at}` | |
+| POST | `/teacher/rounds/:id/confirm` | 입력 확정 | OPEN에서만 (그 외 400) |
+| DELETE | `/teacher/rounds/:id/confirm` | 확정 취소 | OPEN에서만 (그 외 400) |
 
 ### POST /teacher/applications 상세
 

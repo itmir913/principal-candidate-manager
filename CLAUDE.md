@@ -26,3 +26,5 @@
 **7. base_data bulk delete는 student_type 필터 필수**: 재학생 업로드가 졸업생 데이터를 지우면 점수 계산 실패.
 
 **8. 폰트 최소 `text-base`**: `text-sm` / `text-xs` / `font-size: 14px` 이하 금지.
+유일한 예외는 **본문이 아닌 배지·pill 라벨**(예: `AdminView.vue` 사이드바 "NEW" 배지) —
+읽는 텍스트가 아니라 표식이므로 `text-xs`를 허용한다. 예외 사용 시 해당 줄에 주석을 남긴다.

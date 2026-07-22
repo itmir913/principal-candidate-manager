@@ -95,10 +95,18 @@ AdminView.vue 및 하위 탭 컴포넌트에서 사용.
 | `unrecommendResult(sid, tid, rid)` | PUT /results/:sid/:tid/:rid/unrecommend | - |
 | `getApplications(roundId, trackId?)` | GET /applications | `[ApplicationRow]` |
 | `abandonApplication(sid, tid, rid)` | PUT /applications/:sid/:tid/:rid/abandon | - |
+| `excludeApplication(sid, tid, rid, reason)` | PUT /applications/:sid/:tid/:rid/exclude | - |
+| `clearApplicationExclusion(sid, tid, rid)` | DELETE /applications/:sid/:tid/:rid/exclude | - |
 | `changeAdminPassword(current, new)` | PUT /auth/admin/password | - |
 | `scorePreview(studentId, trackId)` | GET /score-preview | `ScorePreviewResponse` |
+| `adminAreaScorePreview(areaId, trackId, values)` | POST /area-score-preview | `{score, matched_keys, warning, error}` |
 | `getQuotaStats` | GET /universities/quota-stats | `[QuotaStatRow]` |
 | `exportQuotaStats(univId?)` | GET /universities/quota-stats/export | blob |
+| `autoRecommend(roundId)` | POST /rounds/:id/auto-recommend | `AutoRecommendResponse {confirmed, manual}` |
+| `autoRecommendUniv(roundId, univId)` | POST /rounds/:id/auto-recommend/univ/:univ_id | `AutoRecommendResponse` |
+| `getRoundConfirmationStatus(roundId)` | GET /rounds/:id/confirmation-status | `{classes: [{grade, class_no, teacher_name, confirmed, confirmed_at}]}` |
+| `getAuditLogs(params)` | GET /audit-logs | `AuditPage {rows, total, page, per_page}` — `AuditRow`에 `actor_ip` 포함 |
+| `exportAuditLogs` | GET /audit-logs/export | blob |
 
 ### `frontend/src/api/teacher.js`
 
@@ -111,7 +119,7 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 | `teacherGetUniversities` | GET /teacher/universities | `[UnivRow]` |
 | `teacherGetUnivTracks(univId)` | GET /teacher/universities/:id/tracks | `[TrackRow]` |
 | `teacherGetAreaContext(studentId, trackId)` | GET /teacher/area-context | `AreaContextResponse` |
-| `teacherAreaScorePreview(areaId, trackId, values)` | POST /teacher/area-score-preview | `{score}` |
+| `teacherAreaScorePreview(areaId, trackId, values)` | POST /teacher/area-score-preview | `{score, matched_keys, warning, error}` — ApplicationTab.vue가 4개 필드 전부 사용 |
 | `teacherGetAllTracks` | GET /teacher/univ-tracks | `[TrackRow]` |
 | `teacherGetApplications(roundId)` | GET /teacher/applications | `[ApplicationRow]` |
 | `teacherCreateApplication(body)` | POST /teacher/applications | 201 |
@@ -119,6 +127,9 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 | `teacherChangePassword(current, new)` | PUT /teacher/password | - |
 | `teacherGetResults` | GET /teacher/results | `TeacherResultsResponse` |
 | `teacherAbandonApplication(sid, tid, rid)` | PUT /teacher/applications/:sid/:tid/:rid/abandon | - |
+| `teacherGetRoundConfirmation(roundId)` | GET /teacher/rounds/:id/confirm | `{confirmed, confirmed_at}` |
+| `teacherConfirmRound(roundId)` | POST /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |
+| `teacherRevokeRoundConfirmation(roundId)` | DELETE /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |
 
 ---
 
@@ -196,7 +207,8 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 student_id, track_id, round_id
 total_score         // Score 타입 → JSON: 소수 문자열 or 숫자 (serde로 f64 출력)
 score_detail        // 백: JSON 문자열 "{\"1\": Score, ...}" → 프론트: 객체 {area_id: Score}
-ranking             // null 가능
+ranking             // 대학 전체 순위. null 가능
+track_rank          // 모집단위 순위 (track_rank_window 파생). null 가능
 recommended         // bool
 abandoned           // bool
 excluded            // bool (미선발 여부. false면 excluded_reason은 null)
@@ -211,8 +223,11 @@ univ_name, track_name, department_name
 ```
 student_id, track_id, round_id
 abandoned       // bool
+excluded        // bool (미선발 여부)
+excluded_reason // string | null
 department_name // string
 student_code, name, grade, class_no, seq_no, is_enrolled
+univ_id         // ApplicationTab.vue가 모집단위 재조회에 사용
 univ_name, track_name
 recommended     // null | bool (results 테이블 LEFT JOIN)
 round_status    // "OPEN" | "CLOSED" | "FINALIZED"
