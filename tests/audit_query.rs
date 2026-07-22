@@ -293,3 +293,40 @@ async fn class_filter_combines_with_action_filter() {
     assert_eq!(page.total, 1, "학급+작업 유형 필터 결합");
     assert_eq!(page.rows[0].action, "APPLICATION_DELETED");
 }
+
+// ── actor_ip 노출 ────────────────────────────────────────────────────
+
+/// 백업 다운로드 등 계정 보안 이벤트의 IP는 DB에만 남는 게 아니라 조회 응답까지
+/// 실려야 한다 — 감사 화면 '상세' 열이 이 값을 표시한다.
+#[tokio::test]
+async fn actor_ip_is_returned_in_list() {
+    let pool = common::create_test_pool().await;
+    {
+        let mut conn = pool.acquire().await.unwrap();
+        audit::log_with_ip(
+            &mut *conn,
+            AuditEntry {
+                actor: Actor::Admin,
+                action: AuditAction::DbBackupDownloaded,
+                round_id: None,
+                student_id: None,
+                detail: serde_json::json!({ "filename": "pcm_backup.zip" }),
+            },
+            Some("192.168.0.42".to_string()),
+        )
+        .await
+        .unwrap();
+    }
+    // IP 없는 액션은 None 그대로여야 한다
+    insert_log(&pool, AuditAction::RoundOpened, None).await;
+
+    let state = common::make_state(pool);
+    let q = AuditQuery { grade: None, class_no: None, page: 1, per_page: 50, round_id: None, action: None };
+    let axum::Json(page) = list_audit_logs(State(state), Query(q)).await.unwrap();
+
+    let backup = page.rows.iter().find(|r| r.action == "DB_BACKUP_DOWNLOADED").unwrap();
+    assert_eq!(backup.actor_ip.as_deref(), Some("192.168.0.42"));
+
+    let opened = page.rows.iter().find(|r| r.action == "ROUND_OPENED").unwrap();
+    assert_eq!(opened.actor_ip, None, "IP 미기록 액션은 NULL 유지");
+}

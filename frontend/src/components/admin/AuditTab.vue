@@ -87,7 +87,7 @@
                 </span>
               </td>
               <td class="text-base" style="padding: 13px 20px; color: #475569;">{{ fmtTarget(row.detail) }}</td>
-              <td class="text-base" style="padding: 13px 20px; color: #64748b;">{{ fmtDetail(row.detail) }}</td>
+              <td class="text-base" style="padding: 13px 20px; color: #64748b;">{{ fmtDetail(row) }}</td>
             </tr>
             <tr v-if="auditPage.rows.length === 0">
               <td colspan="5" class="text-base text-center" style="padding: 48px 20px; color: #94a3b8;">
@@ -239,10 +239,12 @@ function fmtTarget(detailStr) {
   }
 }
 
-function fmtDetail(detailStr) {
+// 백업 다운로드·비밀번호 변경 등 계정 보안 이벤트는 actor_ip가 채워져 있다
+// (그 외 액션은 NULL — src/docs/01_auth.md 'actor_ip 필드 규약').
+function fmtDetail(row) {
+  const parts = []
   try {
-    const d = JSON.parse(detailStr)
-    const parts = []
+    const d = JSON.parse(row.detail)
     if (d.inserted != null) parts.push(`추가 ${d.inserted}건`)
     if (d.updated != null) parts.push(`수정 ${d.updated}건`)
     if (d.rows != null) parts.push(`${d.rows}행`)
@@ -253,10 +255,11 @@ function fmtDetail(detailStr) {
     if (d.student_type) parts.push(d.student_type === 'enrolled' ? '재학생' : '졸업생')
     if (d.auto != null) parts.push(d.auto ? '자동 해제 (지원 변경)' : '수동 해제')
     if (d.reason) parts.push(`사유: ${d.reason}`)
-    return parts.join(' · ')
   } catch {
-    return ''
+    // detail이 JSON이 아니어도 IP는 남긴다
   }
+  if (row.actor_ip) parts.push(`IP ${row.actor_ip}`)
+  return parts.join(' · ')
 }
 
 onMounted(() => {

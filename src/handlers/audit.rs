@@ -35,6 +35,9 @@ pub struct AuditRow {
     pub actor_grade: Option<i64>,
     pub actor_class_no: Option<i64>,
     pub actor_name: Option<String>,
+    /// 계정 보안 이벤트(백업 다운로드·비밀번호 변경)에만 채워진다. 그 외는 None.
+    /// 감사 화면 '상세' 열에 함께 표시된다 — src/docs/01_auth.md 'actor_ip 필드 규약'.
+    pub actor_ip: Option<String>,
     pub action: String,
     pub round_id: Option<i64>,
     pub student_id: Option<i64>,
@@ -76,7 +79,7 @@ pub async fn list_audit_logs(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rows = sqlx::query(
-        "SELECT id, at, actor_type, actor_grade, actor_class_no, actor_name,
+        "SELECT id, at, actor_type, actor_grade, actor_class_no, actor_name, actor_ip,
                 action, round_id, student_id, detail
          FROM audit_log
          WHERE (? IS NULL OR round_id = ?)
@@ -107,6 +110,7 @@ pub async fn list_audit_logs(
             actor_grade: row.get("actor_grade"),
             actor_class_no: row.get("actor_class_no"),
             actor_name: row.get("actor_name"),
+            actor_ip: row.get("actor_ip"),
             action: row.get("action"),
             round_id: row.get("round_id"),
             student_id: row.get("student_id"),
@@ -123,7 +127,7 @@ pub async fn export_audit_logs(
     Query(q): Query<AuditQuery>,
 ) -> Result<Response, ApiError> {
     let rows = sqlx::query(
-        "SELECT id, at, actor_type, actor_grade, actor_class_no, actor_name,
+        "SELECT id, at, actor_type, actor_grade, actor_class_no, actor_name, actor_ip,
                 action, round_id, student_id, detail
          FROM audit_log
          WHERE (? IS NULL OR round_id = ?)
@@ -146,7 +150,8 @@ pub async fn export_audit_logs(
     let ws = wb.add_worksheet();
     ws.set_name("감사기록").map_err(excel::xlsx_err)?;
 
-    for (i, h) in ["시각", "행위자", "행위", "라운드", "상세"].iter().enumerate() {
+    // IP는 기존 열 순서를 흔들지 않도록 맨 뒤에 붙인다 (대부분의 행에서는 빈 칸).
+    for (i, h) in ["시각", "행위자", "행위", "라운드", "상세", "IP"].iter().enumerate() {
         ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
     }
 
@@ -183,6 +188,11 @@ pub async fn export_audit_logs(
 
         let detail: String = row.get("detail");
         ws.write_string(r, 4, &detail).map_err(excel::xlsx_err)?;
+
+        let actor_ip: Option<String> = row.get("actor_ip");
+        if let Some(ip) = actor_ip {
+            ws.write_string(r, 5, &ip).map_err(excel::xlsx_err)?;
+        }
     }
 
     let buf = wb
