@@ -6,8 +6,8 @@ use axum::{
 };
 use principal_candidate_manager::handlers::universities::{
     create_track, delete_track, delete_university, export_quota_stats, get_quota_stats,
-    update_track, update_university, CreateTrackBody, ExportQuotaQuery, UpdateTrackBody,
-    UpdateUnivBody,
+    get_track_recommended_list, update_track, update_university, CreateTrackBody,
+    ExportQuotaQuery, UpdateTrackBody, UpdateUnivBody,
 };
 
 // ── 공통 픽스처 ────────────────────────────────────────────────────
@@ -151,6 +151,119 @@ async fn get_quota_stats_counts_recommended_excluding_abandoned() {
     );
     assert!(b.by_round.is_empty(), "B는 포기라 라운드별 내역이 없어야 함: {:?}",
         b.by_round.iter().map(|c| (c.round_id, c.count)).collect::<Vec<_>>());
+}
+
+// ── get_track_recommended_list ─────────────────────────────────────
+//
+// 모집단위별 "추천 확정 학생 목록"은 관리자가 정원 현황에서 열어보는 화면인데
+// 이 핸들러를 호출하는 테스트가 하나도 없었다. 필터(recommended=1)와 정렬
+// (round_id → ranking NULLS LAST → name)이 조용히 바뀌어도 스위트가 초록이었다.
+
+/// (라운드 상태, 모집단위) 위에 결과 행을 만든다. rec/aband/ranking 을 그대로 반영.
+async fn seed_result(
+    pool: &sqlx::SqlitePool,
+    track_id: i64,
+    round_id: i64,
+    code: &str,
+    name: &str,
+    seq_no: i64,
+    ranking: Option<i64>,
+    rec: i64,
+    aband: i64,
+) -> i64 {
+    let sid: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
+    )
+    .bind(code).bind(name).bind(seq_no)
+    .fetch_one(pool).await.unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, ?)")
+        .bind(sid).bind(track_id).bind(round_id).bind(aband)
+        .execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+         ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, ?, ?, '2025-01-09')",
+    )
+    .bind(sid).bind(track_id).bind(round_id).bind(ranking).bind(rec)
+    .execute(pool).await.unwrap();
+    sid
+}
+
+async fn two_rounds(pool: &sqlx::SqlitePool) -> (i64, i64) {
+    let r1: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, finalized_at) \
+         VALUES ('FINALIZED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+    let r2: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-02-01', '2025-02-05') RETURNING id",
+    ).fetch_one(pool).await.unwrap();
+    (r1, r2)
+}
+
+#[tokio::test]
+async fn get_track_recommended_list_returns_only_recommended_rows_with_abandoned_flag() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track(&pool, uid, "컴공").await;
+    let other = insert_track(&pool, uid, "전자").await;
+    let (r1, r2) = two_rounds(&pool).await;
+
+    let rec = seed_result(&pool, tid, r1, "S001", "확정자", 1, Some(1), 1, 0).await;
+    let _not_rec = seed_result(&pool, tid, r1, "S002", "미확정자", 2, Some(2), 0, 0).await;
+    // 포기자는 정원에서 빠지지만 "추천했었다"는 이력은 남는다 → 목록에는 표시하되 플래그로 구분
+    let aband = seed_result(&pool, tid, r2, "S003", "포기자", 3, Some(5), 1, 1).await;
+    // 다른 모집단위 확정자는 새면 안 된다
+    let _other = seed_result(&pool, other, r2, "S004", "타트랙", 4, Some(1), 1, 0).await;
+
+    let axum::Json(rows) =
+        get_track_recommended_list(State(common::make_state(pool)), Path(tid)).await.unwrap();
+
+    assert_eq!(
+        rows.iter().map(|r| (r.student_id, r.abandoned)).collect::<Vec<_>>(),
+        vec![(rec, false), (aband, true)],
+        "recommended=1 행만, 포기 여부는 플래그로: {:?}",
+        rows.iter().map(|r| (&r.name, r.abandoned)).collect::<Vec<_>>(),
+    );
+    assert_eq!(rows[0].student_code, "S001");
+    assert_eq!(rows[0].ranking, Some(1));
+    assert_eq!(rows[0].is_enrolled, true);
+}
+
+#[tokio::test]
+async fn get_track_recommended_list_orders_by_round_then_ranking_nulls_last() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track(&pool, uid, "컴공").await;
+    let (r1, r2) = two_rounds(&pool).await;
+
+    // 삽입 순서를 기대 정렬과 일부러 어긋나게 둔다 — ORDER BY 가 없어도 통과하면 안 된다.
+    //
+    // 이름은 **기대 정렬의 역순**이 되도록 A~D 접두어를 붙인다. 이름을 설명적으로
+    // ("라운드1_1위" 식) 지으면 이름 오름차순이 기대 정렬과 우연히 일치해서,
+    // ORDER BY 가 `s.name` 하나로 줄어들어도 테스트가 통과해 버린다(실제로 그랬다).
+    // 같은 라운드·같은 순위 두 명(S005, S003)으로 세 번째 키인 이름 정렬을,
+    // 순위 미계산(S004)으로 NULLS LAST 를 각각 고정한다.
+    seed_result(&pool, tid, r2, "S004", "A_2차_순위없음", 4, None, 1, 0).await;
+    seed_result(&pool, tid, r1, "S002", "C_1차_2위", 2, Some(2), 1, 0).await;
+    seed_result(&pool, tid, r2, "S003", "B_2차_1위", 3, Some(1), 1, 0).await;
+    seed_result(&pool, tid, r1, "S001", "D_1차_1위", 1, Some(1), 1, 0).await;
+    seed_result(&pool, tid, r2, "S005", "A_2차_1위동점", 5, Some(1), 1, 0).await;
+
+    let axum::Json(rows) =
+        get_track_recommended_list(State(common::make_state(pool)), Path(tid)).await.unwrap();
+
+    assert_eq!(
+        rows.iter().map(|r| (r.round_id, r.student_code.as_str())).collect::<Vec<_>>(),
+        vec![(r1, "S001"), (r1, "S002"), (r2, "S005"), (r2, "S003"), (r2, "S004")],
+        "라운드 오름차순 → 순위 오름차순 → (동점은 이름 오름차순) → 순위 미계산은 맨 뒤",
+    );
 }
 
 // ── delete_track ───────────────────────────────────────────────────
@@ -418,6 +531,91 @@ async fn export_quota_stats_empty_db_returns_header_only() {
     assert_eq!(rows.len(), 1, "빈 DB → 헤더 행만");
     assert_eq!(rows[0][0], "대학명", "첫 번째 헤더 열");
     assert!(cd.contains("전체_추천현황"), "빈 DB 파일명: {cd}");
+}
+
+/// 라운드별 추천 인원 열("1차 추천", "2차 추천", …)은 `all_round_ids` 순서로 붙는
+/// 동적 열이라 헤더 라벨과 셀 값이 어긋나기 쉽다. 기존 export 테스트는 정원·잔여만
+/// 봤고, 픽스처의 라운드별 인원이 모두 같아 열이 뒤바뀌어도 통과했다.
+#[tokio::test]
+async fn export_quota_stats_round_columns_carry_per_round_counts() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 10) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let ta: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, 'A컴공', 10) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let tb: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, 'B전자', 10) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let (r1, r2) = two_rounds(&pool).await;
+
+    // A: 1차 2명 · 2차 1명 / B: 1차 0명 · 2차 3명 — 라운드축·트랙축 모두 비대칭
+    let plan = [
+        (ta, r1), (ta, r1), (ta, r2),
+        (tb, r2), (tb, r2), (tb, r2),
+    ];
+    for (i, (tid, rid)) in plan.into_iter().enumerate() {
+        seed_result(&pool, tid, rid, &format!("S{:03}", i + 1), "학생", i as i64 + 1, Some(1), 1, 0).await;
+    }
+
+    let (bytes, _) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let (c_track, c1, c2) = (col_of("모집단위"), col_of("1차 추천"), col_of("2차 추천"));
+    assert!(c1 < c2, "라운드 열은 라운드 오름차순으로 붙어야 함: {header:?}");
+
+    let a = rows[1..].iter().find(|r| r[c_track] == "A컴공").expect("A컴공 행");
+    assert_eq!(
+        (a[c1].as_str(), a[c2].as_str()), ("2", "1"),
+        "A: 1차 2명 · 2차 1명 이어야 함: {a:?}",
+    );
+    let b = rows[1..].iter().find(|r| r[c_track] == "B전자").expect("B전자 행");
+    assert_eq!(
+        (b[c1].as_str(), b[c2].as_str()), ("0", "3"),
+        "B: 1차 0명 · 2차 3명 이어야 함(내역 없는 라운드는 0): {b:?}",
+    );
+}
+
+/// 정원을 나중에 줄이면 확정 인원이 정원을 넘을 수 있다. 잔여인원이 음수로
+/// 나가면 관리자가 "-1명 남음"을 보게 된다 — `.max(0)` 클램프가 이를 막는다.
+/// 기존 픽스처는 정원과 확정 인원이 정확히 맞아떨어져 클램프가 발동한 적이 없다.
+#[tokio::test]
+async fn export_quota_stats_clamps_negative_remaining_to_zero() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 1) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let (r1, _r2) = two_rounds(&pool).await;
+
+    seed_result(&pool, tid, r1, "S001", "학생", 1, Some(1), 1, 0).await;
+    seed_result(&pool, tid, r1, "S002", "학생", 2, Some(2), 1, 0).await;
+
+    let (bytes, _) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let r = &rows[1];
+
+    // 추천 인원은 실제 값(2)을 그대로, 잔여만 0 으로 클램프
+    assert_eq!(r[col_of("추천인원")], "2", "실제 확정 인원: {r:?}");
+    assert_eq!(r[col_of("잔여인원")], "0", "정원 1 - 확정 2 = -1 → 0 으로 클램프: {r:?}");
+    assert_eq!(r[col_of("대학 추천인원")], "2", "대학 확정 인원: {r:?}");
+    assert_eq!(r[col_of("대학 잔여인원")], "0", "대학 잔여도 음수 금지: {r:?}");
 }
 
 // ── prioritize_enrolled 불변식 트리거 (DB 레벨) ────────────────────

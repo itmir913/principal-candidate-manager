@@ -584,6 +584,212 @@ async fn score_preview_manual_exceeds_max_score_returns_warning() {
     assert_eq!(resp.score.unwrap().raw(), 1000000); // 만점 캡핑
 }
 
+// ── matched_keys: LOWER / EXACT 분기 ──────────────────────────────
+//
+// 하이라이팅 행은 `scoring.rs::find_numeric_matched_threshold` 가 정하는데,
+// 이 함수는 `lookup_range_score` 와 **대칭이지만 별개**다 — 점수는 맞는데 표에서
+// 짚어주는 행만 어긋나는 회귀가 성립한다. 지금까지 UPPER 한 갈래만 단언돼 있어
+// LOWER(폴백 포함)·EXACT 두 갈래는 통째로 미검증이었다.
+
+/// NUMERIC 전형요소 하나를 점수표와 함께 추가한다. rows 는 (threshold, score) 원시 정수.
+async fn add_numeric_area(
+    pool: &sqlx::SqlitePool,
+    name: &str,
+    match_mode: &str,
+    max_score: i64,
+    rows: &[(i64, i64)],
+) -> i64 {
+    let aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, teacher_editable, lookup_scope, match_mode)
+         VALUES (?, ?, 'NUMERIC', 1, 'SIMPLE', ?) RETURNING id",
+    )
+    .bind(name)
+    .bind(max_score)
+    .bind(match_mode)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    for (th, sc) in rows {
+        sqlx::query("INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)")
+            .bind(aid)
+            .bind(th)
+            .bind(sc)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    aid
+}
+
+/// 결석일수 구간표 — LOWER(threshold = 허용 상한): 0일 5점 / 1일 4점 / 3일 3점 / 5일 2점
+const ABSENCE_ROWS: [(i64, i64); 4] = [
+    (0, 500_000),
+    (100_000, 400_000),
+    (300_000, 300_000),
+    (500_000, 200_000),
+];
+
+#[tokio::test]
+async fn score_preview_numeric_lower_matched_key_is_min_threshold_at_or_above_value() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id = add_numeric_area(&pool, "결석일수", "LOWER", 500_000, &ABSENCE_ROWS).await;
+
+    // 2일 → 값 이상인 threshold 중 최소(3일) 행이 적용 → 3점, 하이라이팅 키도 3.0
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["2".into()] }),
+    ).await.unwrap().0;
+
+    assert_eq!(resp.error, None);
+    assert_eq!(resp.score.unwrap().raw(), 300_000, "2일 → 3일 구간의 3점");
+    assert_eq!(resp.matched_keys.len(), 1, "키는 하나: {:?}", resp.matched_keys);
+    assert_eq!(
+        resp.matched_keys[0].as_f64(), Some(3.0),
+        "하이라이팅 행은 실제 적용된 3일 구간이어야 함: {:?}", resp.matched_keys,
+    );
+}
+
+#[tokio::test]
+async fn score_preview_numeric_lower_above_max_threshold_matched_key_falls_back_to_max() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id = add_numeric_area(&pool, "결석일수", "LOWER", 500_000, &ABSENCE_ROWS).await;
+
+    // 9일 — 어떤 threshold 도 값 이상이 아니다 → 최대 threshold(5일) 행으로 폴백.
+    // 점수와 하이라이팅 키가 **같은 행**을 가리켜야 한다.
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["9".into()] }),
+    ).await.unwrap().0;
+
+    assert_eq!(resp.error, None);
+    assert_eq!(resp.score.unwrap().raw(), 200_000, "최대 구간(5일)의 2점으로 폴백");
+    assert_eq!(
+        resp.matched_keys.iter().filter_map(|k| k.as_f64()).collect::<Vec<_>>(),
+        vec![5.0],
+        "폴백 시에도 키는 최대 threshold(5일): {:?}", resp.matched_keys,
+    );
+}
+
+#[tokio::test]
+async fn score_preview_numeric_exact_matched_key_equals_input_value() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id = add_numeric_area(
+        &pool, "자격증급수", "EXACT", 500_000,
+        &[(100_000, 100_000), (200_000, 250_000), (300_000, 400_000)],
+    ).await;
+
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["2".into()] }),
+    ).await.unwrap().0;
+
+    assert_eq!(resp.error, None);
+    assert_eq!(resp.score.unwrap().raw(), 250_000, "2급 행의 점수");
+    assert_eq!(
+        resp.matched_keys.iter().filter_map(|k| k.as_f64()).collect::<Vec<_>>(),
+        vec![2.0],
+        "EXACT 는 입력값과 같은 키만 짚어야 함(이웃 행 금지): {:?}", resp.matched_keys,
+    );
+}
+
+#[tokio::test]
+async fn score_preview_numeric_exact_miss_returns_error_and_no_key() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id = add_numeric_area(
+        &pool, "자격증급수", "EXACT", 500_000,
+        &[(100_000, 100_000), (200_000, 250_000)],
+    ).await;
+
+    // 1.5급 — 등록되지 않은 값. EXACT 는 근처 행으로 조용히 떨어지면 안 된다.
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["1.5".into()] }),
+    ).await.unwrap().0;
+
+    assert_eq!(resp.score, None, "매칭 실패인데 점수가 나오면 안 됨");
+    assert!(resp.matched_keys.is_empty(), "매칭 실패 시 하이라이팅 없음: {:?}", resp.matched_keys);
+    let err = resp.error.expect("오류 메시지");
+    assert!(err.contains("EXACT"), "원인이 EXACT 매칭 실패임을 밝혀야 함: {err}");
+}
+
+/// NUMERIC 은 구간표 점수가 만점을 넘을 수 있다(표가 잘못 올라온 경우).
+/// 이때 캡핑 + 경고 문구가 MANUAL 과 **다른 문장**이어야 한다 —
+/// 지금까지 MANUAL 갈래만 단언돼 있어 두 문구를 뒤바꿔도 통과했다.
+#[tokio::test]
+async fn score_preview_numeric_over_max_score_caps_and_warns_with_calculated_wording() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    // 만점 2점인데 구간 점수는 5점
+    let area_id = add_numeric_area(&pool, "초과요소", "UPPER", 200_000, &[(0, 500_000)]).await;
+
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["1".into()] }),
+    ).await.unwrap().0;
+
+    assert_eq!(resp.error, None);
+    assert_eq!(resp.score.unwrap().raw(), 200_000, "만점으로 캡핑");
+    let w = resp.warning.expect("만점 초과 경고");
+    assert!(w.starts_with("계산된 점수가"), "NUMERIC 은 '계산된 점수' 문구: {w}");
+    assert!(!w.contains("입력값"), "MANUAL 문구가 새면 안 됨: {w}");
+}
+
+// ── 미리보기 입력 검증 ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn score_preview_empty_values_returns_error_without_score() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id = get_area_id(&pool, "봉사시간").await;
+
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec![] }),
+    ).await.unwrap().0;
+
+    // 빈 입력을 0점으로 처리하면 담임 화면에 "0점"이 확정처럼 표시된다 — 반드시 오류
+    assert_eq!(resp.score, None, "빈 입력에 점수를 매기면 안 됨");
+    assert!(resp.matched_keys.is_empty());
+    assert_eq!(resp.error.as_deref(), Some("값이 입력되지 않았습니다"));
+}
+
+#[tokio::test]
+async fn score_preview_unknown_area_returns_404() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+
+    let res = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id: 9999, track_id: tid, values: vec!["1".into()] }),
+    ).await;
+    // 없는 전형요소를 "값 없음" 미리보기(200)로 흘리면 담임 화면에 원인이 안 뜬다
+    let err = match res {
+        Ok(_) => panic!("없는 전형요소인데 성공 응답이 나왔다"),
+        Err(e) => e,
+    };
+
+    assert_eq!(err.0, StatusCode::NOT_FOUND, "없는 전형요소는 404");
+    assert!(err.1.contains("9999"), "어느 id 가 없는지 밝혀야 함: {}", err.1);
+}
+
 // ── base_data 저장 포함 지원 등록 ─────────────────────────────────
 
 #[tokio::test]

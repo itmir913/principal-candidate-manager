@@ -34,3 +34,21 @@ fn score_boundary_one_billion() {
     let err = serde_json::from_str::<Score>("1000000001");
     assert!(err.is_err(), "10억 초과는 거부되어야 함");
 }
+
+/// `Score` 역직렬화는 `(f * 100_000.0).round()` 로 최소 단위를 정한다.
+/// 기존 테스트는 `0.00001`(= 정확히 1) 처럼 반올림이 개입하지 않는 값만 봐서,
+/// `.round()` 가 절삭(`as i64`)으로 바뀌어도 전부 통과했다.
+/// 최소 단위의 절반(0.000005)은 **올림**, 그 아래(0.000004)는 **버림**이어야 하며
+/// 음수에서도 0에서 멀어지는 방향으로 대칭이어야 한다.
+#[test]
+fn score_deserialize_rounds_half_away_from_zero() {
+    for (json, raw) in [
+        ("0.000005", 1i64),   // 0.5 raw → 올림
+        ("0.000004", 0),      // 0.4 raw → 버림
+        ("-0.000005", -1),    // 음수도 0에서 멀어지는 방향
+        ("-0.000004", 0),
+    ] {
+        let s: Score = serde_json::from_str(json).unwrap();
+        assert_eq!(s.raw(), raw, "입력 {} 의 raw 값", json);
+    }
+}

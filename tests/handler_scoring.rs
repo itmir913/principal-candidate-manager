@@ -9,8 +9,8 @@ use axum::extract::Query;
 use principal_candidate_manager::handlers::scoring::{
     calc_area_score, calculate_scores, export_results, export_round_summary, get_results,
     lookup_range_score,
-    recommend_result, teacher_get_results, unrecommend_result,
-    AreaRow, ResultQuery, ResultRow, StudentTrackCtx,
+    recommend_result, score_preview, teacher_get_results, unrecommend_result,
+    AreaRow, ResultQuery, ResultRow, ScorePreviewQuery, StudentTrackCtx,
 };
 use principal_candidate_manager::score::Score;
 
@@ -2300,4 +2300,265 @@ async fn each_scope_own_prioritize_flag_no_silent_or() {
     let tr_grad = rows.iter().find(|r| r.student_id == sid_grad).unwrap().track_rank;
     assert_eq!(tr_enr, Some(1), "트랙=1: track_rank 재학생 우선 → 재학생 1위");
     assert_eq!(tr_grad, Some(2), "트랙=1: 졸업생 2위");
+}
+
+// ── score_preview (관리자 GET /api/score-preview) ──────────────────
+//
+// 관리자 화면의 점수 미리보기 진입점인데 이 핸들러를 호출하는 테스트가 하나도
+// 없었다. 전형요소 순회·합산·per-area 응답 조립이 통째로 미검증이라, 예를 들어
+// 마지막 전형요소를 빠뜨리거나 총점을 detail 과 다르게 만들어도 스위트가 초록이었다.
+
+#[tokio::test]
+async fn score_preview_returns_total_and_per_area_detail() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, _rid) = setup_full(&pool).await;
+
+    // NUMERIC(UPPER): 35시간 → 30시간 구간 3점
+    let num_aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope, match_mode) \
+         VALUES ('봉사시간', 500000, 'NUMERIC', 'SIMPLE', 'UPPER') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    for (th, sc) in [(1_000_000i64, 100_000i64), (3_000_000, 300_000)] {
+        sqlx::query("INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, ?, ?)")
+            .bind(num_aid).bind(th).bind(sc).execute(&pool).await.unwrap();
+    }
+    // MANUAL: 4.5점 그대로
+    let man_aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('면접점수', 1000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    for (aid, v) in [(num_aid, "3500000"), (man_aid, "450000")] {
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, ?)")
+            .bind(sid).bind(aid).bind(v).execute(&pool).await.unwrap();
+    }
+
+    let axum::Json(resp) = score_preview(
+        State(common::make_state(pool)),
+        Query(ScorePreviewQuery { student_id: sid, track_id: tid }),
+    ).await.unwrap();
+
+    // 총점은 전형요소별 점수의 합이어야 한다 (3점 + 4.5점 = 7.5점)
+    assert_eq!(resp.total.raw(), 750_000, "총점 raw");
+    assert_eq!(
+        resp.detail.iter().map(|d| (d.area_id, d.area_name.as_str(), d.score.raw())).collect::<Vec<_>>(),
+        vec![(num_aid, "봉사시간", 300_000), (man_aid, "면접점수", 450_000)],
+        "전형요소별 내역은 areas ORDER BY id 순서로 전부 실려야 한다",
+    );
+    assert_eq!(
+        resp.detail.iter().map(|d| d.score.raw()).sum::<i64>(),
+        resp.total.raw(),
+        "total 과 detail 합이 어긋나면 화면과 확정 점수가 갈린다",
+    );
+}
+
+/// 기초데이터가 없으면 0점으로 흘리지 않고 즉시 오류여야 한다(Fail-Fast).
+/// 미리보기가 조용히 0을 보여주면 관리자가 그 값을 정상으로 오인한다.
+#[tokio::test]
+async fn score_preview_missing_base_data_returns_500_with_context() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, _rid) = setup_full(&pool).await;
+    sqlx::query(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('면접점수', 1000000, 'MANUAL', 'SIMPLE')",
+    ).execute(&pool).await.unwrap();
+
+    let res = score_preview(
+        State(common::make_state(pool)),
+        Query(ScorePreviewQuery { student_id: sid, track_id: tid }),
+    ).await;
+    let err = match res {
+        Ok(r) => panic!("기초데이터가 없는데 점수가 나왔다: total={}", r.0.total.raw()),
+        Err(e) => e,
+    };
+
+    assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+    // 어느 전형요소·어느 학생·어느 모집단위인지가 메시지에 있어야 관리자가 고칠 수 있다
+    for needle in ["면접점수", "홍길동", "S001", "한국대", "컴공"] {
+        assert!(err.1.contains(needle), "오류 메시지에 '{}' 가 없다: {}", needle, err.1);
+    }
+}
+
+// ── 모집단위 순위의 라운드 파티션 ─────────────────────────────────
+//
+// `track_rank_window(.., partition_by_round = true)` 는 **여러 라운드가 섞이는**
+// 쿼리에서만 의미가 있다. get_results 는 WHERE 로 라운드를 이미 고정하므로
+// (윈도우 함수는 WHERE 이후에 계산된다) 라운드 파티션이 빠져도 값이 같다 —
+// 즉 기존 track_rank 테스트들은 이 인자를 전혀 검증하지 못한다.
+// export_round_summary 의 CTE 는 라운드 필터 없이 results 전체를 훑으므로,
+// 여기서만 파티션 누락이 드러난다.
+#[tokio::test]
+async fn export_round_summary_track_rank_restarts_each_round() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+
+    let r1: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, finalized_at) \
+         VALUES ('FINALIZED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let r2: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-02-01', '2025-02-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // 2차 지원자(C·D)의 점수는 1차 지원자(A·B) 전원보다 낮다.
+    // 라운드로 파티션하지 않으면 C·D 는 3위·4위가 된다.
+    for (seq, (name, rid, score)) in [
+        ("에이", r1, 900_000i64),
+        ("비",   r1, 800_000),
+        ("씨",   r2, 700_000),
+        ("디",   r2, 600_000),
+    ].into_iter().enumerate()
+    {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, 1, ?, 1) RETURNING id",
+        )
+        .bind(format!("S00{}", seq + 1)).bind(name).bind(seq as i64 + 1)
+        .fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', ?, NULL, 0, '2025-02-06')",
+        ).bind(sid).bind(tid).bind(rid).bind(score).execute(&pool).await.unwrap();
+    }
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자결과").unwrap();
+
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let (c_name, c_rank) = (col_of("이름"), col_of("모집단위 순위"));
+
+    assert_eq!(rows.len(), 3, "2차 지원자 2명만 실려야 함: {rows:?}");
+    let names: Vec<&str> = rows[1..].iter().map(|r| r[c_name].as_str()).collect();
+    assert!(!names.contains(&"에이"), "1차 지원자가 2차 시트에 새면 안 됨: {names:?}");
+
+    let c = rows[1..].iter().find(|r| r[c_name] == "씨").expect("씨 행");
+    let d = rows[1..].iter().find(|r| r[c_name] == "디").expect("디 행");
+    assert_eq!(c[c_rank], "1", "2차 최고점은 그 라운드의 1위여야 함(1차와 합산 금지): {c:?}");
+    assert_eq!(d[c_rank], "2", "2차 차점자는 2위: {d:?}");
+}
+
+/// 담임 화면의 모집단위 순위는 **학급 필터 이전의 전체 결과** 기준이어야 한다.
+/// CTE 를 걷어내고 학급 필터가 걸린 집합에서 순위를 매기면, 타 학급 상위자가
+/// 사라져 담임에게 "우리 반 학생이 1위"로 보인다 — 실제 순위와 다른 값이 나간다.
+#[tokio::test]
+async fn teacher_get_results_track_rank_counts_students_in_other_classes() {
+    let pool = common::create_test_pool().await;
+    let (_grad_sid, tid, rid) = setup_grad_result(&pool).await;
+
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    for (grade, class_no) in [(1, 1), (1, 2)] {
+        sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (?, ?, ?)")
+            .bind(grade).bind(class_no).bind(&hash)
+            .execute(&pool).await.unwrap();
+    }
+    // 1반 홍길동 5점 / 2반 이순신 9점 — 같은 모집단위, 같은 FINALIZED 라운드
+    let mut sids = Vec::new();
+    for (code, name, class_no, score) in
+        [("S001", "홍길동", 1i64, 500_000i64), ("S002", "이순신", 2, 900_000)]
+    {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, ?, 1, ?, 1, 1) RETURNING id",
+        ).bind(code).bind(name).bind(class_no).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', ?, NULL, 0, '2025-01-09')",
+        ).bind(sid).bind(tid).bind(rid).bind(score).execute(&pool).await.unwrap();
+        sids.push(sid);
+    }
+
+    let res = teacher_get_results(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+    ).await.unwrap();
+
+    assert_eq!(res.0.results.len(), 1, "1반 담임에게는 1반 학생만");
+    let row = &res.0.results[0];
+    assert_eq!(row.student_id, sids[0]);
+    assert_eq!(
+        row.track_rank, Some(2),
+        "2반 이순신(9점)이 위에 있으므로 홍길동은 모집단위 2위여야 한다",
+    );
+}
+
+/// 정원보다 많이 추천된 상태(정원을 나중에 줄인 경우 등)에서 잔여석이 음수로
+/// 나가면 관리자가 "-1석 남음"을 보게 된다. `.max(0)` 클램프가 이를 막는데,
+/// 기존 픽스처는 정원과 확정 인원이 정확히 맞아떨어져 클램프가 한 번도 발동하지 않았다.
+#[tokio::test]
+async fn export_round_summary_clamps_negative_remaining_to_zero() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+
+    // 정원은 각각 1석뿐인데 1차에서 이미 2명이 확정됐고 2차에서 1명 더 확정된다
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 1) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+
+    let r1: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, finalized_at) \
+         VALUES ('FINALIZED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let r2: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-02-01', '2025-02-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    for (seq, (code, rid)) in [("S001", r1), ("S002", r1), ("S003", r2)].into_iter().enumerate() {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, '학생', 1, 1, ?, 1) RETURNING id",
+        ).bind(code).bind(seq as i64 + 1).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, 1, 1, '2025-01-09')",
+        ).bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let data = &rows[1];
+
+    // 정원 1 - 이전 확정 2 = -1, 여기서 이번 1명 더 = -2 → 둘 다 0 으로 클램프
+    for (h, want) in [
+        ("모집단위 라운드 전 잔여석", "0"),
+        ("모집단위 남은 잔여석", "0"),
+        ("대학 라운드 전 잔여석", "0"),
+        ("대학 남은 잔여석", "0"),
+    ] {
+        let c = col_of(h);
+        assert_eq!(
+            data.get(c).map(String::as_str), Some(want),
+            "'{}' 열({})은 음수 대신 '{}' 이어야 함: {:?}", h, c, want, data,
+        );
+    }
+    // 클램프가 "이번 라운드 추천 인원"까지 뭉개면 안 된다 — 이 값은 실제 카운트
+    assert_eq!(data[col_of("이번 라운드 추천 인원")], "1", "이번 라운드 확정 1명: {data:?}");
 }
