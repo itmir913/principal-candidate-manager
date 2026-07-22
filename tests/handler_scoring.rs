@@ -2045,6 +2045,153 @@ async fn export_round_summary_applicant_sheet_populates_track_rank() {
     assert_eq!(kim[rank_col], "2", "저득점자가 모집단위 2위여야 함: {kim:?}");
 }
 
+/// 감점은 `compute_area_score` 단위로만 검증돼 있었고, **여러 전형요소를 합산하는
+/// `calculate_scores` 경로에 감점이 섞인 총점**을 단언하는 테스트가 없었다.
+/// 합산 시 감점을 0으로 clamp 하거나 부호를 뒤집는 회귀가 초록으로 통과한다.
+#[tokio::test]
+async fn calculate_scores_total_includes_negative_deduction_area() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    // 가점 영역: 만점 100 → 80점 / 감점 영역: 만점 0 → -5점
+    let plus: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('내신', 10000000, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let minus: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, lookup_scope) \
+         VALUES ('감점', 0, 'MANUAL', 'SIMPLE') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    for (aid, v) in [(plus, "8000000"), (minus, "-500000")] {
+        sqlx::query("INSERT INTO base_data (student_id, area_id, track_id, value) VALUES (?, ?, NULL, ?)")
+            .bind(sid).bind(aid).bind(v).execute(&pool).await.unwrap();
+    }
+
+    sqlx::query("UPDATE rounds SET status = 'CLOSED', closed_at = '2025-01-02' WHERE id = ?")
+        .bind(rid).execute(&pool).await.unwrap();
+    let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
+
+    let (total, detail): (i64, String) = sqlx::query_as(
+        "SELECT total_score, score_detail FROM results WHERE round_id = ?",
+    ).bind(rid).fetch_one(&pool).await.unwrap();
+
+    // 80 + (-5) = 75 → raw 7_500_000. 감점이 0으로 잘리면 8_000_000 이 되어 실패한다.
+    assert_eq!(total, 7_500_000, "총점은 가점−감점이어야 함 (detail={detail})");
+
+    let map: serde_json::Value = serde_json::from_str(&detail).unwrap();
+    assert_eq!(map[minus.to_string()], serde_json::json!(-500_000), "감점 영역은 음수로 저장: {detail}");
+    assert_eq!(map[plus.to_string()], serde_json::json!(8_000_000), "가점 영역: {detail}");
+}
+
+/// `export_round_summary` 의 "라운드결과" 시트 — 관리자가 잔여석을 읽는 산출물인데
+/// 지금까지 이 시트를 파싱하는 테스트가 하나도 없었다. `(q - before).max(0)` /
+/// `(q - before - this).max(0)` 산술이 조용히 틀려도 전 스위트가 초록이었다.
+#[tokio::test]
+async fn export_round_summary_track_sheet_computes_remaining_seats() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 3) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 2) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+
+    let r1: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, finalized_at) \
+         VALUES ('FINALIZED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let r2: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-02-01', '2025-02-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // (학번, 라운드, recommended, abandoned)
+    //  이전 라운드 1명 확정 → before_count=1 / 이번 라운드 1명 확정 → this_count=1
+    //  포기자는 어느 쪽에도 세지 않아야 한다
+    for (seq, (code, rid, rec, aband)) in [
+        ("S001", r1, 1, 0),
+        ("S002", r2, 1, 0),
+        ("S003", r2, 1, 1),
+    ].into_iter().enumerate()
+    {
+        // seq_no 는 학급 내 유일해야 한다 (idx_students_position)
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, '학생', 1, 1, ?, 1) RETURNING id",
+        ).bind(code).bind(seq as i64 + 1).fetch_one(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, ?)",
+        ).bind(sid).bind(tid).bind(rid).bind(aband).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, 1, ?, '2025-01-09')",
+        ).bind(sid).bind(tid).bind(rid).bind(rec).execute(&pool).await.unwrap();
+    }
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let data = &rows[1];
+
+    // 트랙 정원 2, 이전 확정 1 → 라운드 전 잔여 1, 이번 1명 → 남은 잔여 0
+    // 대학 정원 3, 이전 확정 1 → 라운드 전 잔여 2, 이번 1명 → 남은 잔여 1
+    for (h, want) in [
+        ("모집단위 정원", "2"),
+        ("모집단위 라운드 전 잔여석", "1"),
+        ("이번 라운드 추천 인원", "1"),
+        ("모집단위 남은 잔여석", "0"),
+        ("대학 전체 정원", "3"),
+        ("대학 라운드 전 잔여석", "2"),
+        ("대학 남은 잔여석", "1"),
+    ] {
+        let c = col_of(h);
+        assert_eq!(
+            data.get(c).map(String::as_str), Some(want),
+            "'{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, data,
+        );
+    }
+}
+
+/// 정원 무제한(NULL)은 0 이 아니라 "무제한" 문자열로 나가야 한다.
+#[tokio::test]
+async fn export_round_summary_unlimited_quota_renders_as_text() {
+    let pool = common::create_test_pool().await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('무제한대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    sqlx::query("INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '자유전공')")
+        .bind(uid).execute(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h).unwrap();
+    let data = &rows[1];
+
+    for h in [
+        "모집단위 정원", "모집단위 라운드 전 잔여석", "모집단위 남은 잔여석",
+        "대학 전체 정원", "대학 라운드 전 잔여석", "대학 남은 잔여석",
+    ] {
+        assert_eq!(data[col_of(h)], "무제한", "'{h}' 열은 '무제한' 이어야 함: {data:?}");
+    }
+    assert_eq!(data[col_of("이번 라운드 추천 인원")], "0", "추천 인원은 무제한이어도 숫자");
+}
+
 /// 내보내기 용어가 화면·매뉴얼의 "미선발"과 일치해야 한다.
 /// 화면 라벨만 바꾸고 엑셀 문자열을 빠뜨리면 산출물에서만 옛 용어("제외")가 살아남는다 —
 /// 실제로 그렇게 어긋난 적이 있어 헤더와 셀 값을 함께 단언한다.

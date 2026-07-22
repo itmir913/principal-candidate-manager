@@ -5,8 +5,9 @@ use axum::{
     http::StatusCode,
 };
 use principal_candidate_manager::handlers::universities::{
-    create_track, delete_track, delete_university, export_quota_stats, update_track,
-    update_university, CreateTrackBody, ExportQuotaQuery, UpdateTrackBody, UpdateUnivBody,
+    create_track, delete_track, delete_university, export_quota_stats, get_quota_stats,
+    update_track, update_university, CreateTrackBody, ExportQuotaQuery, UpdateTrackBody,
+    UpdateUnivBody,
 };
 
 // ── 공통 픽스처 ────────────────────────────────────────────────────
@@ -70,6 +71,86 @@ async fn insert_application(
     .execute(pool)
     .await
     .unwrap();
+}
+
+/// 잔여석 픽스처: 대학 정원 3 / 트랙A 정원 2 · 트랙B 정원 1.
+/// 라운드1에서 A에 1명 확정, 라운드2에서 A에 1명 확정 + B에 1명 확정 후 포기.
+/// 기대 집계 — A: unit_used 2, B: unit_used 0(포기는 안 셈), 대학 total_used 2.
+async fn setup_quota_fixture(pool: &sqlx::SqlitePool) -> (i64, i64, i64, i64, i64) {
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 3) RETURNING id",
+    )
+    .fetch_one(pool).await.unwrap();
+    let ta: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, 'A컴공', 2) RETURNING id",
+    ).bind(uid).fetch_one(pool).await.unwrap();
+    let tb: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, 'B전자', 1) RETURNING id",
+    ).bind(uid).fetch_one(pool).await.unwrap();
+
+    let r1 = insert_round(pool).await;
+    sqlx::query("UPDATE rounds SET status = 'FINALIZED' WHERE id = ?")
+        .bind(r1).execute(pool).await.unwrap();
+    let r2 = insert_round(pool).await;
+
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?) ON CONFLICT DO NOTHING")
+        .bind(&hash).execute(pool).await.unwrap();
+
+    // (학생, 트랙, 라운드, recommended, abandoned)
+    let plan = [
+        ("S001", ta, r1, 1, 0),
+        ("S002", ta, r2, 1, 0),
+        ("S003", tb, r2, 1, 1), // 확정 후 포기 → 잔여석 집계에서 빠져야 한다
+        ("S004", tb, r2, 0, 0), // 미추천 → 집계 대상 아님
+    ];
+    for (seq, (code, tid, rid, rec, aband)) in plan.into_iter().enumerate() {
+        // 공용 insert_student 는 seq_no 를 1로 고정하므로 여기서는 직접 넣는다
+        // (학급 내 seq_no 는 유일해야 한다 — idx_students_position)
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, '학생', 1, 1, ?, 1) RETURNING id",
+        ).bind(code).bind(seq as i64 + 1).fetch_one(pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, ?)",
+        ).bind(sid).bind(tid).bind(rid).bind(aband).execute(pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, 1, ?, '2025-01-09')",
+        ).bind(sid).bind(tid).bind(rid).bind(rec).execute(pool).await.unwrap();
+    }
+    (uid, ta, tb, r1, r2)
+}
+
+/// `get_quota_stats` 는 관리자 "정원 현황" 화면이 잔여석을 읽는 유일한 경로인데
+/// 호출하는 테스트가 하나도 없었다. 집계식(recommended=1 AND abandoned=0)이
+/// 조용히 바뀌어도 스위트가 초록이었다.
+#[tokio::test]
+async fn get_quota_stats_counts_recommended_excluding_abandoned() {
+    let pool = common::create_test_pool().await;
+    let (_uid, ta, tb, r1, r2) = setup_quota_fixture(&pool).await;
+
+    let axum::Json(stats) = get_quota_stats(State(common::make_state(pool))).await.unwrap();
+
+    assert_eq!(stats.all_round_ids, vec![r1, r2], "추천이 있었던 라운드만 오름차순");
+    assert_eq!(stats.univs.len(), 1);
+    let u = &stats.univs[0];
+    assert_eq!(u.total_quota, Some(3));
+    assert_eq!(u.total_used, 2, "포기자(S003)와 미추천자(S004)는 대학 집계에서 빠진다");
+
+    let a = u.tracks.iter().find(|t| t.track_id == ta).expect("A트랙");
+    assert_eq!((a.unit_quota, a.unit_used), (Some(2), 2), "A: 정원 2, 사용 2 → 잔여 0");
+    let b = u.tracks.iter().find(|t| t.track_id == tb).expect("B트랙");
+    assert_eq!((b.unit_quota, b.unit_used), (Some(1), 0), "B: 포기로 반환되어 사용 0 → 잔여 1");
+
+    // 라운드별 내역: A는 두 라운드에 1명씩, B는 포기라 내역 없음
+    assert_eq!(
+        a.by_round.iter().map(|c| (c.round_id, c.count)).collect::<Vec<_>>(),
+        vec![(r1, 1), (r2, 1)],
+        "A 라운드별 추천 인원",
+    );
+    assert!(b.by_round.is_empty(), "B는 포기라 라운드별 내역이 없어야 함: {:?}",
+        b.by_round.iter().map(|c| (c.round_id, c.count)).collect::<Vec<_>>());
 }
 
 // ── delete_track ───────────────────────────────────────────────────
@@ -261,6 +342,70 @@ async fn export_quota_stats_content_disposition_all_vs_filtered() {
     assert!(cd_all.contains("전체_추천현황"), "전체 경로 파일명: {cd_all}");
     assert!(cd_filtered.contains("고려대"), "필터 경로 파일명에 대학명: {cd_filtered}");
     assert!(cd_filtered.contains("_추천현황_"), "필터 경로 파일명 패턴: {cd_filtered}");
+}
+
+/// 기존 export 테스트들은 행 수·대학명·파일명만 봤고 픽스처에 라운드도 results 도
+/// 없어서 **정원 산술이 한 번도 실행되지 않았다**. 잔여인원 계산식
+/// `(quota - used).max(0)` 이 틀려도 전 스위트가 초록이었다.
+#[tokio::test]
+async fn export_quota_stats_cells_carry_remaining_seat_numbers() {
+    let pool = common::create_test_pool().await;
+    let _ = setup_quota_fixture(&pool).await;
+
+    let (bytes, _) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+
+    // 값이 "어느 열 아래에" 있는지까지 결합해서 단언한다
+    let (c_track, c_quota, c_used, c_left) =
+        (col_of("모집단위"), col_of("모집단위 정원"), col_of("추천인원"), col_of("잔여인원"));
+    let (c_uq, c_uused, c_uleft) =
+        (col_of("대학 전체 정원"), col_of("대학 추천인원"), col_of("대학 잔여인원"));
+
+    let a = rows[1..].iter().find(|r| r[c_track] == "A컴공").expect("A컴공 행");
+    assert_eq!(
+        (a[c_quota].as_str(), a[c_used].as_str(), a[c_left].as_str()),
+        ("2", "2", "0"),
+        "A: 정원 2 · 추천 2 · 잔여 0 이어야 함: {a:?}",
+    );
+
+    let b = rows[1..].iter().find(|r| r[c_track] == "B전자").expect("B전자 행");
+    assert_eq!(
+        (b[c_quota].as_str(), b[c_used].as_str(), b[c_left].as_str()),
+        ("1", "0", "1"),
+        "B: 포기자는 세지 않으므로 추천 0 · 잔여 1 이어야 함: {b:?}",
+    );
+
+    // 대학 전체 열은 두 행 모두 같은 값
+    for r in [a, b] {
+        assert_eq!(
+            (r[c_uq].as_str(), r[c_uused].as_str(), r[c_uleft].as_str()),
+            ("3", "2", "1"),
+            "대학: 정원 3 · 추천 2 · 잔여 1 이어야 함: {r:?}",
+        );
+    }
+}
+
+/// 정원 무제한(NULL)은 숫자가 아니라 "무제한" 문자열로 나가야 한다.
+/// 0 이나 빈 칸으로 나가면 관리자가 정원 소진으로 오독한다.
+#[tokio::test]
+async fn export_quota_stats_unlimited_quota_renders_as_text() {
+    let pool = common::create_test_pool().await;
+    let uid = insert_univ(&pool, "무제한대").await; // total_quota NULL
+    insert_track(&pool, uid, "자유전공").await;      // unit_quota NULL
+
+    let (bytes, _) = export_bytes(&pool, None).await;
+    let rows = parse_rows(&bytes);
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h).unwrap();
+
+    let r = &rows[1];
+    for h in ["모집단위 정원", "잔여인원", "대학 전체 정원", "대학 잔여인원"] {
+        assert_eq!(r[col_of(h)], "무제한", "'{h}' 열은 '무제한' 이어야 함: {r:?}");
+    }
+    assert_eq!(r[col_of("추천인원")], "0", "추천 인원은 무제한이어도 숫자");
 }
 
 #[tokio::test]
