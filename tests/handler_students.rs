@@ -1,13 +1,14 @@
 mod common;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use principal_candidate_manager::handlers::students::{
-    add_enrolled, add_graduated, delete_student, find_unique_code,
-    upsert_enrolled_by_position, upsert_student, AddEnrolledBody, AddGraduatedBody, StudentRecord,
+    add_enrolled, add_graduated, delete_student, find_unique_code, list_students,
+    upsert_enrolled_by_position, upsert_student, AddEnrolledBody, AddGraduatedBody, ListQuery,
+    StudentRecord,
 };
 
 fn enrolled_rec(code: &str, name: &str, g: i64, c: i64, s: i64) -> StudentRecord {
@@ -732,4 +733,61 @@ async fn upsert_student_new_insert_allowed_when_closed_round() {
     let mut tx2 = pool.begin().await.unwrap();
     upsert_student(&mut *tx2, &graduated_rec("S9", "신입", 2024), &mut ins, &mut upd)
         .await.expect("신규 학생은 막지 않는다");
+}
+
+// ── list_students: 필터·페이지네이션(G 세션 보강) ────────────────────
+
+fn list_query(grade: Option<i64>, class_no: Option<i64>, page: i64, per_page: i64) -> Query<ListQuery> {
+    Query(ListQuery { grade, class_no, is_enrolled: None, page, per_page })
+}
+
+#[tokio::test]
+async fn list_students_grade_class_filter_returns_only_matching_class() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    common::insert_class(&pool, 1, 2).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    for (code, seq) in [("E1", 1), ("E2", 2), ("E3", 3)] {
+        upsert_student(&mut *tx, &enrolled_rec(code, code, 1, 1, seq), &mut ins, &mut upd).await.unwrap();
+    }
+    upsert_student(&mut *tx, &enrolled_rec("E4", "E4", 1, 2, 1), &mut ins, &mut upd).await.unwrap();
+    tx.commit().await.unwrap();
+
+    let Json(page) = list_students(State(common::make_state(pool)), list_query(Some(1), Some(1), 1, 50))
+        .await
+        .unwrap();
+    assert_eq!(page.total, 3, "1반 소속 3명만 집계되어야 함(2반 제외)");
+    assert_eq!(page.rows.len(), 3);
+    let codes: Vec<&str> = page.rows.iter().map(|r| r.student_code.as_str()).collect();
+    assert_eq!(codes, vec!["E1", "E2", "E3"], "seq_no 오름차순 정렬이어야 함");
+}
+
+#[tokio::test]
+async fn list_students_pagination_offset_matches_page_minus_one_times_per_page() {
+    // 재학생 4명(1반 seq1~3, 2반 seq1) + 졸업생 1명 = 총 5명.
+    // 정렬은 is_enrolled DESC, grade, class_no, seq_no 이므로
+    // 순서는 E1,E2,E3,E4,G1. per_page=2일 때 2페이지는 offset=2 → E3,E4가 나와야 한다.
+    // offset이 page*per_page(=4)로 잘못 계산되면 2페이지에 G1만 남는다.
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    common::insert_class(&pool, 1, 2).await;
+    let mut tx = pool.begin().await.unwrap();
+    let (mut ins, mut upd) = (0usize, 0usize);
+    for (code, seq) in [("E1", 1), ("E2", 2), ("E3", 3)] {
+        upsert_student(&mut *tx, &enrolled_rec(code, code, 1, 1, seq), &mut ins, &mut upd).await.unwrap();
+    }
+    upsert_student(&mut *tx, &enrolled_rec("E4", "E4", 1, 2, 1), &mut ins, &mut upd).await.unwrap();
+    upsert_student(&mut *tx, &graduated_rec("G1", "G1", 2024), &mut ins, &mut upd).await.unwrap();
+    tx.commit().await.unwrap();
+
+    let state = common::make_state(pool);
+    let Json(page2) = list_students(State(state.clone()), list_query(None, None, 2, 2)).await.unwrap();
+    assert_eq!(page2.total, 5, "필터 없을 때 전체 5명 집계");
+    let codes: Vec<&str> = page2.rows.iter().map(|r| r.student_code.as_str()).collect();
+    assert_eq!(codes, vec!["E3", "E4"], "offset=(page-1)*per_page=2 이어야 함");
+
+    let Json(page3) = list_students(State(state), list_query(None, None, 3, 2)).await.unwrap();
+    let codes3: Vec<&str> = page3.rows.iter().map(|r| r.student_code.as_str()).collect();
+    assert_eq!(codes3, vec!["G1"], "3페이지엔 졸업생 1명만 남아야 함");
 }

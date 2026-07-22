@@ -7,8 +7,8 @@ use axum::{
 };
 use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
-    base_data_import, base_data_list, category_map_import, numeric_table_import,
-    BaseDataPageQuery, StudentTypeQuery,
+    base_data_import, base_data_list, category_map_import, category_map_list,
+    numeric_table_import, numeric_table_list, BaseDataPageQuery, PageQuery, StudentTypeQuery,
 };
 
 async fn build_multipart(csv: &str) -> Multipart {
@@ -1655,4 +1655,181 @@ async fn category_map_import_blocked_when_closed_round_exists() {
     assert_eq!(err.0, StatusCode::CONFLICT);
     assert!(err.1.contains("라운드"), "실제 오류: {}", err.1);
     assert_category_map_preserved(&pool, aid).await;
+}
+
+// ── list 조회: composite 게이팅 + Score 변환 (G 세션 보강) ──────────
+
+async fn insert_univ_track(pool: &sqlx::SqlitePool, univ: &str, track: &str) -> i64 {
+    let uid: i64 = sqlx::query_scalar("INSERT INTO universities (univ_name) VALUES (?) RETURNING id")
+        .bind(univ)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    sqlx::query_scalar("INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, ?) RETURNING id")
+        .bind(uid)
+        .bind(track)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn numeric_table_list_converts_scores_and_gates_composite_fields() {
+    // SIMPLE: univ_name/track_name/track_id는 None이어야 하고, threshold/score는
+    // 저장된 raw 정수 그대로(Score::raw) 노출되어야 한다.
+    let pool = common::create_test_pool_shared().await;
+    let simple_aid = insert_area(&pool, CalcType::Numeric, Some(MatchMode::Upper), None, 0).await;
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, NULL, 8000000, 5000000)",
+    )
+    .bind(simple_aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(simple_page) = numeric_table_list(
+        State(common::make_state(pool.clone())),
+        Path(simple_aid),
+        Query(PageQuery { page: 1, per_page: 50 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(simple_page.total, 1);
+    assert_eq!(simple_page.rows[0].threshold.raw(), 8_000_000, "threshold는 raw 정수 그대로");
+    assert_eq!(simple_page.rows[0].score.raw(), 5_000_000, "score는 raw 정수 그대로");
+    assert_eq!(simple_page.rows[0].univ_name, None, "SIMPLE에서는 univ_name이 없어야 함");
+    assert_eq!(simple_page.rows[0].track_name, None, "SIMPLE에서는 track_name이 없어야 함");
+    assert_eq!(simple_page.rows[0].track_id, None, "SIMPLE에서는 track_id가 없어야 함");
+
+    // COMPOSITE: 동일 값이 track_id 경유로 저장되면 univ_name/track_name/track_id가 채워져야 한다.
+    let comp_aid = insert_area_composite(&pool).await;
+    let tid = insert_univ_track(&pool, "가나대", "컴공과").await;
+    sqlx::query(
+        "INSERT INTO numeric_table (area_id, track_id, threshold, score) VALUES (?, ?, 9000000, 6000000)",
+    )
+    .bind(comp_aid)
+    .bind(tid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(comp_page) = numeric_table_list(
+        State(common::make_state(pool)),
+        Path(comp_aid),
+        Query(PageQuery { page: 1, per_page: 50 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(comp_page.total, 1);
+    assert_eq!(comp_page.rows[0].univ_name, Some("가나대".to_string()));
+    assert_eq!(comp_page.rows[0].track_name, Some("컴공과".to_string()));
+    assert_eq!(comp_page.rows[0].track_id, Some(tid));
+}
+
+#[tokio::test]
+async fn category_map_list_converts_scores_and_gates_composite_fields() {
+    let pool = common::create_test_pool_shared().await;
+    let simple_aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Sum), 0).await;
+    sqlx::query(
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, '회장', 4000000)",
+    )
+    .bind(simple_aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(simple_page) = category_map_list(
+        State(common::make_state(pool.clone())),
+        Path(simple_aid),
+        Query(PageQuery { page: 1, per_page: 50 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(simple_page.total, 1);
+    assert_eq!(simple_page.rows[0].category, "회장");
+    assert_eq!(simple_page.rows[0].score.raw(), 4_000_000);
+    assert_eq!(simple_page.rows[0].univ_name, None, "SIMPLE에서는 univ_name이 없어야 함");
+    assert_eq!(simple_page.rows[0].track_name, None, "SIMPLE에서는 track_name이 없어야 함");
+
+    let comp_aid: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, max_score, calc_type, category_agg, lookup_scope, multi_value) \
+         VALUES ('봉사_목록', 10000000, 'CATEGORY', 'SUM', 'COMPOSITE', 0) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tid = insert_univ_track(&pool, "다라대", "전자과").await;
+    sqlx::query(
+        "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, ?, '부회장', 3000000)",
+    )
+    .bind(comp_aid)
+    .bind(tid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(comp_page) = category_map_list(
+        State(common::make_state(pool)),
+        Path(comp_aid),
+        Query(PageQuery { page: 1, per_page: 50 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(comp_page.total, 1);
+    assert_eq!(comp_page.rows[0].univ_name, Some("다라대".to_string()));
+    assert_eq!(comp_page.rows[0].track_name, Some("전자과".to_string()));
+    assert_eq!(comp_page.rows[0].track_id, Some(tid));
+}
+
+#[tokio::test]
+async fn base_data_list_gates_univ_track_names_by_composite_scope() {
+    // SIMPLE 전형요소: univ_name/track_name이 None이어야 한다 (기존 base_data_list
+    // 테스트들은 value 파싱만 확인하고 이 게이팅은 검증한 적이 없다).
+    let pool = common::create_test_pool_shared().await;
+    let sid = insert_student(&pool, "S001").await;
+    let simple_aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, '8500000', 0)",
+    )
+    .bind(sid)
+    .bind(simple_aid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(simple_page) = base_data_list(
+        State(common::make_state(pool.clone())),
+        Path(simple_aid),
+        default_page_query(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(simple_page.rows.len(), 1);
+    assert_eq!(simple_page.rows[0].univ_name, None, "SIMPLE에서는 univ_name이 없어야 함");
+    assert_eq!(simple_page.rows[0].track_name, None, "SIMPLE에서는 track_name이 없어야 함");
+
+    // COMPOSITE 전형요소: 같은 학생의 base_data가 track_id를 가지면
+    // univ_name/track_name이 채워져야 한다.
+    let comp_aid = insert_area_composite(&pool).await;
+    let tid = insert_univ_track(&pool, "마바대", "기계과").await;
+    sqlx::query(
+        "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, ?, '7000000', 0)",
+    )
+    .bind(sid)
+    .bind(comp_aid)
+    .bind(tid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let axum::Json(comp_page) = base_data_list(
+        State(common::make_state(pool)),
+        Path(comp_aid),
+        default_page_query(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(comp_page.rows.len(), 1);
+    assert_eq!(comp_page.rows[0].univ_name, Some("마바대".to_string()));
+    assert_eq!(comp_page.rows[0].track_name, Some("기계과".to_string()));
 }

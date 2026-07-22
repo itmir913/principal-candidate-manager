@@ -8,7 +8,7 @@ use axum::{
 use principal_candidate_manager::handlers::applications::{
     abandon_application, admin_list_applications, teacher_abandon_application,
     teacher_create_application, teacher_delete_application, teacher_list_applications,
-    ApplicationListQuery, CreateApplicationBody, TeacherAppListQuery,
+    teacher_list_students, ApplicationListQuery, CreateApplicationBody, TeacherAppListQuery,
 };
 
 async fn setup(pool: &sqlx::SqlitePool) -> (i64, i64, i64) {
@@ -976,4 +976,79 @@ async fn teacher_abandon_grad_teacher_can_abandon_graduated_student() {
     .await
     .unwrap();
     assert_eq!(abandoned, 1);
+}
+
+// ── teacher_list_students: 학급 격리(G 세션 보강) ────────────────────
+
+#[tokio::test]
+async fn teacher_list_students_scoped_to_own_class_only() {
+    // 1반 담임은 1반 재학생만 봐야 한다 — 2반 학생·졸업생은 보이면 안 된다.
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?), (1, 2, ?)")
+        .bind(&hash)
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) VALUES \
+         ('S1', '1반학생1', 1, 1, 1, 1), \
+         ('S2', '1반학생2', 1, 1, 2, 1), \
+         ('S3', '2반학생', 1, 2, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES ('S9', '졸업생', 0, 2024)")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let Json(rows) = teacher_list_students(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(1, 1)),
+    )
+    .await
+    .unwrap();
+
+    let codes: Vec<&str> = rows.iter().map(|r| r.student_code.as_str()).collect();
+    assert_eq!(codes, vec!["S1", "S2"], "1반 소속 재학생만, seq_no 순으로 반환되어야 함");
+}
+
+#[tokio::test]
+async fn teacher_list_students_grad_account_sees_only_graduated_across_classes() {
+    // grade=0/class_no=0 은 졸업생 담당 특수 계정 — 반과 무관하게 졸업생 전원을 보되
+    // 재학생은 포함하면 안 된다.
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) VALUES \
+         ('S1', '재학생', 1, 1, 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES \
+         ('S8', '졸업생나', 0, 2023), ('S9', '졸업생가', 0, 2024)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let Json(rows) = teacher_list_students(
+        State(common::make_state(pool)),
+        Extension(common::teacher_claims(0, 0)),
+    )
+    .await
+    .unwrap();
+
+    let codes: Vec<&str> = rows.iter().map(|r| r.student_code.as_str()).collect();
+    assert_eq!(codes, vec!["S8", "S9"], "졸업생 전원(student_code 순), 재학생 S1은 제외되어야 함");
 }
