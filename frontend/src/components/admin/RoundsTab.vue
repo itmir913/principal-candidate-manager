@@ -445,8 +445,9 @@
                             </template>
                             <button
                               v-else-if="selected.status === 'CLOSED' && !r.excluded"
-                              class="text-base font-semibold rounded-lg whitespace-nowrap"
+                              class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
                               style="padding: 5px 12px; border: none; background: #16a34a; color: white; cursor: pointer;"
+                              :disabled="resultActing"
                               @click="handleRecommend(r)"
                             >추천 확정</button>
                             <span v-else-if="selected.status === 'CLOSED' && r.excluded" style="color: #cbd5e1;">-</span>
@@ -469,8 +470,9 @@
                               <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">미선발</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
-                                class="text-base rounded-lg whitespace-nowrap"
+                                class="text-base rounded-lg whitespace-nowrap disabled:opacity-40"
                                 style="padding: 3px 10px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                                :disabled="resultActing"
                                 @click="handleClearExclusion(r)"
                               >미선발 해제</button>
                             </template>
@@ -545,9 +547,9 @@
           <button
             class="text-base font-semibold rounded-lg whitespace-nowrap disabled:opacity-40"
             style="padding: 9px 18px; border: none; background: #d97706; color: white; cursor: pointer;"
-            :disabled="!excludeReasonDraft.trim()"
+            :disabled="!excludeReasonDraft.trim() || resultActing"
             @click="confirmExclude"
-          >미선발 확정</button>
+          >{{ resultActing ? '처리 중...' : '미선발 확정' }}</button>
         </div>
       </div>
     </div>
@@ -662,6 +664,10 @@ const areas   = ref([])
 
 const roundsLoadError    = ref('')
 const roundActing        = ref(false)
+// 결과 행 단위 조작(추천 확정/취소, 미선발 처리/해제) 공용 진행 플래그.
+// 정원 마지막 한 자리에서 두 번 클릭하면 첫 요청은 성공하는데 두 번째가
+// 자기 자신을 센 정원 카운트 때문에 409("정원이 이미 찼습니다")를 띄운다.
+const resultActing       = ref(false)
 const calcLoading        = ref(false)
 const calcMsg            = ref(null)
 const downloading        = ref(false)
@@ -1139,31 +1145,39 @@ function startExclude(r) {
 }
 
 async function confirmExclude() {
+  if (resultActing.value) return
   const r = excludeTarget.value
   if (!r) return
   const reason = excludeReasonDraft.value.trim()
   if (!reason) return
+  resultActing.value = true
   try {
     await excludeApplication(r.student_id, r.track_id, r.round_id, reason)
     showExcludeModal.value = false
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    resultActing.value = false
   }
 }
 
 async function handleClearExclusion(r) {
+  if (resultActing.value) return
   if (!(await dialog.confirm({
     title: '미선발 해제',
     message: `${r.name} 학생의 미선발 처리를 해제하시겠습니까?`,
     confirmText: '해제',
     level: 'warn',
   }))) return
+  resultActing.value = true
   try {
     await clearApplicationExclusion(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    resultActing.value = false
   }
 }
 
@@ -1247,26 +1261,34 @@ async function runAutoRecommend(call, scopeLabel) {
 }
 
 async function handleRecommend(r) {
+  if (resultActing.value) return
+  resultActing.value = true
   try {
     await recommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    resultActing.value = false
   }
 }
 
 async function handleUnrecommend(r) {
+  if (resultActing.value) return
   if (!(await dialog.confirm({
     title: '추천 취소',
     message: `${r.name} 학생의 추천을 취소하시겠습니까?`,
     confirmText: '추천 취소',
     level: 'warn',
   }))) return
+  resultActing.value = true
   try {
     await unrecommendResult(r.student_id, r.track_id, r.round_id)
     await loadResults()
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    resultActing.value = false
   }
 }
 
