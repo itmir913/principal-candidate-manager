@@ -4,8 +4,11 @@
 -- score_detail: JSON {"area_id": score_int, ...} (×100000)
 -- FK CASCADE 미적용: 불변 이력 보존
 -- Abandon 박제: 포기(abandoned=1) 발생 시 이 테이블을 수정하지 않는다.
---   recommended=1 행은 영구 불변 스냅샷(Immutable Snapshot).
---   잔여석 = 정원 - COUNT(이전 라운드 recommended=1) 로 실시간 계산.
+--   recommended=1 행은 영구 불변 스냅샷(Immutable Snapshot) — "추천했었다"는 사실은 남는다.
+--   박제되는 것은 이력이지 정원이 아니다. 집계는 applications 쪽 abandoned를 함께 보고
+--   `recommended=1 AND abandoned=0`으로 세므로(전 라운드 누적), 포기한 자리는 다음
+--   라운드에서 다시 빈다. 008-applications.sql 의 정원 집계 주석과 같은 기준이다.
+--   근거: rounds.rs::finalize_round, scoring.rs::recommend_result.
 -- ================================================================
 CREATE TABLE IF NOT EXISTS results (
     student_id     INTEGER NOT NULL,
