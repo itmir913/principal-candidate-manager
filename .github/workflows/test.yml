@@ -1,0 +1,46 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# 같은 PR에 새 커밋이 올라오면 이전 실행은 취소한다
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # tray-icon 이 Linux 에서 GTK 시스템 패키지를 요구하므로 windows 로 고정한다.
+    # 릴리스 대상 플랫폼(publish.yml)과도 일치한다.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install frontend dependencies
+        run: npm --prefix frontend ci
+
+      # frontend/dist 는 gitignore 대상인데 src/main.rs 가
+      # #[folder = "frontend/dist/"] 로 임베드하므로, 빌드해 두지 않으면
+      # cargo test 가 바이너리 타깃 컴파일 단계에서 실패한다.
+      - name: build frontend
+        run: npm --prefix frontend run build
+
+      - name: cargo test
+        run: cargo test --all

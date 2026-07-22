@@ -126,8 +126,8 @@ npm run build
 npm run test
 ```
 
-> CI(`.github/workflows/publish.yml`)는 릴리스 빌드 전용이며 **테스트를 실행하지 않습니다.**
-> 변경 사항 검증은 로컬 `npm run test`가 유일한 관문입니다.
+> PR과 `master` 푸시에서는 `.github/workflows/test.yml`이 `cargo test --all`을 자동 실행합니다.
+> 프론트엔드에는 자동화 테스트가 없으므로 Vue 변경은 사람이 확인해야 합니다.
 
 ---
 

@@ -60,10 +60,9 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 3. **로컬에서 `npm test`가 전부 통과하는지 확인합니다**
 4. 무엇을 왜 바꿨는지 설명을 담아 PR을 보냅니다
 
-> **CI는 테스트를 돌리지 않습니다.** `.github/workflows/publish.yml`은 수동 실행
-> (`workflow_dispatch`) 전용 릴리스 빌드 워크플로이고 테스트 잡이 없습니다.
-> 따라서 **테스트 통과 확인은 전적으로 기여자 로컬 책임**입니다. 이 점을 모르고
-> "CI가 초록이니 괜찮겠지"로 넘기면 회귀가 그대로 병합됩니다.
+> PR을 올리면 `.github/workflows/test.yml`이 `cargo test --all`을 실행합니다
+> (windows-latest). 다만 **CI는 백엔드 테스트만 검증합니다** — 프론트엔드에는
+> 자동화 테스트가 없으므로 Vue 변경은 여전히 사람이 확인해야 합니다.
 
 ### 커밋 규약
 
