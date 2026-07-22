@@ -126,7 +126,8 @@ npm run build
 npm run test
 ```
 
-> PR과 `master` 푸시에서는 `.github/workflows/test.yml`이 `cargo test --all`을 자동 실행합니다.
+> PR이 올라오면 `.github/workflows/test.yml`이 같은 `npm test`를 자동 실행합니다.
+> `master` 직접 푸시는 CI를 거치지 않으므로 로컬 확인이 필요합니다.
 > 프론트엔드에는 자동화 테스트가 없으므로 Vue 변경은 사람이 확인해야 합니다.
 
 ---

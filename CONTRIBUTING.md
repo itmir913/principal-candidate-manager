@@ -60,9 +60,9 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 3. **로컬에서 `npm test`가 전부 통과하는지 확인합니다**
 4. 무엇을 왜 바꿨는지 설명을 담아 PR을 보냅니다
 
-> PR을 올리면 `.github/workflows/test.yml`이 `cargo test --all`을 실행합니다
-> (windows-latest). 다만 **CI는 백엔드 테스트만 검증합니다** — 프론트엔드에는
-> 자동화 테스트가 없으므로 Vue 변경은 여전히 사람이 확인해야 합니다.
+> PR을 올리면 `.github/workflows/test.yml`이 위와 **동일한 `npm test`**를
+> windows-latest에서 실행합니다. 다만 **CI는 백엔드 테스트만 검증합니다** —
+> 프론트엔드에는 자동화 테스트가 없으므로 Vue 변경은 여전히 사람이 확인해야 합니다.
 
 ### 커밋 규약
 

@@ -2,8 +2,6 @@ name: test
 
 on:
   pull_request:
-  push:
-    branches: [master]
 
 # 같은 PR에 새 커밋이 올라오면 이전 실행은 취소한다
 concurrency:
@@ -42,5 +40,7 @@ jobs:
       - name: build frontend
         run: npm --prefix frontend run build
 
-      - name: cargo test
-        run: cargo test --all
+      # CONTRIBUTING 이 기여자에게 안내하는 명령과 동일하게 유지한다.
+      # 테스트 정의가 바뀌면(예: 프론트 테스트 추가) CI 도 자동으로 따라간다.
+      - name: test
+        run: npm test
