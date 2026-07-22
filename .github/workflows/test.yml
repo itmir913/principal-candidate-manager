@@ -2,6 +2,9 @@ name: test
 
 on:
   pull_request:
+  # GitHub 웹 Actions 탭에서 수동 실행 (publish.yml 과 동일한 방식).
+  # "Run workflow" 버튼은 이 파일이 기본 브랜치에 있을 때만 나타난다.
+  workflow_dispatch:
 
 # 같은 PR에 새 커밋이 올라오면 이전 실행은 취소한다
 concurrency:
