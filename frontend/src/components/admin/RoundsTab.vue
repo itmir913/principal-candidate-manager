@@ -708,6 +708,7 @@ const autoRecommendResult = ref(null)
 const autoRecommendScope  = ref('')
 
 const selectedTrackId   = ref('')
+const allTracksInRound  = ref([])     // 필터와 무관한 전체 트랙 목록 (드롭다운용)
 const confirmationStatus = ref(null)  // { classes: [...] } | null
 
 const showExcludeModal   = ref(false)
@@ -801,12 +802,7 @@ function appTotalScore(app) {
   return r ? formatScore(r.total_score) : '-'
 }
 
-const tracksInRound = computed(() => {
-  const seen = new Set()
-  return results.value
-    .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
-    .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
-})
+const tracksInRound = computed(() => allTracksInRound.value)
 
 const trackQuotaMap = computed(() => {
   const map = {}
@@ -969,6 +965,8 @@ async function selectRound(r) {
   autoRecommendResult.value = null
   autoRecommendScope.value = ''
   confirmationStatus.value = null
+  selectedTrackId.value = ''
+  allTracksInRound.value = []
   await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
 }
 
@@ -983,6 +981,13 @@ async function loadResults() {
     getResults(selected.value.id, selectedTrackId.value || null),
     getQuotaStats(),
   ])
+  // 필터 없이 전체 결과를 불러올 때만 드롭다운 목록 갱신
+  if (!selectedTrackId.value) {
+    const seen = new Set()
+    allTracksInRound.value = results.value
+      .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
+      .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
+  }
   expandedRows.value = {}
 }
 
