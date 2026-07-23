@@ -88,6 +88,7 @@ pub enum AuditAction {
     TrackCreated,
     TrackUpdated,
     TrackDeleted,
+    UniversitySettingsImported,
     // 인증·백업 (2차 감사 소유자 라운드 #5, #6)
     DbBackupDownloaded,
     TeacherPasswordChanged,

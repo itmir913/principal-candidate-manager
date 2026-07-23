@@ -1,18 +1,20 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::Response,
     Json,
 };
-use rust_xlsxwriter::Workbook;
+use rust_xlsxwriter::{DataValidation, Workbook};
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     audit::{self, Actor, AuditEntry},
     enums::AuditAction,
-    excel, state::AppState,
+    excel,
+    middleware::multipart_err,
+    state::AppState,
 };
 
 type ApiError = (StatusCode, String);
@@ -774,4 +776,718 @@ pub async fn get_track_recommended_list(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  대학·모집단위 설정 일괄 Import·Export
+//  (대학 정원·모집단위 정원·재학생 우선을 Excel로 왕복 편집)
+//
+//  UPSERT 전용 — 파일에 없는 대학/모집단위는 건드리지 않는다(삭제 아님, CLAUDE.md §2).
+//  식별자는 이름: univ_name / (univ_id, track_name).
+//  import 는 All-or-Nothing (규칙 4): 오류 하나라도 rollback + 422.
+//  마감 라운드 중에는 재학생 우선 변경만 차단(guard_prioritize_change_closed),
+//  정원 변경은 허용.
+// ════════════════════════════════════════════════════════════════════
+
+/// 설정 시트 헤더. 파싱은 이 이름 기반(규칙 5) — 열 순서에 의존하지 않는다.
+const SETTINGS_HEADERS: &[&str] = &[
+    "대학명", "대학 정원", "대학 재학생우선",
+    "모집단위명", "모집단위 정원", "모집단위 재학생우선",
+];
+
+/// 재학생우선 열의 열 인덱스(0-기반). 예/아니오 드롭다운을 거는 위치.
+const PRIO_COLS: [u16; 2] = [2, 5];
+/// 정원 열의 열 인덱스. 숫자 또는 "무제한" 입력 안내를 거는 위치.
+const QUOTA_COLS: [u16; 2] = [1, 4];
+/// 데이터 검증을 적용할 최대 행(넉넉히). 헤더 다음 행부터.
+const DV_LAST_ROW: u32 = 5000;
+
+/// 정원 셀 표기: NULL(무제한) → "무제한", 값 → 숫자.
+/// export 와 import 가 대칭이 되도록 이 한 곳에서만 규약을 정의한다.
+const UNLIMITED_TEXT: &str = "무제한";
+
+fn fmt_prio(v: bool) -> &'static str {
+    if v { "예" } else { "아니오" }
+}
+
+/// 정원 문자열 파싱: "무제한" → None, 양의 정수 → Some, 그 외 → Err.
+/// 빈 문자열 처리는 호출자 몫(대학 정원=필수, 트랙 없는 행=빈 칸 허용).
+fn parse_quota(s: &str) -> Result<Option<i64>, String> {
+    if s == UNLIMITED_TEXT {
+        return Ok(None);
+    }
+    match s.parse::<i64>() {
+        Ok(n) if n >= 1 => Ok(Some(n)),
+        _ => Err(format!(
+            "정원 '{}' 인식 불가 — 1 이상 정수 또는 '{}'만 허용됩니다",
+            s, UNLIMITED_TEXT
+        )),
+    }
+}
+
+/// 재학생우선 셀 파싱: "예" → true, "아니오" → false, 그 외 → Err.
+fn parse_prio(s: &str) -> Result<bool, String> {
+    match s {
+        "예" => Ok(true),
+        "아니오" => Ok(false),
+        _ => Err(format!(
+            "재학생우선 '{}' 인식 불가 — '예' 또는 '아니오'만 허용됩니다",
+            s
+        )),
+    }
+}
+
+/// 파일에서 파싱한 한 대학의 목표 상태.
+struct UnivSpec {
+    univ_name: String,
+    total_quota: Option<i64>,
+    prioritize: bool,
+    tracks: Vec<TrackSpec>,
+}
+
+struct TrackSpec {
+    track_name: String,
+    unit_quota: Option<i64>,
+    prioritize: bool,
+}
+
+// ── 파일 → UnivSpec 파싱 + 검증 (DB 접근 없음, 규칙 4 검증 단일 출처) ──
+
+/// 데이터 행을 파싱해 대학별로 묶는다. 오류가 하나라도 있으면 Err(오류 목록).
+/// preview 와 import 가 **같은 함수**를 통과하므로 검증이 갈라지지 않는다.
+fn parse_settings(
+    headers: &[String],
+    rows: &[Vec<String>],
+) -> Result<Vec<UnivSpec>, Vec<String>> {
+    let col = excel::col_map(headers);
+    if let Err(e) = excel::require_cols(&col, SETTINGS_HEADERS) {
+        return Err(vec![e]);
+    }
+    if rows.is_empty() {
+        return Err(vec!["가져올 데이터 행이 없습니다 — 헤더만 있는 빈 파일입니다".into()]);
+    }
+
+    let mut errors: Vec<String> = Vec::new();
+
+    // 대학명 → (정원, 재학생우선, 최초 등장 행, 트랙들)
+    struct Acc {
+        total_quota: Option<i64>,
+        prioritize: bool,
+        first_row: usize,
+        tracks: Vec<TrackSpec>,
+        track_names: HashSet<String>,
+    }
+    // 등장 순서 유지를 위해 별도 Vec + 인덱스 맵
+    let mut order: Vec<String> = Vec::new();
+    let mut accs: HashMap<String, Acc> = HashMap::new();
+
+    for (idx, cols) in rows.iter().enumerate() {
+        let row_num = idx + 2; // 헤더가 1행
+        let get = |name: &str| excel::get_col(cols, &col, name);
+
+        let univ_name = get("대학명").to_string();
+        if univ_name.is_empty() {
+            errors.push(format!("{}행: 대학명이 비어 있습니다", row_num));
+            continue;
+        }
+
+        // 대학 정원(필수) / 재학생우선(필수)
+        let univ_quota_s = get("대학 정원");
+        let univ_quota = if univ_quota_s.is_empty() {
+            errors.push(format!("{}행: 대학 정원이 비어 있습니다 (숫자 또는 '{}')", row_num, UNLIMITED_TEXT));
+            None
+        } else {
+            match parse_quota(univ_quota_s) {
+                Ok(v) => Some(v),
+                Err(e) => { errors.push(format!("{}행: {}", row_num, e)); None }
+            }
+        };
+        let univ_prio_s = get("대학 재학생우선");
+        let univ_prio = if univ_prio_s.is_empty() {
+            errors.push(format!("{}행: 대학 재학생우선이 비어 있습니다 ('예' 또는 '아니오')", row_num));
+            None
+        } else {
+            match parse_prio(univ_prio_s) {
+                Ok(v) => Some(v),
+                Err(e) => { errors.push(format!("{}행: {}", row_num, e)); None }
+            }
+        };
+
+        // 모집단위(선택) — 이름 없으면 "대학만" 행. 이름 있으면 정원·재학생우선 필수.
+        let track_name = get("모집단위명").to_string();
+        let track_quota_s = get("모집단위 정원");
+        let track_prio_s = get("모집단위 재학생우선");
+
+        let track: Option<TrackSpec> = if track_name.is_empty() {
+            // 모집단위명 빈 행 — 정원/재학생우선도 함께 비어야 한다(모순 방지, §8)
+            if !track_quota_s.is_empty() || !track_prio_s.is_empty() {
+                errors.push(format!(
+                    "{}행: 모집단위명이 비었는데 모집단위 정원·재학생우선이 채워져 있습니다 \
+                     (모집단위 없는 대학 행이면 세 칸을 모두 비우세요)",
+                    row_num
+                ));
+            }
+            None
+        } else {
+            let tq = if track_quota_s.is_empty() {
+                errors.push(format!("{}행: 모집단위 정원이 비어 있습니다 (숫자 또는 '{}')", row_num, UNLIMITED_TEXT));
+                None
+            } else {
+                match parse_quota(track_quota_s) {
+                    Ok(v) => Some(v),
+                    Err(e) => { errors.push(format!("{}행: {}", row_num, e)); None }
+                }
+            };
+            let tp = if track_prio_s.is_empty() {
+                errors.push(format!("{}행: 모집단위 재학생우선이 비어 있습니다 ('예' 또는 '아니오')", row_num));
+                None
+            } else {
+                match parse_prio(track_prio_s) {
+                    Ok(v) => Some(v),
+                    Err(e) => { errors.push(format!("{}행: {}", row_num, e)); None }
+                }
+            };
+            match (tq, tp) {
+                (Some(q), Some(p)) => Some(TrackSpec { track_name: track_name.clone(), unit_quota: q, prioritize: p }),
+                _ => None, // 위에서 이미 오류 기록
+            }
+        };
+
+        // 대학 단위 값이 확정되지 않았으면(오류) 누적하지 않는다
+        let (Some(uq), Some(up)) = (univ_quota, univ_prio) else { continue };
+
+        match accs.get_mut(&univ_name) {
+            None => {
+                order.push(univ_name.clone());
+                let mut track_names = HashSet::new();
+                let mut tracks = Vec::new();
+                if let Some(t) = track {
+                    track_names.insert(t.track_name.clone());
+                    tracks.push(t);
+                }
+                accs.insert(univ_name.clone(), Acc {
+                    total_quota: uq, prioritize: up, first_row: row_num, tracks, track_names,
+                });
+            }
+            Some(acc) => {
+                // 같은 대학의 반복 대학값 불일치 → 오류(§6)
+                if acc.total_quota != uq || acc.prioritize != up {
+                    errors.push(format!(
+                        "{}행: 대학 '{}'의 대학 정원·재학생우선이 {}행과 다릅니다 \
+                         (같은 대학은 모든 행에서 같은 값이어야 합니다)",
+                        row_num, univ_name, acc.first_row
+                    ));
+                }
+                if let Some(t) = track {
+                    if !acc.track_names.insert(t.track_name.clone()) {
+                        errors.push(format!(
+                            "{}행: 모집단위 '{}/{}' 중복 — 파일에 같은 모집단위가 두 번 이상 있습니다",
+                            row_num, univ_name, t.track_name
+                        ));
+                    } else {
+                        acc.tracks.push(t);
+                    }
+                }
+            }
+        }
+    }
+
+    // 불변식(§3): 대학=예 이면 그 대학 파일 내 모든 모집단위=예
+    for name in &order {
+        let acc = &accs[name];
+        if acc.prioritize {
+            for t in &acc.tracks {
+                if !t.prioritize {
+                    errors.push(format!(
+                        "대학 '{}'의 재학생우선이 '예'인데 모집단위 '{}'가 '아니오'입니다 \
+                         (재학생 우선 대학의 모집단위는 모두 '예'여야 합니다)",
+                        name, t.track_name
+                    ));
+                }
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    Ok(order.into_iter().map(|name| {
+        let acc = accs.remove(&name).unwrap();
+        UnivSpec { univ_name: name, total_quota: acc.total_quota, prioritize: acc.prioritize, tracks: acc.tracks }
+    }).collect())
+}
+
+// ── diff 계산 (읽기 전용, preview 용) ─────────────────────────────
+
+#[derive(Serialize)]
+pub struct FieldChange {
+    pub field: String,
+    pub old: String,
+    pub new: String,
+}
+
+#[derive(Serialize)]
+pub struct SettingsDiffEntry {
+    pub kind: String,   // "univ" | "track" | "cascade"
+    pub op: String,     // "create" | "update"
+    pub univ_name: String,
+    pub track_name: Option<String>,
+    pub fields: Vec<FieldChange>,
+    pub blocked: bool,  // 마감 라운드로 차단되는 재학생우선 변경 포함
+}
+
+#[derive(Serialize)]
+pub struct SettingsPreview {
+    pub errors: Vec<String>,
+    pub changes: Vec<SettingsDiffEntry>,
+    pub unchanged_count: usize,
+    pub closed_round_labels: Vec<String>,
+    pub has_blocked: bool,
+}
+
+fn quota_display(v: Option<i64>) -> String {
+    match v {
+        Some(n) => n.to_string(),
+        None => UNLIMITED_TEXT.to_string(),
+    }
+}
+
+async fn closed_round_labels(db: &sqlx::SqlitePool) -> Result<Vec<String>, ApiError> {
+    let ids: Vec<i64> = sqlx::query_scalar("SELECT id FROM rounds WHERE status = 'CLOSED' ORDER BY id")
+        .fetch_all(db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(ids.iter().map(|id| format!("{}차", id)).collect())
+}
+
+/// 현재 DB 상태와 대비해 diff 를 만든다. **쓰기 없음.**
+async fn compute_settings_changes(
+    db: &sqlx::SqlitePool,
+    specs: &[UnivSpec],
+) -> Result<SettingsPreview, ApiError> {
+    let labels = closed_round_labels(db).await?;
+    let closed = !labels.is_empty();
+
+    let mut changes: Vec<SettingsDiffEntry> = Vec::new();
+    let mut unchanged = 0usize;
+
+    #[derive(FromRow)]
+    struct CurUniv { id: i64, total_quota: Option<i64>, prioritize_enrolled: i64 }
+    #[derive(FromRow)]
+    struct CurTrack { track_name: String, unit_quota: Option<i64>, prioritize_enrolled: i64 }
+
+    for u in specs {
+        let cur = sqlx::query_as::<_, CurUniv>(
+            "SELECT id, total_quota, prioritize_enrolled FROM universities WHERE univ_name = ?",
+        )
+        .bind(&u.univ_name)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        match cur {
+            None => {
+                // 신규 대학 — 생성 (마감 가드 대상 아님: 저장된 순위가 참조할 수 없음)
+                changes.push(SettingsDiffEntry {
+                    kind: "univ".into(), op: "create".into(),
+                    univ_name: u.univ_name.clone(), track_name: None,
+                    fields: vec![
+                        FieldChange { field: "정원".into(), old: "—".into(), new: quota_display(u.total_quota) },
+                        FieldChange { field: "재학생우선".into(), old: "—".into(), new: fmt_prio(u.prioritize).into() },
+                    ],
+                    blocked: false,
+                });
+                for t in &u.tracks {
+                    changes.push(SettingsDiffEntry {
+                        kind: "track".into(), op: "create".into(),
+                        univ_name: u.univ_name.clone(), track_name: Some(t.track_name.clone()),
+                        fields: vec![
+                            FieldChange { field: "정원".into(), old: "—".into(), new: quota_display(t.unit_quota) },
+                            FieldChange { field: "재학생우선".into(), old: "—".into(), new: fmt_prio(t.prioritize).into() },
+                        ],
+                        blocked: false,
+                    });
+                }
+            }
+            Some(cu) => {
+                let cur_prio = cu.prioritize_enrolled == 1;
+                let mut fields = Vec::new();
+                if cu.total_quota != u.total_quota {
+                    fields.push(FieldChange { field: "정원".into(), old: quota_display(cu.total_quota), new: quota_display(u.total_quota) });
+                }
+                let univ_prio_changed = cur_prio != u.prioritize;
+                if univ_prio_changed {
+                    fields.push(FieldChange { field: "재학생우선".into(), old: fmt_prio(cur_prio).into(), new: fmt_prio(u.prioritize).into() });
+                }
+                let univ_blocked = closed && univ_prio_changed;
+                if fields.is_empty() {
+                    unchanged += 1;
+                } else {
+                    changes.push(SettingsDiffEntry {
+                        kind: "univ".into(), op: "update".into(),
+                        univ_name: u.univ_name.clone(), track_name: None,
+                        fields, blocked: univ_blocked,
+                    });
+                }
+
+                // 기존 트랙 스냅샷
+                let cur_tracks = sqlx::query_as::<_, CurTrack>(
+                    "SELECT track_name, unit_quota, prioritize_enrolled FROM univ_tracks WHERE univ_id = ?",
+                )
+                .bind(cu.id)
+                .fetch_all(db)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                let cur_map: HashMap<&str, &CurTrack> = cur_tracks.iter().map(|t| (t.track_name.as_str(), t)).collect();
+                let file_names: HashSet<&str> = u.tracks.iter().map(|t| t.track_name.as_str()).collect();
+
+                for t in &u.tracks {
+                    match cur_map.get(t.track_name.as_str()) {
+                        None => {
+                            changes.push(SettingsDiffEntry {
+                                kind: "track".into(), op: "create".into(),
+                                univ_name: u.univ_name.clone(), track_name: Some(t.track_name.clone()),
+                                fields: vec![
+                                    FieldChange { field: "정원".into(), old: "—".into(), new: quota_display(t.unit_quota) },
+                                    FieldChange { field: "재학생우선".into(), old: "—".into(), new: fmt_prio(t.prioritize).into() },
+                                ],
+                                blocked: false,
+                            });
+                        }
+                        Some(ct) => {
+                            let ct_prio = ct.prioritize_enrolled == 1;
+                            let mut tf = Vec::new();
+                            if ct.unit_quota != t.unit_quota {
+                                tf.push(FieldChange { field: "정원".into(), old: quota_display(ct.unit_quota), new: quota_display(t.unit_quota) });
+                            }
+                            let tprio_changed = ct_prio != t.prioritize;
+                            if tprio_changed {
+                                tf.push(FieldChange { field: "재학생우선".into(), old: fmt_prio(ct_prio).into(), new: fmt_prio(t.prioritize).into() });
+                            }
+                            if tf.is_empty() {
+                                unchanged += 1;
+                            } else {
+                                changes.push(SettingsDiffEntry {
+                                    kind: "track".into(), op: "update".into(),
+                                    univ_name: u.univ_name.clone(), track_name: Some(t.track_name.clone()),
+                                    fields: tf, blocked: closed && tprio_changed,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // cascade: 대학 재학생우선이 바뀌면 파일에 없는 기존 트랙도 트리거로 함께 뒤집힌다
+                if univ_prio_changed {
+                    for ct in &cur_tracks {
+                        let ct_prio = ct.prioritize_enrolled == 1;
+                        if !file_names.contains(ct.track_name.as_str()) && ct_prio != u.prioritize {
+                            changes.push(SettingsDiffEntry {
+                                kind: "cascade".into(), op: "update".into(),
+                                univ_name: u.univ_name.clone(), track_name: Some(ct.track_name.clone()),
+                                fields: vec![FieldChange {
+                                    field: "재학생우선".into(),
+                                    old: fmt_prio(ct_prio).into(), new: fmt_prio(u.prioritize).into(),
+                                }],
+                                blocked: closed, // 대학 UPDATE 가 차단되면 cascade 도 차단
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let has_blocked = changes.iter().any(|c| c.blocked);
+    Ok(SettingsPreview { errors: vec![], changes, unchanged_count: unchanged, closed_round_labels: labels, has_blocked })
+}
+
+// ── 적용 (tx 쓰기) ────────────────────────────────────────────────
+
+/// 검증된 specs 를 DB 에 반영한다. 마감 라운드 중 재학생우선 변경은
+/// `guard_prioritize_change_closed` 로 차단(정원은 허용). 오류 시 호출자 tx drop 으로 rollback.
+async fn apply_settings(
+    tx: &mut sqlx::SqliteConnection,
+    specs: &[UnivSpec],
+) -> Result<(usize, usize), ApiError> {
+    let mut created = 0usize;
+    let mut updated = 0usize;
+
+    for u in specs {
+        let cur = sqlx::query_as::<_, (i64, Option<i64>, i64)>(
+            "SELECT id, total_quota, prioritize_enrolled FROM universities WHERE univ_name = ?",
+        )
+        .bind(&u.univ_name)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let (univ_id, univ_is_new) = match cur {
+            None => {
+                let id: i64 = sqlx::query_scalar(
+                    "INSERT INTO universities (univ_name, total_quota, prioritize_enrolled) VALUES (?, ?, ?) RETURNING id",
+                )
+                .bind(&u.univ_name).bind(u.total_quota).bind(u.prioritize as i64)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                created += 1;
+                (id, true)
+            }
+            Some((id, cur_quota, cur_prio_i)) => {
+                let cur_prio = cur_prio_i == 1;
+                let mut changed = false;
+                if cur_quota != u.total_quota {
+                    sqlx::query("UPDATE universities SET total_quota = ? WHERE id = ?")
+                        .bind(u.total_quota).bind(id).execute(&mut *tx).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    changed = true;
+                }
+                if cur_prio != u.prioritize {
+                    // 대학 UPDATE 를 막으면 트리거의 트랙 cascade 도 함께 차단된다
+                    guard_prioritize_change_closed(&mut *tx).await?;
+                    sqlx::query("UPDATE universities SET prioritize_enrolled = ? WHERE id = ?")
+                        .bind(u.prioritize as i64).bind(id).execute(&mut *tx).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    changed = true;
+                }
+                if changed { updated += 1; }
+                (id, false)
+            }
+        };
+
+        for t in &u.tracks {
+            if univ_is_new {
+                sqlx::query(
+                    "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled) VALUES (?, ?, ?, ?)",
+                )
+                .bind(univ_id).bind(&t.track_name).bind(t.unit_quota).bind(t.prioritize as i64)
+                .execute(&mut *tx).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                created += 1;
+                continue;
+            }
+            // 기존 대학 — 트랙 조회/생성. prioritize 는 대학 cascade 이후의 라이브 값과 비교.
+            let ct = sqlx::query_as::<_, (i64, Option<i64>, i64)>(
+                "SELECT id, unit_quota, prioritize_enrolled FROM univ_tracks WHERE univ_id = ? AND track_name = ?",
+            )
+            .bind(univ_id).bind(&t.track_name)
+            .fetch_optional(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            match ct {
+                None => {
+                    sqlx::query(
+                        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled) VALUES (?, ?, ?, ?)",
+                    )
+                    .bind(univ_id).bind(&t.track_name).bind(t.unit_quota).bind(t.prioritize as i64)
+                    .execute(&mut *tx).await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    created += 1;
+                }
+                Some((tid, cq, cp_i)) => {
+                    let cp_live = cp_i == 1;
+                    let mut changed = false;
+                    if cq != t.unit_quota {
+                        sqlx::query("UPDATE univ_tracks SET unit_quota = ? WHERE id = ?")
+                            .bind(t.unit_quota).bind(tid).execute(&mut *tx).await
+                            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                        changed = true;
+                    }
+                    if cp_live != t.prioritize {
+                        guard_prioritize_change_closed(&mut *tx).await?;
+                        sqlx::query("UPDATE univ_tracks SET prioritize_enrolled = ? WHERE id = ?")
+                            .bind(t.prioritize as i64).bind(tid).execute(&mut *tx).await
+                            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                        changed = true;
+                    }
+                    if changed { updated += 1; }
+                }
+            }
+        }
+    }
+
+    Ok((created, updated))
+}
+
+// ── xlsx 생성 (template / export) ─────────────────────────────────
+
+/// 헤더 + 데이터 검증을 새 워크시트에 심는다. 반환된 워크시트에 데이터 행을 이어 쓴다.
+fn write_settings_header(ws: &mut rust_xlsxwriter::Worksheet) -> Result<(), ApiError> {
+    for (i, h) in SETTINGS_HEADERS.iter().enumerate() {
+        ws.write_string(0, i as u16, *h).map_err(excel::xlsx_err)?;
+    }
+    // 재학생우선 열: 예/아니오 드롭다운(엄격) — 이상값 입력 차단
+    let prio_dv = DataValidation::new()
+        .allow_list_strings(&["예", "아니오"])
+        .map_err(excel::xlsx_err)?;
+    for &c in &PRIO_COLS {
+        ws.add_data_validation(1, c, DV_LAST_ROW, c, &prio_dv).map_err(excel::xlsx_err)?;
+    }
+    // 정원 열: 숫자 OR "무제한" 텍스트를 한 셀에 강제할 수 없으므로 입력 안내만(유연).
+    let quota_dv = DataValidation::new()
+        .ignore_blank(true)
+        .set_input_title("정원 입력")
+        .map_err(excel::xlsx_err)?
+        .set_input_message(format!("1 이상 정수를 입력하거나 '{}'이라고 적으세요", UNLIMITED_TEXT))
+        .map_err(excel::xlsx_err)?;
+    for &c in &QUOTA_COLS {
+        ws.add_data_validation(1, c, DV_LAST_ROW, c, &quota_dv).map_err(excel::xlsx_err)?;
+    }
+    Ok(())
+}
+
+/// GET /api/universities/settings/template
+pub async fn settings_template() -> Result<Response, ApiError> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet().set_name("대학설정")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    write_settings_header(ws)?;
+
+    // 샘플 1: 모집단위가 있는 대학
+    ws.write_string(1, 0, "한국대학교").map_err(excel::xlsx_err)?;
+    ws.write_number(1, 1, 5.0).map_err(excel::xlsx_err)?;
+    ws.write_string(1, 2, "아니오").map_err(excel::xlsx_err)?;
+    ws.write_string(1, 3, "인문계열").map_err(excel::xlsx_err)?;
+    ws.write_number(1, 4, 3.0).map_err(excel::xlsx_err)?;
+    ws.write_string(1, 5, "아니오").map_err(excel::xlsx_err)?;
+    // 같은 대학의 두 번째 모집단위 — 대학 정원·재학생우선은 동일하게 반복
+    ws.write_string(2, 0, "한국대학교").map_err(excel::xlsx_err)?;
+    ws.write_number(2, 1, 5.0).map_err(excel::xlsx_err)?;
+    ws.write_string(2, 2, "아니오").map_err(excel::xlsx_err)?;
+    ws.write_string(2, 3, "자연계열").map_err(excel::xlsx_err)?;
+    ws.write_string(2, 4, UNLIMITED_TEXT).map_err(excel::xlsx_err)?;
+    ws.write_string(2, 5, "아니오").map_err(excel::xlsx_err)?;
+    // 샘플 2: 모집단위가 없는 대학 — 모집단위 3칸은 비운다
+    ws.write_string(3, 0, "서울대학교").map_err(excel::xlsx_err)?;
+    ws.write_string(3, 1, UNLIMITED_TEXT).map_err(excel::xlsx_err)?;
+    ws.write_string(3, 2, "예").map_err(excel::xlsx_err)?;
+
+    let buf = wb.save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, "univ_settings_template.xlsx"))
+}
+
+/// GET /api/universities/settings/export
+pub async fn settings_export(State(state): State<AppState>) -> Result<Response, ApiError> {
+    let univs = sqlx::query_as::<_, UnivRow>(
+        "SELECT id, univ_name, total_quota, prioritize_enrolled FROM universities ORDER BY univ_name",
+    )
+    .fetch_all(&state.db).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let tracks = sqlx::query_as::<_, TrackRow>(
+        "SELECT id, univ_id, track_name, unit_quota, prioritize_enrolled FROM univ_tracks ORDER BY univ_id, track_name",
+    )
+    .fetch_all(&state.db).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut by_univ: HashMap<i64, Vec<&TrackRow>> = HashMap::new();
+    for t in &tracks { by_univ.entry(t.univ_id).or_default().push(t); }
+
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet().set_name("대학설정")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    write_settings_header(ws)?;
+
+    let write_quota = |ws: &mut rust_xlsxwriter::Worksheet, row: u32, coln: u16, q: Option<i64>| -> Result<(), ApiError> {
+        match q {
+            Some(n) => ws.write_number(row, coln, n as f64).map(|_| ()).map_err(excel::xlsx_err),
+            None => ws.write_string(row, coln, UNLIMITED_TEXT).map(|_| ()).map_err(excel::xlsx_err),
+        }
+    };
+
+    let mut row = 1u32;
+    for u in &univs {
+        let u_tracks = by_univ.remove(&u.id).unwrap_or_default();
+        if u_tracks.is_empty() {
+            // 모집단위 없는 대학 — 대학 3칸만
+            ws.write_string(row, 0, &u.univ_name).map_err(excel::xlsx_err)?;
+            write_quota(ws, row, 1, u.total_quota)?;
+            ws.write_string(row, 2, fmt_prio(u.prioritize_enrolled == 1)).map_err(excel::xlsx_err)?;
+            row += 1;
+        } else {
+            for t in u_tracks {
+                ws.write_string(row, 0, &u.univ_name).map_err(excel::xlsx_err)?;
+                write_quota(ws, row, 1, u.total_quota)?;
+                ws.write_string(row, 2, fmt_prio(u.prioritize_enrolled == 1)).map_err(excel::xlsx_err)?;
+                ws.write_string(row, 3, &t.track_name).map_err(excel::xlsx_err)?;
+                write_quota(ws, row, 4, t.unit_quota)?;
+                ws.write_string(row, 5, fmt_prio(t.prioritize_enrolled == 1)).map_err(excel::xlsx_err)?;
+                row += 1;
+            }
+        }
+    }
+
+    let buf = wb.save_to_buffer()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(excel::xlsx_response(buf, &format!("univ_settings_{}.xlsx", excel::now_tag())))
+}
+
+// ── preview / import 핸들러 ───────────────────────────────────────
+
+async fn read_upload(mut multipart: Multipart) -> Result<Vec<u8>, ApiError> {
+    match multipart.next_field().await.map_err(multipart_err)? {
+        Some(f) => Ok(f.bytes().await.map_err(multipart_err)?.to_vec()),
+        None => Err((StatusCode::BAD_REQUEST, "파일이 없습니다".into())),
+    }
+}
+
+/// POST /api/universities/settings/preview
+/// 파일을 파싱·검증하고 현재 DB 와의 diff 를 계산한다. **쓰기 없음.**
+/// 관리자가 모달에서 확인하기 위한 advisory — 오류가 있으면 body.errors 에 담아 200 으로 반환한다.
+pub async fn settings_preview(
+    State(state): State<AppState>,
+    multipart: Multipart,
+) -> Result<Json<SettingsPreview>, ApiError> {
+    let bytes = read_upload(multipart).await?;
+    let (headers, rows) = match excel::parse_file_rows_with_headers(&bytes) {
+        Ok(v) => v,
+        Err(e) => return Ok(Json(SettingsPreview {
+            errors: vec![e.to_string()], changes: vec![], unchanged_count: 0,
+            closed_round_labels: vec![], has_blocked: false,
+        })),
+    };
+    match parse_settings(&headers, &rows) {
+        Err(errors) => {
+            let labels = closed_round_labels(&state.db).await?;
+            Ok(Json(SettingsPreview {
+                errors, changes: vec![], unchanged_count: 0,
+                closed_round_labels: labels, has_blocked: false,
+            }))
+        }
+        Ok(specs) => Ok(Json(compute_settings_changes(&state.db, &specs).await?)),
+    }
+}
+
+/// POST /api/universities/settings/import
+/// 재검증 후 tx 적용(All-or-Nothing). 검증 오류 422 / 마감 가드 409 / 성공 200.
+pub async fn settings_import(
+    State(state): State<AppState>,
+    multipart: Multipart,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    let bytes = read_upload(multipart).await?;
+    let (headers, rows) = excel::parse_file_rows_with_headers(&bytes)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let specs = match parse_settings(&headers, &rows) {
+        Ok(s) => s,
+        Err(errors) => return Ok((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({ "inserted": 0, "updated": 0, "errors": errors })),
+        )),
+    };
+
+    let mut tx = state.db.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (created, updated) = apply_settings(&mut tx, &specs).await?;
+    audit::log(&mut *tx, AuditEntry {
+        actor: Actor::Admin,
+        action: AuditAction::UniversitySettingsImported,
+        round_id: None,
+        student_id: None,
+        detail: serde_json::json!({ "created": created, "updated": updated }),
+    }).await?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((StatusCode::OK, Json(serde_json::json!({ "inserted": created, "updated": updated, "errors": [] }))))
 }
