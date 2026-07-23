@@ -362,11 +362,11 @@
 
             <!-- 점수 기준 목록 -->
             <div class="mt-5 rounded-xl overflow-hidden"
-              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
+              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-x: auto; overflow-y: auto;">
               <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 점수 기준 없음
               </p>
-              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 660px;">
                 <colgroup>
                   <template v-if="selected.lookup_scope === 'COMPOSITE'">
                     <col style="width: 140px;">
@@ -505,11 +505,11 @@
 
             <!-- 기초 데이터 목록 -->
             <div class="mt-5 rounded-xl overflow-hidden"
-              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-y: auto;">
+              style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-x: auto; overflow-y: auto;">
               <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 기초 데이터 없음
               </p>
-              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 680px;">
                 <colgroup>
                   <col style="width: 160px;">
                   <col style="width: 100px;">
