@@ -2049,12 +2049,11 @@ async fn export_results_header_contains_univ_rank() {
     }
 }
 
-/// `export_round_summary` 의 "지원자결과" 시트 — track_rank_window() 를 r2/ut2/s2 별칭
-/// CTE로 쓰는 유일한 경로다. 이 핸들러는 리팩터링 전까지 테스트가 전혀 없어서, 헬퍼에
-/// 별칭을 잘못 넘겨도(예: r/ut/s) 전 스위트가 통과했다. SQL이 실제로 실행되는지와
+/// `export_results` 의 "지원자 명단" 시트 — track_rank_window() 를 CTE로 쓰는 경로다.
+/// 헬퍼에 별칭을 잘못 넘겨도 전 스위트가 통과하던 사각지대라, SQL이 실제로 실행되는지와
 /// 모집단위 순위가 채워지는지를 확인한다.
 #[tokio::test]
-async fn export_round_summary_applicant_sheet_populates_track_rank() {
+async fn export_results_roster_populates_track_rank() {
     let pool = common::create_test_pool().await;
     let (sid, tid, rid) = setup_full(&pool).await;
 
@@ -2080,16 +2079,15 @@ async fn export_round_summary_applicant_sheet_populates_track_rank() {
         .bind(rid).execute(&pool).await.unwrap();
     let _ = calculate_scores(State(common::make_state(pool.clone())), Path(rid)).await.unwrap();
 
-    let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
     assert!(principal_candidate_manager::excel::is_xlsx(&bytes));
 
-    // 첫 시트가 아니라 "지원자결과" 시트를 직접 열어야 한다
-    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자결과").unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자 명단").unwrap();
     let header = &rows[0];
     let rank_col = header.iter().position(|h| h == "모집단위 순위")
         .expect(&format!("헤더에 '모집단위 순위' 없음: {header:?}"));
-    let name_col = header.iter().position(|h| h == "이름").expect("헤더에 '이름' 없음");
+    let name_col = header.iter().position(|h| h == "학생명").expect("헤더에 '학생명' 없음");
 
     assert_eq!(rows.len(), 3, "헤더 + 지원자 2행이어야 함: {rows:?}");
     let hong = rows[1..].iter().find(|r| r[name_col] == "홍길동").expect("홍길동 행");
@@ -2138,7 +2136,7 @@ async fn calculate_scores_total_includes_negative_deduction_area() {
     assert_eq!(map[plus.to_string()], serde_json::json!(8_000_000), "가점 영역: {detail}");
 }
 
-/// `export_round_summary` 의 "라운드결과" 시트 — 관리자가 잔여석을 읽는 산출물인데
+/// `export_round_summary` 의 "선발 현황" 시트 — 관리자가 잔여석을 읽는 산출물인데
 /// 지금까지 이 시트를 파싱하는 테스트가 하나도 없었다. `(q - before).max(0)` /
 /// `(q - before - this).max(0)` 산술이 조용히 틀려도 전 스위트가 초록이었다.
 #[tokio::test]
@@ -2189,7 +2187,7 @@ async fn export_round_summary_track_sheet_computes_remaining_seats() {
 
     let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "선발 현황").unwrap();
 
     let header = &rows[0];
     let col_of = |h: &str| header.iter().position(|c| c == h)
@@ -2201,7 +2199,7 @@ async fn export_round_summary_track_sheet_computes_remaining_seats() {
     for (h, want) in [
         ("모집단위 정원", "2"),
         ("모집단위 라운드 전 잔여석", "1"),
-        ("이번 라운드 추천 인원", "1"),
+        ("추천 인원", "1"),
         ("모집단위 남은 잔여석", "0"),
         ("대학 전체 정원", "3"),
         ("대학 라운드 전 잔여석", "2"),
@@ -2231,7 +2229,7 @@ async fn export_round_summary_unlimited_quota_renders_as_text() {
 
     let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "선발 현황").unwrap();
     let header = &rows[0];
     let col_of = |h: &str| header.iter().position(|c| c == h).unwrap();
     let data = &rows[1];
@@ -2242,7 +2240,7 @@ async fn export_round_summary_unlimited_quota_renders_as_text() {
     ] {
         assert_eq!(data[col_of(h)], "무제한", "'{h}' 열은 '무제한' 이어야 함: {data:?}");
     }
-    assert_eq!(data[col_of("이번 라운드 추천 인원")], "0", "추천 인원은 무제한이어도 숫자");
+    assert_eq!(data[col_of("추천 인원")], "0", "추천 인원은 무제한이어도 숫자");
 }
 
 /// 내보내기 용어가 화면·매뉴얼의 "미선발"과 일치해야 한다.
@@ -2438,10 +2436,10 @@ async fn score_preview_missing_base_data_returns_500_with_context() {
 // 쿼리에서만 의미가 있다. get_results 는 WHERE 로 라운드를 이미 고정하므로
 // (윈도우 함수는 WHERE 이후에 계산된다) 라운드 파티션이 빠져도 값이 같다 —
 // 즉 기존 track_rank 테스트들은 이 인자를 전혀 검증하지 못한다.
-// export_round_summary 의 CTE 는 라운드 필터 없이 results 전체를 훑으므로,
-// 여기서만 파티션 누락이 드러난다.
+// export_results 의 명단 CTE 는 라운드 필터 없이 results 전체를 훑고 (track,round)로
+// 파티션하므로, 여기서만 파티션 누락이 드러난다.
 #[tokio::test]
-async fn export_round_summary_track_rank_restarts_each_round() {
+async fn export_results_roster_track_rank_restarts_each_round() {
     let pool = common::create_test_pool().await;
     let hash = bcrypt::hash("pass", 4u32).unwrap();
     sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
@@ -2486,14 +2484,14 @@ async fn export_round_summary_track_rank_restarts_each_round() {
         ).bind(sid).bind(tid).bind(rid).bind(score).execute(&pool).await.unwrap();
     }
 
-    let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
+    let resp = export_results(State(common::make_state(pool)), Path(r2)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자결과").unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자 명단").unwrap();
 
     let header = &rows[0];
     let col_of = |h: &str| header.iter().position(|c| c == h)
         .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
-    let (c_name, c_rank) = (col_of("이름"), col_of("모집단위 순위"));
+    let (c_name, c_rank) = (col_of("학생명"), col_of("모집단위 순위"));
 
     assert_eq!(rows.len(), 3, "2차 지원자 2명만 실려야 함: {rows:?}");
     let names: Vec<&str> = rows[1..].iter().map(|r| r[c_name].as_str()).collect();
@@ -2593,7 +2591,7 @@ async fn export_round_summary_clamps_negative_remaining_to_zero() {
 
     let resp = export_round_summary(State(common::make_state(pool)), Path(r2)).await.unwrap();
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "라운드결과").unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "선발 현황").unwrap();
     let header = &rows[0];
     let col_of = |h: &str| header.iter().position(|c| c == h)
         .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
@@ -2612,6 +2610,198 @@ async fn export_round_summary_clamps_negative_remaining_to_zero() {
             "'{}' 열({})은 음수 대신 '{}' 이어야 함: {:?}", h, c, want, data,
         );
     }
-    // 클램프가 "이번 라운드 추천 인원"까지 뭉개면 안 된다 — 이 값은 실제 카운트
-    assert_eq!(data[col_of("이번 라운드 추천 인원")], "1", "이번 라운드 확정 1명: {data:?}");
+    // 클램프가 "추천 인원"까지 뭉개면 안 된다 — 이 값은 실제 카운트
+    assert_eq!(data[col_of("추천 인원")], "1", "이번 라운드 확정 1명: {data:?}");
+}
+
+// ── 신규: applications 기준 명단 & 지원/포기 집계 ──────────────────
+
+/// export_results 는 `applications` 기준이라 **점수 미계산 지원자도** 명단에 나와야 한다.
+/// (예전 `results` 기준이면 계산 전 지원자는 통째로 빠졌다 — "누가 지원했는지"와 어긋남.)
+#[tokio::test]
+async fn export_results_includes_applicant_without_result() {
+    let pool = common::create_test_pool().await;
+    let (sid, tid, rid) = setup_full(&pool).await;
+    // 지원만 하고 결과(results) 는 없다 — 점수 계산 전 상태
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자 명단").unwrap();
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+
+    assert_eq!(rows.len(), 2, "미계산 지원자도 한 행으로 실려야 함: {rows:?}");
+    let data = &rows[1];
+    assert_eq!(data[col_of("학생명")], "홍길동");
+    assert_eq!(data[col_of("총점")], "미계산", "결과가 없으면 총점은 '미계산': {data:?}");
+    assert_eq!(data[col_of("추천")], "", "미추천은 빈 칸");
+}
+
+/// export_round_summary "선발 현황" — 지원 인원·추천 인원·포기 인원을 각각 센다.
+/// 추천 인원은 recommended AND NOT abandoned, 포기 인원은 abandoned 지원 수.
+#[tokio::test]
+async fn export_round_summary_counts_applied_and_abandoned() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name, total_quota) VALUES ('한국대', 5) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name, unit_quota) VALUES (?, '컴공', 5) RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // (학번, recommended, abandoned): 3명 지원 / 1명 추천(포기 아님) / 1명 포기
+    for (seq, (code, rec, aband)) in [("S001", 1, 0), ("S002", 0, 0), ("S003", 1, 1)].into_iter().enumerate() {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+             VALUES (?, '학생', 1, 1, ?, 1) RETURNING id",
+        ).bind(code).bind(seq as i64 + 1).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, ?)")
+            .bind(sid).bind(tid).bind(rid).bind(aband).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+             ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, 1, ?, '2025-01-09')",
+        ).bind(sid).bind(tid).bind(rid).bind(rec).execute(&pool).await.unwrap();
+    }
+
+    let resp = export_round_summary(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "선발 현황").unwrap();
+    let header = &rows[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let data = &rows[1];
+
+    assert_eq!(data[col_of("지원 인원")], "3", "지원 3명: {data:?}");
+    assert_eq!(data[col_of("추천 인원")], "1", "추천(포기 제외) 1명: {data:?}");
+    assert_eq!(data[col_of("포기 인원")], "1", "포기 1명: {data:?}");
+}
+
+/// 내보내기 엑셀이 **실제 지원 명단과 1:1 일치**함을 고정한다(핵심 정합성).
+/// applications·results 는 둘 다 PK(student_id, track_id, round_id) 라 JOIN 은 1:1 이어야 한다.
+/// 한 학생이 여러 트랙에 지원하고 results 를 붙여도 행이 늘거나(fan-out) 줄면(누락) 안 된다.
+#[tokio::test]
+async fn export_results_roster_is_one_row_per_application() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let t1: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let t2: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '전자') RETURNING id",
+    ).bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    let a: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '에이', 1, 1, 1, 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+    let b: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S002', '비', 1, 1, 2, 1) RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // 지원 3건: A→컴공(추천), A→전자(미추천, 결과 없음), B→컴공(포기, 결과=추천 박제)
+    // (student, track, abandoned, has_result, recommended)
+    let apps = [
+        (a, t1, 0, true, 1),
+        (a, t2, 0, false, 0),
+        (b, t1, 1, true, 1),
+    ];
+    for (s, t, ab, has_res, rec) in apps {
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, ?)")
+            .bind(s).bind(t).bind(rid).bind(ab).execute(&pool).await.unwrap();
+        if has_res {
+            sqlx::query(
+                "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
+                 ranking, recommended, calculated_at) VALUES (?, ?, ?, '{}', 0, 1, ?, '2025-01-09')",
+            ).bind(s).bind(t).bind(rid).bind(rec).execute(&pool).await.unwrap();
+        }
+    }
+
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자 명단").unwrap();
+    let h = &rows[0];
+    let col = |name: &str| h.iter().position(|c| c == name).unwrap();
+    let (c_name, c_track, c_rec, c_ab) = (col("학생명"), col("모집단위"), col("추천"), col("포기"));
+
+    // 지원 3건 → 정확히 3행 (fan-out 로 늘거나 누락으로 줄면 실패)
+    assert_eq!(rows.len(), 4, "지원 3건과 1:1(헤더+3): {rows:?}");
+    let mut pairs: Vec<(String, String)> = rows[1..].iter()
+        .map(|r| (r[c_name].clone(), r[c_track].clone())).collect();
+    pairs.sort();
+    assert_eq!(
+        pairs,
+        vec![("비".into(), "컴공".into()), ("에이".into(), "전자".into()), ("에이".into(), "컴공".into())],
+        "지원 (학생,모집단위) 조합이 정확히 일치해야 함",
+    );
+
+    // 각 행의 플래그가 실제 상태와 일치
+    let find = |name: &str, track: &str| rows[1..].iter()
+        .find(|r| r[c_name] == name && r[c_track] == track).unwrap();
+    assert_eq!(find("에이", "컴공")[c_rec], "추천");
+    assert_eq!(find("에이", "전자")[c_rec], "", "결과 없는 지원은 추천 빈 칸");
+    assert_eq!(find("비", "컴공")[c_ab], "포기", "포기 지원은 포기 표시(추천 박제와 무관)");
+}
+
+/// 명단 정렬 고정: 재학생이 졸업생보다 위, 그 안에서 학생코드 오름차순.
+/// (관리자가 학번순으로 "누가 어디 지원/선발됐나"를 읽는 기준.)
+#[tokio::test]
+async fn export_results_roster_sorts_enrolled_first_then_student_code() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid: i64 = sqlx::query_scalar("INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id")
+        .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar("INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id")
+        .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', '2025-01-01', '2025-01-05') RETURNING id",
+    ).fetch_one(&pool).await.unwrap();
+
+    // 삽입 순서를 기대 정렬과 어긋나게 둔다. 졸업생 코드가 재학생보다 작아도 재학생이 위여야 한다.
+    // (student_code, is_enrolled, grade, class, seq, grad_year)
+    let grads_and_enrolled = [
+        ("20240001", 0, None, None, None, Some(2024)),      // 졸업생(작은 코드)
+        ("20259901", 1, Some(1), Some(1), Some(2), None),   // 재학생 (학급 1-1 존재)
+        ("20259801", 1, Some(1), Some(1), Some(1), None),   // 재학생(더 작은 코드)
+    ];
+    for (code, enr, g, c, s, gy) in grads_and_enrolled {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled, grad_year) \
+             VALUES (?, '학생', ?, ?, ?, ?, ?) RETURNING id",
+        ).bind(code).bind(g).bind(c).bind(s).bind(enr).bind(gy).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+
+    let resp = export_results(State(common::make_state(pool)), Path(rid)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "지원자 명단").unwrap();
+    let h = &rows[0];
+    let c_code = h.iter().position(|c| c == "학생코드").unwrap();
+    let order: Vec<&str> = rows[1..].iter().map(|r| r[c_code].as_str()).collect();
+
+    assert_eq!(
+        order,
+        vec!["20259801", "20259901", "20240001"],
+        "재학생(코드 오름차순) 먼저, 졸업생은 코드가 작아도 맨 뒤: {order:?}",
+    );
 }

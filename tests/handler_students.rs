@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 use principal_candidate_manager::handlers::students::{
-    add_enrolled, add_graduated, delete_student, find_unique_code, list_students,
+    add_enrolled, add_graduated, delete_student, export_students, find_unique_code, list_students,
     upsert_enrolled_by_position, upsert_student, AddEnrolledBody, AddGraduatedBody, ListQuery,
     StudentRecord,
 };
@@ -790,4 +790,34 @@ async fn list_students_pagination_offset_matches_page_minus_one_times_per_page()
     let Json(page3) = list_students(State(state), list_query(None, None, 3, 2)).await.unwrap();
     let codes3: Vec<&str> = page3.rows.iter().map(|r| r.student_code.as_str()).collect();
     assert_eq!(codes3, vec!["G1"], "3페이지엔 졸업생 1명만 남아야 함");
+}
+
+/// 전체 목록 다운로드(export_students)는 화면 목록과 같은 기준으로 정렬돼야 한다:
+/// 재학생 먼저(is_enrolled DESC) → 학년·반·번호 → 학생코드.
+/// is_enrolled 를 빼면 grade=NULL 인 졸업생이 맨 위로 올라와 화면과 어긋난다(회귀 방지).
+#[tokio::test]
+async fn export_students_sorts_enrolled_before_graduated() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+
+    // 졸업생을 먼저 넣어 삽입 순서가 기대 정렬과 어긋나게 둔다
+    sqlx::query("INSERT INTO students (student_code, name, is_enrolled, grad_year) VALUES ('20240001', '졸업', 0, 2024)")
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) VALUES ('E002', '재학2', 1, 1, 2, 1)")
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) VALUES ('E001', '재학1', 1, 1, 1, 1)")
+        .execute(&pool).await.unwrap();
+
+    let resp = export_students(State(common::make_state(pool))).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = principal_candidate_manager::excel::parse_xlsx_all_rows_raw(&bytes).unwrap();
+    let h = &rows[0];
+    let c_code = h.iter().position(|c| c == "학생코드").unwrap();
+    let order: Vec<&str> = rows[1..].iter().map(|r| r[c_code].as_str()).collect();
+
+    assert_eq!(
+        order,
+        vec!["E001", "E002", "20240001"],
+        "재학생(번호순) 먼저, 졸업생은 코드가 작아도 맨 뒤: {order:?}",
+    );
 }

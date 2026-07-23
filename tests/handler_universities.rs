@@ -398,8 +398,11 @@ async fn export_bytes(pool: &sqlx::SqlitePool, univ_id: Option<i64>) -> (Vec<u8>
     (bytes, cd)
 }
 
+// export_quota_stats 는 2시트(①"전체 명단" ②"정원 현황")를 내보낸다.
+// 정원·잔여석 집계는 두 번째 "정원 현황" 시트에 있으므로 그 시트를 직접 연다
+// (첫 시트를 읽으면 지원자 명단이 나온다).
 fn parse_rows(bytes: &[u8]) -> Vec<Vec<String>> {
-    principal_candidate_manager::excel::parse_xlsx_all_rows_raw(bytes).unwrap()
+    principal_candidate_manager::excel::parse_xlsx_sheet_rows(bytes, "정원 현황").unwrap()
 }
 
 #[tokio::test]
@@ -419,7 +422,7 @@ async fn export_quota_stats_all_returns_all_tracks() {
     let univ_names: Vec<&str> = body.iter().map(|r| r[0].as_str()).collect();
     assert!(univ_names.contains(&"한국대"), "한국대 포함");
     assert!(univ_names.contains(&"서울대"), "서울대 포함");
-    assert!(cd.contains("전체_추천현황"), "파일명에 '전체_추천현황' 포함: {cd}");
+    assert!(cd.contains("전체_명단_정원현황"), "파일명에 '전체_명단_정원현황' 포함: {cd}");
 }
 
 #[tokio::test]
@@ -440,7 +443,7 @@ async fn export_quota_stats_filtered_returns_one_univ() {
     let flat = rows.iter().skip(1).flat_map(|r| r.iter().map(String::as_str)).collect::<Vec<_>>();
     assert!(!flat.contains(&"한국대"), "한국대 미포함");
     assert!(cd.contains("서울대"), "파일명에 대학명 포함: {cd}");
-    assert!(cd.contains("_추천현황_"), "파일명 패턴: {cd}");
+    assert!(cd.contains("_명단_정원현황_"), "파일명 패턴: {cd}");
 }
 
 #[tokio::test]
@@ -452,9 +455,9 @@ async fn export_quota_stats_content_disposition_all_vs_filtered() {
     let (_, cd_all) = export_bytes(&pool, None).await;
     let (_, cd_filtered) = export_bytes(&pool, Some(uid)).await;
 
-    assert!(cd_all.contains("전체_추천현황"), "전체 경로 파일명: {cd_all}");
+    assert!(cd_all.contains("전체_명단_정원현황"), "전체 경로 파일명: {cd_all}");
     assert!(cd_filtered.contains("고려대"), "필터 경로 파일명에 대학명: {cd_filtered}");
-    assert!(cd_filtered.contains("_추천현황_"), "필터 경로 파일명 패턴: {cd_filtered}");
+    assert!(cd_filtered.contains("_명단_정원현황_"), "필터 경로 파일명 패턴: {cd_filtered}");
 }
 
 /// 기존 export 테스트들은 행 수·대학명·파일명만 봤고 픽스처에 라운드도 results 도
@@ -530,7 +533,7 @@ async fn export_quota_stats_empty_db_returns_header_only() {
     // 헤더 행만 존재
     assert_eq!(rows.len(), 1, "빈 DB → 헤더 행만");
     assert_eq!(rows[0][0], "대학명", "첫 번째 헤더 열");
-    assert!(cd.contains("전체_추천현황"), "빈 DB 파일명: {cd}");
+    assert!(cd.contains("전체_명단_정원현황"), "빈 DB 파일명: {cd}");
 }
 
 /// 라운드별 추천 인원 열("1차 추천", "2차 추천", …)은 `all_round_ids` 순서로 붙는
@@ -959,4 +962,43 @@ async fn update_university_prioritize_allowed_when_open_or_finalized() {
             .bind(uid).fetch_one(&pool).await.unwrap();
         assert_eq!(pe, 1, "{status} 라운드에서는 변경이 반영되어야 함");
     }
+}
+
+// ── 신규: 전체 명단 시트 + 정원 현황의 지원/포기 열 ────────────────
+
+/// export_quota_stats 는 2시트다: ①"전체 명단"(전 라운드 지원자, 라운드 열 포함)
+/// ②"정원 현황"(지원·추천·포기·잔여). 두 시트가 모두 채워지는지 확인한다.
+#[tokio::test]
+async fn export_quota_stats_roster_sheet_and_applied_abandoned_columns() {
+    let pool = common::create_test_pool().await;
+    let hash = bcrypt::hash("pass", 4u32).unwrap();
+    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (1, 1, ?)")
+        .bind(&hash).execute(&pool).await.unwrap();
+    let uid = insert_univ(&pool, "한국대").await;
+    let tid = insert_track(&pool, uid, "컴공").await;
+    let (r1, r2) = two_rounds(&pool).await;
+
+    // 1차 추천 1명 / 2차 추천 1명 / 2차 포기 1명 — 전체 라운드 누적
+    seed_result(&pool, tid, r1, "S001", "에이", 1, Some(1), 1, 0).await;
+    seed_result(&pool, tid, r2, "S002", "비",   2, Some(1), 1, 0).await;
+    seed_result(&pool, tid, r2, "S003", "씨",   3, Some(2), 1, 1).await;
+
+    let (bytes, cd) = export_bytes(&pool, None).await;
+    assert!(cd.contains("전체_명단_정원현황"), "파일명: {cd}");
+
+    // ① 전체 명단 — 라운드 열 포함, 지원자 3명 전원
+    let roster = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "전체 명단").unwrap();
+    assert!(roster[0].iter().any(|h| h == "라운드"), "명단에 '라운드' 열: {:?}", roster[0]);
+    assert!(roster[0].iter().any(|h| h == "모집단위 순위"), "명단에 '모집단위 순위' 열");
+    assert_eq!(roster.len(), 4, "헤더 + 지원자 3명: {roster:?}");
+
+    // ② 정원 현황 — 지원 3 / 추천 2(포기 제외) / 포기 1
+    let summary = principal_candidate_manager::excel::parse_xlsx_sheet_rows(&bytes, "정원 현황").unwrap();
+    let header = &summary[0];
+    let col_of = |h: &str| header.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("헤더에 '{}' 없음: {:?}", h, header));
+    let data = &summary[1];
+    assert_eq!(data[col_of("지원 인원")], "3", "지원 3명: {data:?}");
+    assert_eq!(data[col_of("추천인원")], "2", "추천(포기 제외) 2명: {data:?}");
+    assert_eq!(data[col_of("포기 인원")], "1", "포기 1명: {data:?}");
 }
