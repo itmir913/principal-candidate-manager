@@ -885,7 +885,7 @@ async function removeUniv(id) {
     message: '이 대학과 모든 모집단위를 삭제하시겠습니까?',
     confirmText: '삭제',
     level: 'danger',
-    dangerNotice: '삭제된 대학·모집단위 정보는 복구할 수 없습니다.',
+    dangerNotice: '삭제된 대학·모집단위 정보는 복구할 수 없습니다. 이 대학과 연관된 기초 데이터(석차연명부 포함)도 함께 삭제됩니다.',
     finalConfirmText: '영구 삭제',
   }))) return
   saving.value = true; error.value = ''
