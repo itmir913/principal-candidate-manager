@@ -482,21 +482,27 @@
           <div v-for="grp in settingsGrouped" :key="grp.univ_name" class="mb-5">
             <h4 class="text-base font-semibold mb-2" style="color: #1e293b;">{{ grp.univ_name }}</h4>
             <div class="rounded-xl overflow-hidden" style="border: 1px solid #e2e8f0;">
-              <table class="w-full" style="border-collapse: collapse;">
+              <table class="w-full" style="border-collapse: collapse; table-layout: fixed;">
+                <!-- 대학마다 표가 달라도 열 위치가 어긋나지 않도록 너비를 고정한다 -->
+                <colgroup>
+                  <col style="width: 84px;" />
+                  <col style="width: 280px;" />
+                  <col />
+                </colgroup>
                 <tbody>
                   <tr v-for="(c, i) in grp.rows" :key="i"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
                       background: c.blocked ? '#fef2f2' : (c.op === 'create' ? '#f0fdf4' : '#fffbeb'),
                     }">
-                    <td class="text-base" style="padding: 10px 16px; width: 90px; vertical-align: top;">
+                    <td class="text-base" style="padding: 10px 16px; vertical-align: top;">
                       <span class="text-base font-semibold" :style="{ color: badgeColor(c) }">{{ badgeLabel(c) }}</span>
                     </td>
-                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #1e293b;">
+                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #1e293b; overflow-wrap: anywhere;">
                       <span v-if="c.track_name">모집단위 · {{ c.track_name }}</span>
                       <span v-else>대학 설정</span>
                     </td>
-                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #475569;">
+                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #475569; overflow-wrap: anywhere;">
                       <div v-for="(f, j) in c.fields" :key="j">
                         {{ f.field }}: <span style="color: #94a3b8;">{{ f.old }}</span>
                         <span style="color: #94a3b8;"> → </span>
