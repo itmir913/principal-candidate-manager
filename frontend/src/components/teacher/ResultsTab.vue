@@ -135,8 +135,8 @@
                     <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">대학명</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">모집단위</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">지원 학과</th>
-                    <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
-                    <th class="text-base font-semibold text-right" style="padding: 12px 20px; color: #475569;">총점</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
+                    <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">총점</th>
                     <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">상태</th>
                     <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">비고</th>
                   </tr>
@@ -156,8 +156,8 @@
                     <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
                     <td class="text-base" style="padding: 12px 16px; color: #1e293b;">{{ r.track_name }}</td>
                     <td class="text-base" style="padding: 12px 16px; color: #475569;">{{ r.department_name }}</td>
-                    <td class="text-base text-left" style="padding: 12px 16px; color: #64748b;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
-                    <td class="text-base text-right font-semibold" style="padding: 12px 20px; color: #1e293b;">
+                    <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
+                    <td class="text-base text-left font-semibold" style="padding: 12px 20px; color: #1e293b;">
                       {{ formatScore(r.total_score) }}
                     </td>
                     <td class="text-center" style="padding: 12px 16px;">

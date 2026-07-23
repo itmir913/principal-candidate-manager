@@ -226,7 +226,7 @@
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">지원 학과</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">추천</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">포기처리</th>
-                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569;">총점</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">총점</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -264,7 +264,7 @@
                           >포기하기</button>
                           <span v-else style="color: #cbd5e1;">-</span>
                         </td>
-                        <td class="text-base text-right font-semibold" style="padding: 12px 18px; color: #1e293b;">
+                        <td class="text-base text-left font-semibold" style="padding: 12px 18px; color: #1e293b;">
                           {{ appTotalScore(app) }}
                         </td>
                       </tr>
@@ -409,12 +409,12 @@
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th style="padding: 13px 8px;"></th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">{{ rankView === 'track' ? '지원 학과' : '모집단위 · 지원 학과' }}</th>
-                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569;">총점</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">총점</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">추천</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">포기처리</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">미선발</th>
@@ -437,7 +437,7 @@
                           <td class="text-base text-center" style="padding: 12px 8px; color: #94a3b8; user-select: none;">
                             {{ expandedRows[`${r.student_id}-${r.track_id}`] ? '▼' : '▶' }}
                           </td>
-                          <td class="text-base text-left" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
+                          <td class="text-base text-center" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
                           <td class="text-base" style="padding: 12px 18px; color: #475569; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <span v-if="r.is_enrolled">{{ r.grade }}학년 {{ r.class_no }}반 {{ r.seq_no }}번</span>
                             <span v-else class="font-mono">{{ r.student_code }}</span>
@@ -456,7 +456,7 @@
                             </template>
                             <span v-else class="text-base" style="color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;">{{ r.department_name }}</span>
                           </td>
-                          <td class="text-base text-right font-semibold" style="padding: 12px 18px; color: #1e293b;">
+                          <td class="text-base text-left font-semibold" style="padding: 12px 18px; color: #1e293b;">
                             {{ formatScore(r.total_score) }}
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
