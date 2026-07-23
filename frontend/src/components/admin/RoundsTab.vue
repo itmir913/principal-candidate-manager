@@ -393,14 +393,14 @@
               <div class="rounded-xl overflow-hidden"
                 style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
                 <div class="overflow-x-auto">
-                  <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1076px;">
+                  <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1106px;">
                     <colgroup>
                       <col style="width: 36px;">
                       <col style="width: 70px;">
-                      <col style="width: 160px;">
+                      <col style="width: 140px;">
                       <col style="width: 100px;">
                       <col style="width: 90px;">
-                      <col style="width: 140px;">
+                      <col style="width: 190px;">
                       <col style="width: 90px;">
                       <col style="width: 120px;">
                       <col style="width: 110px;">
@@ -409,7 +409,7 @@
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th style="padding: 13px 8px;"></th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569;">순위</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
