@@ -366,17 +366,26 @@
               <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 점수 기준 없음
               </p>
-              <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;">
+                <colgroup>
+                  <col style="width: 140px;">
+                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                    <col style="width: 100px;">
+                    <col style="width: 160px;">
+                    <col>
+                  </template>
+                  <col v-else>
+                </colgroup>
                 <thead style="position: sticky; top: 0; z-index: 1;">
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">
                       <template v-if="selected.calc_type === 'NUMERIC'">기준값<span v-if="selected.unit"> ({{ selected.unit }})</span></template>
                       <template v-else>범주</template>
                     </th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">점수 (점)</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">점수 (점)</th>
                     <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
-                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">대학명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">모집단위명</th>
                     </template>
                   </tr>
                 </thead>
@@ -497,15 +506,25 @@
               <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 기초 데이터 없음
               </p>
-              <table v-else class="w-full min-w-max" style="border-collapse: collapse;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;">
+                <colgroup>
+                  <col style="width: 160px;">
+                  <col style="width: 100px;">
+                  <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                    <col style="width: 100px;">
+                    <col style="width: 160px;">
+                    <col>
+                  </template>
+                  <col v-else>
+                </colgroup>
                 <thead style="position: sticky; top: 0; z-index: 1;">
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학생코드</th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">이름</th>
-                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">값</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생코드</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">이름</th>
+                    <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">값</th>
                     <template v-if="selected.lookup_scope === 'COMPOSITE'">
-                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">대학명</th>
-                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">모집단위명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">대학명</th>
+                      <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">모집단위명</th>
                     </template>
                   </tr>
                 </thead>
