@@ -206,17 +206,27 @@
               <div class="rounded-xl overflow-hidden"
                 style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
                 <div class="overflow-x-auto">
-                  <table class="w-full min-w-max" style="border-collapse: collapse;">
+                  <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 910px;">
+                    <colgroup>
+                      <col style="width: 160px;">
+                      <col style="width: 100px;">
+                      <col style="width: 90px;">
+                      <col style="width: 120px;">
+                      <col style="width: 150px;">
+                      <col style="width: 110px;">
+                      <col style="width: 110px;">
+                      <col style="width: 70px;">
+                    </colgroup>
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학번/학생코드</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">학생 이름</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 90px;">구분</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 110px;">모집단위</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">지원 학과</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 110px;">추천</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 110px;">포기처리</th>
-                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569; width: 90px;">총점</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">모집단위</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">지원 학과</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">추천</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">포기처리</th>
+                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569;">총점</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -383,19 +393,31 @@
               <div class="rounded-xl overflow-hidden"
                 style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
                 <div class="overflow-x-auto">
-                  <table class="w-full min-w-max" style="border-collapse: collapse;">
+                  <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 1076px;">
+                    <colgroup>
+                      <col style="width: 36px;">
+                      <col style="width: 70px;">
+                      <col style="width: 160px;">
+                      <col style="width: 100px;">
+                      <col style="width: 90px;">
+                      <col style="width: 140px;">
+                      <col style="width: 90px;">
+                      <col style="width: 120px;">
+                      <col style="width: 110px;">
+                      <col style="width: 160px;">
+                    </colgroup>
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th style="width: 36px; padding: 13px 8px;"></th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569; width: 70px;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 160px;">학번/학생코드</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 100px;">학생 이름</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 90px;">구분</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569; width: 140px;">지원 학과</th>
-                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569; width: 90px;">총점</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 120px;">추천</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 110px;">포기처리</th>
-                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569; width: 160px;">미선발</th>
+                        <th style="padding: 13px 8px;"></th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">지원 학과</th>
+                        <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569;">총점</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">추천</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">포기처리</th>
+                        <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">미선발</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -759,9 +781,10 @@ const appsByUniv = computed(() => {
   }
   for (const key of Object.keys(map)) {
     map[key].sort((a, b) => {
-      const t = a.track_name.localeCompare(b.track_name, 'ko')
-      if (t !== 0) return t
-      return (a.student_code ?? '').localeCompare(b.student_code ?? '')
+      if (a.is_enrolled !== b.is_enrolled) return a.is_enrolled ? -1 : 1
+      const code = (a.student_code ?? '').localeCompare(b.student_code ?? '')
+      if (code !== 0) return code
+      return a.track_name.localeCompare(b.track_name, 'ko')
     })
   }
   return map

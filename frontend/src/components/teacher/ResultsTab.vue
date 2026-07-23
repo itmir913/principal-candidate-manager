@@ -120,16 +120,25 @@
 
             <!-- 결과 테이블 -->
             <div class="overflow-x-auto">
-              <table class="w-full min-w-max" style="border-collapse: collapse;">
+              <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
+                <colgroup>
+                  <col style="width: 160px;">
+                  <col style="width: 190px;">
+                  <col style="width: 160px;">
+                  <col style="width: 100px;">
+                  <col style="width: 100px;">
+                  <col style="width: 110px;">
+                  <col style="width: 120px;">
+                </colgroup>
                 <thead>
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">대학명</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">모집단위</th>
                     <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">지원 학과</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 80px;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
-                    <th class="text-base font-semibold text-right" style="padding: 12px 20px; color: #475569; width: 100px;">총점</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">상태</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569; width: 120px;">비고</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
+                    <th class="text-base font-semibold text-right" style="padding: 12px 20px; color: #475569;">총점</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">상태</th>
+                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">비고</th>
                   </tr>
                 </thead>
                 <tbody>
