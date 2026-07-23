@@ -368,13 +368,16 @@
               </p>
               <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;">
                 <colgroup>
-                  <col style="width: 140px;">
                   <template v-if="selected.lookup_scope === 'COMPOSITE'">
+                    <col style="width: 140px;">
                     <col style="width: 100px;">
                     <col style="width: 160px;">
                     <col>
                   </template>
-                  <col v-else>
+                  <template v-else>
+                    <col>
+                    <col>
+                  </template>
                 </colgroup>
                 <thead style="position: sticky; top: 0; z-index: 1;">
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
