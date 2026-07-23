@@ -47,12 +47,18 @@
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
     >
       <div class="overflow-x-auto">
-        <table class="w-full min-w-max" style="border-collapse: collapse;">
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 460px;">
+          <colgroup>
+            <col v-if="auth.grade !== 0" style="width: 80px;">
+            <col style="width: 180px;">
+            <col style="width: 200px;">
+            <col>
+          </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th v-if="auth.grade !== 0" class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">번호</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 180px;">학생코드</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 200px;">이름</th>
+              <th v-if="auth.grade !== 0" class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">번호</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">학생코드</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">이름</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">지원 대학</th>
             </tr>
           </thead>

@@ -376,14 +376,21 @@
             </h4>
             <div class="rounded-xl overflow-hidden"
               style="border: 1px solid #e2e8f0;">
-              <table class="w-full" style="border-collapse: collapse;">
+              <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 400px;">
+                <colgroup>
+                  <col style="width: 50px;">
+                  <col>
+                  <col style="width: 150px;">
+                  <col style="width: 70px;">
+                  <col style="width: 70px;">
+                </colgroup>
                 <thead>
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569; width: 50px;">순위</th>
+                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">순위</th>
                     <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">이름</th>
                     <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">학번</th>
-                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569; width: 70px;">구분</th>
-                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569; width: 70px;">상태</th>
+                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569;">구분</th>
+                    <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569;">상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -882,7 +889,12 @@ async function saveEditUniv(id) {
     }
   }
   saving.value = true; error.value = ''
-  try { await updateUniversity(id, body); editingUnivId.value = null; await loadUnivs() }
+  try {
+    await updateUniversity(id, body)
+    editingUnivId.value = null
+    await loadUnivs()
+    if (selectedUnivId.value === id) await loadTracks(id)
+  }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }
