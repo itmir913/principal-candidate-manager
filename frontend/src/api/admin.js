@@ -233,6 +233,20 @@ export const exportQuotaStats = (univId) =>
 export const getTrackRecommendedList = (trackId) =>
   axios.get(`/api/univ-tracks/${trackId}/recommended-list`).then(r => r.data)
 
+// ── 대학 설정 일괄 Import·Export ───────────────────────────────
+export const downloadUnivSettingsTemplate = () =>
+  axios.get('/api/universities/settings/template', { responseType: 'blob' })
+export const exportUnivSettings = () =>
+  axios.get('/api/universities/settings/export', { responseType: 'blob' })
+export const previewUnivSettings = (file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post('/api/universities/settings/preview', fd).then(r => r.data)
+}
+export const importUnivSettings = (file) => {
+  const fd = new FormData(); fd.append('file', file)
+  return axios.post('/api/universities/settings/import', fd).then(r => r.data)
+}
+
 export const autoRecommend = (roundId) =>
   axios.post(`/api/rounds/${roundId}/auto-recommend`).then(r => r.data)
 

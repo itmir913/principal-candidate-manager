@@ -7,12 +7,35 @@
         <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
         <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
       </div>
-      <button
-        class="text-base font-medium rounded-lg disabled:opacity-40"
-        style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
-        :disabled="downloading"
-        @click="doExportQuotaStats(true)"
-      >전체 목록 다운로드</button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+            class="text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
+            :disabled="downloading"
+            @click="doExportQuotaStats(true)"
+        >전체 추천 대상자 내보내기</button>
+        <span style="color: #cbd5e1; user-select: none;">|</span>
+        <button
+          class="text-base font-medium rounded-lg disabled:opacity-40"
+          style="padding: 8px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+          :disabled="settingsBusy"
+          @click="dlSettingsTemplate"
+        >대학 설정 양식 다운로드</button>
+        <button
+            class="text-base font-medium rounded-lg disabled:opacity-40"
+            style="padding: 8px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            :disabled="settingsBusy"
+            @click="dlSettingsExport"
+        >대학 설정 내보내기</button>
+        <label
+            class="text-base font-medium rounded-lg cursor-pointer"
+            :class="settingsBusy ? 'opacity-60 pointer-events-none' : ''"
+            style="padding: 8px 16px; background: #2563eb; color: white;"
+        >
+          {{ settingsBusy ? '불러오는 중…' : '대학 설정 가져오기' }}
+          <input type="file" accept=".xlsx,.csv" class="hidden" :disabled="settingsBusy" @change="onSettingsFile" />
+        </label>
+      </div>
     </div>
 
     <HelpBox class="mb-5" storage-key="univs" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
@@ -389,6 +412,123 @@
       </div>
     </div>
   </div>
+
+  <!-- ── 설정 가져오기 미리보기(diff) 모달 ──────────────────────── -->
+  <div v-if="settings.open"
+    class="fixed inset-0 flex items-center justify-center z-50"
+    style="background: rgba(0,0,0,0.4);"
+    @keydown.escape.window="closeSettings"
+  >
+    <div class="bg-white flex flex-col"
+      style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); width: 85vw; height: 85vh;">
+      <!-- 헤더 -->
+      <div class="flex items-center justify-between flex-shrink-0" style="padding: 18px 24px; border-bottom: 1px solid #f1f5f9;">
+        <div>
+          <h3 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">대학 설정 가져오기 — 변경 내용 확인</h3>
+          <p class="text-base" style="color: #94a3b8; margin: 3px 0 0;">
+            파일: {{ settings.fileName }}
+            <span v-if="!settings.loading">
+              &nbsp;·&nbsp;변경 {{ settings.changes.length }}건, 유지 {{ settings.unchangedCount }}건
+            </span>
+          </p>
+        </div>
+        <button class="text-xl leading-none"
+          style="background: none; border: none; cursor: pointer; color: #94a3b8;"
+          @click="closeSettings">✕</button>
+      </div>
+
+      <!-- 본문 -->
+      <div class="overflow-y-auto flex-1" style="padding: 20px 24px;">
+        <div v-if="settings.loading" class="text-base text-center" style="padding: 60px 0; color: #94a3b8;">
+          파일을 분석하는 중…
+        </div>
+
+        <template v-else>
+          <!-- 오류 -->
+          <div v-if="settings.errors.length" class="rounded-xl mb-4"
+            style="padding: 16px 20px; border: 1px solid #fca5a5; background: #fef2f2;">
+            <p class="text-base font-semibold mb-2" style="color: #991b1b;">
+              오류 {{ settings.errors.length }}건 — 이대로는 적용할 수 없습니다. 파일을 고쳐 다시 가져오세요.
+            </p>
+            <ul class="list-disc list-inside space-y-1">
+              <li v-for="(e, i) in settings.errors" :key="i" class="text-base" style="color: #991b1b;">{{ e }}</li>
+            </ul>
+          </div>
+
+          <!-- 마감 라운드 차단 경고 -->
+          <div v-else-if="settings.hasBlocked" class="rounded-xl mb-4"
+            style="padding: 16px 20px; border: 1px solid #fca5a5; background: #fef2f2;">
+            <p class="text-base font-semibold" style="color: #991b1b;">
+              마감된 라운드({{ settings.closedLabels.join(', ') }})가 있어 아래 붉게 표시된 재학생 우선 변경을 적용할 수 없습니다.
+            </p>
+            <p class="text-base" style="color: #991b1b; margin: 4px 0 0;">
+              정원만 바꾸려면 파일에서 재학생 우선 값을 원래대로 되돌린 뒤 다시 가져오세요. 재학생 우선을 바꾸려면 라운드를 다시 열고 설정을 고친 뒤 다시 마감하세요.
+            </p>
+          </div>
+
+          <!-- 상시 안내 -->
+          <p v-if="!settings.errors.length" class="text-base mb-4"
+            style="padding: 12px 16px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e;">
+            이 파일에 없는 대학·모집단위는 그대로 유지됩니다(삭제되지 않습니다). 아래 변경 내용을 확인한 뒤 "확인하고 적용"을 누르세요.
+          </p>
+
+          <!-- 변경 없음 -->
+          <div v-if="!settings.errors.length && settings.changes.length === 0"
+            class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
+            현재 설정과 달라지는 항목이 없습니다.
+          </div>
+
+          <!-- 대학별 diff 그룹 -->
+          <div v-for="grp in settingsGrouped" :key="grp.univ_name" class="mb-5">
+            <h4 class="text-base font-semibold mb-2" style="color: #1e293b;">{{ grp.univ_name }}</h4>
+            <div class="rounded-xl overflow-hidden" style="border: 1px solid #e2e8f0;">
+              <table class="w-full" style="border-collapse: collapse;">
+                <tbody>
+                  <tr v-for="(c, i) in grp.rows" :key="i"
+                    :style="{
+                      borderBottom: '1px solid #f1f5f9',
+                      background: c.blocked ? '#fef2f2' : (c.op === 'create' ? '#f0fdf4' : '#fffbeb'),
+                    }">
+                    <td class="text-base" style="padding: 10px 16px; width: 90px; vertical-align: top;">
+                      <span class="text-base font-semibold" :style="{ color: badgeColor(c) }">{{ badgeLabel(c) }}</span>
+                    </td>
+                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #1e293b;">
+                      <span v-if="c.track_name">모집단위 · {{ c.track_name }}</span>
+                      <span v-else>대학 설정</span>
+                    </td>
+                    <td class="text-base" style="padding: 10px 16px; vertical-align: top; color: #475569;">
+                      <div v-for="(f, j) in c.fields" :key="j">
+                        {{ f.field }}: <span style="color: #94a3b8;">{{ f.old }}</span>
+                        <span style="color: #94a3b8;"> → </span>
+                        <span class="font-medium" style="color: #1e293b;">{{ f.new }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- 푸터 -->
+      <div class="flex items-center justify-between flex-shrink-0" style="padding: 14px 24px; border-top: 1px solid #f1f5f9;">
+        <p v-if="settings.applyError" class="text-base" style="color: #ef4444; margin: 0;">{{ settings.applyError }}</p>
+        <span v-else></span>
+        <div class="flex gap-2">
+          <button class="text-base rounded-lg"
+            style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+            :disabled="settings.applying"
+            @click="closeSettings">취소</button>
+          <button class="text-base font-semibold rounded-lg disabled:opacity-40"
+            style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            :disabled="!canApplySettings"
+            @click="applySettings"
+          >{{ settings.applying ? '적용 중…' : '확인하고 적용' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -397,6 +537,7 @@ import {
   getUniversities, createUniversity, updateUniversity, deleteUniversity,
   getUnivTracks, createTrack, updateTrack, deleteTrack,
   getQuotaStats, exportQuotaStats, getTrackRecommendedList,
+  downloadUnivSettingsTemplate, exportUnivSettings, previewUnivSettings, importUnivSettings,
   blobErrMsg,
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
@@ -469,6 +610,19 @@ const quotaStats = ref(null)
 // ── 모달 상태 ─────────────────────────────────────────────────
 const modal = ref({ open: false, trackName: '', entries: [], loading: false })
 
+// ── 설정 가져오기(diff) 모달 상태 ─────────────────────────────
+const settings = ref({
+  open: false, loading: false, applying: false,
+  fileName: '', file: null,
+  errors: [], changes: [], unchangedCount: 0, closedLabels: [], hasBlocked: false,
+  applyError: '',
+})
+const settingsBusy = computed(() => settings.value.loading || settings.value.applying)
+const canApplySettings = computed(() =>
+  !settings.value.loading && !settings.value.applying &&
+  settings.value.errors.length === 0 && !settings.value.hasBlocked &&
+  settings.value.changes.length > 0)
+
 const selectedUniv = computed(() => univs.value.find(u => u.id === selectedUnivId.value) ?? null)
 const univPrioritize = computed(() => !!(selectedUniv.value?.prioritize_enrolled))
 
@@ -507,6 +661,95 @@ const groupedByRound = computed(() => {
 function remainingLabel(used, quota) {
   if (quota == null) return '무제한'
   return Math.max(0, quota - used) + '명'
+}
+
+// ── 설정 diff: 대학별 그룹핑 + 배지 ───────────────────────────
+const settingsGrouped = computed(() => {
+  const map = new Map()
+  for (const c of settings.value.changes) {
+    if (!map.has(c.univ_name)) map.set(c.univ_name, [])
+    map.get(c.univ_name).push(c)
+  }
+  return Array.from(map.entries()).map(([univ_name, rows]) => ({ univ_name, rows }))
+})
+function badgeLabel(c) {
+  if (c.kind === 'cascade') return '자동'
+  return c.op === 'create' ? '생성' : '변경'
+}
+function badgeColor(c) {
+  if (c.blocked) return '#ef4444'
+  if (c.kind === 'cascade') return '#7c3aed'
+  return c.op === 'create' ? '#16a34a' : '#d97706'
+}
+
+// ── 설정 양식/내보내기/가져오기 ───────────────────────────────
+function saveSettingsBlob(response, fallback) {
+  const url = URL.createObjectURL(new Blob([response.data]))
+  const a = document.createElement('a')
+  a.href = url; a.download = fallback; a.click()
+  URL.revokeObjectURL(url)
+}
+async function dlSettingsTemplate() {
+  try { saveSettingsBlob(await downloadUnivSettingsTemplate(), 'univ_settings_template.xlsx') }
+  catch (e) { error.value = await blobErrMsg(e) }
+}
+async function dlSettingsExport() {
+  try { saveSettingsBlob(await exportUnivSettings(), 'univ_settings.xlsx') }
+  catch (e) { error.value = await blobErrMsg(e) }
+}
+
+async function onSettingsFile(evt) {
+  const file = evt.target.files?.[0]
+  evt.target.value = '' // 같은 파일 재선택 허용
+  if (!file) return
+  error.value = ''
+  settings.value = {
+    open: true, loading: true, applying: false,
+    fileName: file.name, file,
+    errors: [], changes: [], unchangedCount: 0, closedLabels: [], hasBlocked: false,
+    applyError: '',
+  }
+  try {
+    const p = await previewUnivSettings(file)
+    settings.value.errors = p.errors ?? []
+    settings.value.changes = p.changes ?? []
+    settings.value.unchangedCount = p.unchanged_count ?? 0
+    settings.value.closedLabels = p.closed_round_labels ?? []
+    settings.value.hasBlocked = !!p.has_blocked
+  } catch (e) {
+    settings.value.errors = [e.response?.data ?? e.message ?? '미리보기에 실패했습니다']
+  } finally {
+    settings.value.loading = false
+  }
+}
+
+function closeSettings() {
+  if (settings.value.applying) return
+  settings.value.open = false
+  settings.value.file = null
+}
+
+async function applySettings() {
+  if (!canApplySettings.value || !settings.value.file) return
+  settings.value.applying = true
+  settings.value.applyError = ''
+  try {
+    await importUnivSettings(settings.value.file)
+    settings.value.open = false
+    settings.value.file = null
+    await Promise.all([loadUnivs(), loadQuotaStats()])
+    if (selectedUnivId.value) await loadTracks(selectedUnivId.value)
+  } catch (e) {
+    // import 가 preview 이후 상태 변화로 거부되면(422/409) 오류 목록을 그대로 보여준다
+    const d = e.response?.data
+    if (d && typeof d === 'object' && Array.isArray(d.errors) && d.errors.length) {
+      settings.value.applyError = d.errors.join(' / ')
+    } else {
+      settings.value.applyError = typeof d === 'string' ? d : (e.message ?? '적용에 실패했습니다')
+    }
+  } finally {
+    settings.value.applying = false
+  }
 }
 
 // ── 통계 로드 ─────────────────────────────────────────────────
