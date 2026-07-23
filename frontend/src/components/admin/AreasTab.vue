@@ -366,7 +366,7 @@
               <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 점수 기준 없음
               </p>
-              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 660px;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;" :style="selected.lookup_scope === 'COMPOSITE' ? 'min-width: 660px' : 'min-width: 300px'">
                 <colgroup>
                   <template v-if="selected.lookup_scope === 'COMPOSITE'">
                     <col style="width: 140px;">
@@ -509,7 +509,7 @@
               <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 기초 데이터 없음
               </p>
-              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 680px;">
+              <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;" :style="selected.lookup_scope === 'COMPOSITE' ? 'min-width: 680px' : 'min-width: 360px'">
                 <colgroup>
                   <col style="width: 160px;">
                   <col style="width: 100px;">
