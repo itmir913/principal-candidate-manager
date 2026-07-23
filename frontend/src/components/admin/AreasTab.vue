@@ -1281,7 +1281,6 @@ const ImportResultBox = defineComponent({
       const r = props.result
       const hasErrors = r.errors?.length > 0
       const hasWarnings = r.warnings?.length > 0
-      const hasInfo = r.info?.length > 0
       const bgStyle = hasErrors
         ? 'padding: 14px 18px; border-radius: 12px; border: 1px solid #fca5a5; background: #fef2f2;'
         : hasWarnings
@@ -1292,10 +1291,6 @@ const ImportResultBox = defineComponent({
       return h('div', { style: bgStyle }, [
         h('p', { style: `font-size: 16px; font-weight: 600; margin: 0 0 4px; color: ${titleColor};` },
           hasErrors ? '오류 발생 — 가져오기 실패' : `완료 — ${countStr} 처리됨`),
-        hasInfo
-          ? h('ul', { style: 'font-size: 16px; color: #15803d; padding-left: 20px; margin: 0;' },
-              r.info.map((m, i) => h('li', { key: i }, m)))
-          : null,
         hasWarnings
           ? h('ul', { style: 'font-size: 16px; color: #92400e; padding-left: 20px; margin: 0;' },
               r.warnings.map((w, i) => h('li', { key: i }, w)))
