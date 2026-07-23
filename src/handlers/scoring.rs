@@ -505,120 +505,183 @@ struct AreaName {
     name: String,
 }
 
-pub async fn export_results(
-    State(state): State<AppState>,
-    Path(round_id): Path<i64>,
-) -> Result<Response, ApiError> {
+/// 지원자 명단 한 행 — applications 기준(지원 전원), 결과는 LEFT JOIN 이라 Option.
+#[derive(FromRow)]
+struct RosterRow {
+    round_id: i64,
+    student_code: String,
+    name: String,
+    grade: Option<i64>,
+    class_no: Option<i64>,
+    seq_no: Option<i64>,
+    is_enrolled: i64,
+    univ_name: String,
+    track_name: String,
+    department_name: String,
+    score_detail: Option<String>,
+    total_score: Option<i64>,
+    ranking: Option<i64>,
+    track_rank: Option<i64>,
+    recommended: Option<i64>,
+    abandoned: i64,
+    excluded: i64,
+    excluded_reason: Option<String>,
+}
+
+/// 지원자 명단 시트를 채운다. **`applications` 기준**이라 점수 미계산 지원자도 포함된다
+/// (누가 지원했는지가 기준). 결과(점수·순위·추천)는 `results` 를 LEFT JOIN 해 붙인다.
+///
+/// - `round_id = Some`: 그 라운드만. 라운드 열 생략. 전형요소 점수 누락은 오류로 승격
+///   (그 라운드는 현재 전형요소로 재계산돼 있어야 하므로 — "재계산 필요" 가드 유지).
+/// - `round_id = None`: 전체 라운드. 라운드 열 포함. 과거 라운드가 지금 없는 전형요소를
+///   가질 수 있으므로 누락 점수는 빈 칸으로 둔다(재계산 강요 금지).
+/// - `univ_id = Some`: 그 대학만.
+pub(crate) async fn write_roster_sheet(
+    ws: &mut rust_xlsxwriter::Worksheet,
+    db: &sqlx::SqlitePool,
+    round_id: Option<i64>,
+    univ_id: Option<i64>,
+) -> Result<(), ApiError> {
     let areas: Vec<AreaName> = sqlx::query_as::<_, AreaName>(
         "SELECT id, name FROM areas ORDER BY id",
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // tr CTE 는 전 라운드 결과를 걸치므로 항상 라운드까지 partition (단일 라운드에도 안전)
     let track_rank = track_rank_window("r", "ut", "s", true);
-    let export_sql = format!(
-        "SELECT r.student_id, r.track_id, r.round_id,
-                r.total_score, r.score_detail, r.ranking, r.recommended,
-                COALESCE(a.abandoned, 0) AS abandoned,
-                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
+    let mut filters = String::new();
+    if round_id.is_some() { filters.push_str(" AND a.round_id = ?"); }
+    if univ_id.is_some()  { filters.push_str(" AND ut.univ_id = ?"); }
+    let roster_sql = format!(
+        "WITH tr AS (
+             SELECT r.student_id, r.track_id, r.round_id, {track_rank}
+             FROM results r
+             JOIN students s      ON s.id  = r.student_id
+             JOIN univ_tracks ut  ON ut.id = r.track_id
+         )
+         SELECT a.round_id,
                 s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                u.univ_name, ut.track_name,
-                COALESCE(a.department_name, '') AS department_name,
-                {track_rank}
-         FROM results r
-         JOIN students s ON r.student_id = s.id
-         JOIN univ_tracks ut ON r.track_id = ut.id
-         JOIN universities u ON ut.univ_id = u.id
-         LEFT JOIN applications a ON a.student_id = r.student_id
-                                  AND a.track_id  = r.track_id
-                                  AND a.round_id  = r.round_id
-         WHERE r.round_id = ?
-         ORDER BY u.univ_name, ut.track_name, r.ranking NULLS LAST, r.total_score DESC"
+                u.univ_name, ut.track_name, COALESCE(a.department_name, '') AS department_name,
+                r.score_detail, r.total_score, r.ranking, tr.track_rank, r.recommended,
+                COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0)  AS excluded, a.excluded_reason
+         FROM applications a
+         JOIN students s      ON s.id  = a.student_id
+         JOIN univ_tracks ut  ON ut.id = a.track_id
+         JOIN universities u  ON u.id  = ut.univ_id
+         LEFT JOIN results r  ON r.student_id = a.student_id
+                             AND r.track_id  = a.track_id
+                             AND r.round_id  = a.round_id
+         LEFT JOIN tr         ON tr.student_id = a.student_id
+                             AND tr.track_id  = a.track_id
+                             AND tr.round_id  = a.round_id
+         WHERE 1=1{filters}
+         ORDER BY s.is_enrolled DESC, s.student_code, a.round_id, u.univ_name, ut.track_name"
     );
-    let all_results = sqlx::query_as::<_, ResultRow>(&export_sql)
-    .bind(round_id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let mut wb = Workbook::new();
-    let ws = wb.add_worksheet()
-        .set_name("전체결과")
+    let mut q = sqlx::query_as::<_, RosterRow>(&roster_sql);
+    if let Some(rid) = round_id { q = q.bind(rid); }
+    if let Some(uid) = univ_id  { q = q.bind(uid); }
+    let rows = q
+        .fetch_all(db)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 헤더 행
-    let fixed_headers = ["대학 순위", "모집단위 순위", "대학", "모집단위", "지원학과", "학생명", "학생코드", "학년", "반", "번호", "재학구분"];
+    // 헤더
+    let include_round = round_id.is_none();
     let mut col = 0u16;
-    for h in &fixed_headers {
-        ws.write_string(0, col, *h).map_err(excel::xlsx_err)?;
-        col += 1;
+    if include_round {
+        ws.write_string(0, col, "라운드").map_err(excel::xlsx_err)?; col += 1;
+    }
+    for h in ["대학 순위", "모집단위 순위", "대학", "모집단위", "지원학과", "학생명", "학생코드", "학년", "반", "번호", "재학구분"] {
+        ws.write_string(0, col, h).map_err(excel::xlsx_err)?; col += 1;
     }
     for area in &areas {
-        ws.write_string(0, col, &area.name).map_err(excel::xlsx_err)?;
-        col += 1;
+        ws.write_string(0, col, &area.name).map_err(excel::xlsx_err)?; col += 1;
     }
-    ws.write_string(0, col, "총점").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "추천").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "포기").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "미선발여부").map_err(excel::xlsx_err)?; col += 1;
-    ws.write_string(0, col, "미선발사유").map_err(excel::xlsx_err)?;
+    for h in ["총점", "추천", "포기", "미선발여부", "미선발사유"] {
+        ws.write_string(0, col, h).map_err(excel::xlsx_err)?; col += 1;
+    }
 
-    // 데이터 행
-    for (i, r) in all_results.iter().enumerate() {
+    // 데이터
+    let strict_area = round_id.is_some();
+    for (i, r) in rows.iter().enumerate() {
         let row = (i + 1) as u32;
         let mut col = 0u16;
 
-        if let Some(rank) = r.ranking {
-            ws.write_number(row, col, rank as f64).map_err(excel::xlsx_err)?;
+        if include_round {
+            ws.write_number(row, col, r.round_id as f64).map_err(excel::xlsx_err)?; col += 1;
         }
+        if let Some(rk) = r.ranking { ws.write_number(row, col, rk as f64).map_err(excel::xlsx_err)?; }
         col += 1;
-        if let Some(tr) = r.track_rank {
-            ws.write_number(row, col, tr as f64).map_err(excel::xlsx_err)?;
-        }
+        if let Some(tr) = r.track_rank { ws.write_number(row, col, tr as f64).map_err(excel::xlsx_err)?; }
         col += 1;
-
         ws.write_string(row, col, &r.univ_name).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, &r.track_name).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, &r.department_name).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, &r.name).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, &r.student_code).map_err(excel::xlsx_err)?; col += 1;
-
         if let Some(g) = r.grade { ws.write_number(row, col, g as f64).map_err(excel::xlsx_err)?; }
         col += 1;
         if let Some(c) = r.class_no { ws.write_number(row, col, c as f64).map_err(excel::xlsx_err)?; }
         col += 1;
         if let Some(s) = r.seq_no { ws.write_number(row, col, s as f64).map_err(excel::xlsx_err)?; }
         col += 1;
+        ws.write_string(row, col, if r.is_enrolled == 1 { "재학" } else { "졸업" }).map_err(excel::xlsx_err)?; col += 1;
 
-        ws.write_string(row, col, if r.is_enrolled { "재학" } else { "졸업" }).map_err(excel::xlsx_err)?;
-        col += 1;
-
-        let detail: HashMap<String, i64> = serde_json::from_str(&r.score_detail)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!(
-                "학생 id={} score_detail JSON 파싱 실패: {}", r.student_id, e
-            )))?;
+        // 전형요소별 점수 — 결과가 없으면(미계산 지원자) 빈 칸
+        let detail: Option<HashMap<String, i64>> = match &r.score_detail {
+            Some(json) => Some(serde_json::from_str(json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!(
+                "학생코드 {} score_detail JSON 파싱 실패: {}", r.student_code, e
+            )))?),
+            None => None,
+        };
         for area in &areas {
-            let sc = detail.get(&area.id.to_string()).copied()
-                .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!(
-                    "학생 id={} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
-                    r.student_id, area.id
-                )))?;
-            ws.write_number(row, col, sc as f64 / 100_000.0).map_err(excel::xlsx_err)?;
+            match detail.as_ref().and_then(|d| d.get(&area.id.to_string()).copied()) {
+                Some(sc) => { ws.write_number(row, col, sc as f64 / 100_000.0).map_err(excel::xlsx_err)?; }
+                None => {
+                    // 결과 자체가 없으면 빈 칸. 결과는 있는데 이 전형요소만 없으면:
+                    // 단일 라운드(strict)는 "재계산 필요" 오류, 전체 라운드는 빈 칸(과거 라운드 허용).
+                    if strict_area && detail.is_some() {
+                        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!(
+                            "학생코드 {} 전형요소 id={}의 점수가 없습니다. 점수 재계산이 필요합니다",
+                            r.student_code, area.id
+                        )));
+                    }
+                }
+            }
             col += 1;
         }
 
-        ws.write_number(row, col, r.total_score.raw() as f64 / 100_000.0).map_err(excel::xlsx_err)?; col += 1;
-        ws.write_string(row, col, if r.recommended { "추천" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
-        ws.write_string(row, col, if r.abandoned { "포기" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
-        ws.write_string(row, col, if r.excluded { "미선발" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        match r.total_score {
+            Some(ts) => { ws.write_number(row, col, ts as f64 / 100_000.0).map_err(excel::xlsx_err)?; }
+            None     => { ws.write_string(row, col, "미계산").map_err(excel::xlsx_err)?; }
+        }
+        col += 1;
+        ws.write_string(row, col, if r.recommended == Some(1) { "추천" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.abandoned == 1 { "포기" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
+        ws.write_string(row, col, if r.excluded == 1 { "미선발" } else { "" }).map_err(excel::xlsx_err)?; col += 1;
         ws.write_string(row, col, r.excluded_reason.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
+
+    Ok(())
+}
+
+pub async fn export_results(
+    State(state): State<AppState>,
+    Path(round_id): Path<i64>,
+) -> Result<Response, ApiError> {
+    let mut wb = Workbook::new();
+    let ws = wb.add_worksheet()
+        .set_name("지원자 명단")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    write_roster_sheet(ws, &state.db, Some(round_id), None).await?;
 
     let buf = wb
         .save_to_buffer()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let filename = format!("round_{}_results_{}.xlsx", round_id, excel::now_tag());
+    let filename = format!("round_{}_applicants_{}.xlsx", round_id, excel::now_tag());
     Ok(excel::xlsx_response(buf, &filename))
 }
 
@@ -629,31 +692,13 @@ struct RoundSummaryRow {
     univ_name: String,
     track_name: String,
     unit_quota: Option<i64>,
+    applied_count: i64,
+    abandoned_count: i64,
     before_count: i64,
     this_count: i64,
     total_quota: Option<i64>,
     univ_before_count: i64,
     univ_this_count: i64,
-}
-
-#[derive(FromRow)]
-struct ApplicantResultRow {
-    student_code: String,
-    is_enrolled: i64,
-    grade: Option<i64>,
-    class_no: Option<i64>,
-    seq_no: Option<i64>,
-    name: String,
-    univ_name: String,
-    track_name: String,
-    department_name: String,
-    total_score: Option<i64>,
-    ranking: Option<i64>,
-    track_rank: Option<i64>,
-    recommended: Option<i64>,
-    abandoned: i64,
-    excluded: i64,
-    excluded_reason: Option<String>,
 }
 
 pub async fn export_round_summary(
@@ -662,6 +707,10 @@ pub async fn export_round_summary(
 ) -> Result<Response, ApiError> {
     let rows: Vec<RoundSummaryRow> = sqlx::query_as::<_, RoundSummaryRow>(
         "SELECT u.univ_name, ut.track_name, ut.unit_quota,
+                CAST((SELECT COUNT(*) FROM applications ap
+                      WHERE ap.track_id = ut.id AND ap.round_id = ?) AS INTEGER) AS applied_count,
+                CAST((SELECT COUNT(*) FROM applications ab
+                      WHERE ab.track_id = ut.id AND ab.round_id = ? AND ab.abandoned = 1) AS INTEGER) AS abandoned_count,
                 CAST((SELECT COUNT(*) FROM results r2
                       JOIN applications a2 ON a2.student_id = r2.student_id
                                           AND a2.track_id  = r2.track_id
@@ -701,10 +750,12 @@ pub async fn export_round_summary(
          JOIN universities u ON u.id = ut.univ_id
          ORDER BY u.univ_name, ut.track_name",
     )
-    .bind(round_id)
-    .bind(round_id)
-    .bind(round_id)
-    .bind(round_id)
+    .bind(round_id) // applied_count
+    .bind(round_id) // abandoned_count
+    .bind(round_id) // before_count
+    .bind(round_id) // this_count
+    .bind(round_id) // univ_before_count
+    .bind(round_id) // univ_this_count
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -712,12 +763,13 @@ pub async fn export_round_summary(
     let mut wb = Workbook::new();
     let ws = wb
         .add_worksheet()
-        .set_name("라운드결과")
+        .set_name("선발 현황")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let headers = [
         "대학", "모집단위", "모집단위 정원",
-        "모집단위 라운드 전 잔여석", "이번 라운드 추천 인원", "모집단위 남은 잔여석",
+        "지원 인원", "추천 인원", "포기 인원",
+        "모집단위 라운드 전 잔여석", "모집단위 남은 잔여석",
         "대학 전체 정원", "대학 라운드 전 잔여석", "대학 남은 잔여석",
     ];
     for (col, h) in headers.iter().enumerate() {
@@ -728,20 +780,22 @@ pub async fn export_round_summary(
         let r = (i + 1) as u32;
         ws.write_string(r, 0, &row.univ_name).map_err(excel::xlsx_err)?;
         ws.write_string(r, 1, &row.track_name).map_err(excel::xlsx_err)?;
+        // 지원·추천·포기 인원은 정원 유무와 무관하게 항상 숫자
+        ws.write_number(r, 3, row.applied_count as f64).map_err(excel::xlsx_err)?;
+        ws.write_number(r, 4, row.this_count as f64).map_err(excel::xlsx_err)?;
+        ws.write_number(r, 5, row.abandoned_count as f64).map_err(excel::xlsx_err)?;
         match row.unit_quota {
             Some(q) => {
                 let before_remaining = (q - row.before_count).max(0);
                 let after_remaining = (q - row.before_count - row.this_count).max(0);
                 ws.write_number(r, 2, q as f64).map_err(excel::xlsx_err)?;
-                ws.write_number(r, 3, before_remaining as f64).map_err(excel::xlsx_err)?;
-                ws.write_number(r, 4, row.this_count as f64).map_err(excel::xlsx_err)?;
-                ws.write_number(r, 5, after_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 6, before_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 7, after_remaining as f64).map_err(excel::xlsx_err)?;
             }
             None => {
                 ws.write_string(r, 2, "무제한").map_err(excel::xlsx_err)?;
-                ws.write_string(r, 3, "무제한").map_err(excel::xlsx_err)?;
-                ws.write_number(r, 4, row.this_count as f64).map_err(excel::xlsx_err)?;
-                ws.write_string(r, 5, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 6, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 7, "무제한").map_err(excel::xlsx_err)?;
             }
         }
         match row.total_quota {
@@ -749,104 +803,16 @@ pub async fn export_round_summary(
                 let univ_before_remaining = (tq - row.univ_before_count).max(0);
                 let univ_after_remaining =
                     (tq - row.univ_before_count - row.univ_this_count).max(0);
-                ws.write_number(r, 6, tq as f64).map_err(excel::xlsx_err)?;
-                ws.write_number(r, 7, univ_before_remaining as f64).map_err(excel::xlsx_err)?;
-                ws.write_number(r, 8, univ_after_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 8, tq as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 9, univ_before_remaining as f64).map_err(excel::xlsx_err)?;
+                ws.write_number(r, 10, univ_after_remaining as f64).map_err(excel::xlsx_err)?;
             }
             None => {
-                ws.write_string(r, 6, "무제한").map_err(excel::xlsx_err)?;
-                ws.write_string(r, 7, "무제한").map_err(excel::xlsx_err)?;
                 ws.write_string(r, 8, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 9, "무제한").map_err(excel::xlsx_err)?;
+                ws.write_string(r, 10, "무제한").map_err(excel::xlsx_err)?;
             }
         }
-    }
-
-    // ── 지원자결과 시트 ──────────────────────────────────────────────
-    let track_rank = track_rank_window("r2", "ut2", "s2", true);
-    let summary_sql = format!(
-        "WITH tr AS (
-             SELECT r2.student_id, r2.track_id, r2.round_id,
-                    {track_rank}
-             FROM results r2
-             JOIN students s2   ON s2.id  = r2.student_id
-             JOIN univ_tracks ut2 ON ut2.id = r2.track_id
-         )
-         SELECT s.student_code, s.is_enrolled, s.grade, s.class_no, s.seq_no, s.name,
-                u.univ_name, ut.track_name, a.department_name,
-                r.total_score, r.ranking, tr.track_rank, r.recommended, a.abandoned,
-                a.excluded, a.excluded_reason
-         FROM applications a
-         JOIN students s     ON s.id    = a.student_id
-         JOIN univ_tracks ut ON ut.id   = a.track_id
-         JOIN universities u ON u.id    = ut.univ_id
-         LEFT JOIN results r ON r.student_id = a.student_id
-                             AND r.track_id  = a.track_id
-                             AND r.round_id  = a.round_id
-         LEFT JOIN tr ON tr.student_id = a.student_id
-                      AND tr.track_id  = a.track_id
-                      AND tr.round_id  = a.round_id
-         WHERE a.round_id = ?
-         ORDER BY s.is_enrolled DESC, s.student_code, u.univ_name, ut.track_name"
-    );
-    let applicants: Vec<ApplicantResultRow> = sqlx::query_as::<_, ApplicantResultRow>(&summary_sql)
-    .bind(round_id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let ws2 = wb
-        .add_worksheet()
-        .set_name("지원자결과")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let headers2 = [
-        "학생코드", "재학생여부", "학년", "반", "번호", "이름",
-        "지원대학", "모집단위", "지원학과명", "총점", "대학 순위", "모집단위 순위", "추천대상", "포기여부",
-        "미선발여부", "미선발사유",
-    ];
-    for (col, h) in headers2.iter().enumerate() {
-        ws2.write_string(0, col as u16, *h).map_err(excel::xlsx_err)?;
-    }
-
-    for (i, row) in applicants.iter().enumerate() {
-        let r = (i + 1) as u32;
-        ws2.write_string(r, 0, &row.student_code).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 1, if row.is_enrolled == 1 { "재학생" } else { "졸업생" }).map_err(excel::xlsx_err)?;
-        match row.grade {
-            Some(v) => { ws2.write_number(r, 2, v as f64).map_err(excel::xlsx_err)?; }
-            None    => { ws2.write_string(r, 2, "").map_err(excel::xlsx_err)?; }
-        }
-        match row.class_no {
-            Some(v) => { ws2.write_number(r, 3, v as f64).map_err(excel::xlsx_err)?; }
-            None    => { ws2.write_string(r, 3, "").map_err(excel::xlsx_err)?; }
-        }
-        match row.seq_no {
-            Some(v) => { ws2.write_number(r, 4, v as f64).map_err(excel::xlsx_err)?; }
-            None    => { ws2.write_string(r, 4, "").map_err(excel::xlsx_err)?; }
-        }
-        ws2.write_string(r, 5, &row.name).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 6, &row.univ_name).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 7, &row.track_name).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 8, &row.department_name).map_err(excel::xlsx_err)?;
-        match row.total_score {
-            Some(s) => { ws2.write_number(r, 9, s as f64 / 100_000.0).map_err(excel::xlsx_err)?; }
-            None    => { ws2.write_string(r, 9, "미계산").map_err(excel::xlsx_err)?; }
-        }
-        match row.ranking {
-            Some(rk) => { ws2.write_number(r, 10, rk as f64).map_err(excel::xlsx_err)?; }
-            None     => { ws2.write_string(r, 10, "").map_err(excel::xlsx_err)?; }
-        }
-        match row.track_rank {
-            Some(tr) => { ws2.write_number(r, 11, tr as f64).map_err(excel::xlsx_err)?; }
-            None     => { ws2.write_string(r, 11, "").map_err(excel::xlsx_err)?; }
-        }
-        ws2.write_string(r, 12, match row.recommended {
-            Some(1) => "O",
-            _       => "X",
-        }).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 13, if row.abandoned == 1 { "O" } else { "X" }).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 14, if row.excluded == 1 { "O" } else { "X" }).map_err(excel::xlsx_err)?;
-        ws2.write_string(r, 15, row.excluded_reason.as_deref().unwrap_or("")).map_err(excel::xlsx_err)?;
     }
 
     let buf = wb

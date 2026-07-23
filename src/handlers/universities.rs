@@ -670,21 +670,39 @@ pub async fn export_quota_stats(
                     .collect::<String>()
             })
             .unwrap_or_else(|| "대학".to_string());
-        format!("{}_추천현황_{}.xlsx", univ_name, excel::now_tag())
+        format!("{}_명단_정원현황_{}.xlsx", univ_name, excel::now_tag())
     } else {
-        format!("전체_추천현황_{}.xlsx", excel::now_tag())
+        format!("전체_명단_정원현황_{}.xlsx", excel::now_tag())
     };
+
+    // 모집단위별 지원·포기 인원(전체 라운드 누적) — fetch_quota_stats 는 추천(unit_used)만 세므로 별도 조회
+    let apab_rows = sqlx::query_as::<_, (i64, i64, i64)>(
+        "SELECT track_id, COUNT(*) AS applied, COALESCE(SUM(abandoned), 0) AS abandoned
+         FROM applications GROUP BY track_id",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let apab: HashMap<i64, (i64, i64)> = apab_rows.into_iter().map(|(t, a, b)| (t, (a, b))).collect();
 
     let round_labels: Vec<String> = stats.all_round_ids.iter().enumerate()
         .map(|(i, _)| format!("{}차 추천", i + 1))
         .collect();
 
     let mut wb = Workbook::new();
+
+    // ── 시트 ①: 전체 라운드 지원자 명단(추천·미선발·포기 전원) ──────────
+    let ws_roster = wb.add_worksheet()
+        .set_name("전체 명단")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    crate::handlers::scoring::write_roster_sheet(ws_roster, &state.db, None, q.univ_id).await?;
+
+    // ── 시트 ②: 정원 현황(현 시점, 모집단위별 지원·추천·포기·잔여) ──────
     let ws = wb.add_worksheet()
-        .set_name("추천현황")
+        .set_name("정원 현황")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let fixed = ["대학명", "모집단위", "모집단위 정원", "추천인원", "잔여인원",
+    let fixed = ["대학명", "모집단위", "모집단위 정원", "지원 인원", "추천인원", "포기 인원", "잔여인원",
                  "대학 전체 정원", "대학 추천인원", "대학 잔여인원"];
     let mut col = 0u16;
     for h in &fixed { ws.write_string(0, col, *h).map_err(excel::xlsx_err)?; col += 1; }
@@ -693,6 +711,7 @@ pub async fn export_quota_stats(
     let mut row = 1u32;
     for u in &filtered {
         for t in &u.tracks {
+            let (applied, abandoned) = apab.get(&t.track_id).copied().unwrap_or((0, 0));
             let mut col = 0u16;
             ws.write_string(row, col, &u.univ_name).map_err(excel::xlsx_err)?; col += 1;
             ws.write_string(row, col, &t.track_name).map_err(excel::xlsx_err)?; col += 1;
@@ -702,7 +721,9 @@ pub async fn export_quota_stats(
                 None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }
             }
             col += 1;
+            ws.write_number(row, col, applied as f64).map_err(excel::xlsx_err)?; col += 1;
             ws.write_number(row, col, t.unit_used as f64).map_err(excel::xlsx_err)?; col += 1;
+            ws.write_number(row, col, abandoned as f64).map_err(excel::xlsx_err)?; col += 1;
             match t.unit_quota {
                 Some(q) => { ws.write_number(row, col, (q - t.unit_used).max(0) as f64).map_err(excel::xlsx_err)?; }
                 None    => { ws.write_string(row, col, "무제한").map_err(excel::xlsx_err)?; }

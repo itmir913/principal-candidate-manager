@@ -127,7 +127,7 @@
 | PUT | `/universities/:id` | 대학 수정 | 200 |
 | DELETE | `/universities/:id` | 대학 삭제 (applications 존재 시 409) | 204 |
 | GET | `/universities/quota-stats` | 잔여석 통계 | `[QuotaStatRow]` |
-| GET | `/universities/quota-stats/export` | 잔여석 통계 xlsx. `?univ_id=` | blob |
+| GET | `/universities/quota-stats/export` | 전체 명단·정원 현황 xlsx 2시트("전체 명단"=전 라운드 지원자 전원, "정원 현황"=모집단위별 지원·추천·포기·잔여). `?univ_id=` | blob |
 | GET | `/universities/:id/tracks` | 모집단위 목록 | `[TrackRow]` |
 | POST | `/universities/:id/tracks` | 모집단위 생성 | 201 + `{id}` |
 | GET | `/univ-tracks` | 전체 모집단위 (대학명 포함) | `[TrackRow]` |
@@ -176,8 +176,8 @@
 | POST | `/rounds/:id/auto-recommend` | CLOSED 라운드 자동 추천 확정(전 대학). 2단계(모집단위 정원 채움 → 대학 전체 순위 컷). 동점이 정원 경계를 가르면 그 동점 그룹만 manual로 반환. 부분 성공도 200 | 400: CLOSED 아님 / 404: 없음 |
 | POST | `/rounds/:id/auto-recommend/univ/:univ_id` | 위와 동일하되 지정 대학의 모집단위만 처리 | 400: CLOSED 아님 / 404: 라운드·대학 없음 |
 | GET | `/rounds/:id/results` | 결과 조회. `?track_id=` | `[ResultRow]` |
-| GET | `/rounds/:id/results/export` | 결과 xlsx (전체결과 시트) | blob |
-| GET | `/rounds/:id/summary/export` | 라운드 요약 xlsx (라운드결과+지원자결과 시트) | blob |
+| GET | `/rounds/:id/results/export` | 이 라운드 지원자 명단 xlsx ("지원자 명단" 시트, applications 기준·전형요소별 점수 포함) | blob |
+| GET | `/rounds/:id/summary/export` | 이 라운드 선발 현황 xlsx ("선발 현황" 시트, 모집단위별 지원·추천·포기·잔여석) | blob |
 | GET | `/score-preview` | 점수 미리보기. `?student_id=&track_id=` | `ScorePreviewResponse` |
 | PUT | `/results/:sid/:tid/:rid/recommend` | 추천 확정. CLOSED에서만. 정원 체크 (`BEGIN IMMEDIATE`) | 409: 정원 찼음 |
 | PUT | `/results/:sid/:tid/:rid/unrecommend` | 추천 취소. CLOSED에서만 | |

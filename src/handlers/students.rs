@@ -175,8 +175,11 @@ pub async fn download_template() -> Result<Response, ApiError> {
 /// GET /api/students/export
 pub async fn export_students(State(state): State<AppState>) -> Result<Response, ApiError> {
     let rows = sqlx::query_as::<_, StudentRow>(
+        // 재학생 먼저(is_enrolled DESC) — 화면 목록(list_students)과 동일 기준.
+        // is_enrolled 를 빼면 grade=NULL 인 졸업생이 맨 위로 올라와 화면과 어긋난다.
+        // 졸업생은 grade/class/seq 가 모두 NULL 이므로 student_code 로 최종 정렬한다.
         "SELECT id, student_code, name, grade, class_no, seq_no, is_enrolled, grad_year
-         FROM students ORDER BY grade, class_no, seq_no",
+         FROM students ORDER BY is_enrolled DESC, grade, class_no, seq_no, student_code",
     )
     .fetch_all(&state.db)
     .await
