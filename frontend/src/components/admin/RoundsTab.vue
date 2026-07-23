@@ -413,7 +413,7 @@
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">지원 학과</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">{{ rankView === 'track' ? '지원 학과' : '모집단위 · 지원 학과' }}</th>
                         <th class="text-base font-semibold text-right" style="padding: 13px 18px; color: #475569;">총점</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">추천</th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 18px; color: #475569;">포기처리</th>
@@ -449,7 +449,13 @@
                               {{ r.is_enrolled ? '재학생' : '졸업생' }}
                             </span>
                           </td>
-                          <td class="text-base" style="padding: 12px 18px; color: #475569; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.department_name }}</td>
+                          <td style="padding: 12px 18px; overflow: hidden;">
+                            <template v-if="rankView === 'univ'">
+                              <div class="text-base font-medium" style="color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.track_name }}</div>
+                              <div class="text-base" style="color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.department_name }}</div>
+                            </template>
+                            <span v-else class="text-base" style="color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;">{{ r.department_name }}</span>
+                          </td>
                           <td class="text-base text-right font-semibold" style="padding: 12px 18px; color: #1e293b;">
                             {{ formatScore(r.total_score) }}
                           </td>
