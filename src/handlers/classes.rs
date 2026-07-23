@@ -130,12 +130,10 @@ pub async fn import_classes(
             continue;
         }
         let teacher_name = Some(teacher_name_str);
-        let password_str = excel::get_col(row, &col, "비밀번호").to_string();
-        if password_str.is_empty() {
-            errors.push(format!("{}행: 비밀번호 누락", line));
-            continue;
-        }
-        let password = Some(password_str);
+        let password: Option<String> = {
+            let v = excel::get_col(row, &col, "비밀번호").to_string();
+            if v.is_empty() { None } else { Some(v) }
+        };
 
         // 비밀번호 최소 길이 검증 (4자 미만이면 해당 행 오류 처리)
         if let Some(ref pw) = password {
@@ -177,7 +175,7 @@ pub async fn import_classes(
             updated += 1;
         } else {
             let Some(ref hash) = password_hash else {
-                errors.push(format!("{}행: 신규 학급은 비밀번호가 필요합니다", line));
+                errors.push(format!("{}행: 비밀번호 누락", line));
                 continue;
             };
             sqlx::query(
