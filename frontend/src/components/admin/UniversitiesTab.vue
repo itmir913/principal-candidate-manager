@@ -350,7 +350,7 @@
     @click.self="modal.open = false"
     @keydown.escape.window="modal.open = false"
   >
-    <div class="bg-white flex flex-col" style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 100%; max-width: 560px; margin: 0 16px; max-height: 80vh;">
+    <div class="bg-white flex flex-col" style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 85vw; height: 85vh; margin: 0 16px;">
       <!-- 모달 헤더 -->
       <div class="flex items-center justify-between flex-shrink-0" style="padding: 18px 22px; border-bottom: 1px solid #f1f5f9;">
         <div>
