@@ -583,7 +583,7 @@
          class="fixed inset-0 z-50 flex items-center justify-center"
          style="background: rgba(0,0,0,0.35);">
       <div class="bg-white flex flex-col"
-        style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 540px; max-height: 90vh; overflow-y: auto; padding: 1.75rem;">
+        style="border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); width: 85vw; height: 85vh; max-height: 90vh; overflow-y: auto; padding: 1.75rem;">
         <h3 class="text-lg font-semibold mb-1" style="color: #1e293b;">{{ extModal.title }}</h3>
         <p class="text-base" :class="extModal.headerInfo ? 'mb-2' : 'mb-5'" style="color: #475569;">{{ extModal.fileName }}</p>
         <p v-if="extModal.headerInfo" class="text-base mb-5"
