@@ -177,6 +177,13 @@ pub async fn change_admin_password(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "설정값 없음".into()))?;
 
+    if body.current_password.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "현재 비밀번호를 입력해 주세요".into()));
+    }
+    if body.new_password.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "새 비밀번호를 입력해 주세요".into()));
+    }
+
     let ok = bcrypt::verify(&body.current_password, &current_hash)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if !ok {
