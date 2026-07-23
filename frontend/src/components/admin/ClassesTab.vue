@@ -69,7 +69,7 @@
           <input v-model.number="newGrade" type="number" min="1" max="3"
             class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
             style="width: 72px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;"
-            placeholder="1" />
+            placeholder="3" />
         </div>
         <div>
           <label class="block text-base font-medium mb-1.5" style="color: #64748b;">반</label>
@@ -87,19 +87,16 @@
         </div>
         <div>
           <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
-            비밀번호 <span style="color: #94a3b8;">(4자 이상)</span>
+            비밀번호 <span style="color: #94a3b8;">(4글자 이상)</span>
           </label>
           <input v-model="newPassword" type="password"
             class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
             :style="{
-              width: '140px', border: '1px solid', borderRadius: '8px', padding: '9px 12px',
+              width: '170px', border: '1px solid', borderRadius: '8px', padding: '9px 12px',
               borderColor: newPassword && newPassword.length < 4 ? '#f87171' : '#e2e8f0',
             }" />
-          <p v-if="newPassword && newPassword.length < 4" class="text-base mt-1" style="color: #ef4444;">
-            4자 이상 입력하세요
-          </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
           <button
             class="text-base font-semibold rounded-lg disabled:opacity-40"
             style="padding: 9px 20px; border: none; background: #2563eb; color: white; cursor: pointer;"
@@ -111,6 +108,9 @@
             style="padding: 9px 20px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
             @click="cancelAdd"
           >취소</button>
+          <span v-if="newPassword && newPassword.length < 4" class="text-base" style="color: #ef4444;">
+            비밀번호를 4글자 이상 입력하세요
+          </span>
         </div>
       </div>
     </div>
@@ -225,7 +225,7 @@ const downloading = ref(false)
 const importResult = ref(null)
 
 const showAddForm = ref(false)
-const newGrade = ref(1)
+const newGrade = ref(3)
 const newClassNo = ref(1)
 const newTeacherName = ref('')
 const newPassword = ref('')
