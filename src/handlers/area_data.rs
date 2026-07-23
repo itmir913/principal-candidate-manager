@@ -233,7 +233,7 @@ async fn resolve_track(
     col: &std::collections::HashMap<String, usize>,
     row_num: usize,
     errors: &mut Vec<String>,
-    _warnings: &mut Vec<String>,
+    warnings: &mut Vec<String>,
     info: &mut Vec<String>,
 ) -> Option<Option<i64>> {
     if area.lookup_scope == LookupScope::Composite {
