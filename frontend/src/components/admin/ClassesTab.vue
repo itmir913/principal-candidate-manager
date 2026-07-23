@@ -121,12 +121,18 @@
     <div class="rounded-xl overflow-hidden"
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
       <div class="overflow-x-auto">
-        <table class="w-full min-w-max" style="border-collapse: collapse;">
+        <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 660px;">
+          <colgroup>
+            <col style="width: 80px;">
+            <col style="width: 70px;">
+            <col style="width: 160px;">
+            <col>
+          </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 80px;">학년</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 60px;">반</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 140px;">담임명</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">학년</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">반</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">담임명</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">편집</th>
             </tr>
           </thead>
