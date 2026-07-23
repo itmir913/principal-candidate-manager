@@ -655,7 +655,7 @@ import { getScoreExample, getBaseExample } from '../../data/areaSamples.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import ScoreDemoCard from './ScoreDemoCard.vue'
-import { isKeyMatched } from '../../utils/scorePreviewShared.js'
+import { isKeyMatched, formatScore } from '../../utils/scorePreviewShared.js'
 
 // ── 도움말 문구 ────────────────────────────────────────────────
 const HELP_MAIN = {
@@ -875,9 +875,7 @@ function calcTypeLabel(v)    { return CALC_TYPE_LABELS[v]    ?? v }
 function lookupScopeLabel(v) { return LOOKUP_SCOPE_LABELS[v] ?? v }
 function matchModeLabel(v)   { return v ? (MATCH_MODE_LABELS[v]   ?? v) : '—' }
 function categoryAggLabel(v) { return v ? (CATEGORY_AGG_LABELS[v] ?? v) : '—' }
-function displayScore(v) {
-  return v % 1 === 0 ? String(v) : v.toFixed(5).replace(/\.?0+$/, '')
-}
+const displayScore = formatScore  // 공유 포맷터로 통일 (두 곳이 갈라지지 않도록)
 
 const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
 

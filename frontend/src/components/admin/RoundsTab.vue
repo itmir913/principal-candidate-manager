@@ -429,7 +429,7 @@
                           </td>
                           <td class="text-base" style="padding: 12px 18px; color: #475569; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.department_name }}</td>
                           <td class="text-base text-right font-semibold" style="padding: 12px 18px; color: #1e293b;">
-                            {{ r.total_score.toFixed(2) }}
+                            {{ formatScore(r.total_score) }}
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <div class="flex flex-col items-center gap-1">
@@ -633,6 +633,7 @@ import {
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
+import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
@@ -768,7 +769,7 @@ const appsByUniv = computed(() => {
 
 function appTotalScore(app) {
   const r = results.value.find(r => r.student_id === app.student_id && r.track_id === app.track_id)
-  return r ? r.total_score.toFixed(2) : '-'
+  return r ? formatScore(r.total_score) : '-'
 }
 
 const tracksInRound = computed(() => {
@@ -899,7 +900,7 @@ function getAreaScore(r, areaId) {
       ? JSON.parse(r.score_detail)
       : r.score_detail
     const v = detail[String(areaId)]
-    return v !== undefined ? Number(v).toFixed(2) : '-'
+    return v !== undefined ? formatScore(v) : '-'
   } catch {
     return '-'
   }

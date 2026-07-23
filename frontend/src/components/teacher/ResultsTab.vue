@@ -149,7 +149,7 @@
                     <td class="text-base" style="padding: 12px 16px; color: #475569;">{{ r.department_name }}</td>
                     <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
                     <td class="text-base text-right font-semibold" style="padding: 12px 20px; color: #1e293b;">
-                      {{ r.total_score.toFixed(2) }}
+                      {{ formatScore(r.total_score) }}
                     </td>
                     <td class="text-center" style="padding: 12px 16px;">
                       <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
@@ -182,6 +182,7 @@ import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'
+import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const auth = useAuthStore()
 

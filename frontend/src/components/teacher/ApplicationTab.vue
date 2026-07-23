@@ -269,7 +269,7 @@
                           class="text-base font-medium"
                           style="color: #2563eb;"
                         >
-                          예상 {{ Number(scorePreview[area.area_id].score).toFixed(2) }}점
+                          예상 {{ formatScore(scorePreview[area.area_id].score) }}점
                           <span v-if="scorePreview[area.area_id].warning" style="color: #d97706;"> ⚠</span>
                         </span>
                       </template>
@@ -458,7 +458,7 @@ import {
 } from '../../api/teacher.js'
 import HelpBox from '../common/HelpBox.vue'
 import ApplicationDetailModal from './ApplicationDetailModal.vue'
-import { isKeyMatched } from '../../utils/scorePreviewShared.js'
+import { isKeyMatched, formatScore } from '../../utils/scorePreviewShared.js'
 
 const auth = useAuthStore()
 

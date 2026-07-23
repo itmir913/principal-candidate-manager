@@ -106,7 +106,7 @@
                     <span
                       v-else-if="scorePreviews[area.area_id]?.score !== null && scorePreviews[area.area_id]?.score !== undefined"
                       style="color: #2563eb; font-weight: 500;"
-                    >{{ Number(scorePreviews[area.area_id].score).toFixed(2) }}점</span>
+                    >{{ formatScore(scorePreviews[area.area_id].score) }}점</span>
                     <span v-else style="color: #94a3b8;">—</span>
                   </td>
                 </tr>
@@ -146,6 +146,7 @@
 import { ref, onMounted } from 'vue'
 import { dialog } from '../common/dialog.js'
 import { teacherGetAreaContext, teacherAreaScorePreview, teacherDeleteApplication } from '../../api/teacher.js'
+import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const props = defineProps({
   app: { type: Object, required: true },

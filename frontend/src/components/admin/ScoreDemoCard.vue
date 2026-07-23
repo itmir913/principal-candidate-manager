@@ -66,7 +66,7 @@
     <div v-if="result !== null" style="margin-top: 4px;">
       <span v-if="result.error" class="text-base" style="color: #ef4444;">{{ result.error }}</span>
       <template v-else-if="result.score !== null && result.score !== undefined">
-        <span class="text-base font-medium" style="color: #2563eb;">예상 점수: {{ Number(result.score).toFixed(2) }}점</span>
+        <span class="text-base font-medium" style="color: #2563eb;">예상 점수: {{ formatScore(result.score) }}점</span>
         <span v-if="result.warning" class="text-base ml-2" style="color: #d97706;">⚠ {{ result.warning }}</span>
       </template>
     </div>
@@ -76,6 +76,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { adminAreaScorePreview } from '../../api/admin.js'
+import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const props = defineProps({
   area: { type: Object, required: true },
