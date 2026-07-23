@@ -298,13 +298,13 @@
                   style="padding: 9px 16px; border: none; background: #059669; color: white; cursor: pointer;"
                   :disabled="results.length === 0 || downloading"
                   @click="downloadExcel"
-                >전체 지원자 결과 다운로드</button>
+                >이 라운드 지원자 명단</button>
                 <button
                   class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
                   style="padding: 9px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
                   :disabled="selected.status !== 'FINALIZED' || downloadingSummary"
                   @click="downloadSummary"
-                >라운드 요약 다운로드</button>
+                >이 라운드 선발 현황</button>
               </div>
 
               <div v-if="results.length > 0" class="flex gap-2">
@@ -743,7 +743,7 @@ const helpBox = computed(() => {
     title: '도움말 — 마감된 라운드',
     intro: '이 라운드는 마감되어 결과가 확정되었고 담임교사에게 공개되었습니다.',
     items: [
-      '[결과] 탭에서 "전체 지원자 결과 다운로드"와 "라운드 요약 다운로드"로 엑셀 파일을 내려받을 수 있습니다.',
+      '[결과] 탭에서 "이 라운드 지원자 명단"(지원 학생 전원의 결과)과 "이 라운드 선발 현황"(모집단위별 지원·추천·포기·잔여석)을 엑셀로 내려받을 수 있습니다.',
       { text: '추천 확정 학생이 추천을 포기하면 "포기하기"를 눌러 처리하세요. 포기는 되돌릴 수 없습니다.', warn: true },
       '학생의 지원 포기 등으로 빈자리가 생겨 추가 추천이 필요하면 "+ 라운드 열기"로 다음 차수를 시작하세요.',
     ],
@@ -1190,7 +1190,7 @@ async function downloadExcel() {
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
-    a.download = `round_${selected.value.id}_results.xlsx`
+    a.download = `round_${selected.value.id}_applicants.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {

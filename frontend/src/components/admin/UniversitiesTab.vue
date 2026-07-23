@@ -13,7 +13,7 @@
             style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
             :disabled="downloading"
             @click="doExportQuotaStats(true)"
-        >전체 추천 대상자 내보내기</button>
+        >전체 명단·정원 현황 내보내기</button>
         <span style="color: #cbd5e1; user-select: none;">|</span>
         <button
           class="text-base font-medium rounded-lg disabled:opacity-40"
@@ -199,7 +199,7 @@
                 style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
                 :disabled="downloading"
                 @click="doExportQuotaStats(false)"
-              >이 대학 목록 다운로드</button>
+              >이 대학 명단·정원 현황</button>
               <button
                 class="text-base font-medium rounded-lg disabled:opacity-40"
                 style="padding: 8px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
@@ -778,8 +778,8 @@ async function doExportQuotaStats(all = false) {
     a.href = url
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     a.download = all
-      ? `전체_추천현황_${date}.xlsx`
-      : `${selectedUniv.value?.univ_name ?? '대학'}_추천현황_${date}.xlsx`
+      ? `전체_명단_정원현황_${date}.xlsx`
+      : `${selectedUniv.value?.univ_name ?? '대학'}_명단_정원현황_${date}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
