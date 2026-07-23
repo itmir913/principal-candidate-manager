@@ -453,6 +453,59 @@ async fn calc_category_max() {
     assert_eq!(calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(), 30_000);
 }
 
+/// CATEGORY MAX 판별력 보강 (변이 검사 SC8: MAX→MIN).
+///
+/// 기존 `calc_category_max`는 최댓값이 **첫 번째로 삽입된** 항목이라, 집계가
+/// `.max()` 대신 "첫 항목"·"마지막 항목"·"합산"으로 바뀌어도 값이 우연히 겹치거나
+/// 근접해 판별력이 약할 수 있다. 여기서는 최댓값을 **중간 순서**에 두고,
+/// MAX/MIN/SUM/첫/끝이 **전부 다른 값**이 되도록 골라 MAX만이 정답이 되게 한다.
+///
+///   삽입 순서: 봉사=10000, 회장=50000(최대·중간), 부회장=30000
+///   MAX=50000  MIN=10000  SUM=90000  첫=10000  끝=30000  ← 모두 다름
+#[tokio::test]
+async fn calc_category_max_selects_highest_not_first_or_last() {
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool).await;
+    let aid = insert_area(&pool, CalcType::Category, None, Some(CategoryAgg::Max), LookupScope::Simple).await;
+
+    // 삽입 순서와 값 크기를 어긋나게 — 최댓값(회장)이 가운데 온다
+    for (cat, sc) in [("봉사", 10_000i64), ("회장", 50_000), ("부회장", 30_000)] {
+        sqlx::query(
+            "INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, NULL, ?, ?)",
+        )
+        .bind(aid)
+        .bind(cat)
+        .bind(sc)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO base_data (student_id, area_id, track_id, value, multi_value) VALUES (?, ?, NULL, ?, 1)",
+        )
+        .bind(sid)
+        .bind(aid)
+        .bind(cat)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let area = AreaRow {
+        id: aid,
+        name: "TestArea".to_string(),
+        calc_type: CalcType::Category,
+        max_score: 100_000,
+        match_mode: None,
+        category_agg: Some(CategoryAgg::Max),
+        lookup_scope: LookupScope::Simple,
+    };
+    // MAX여야 50000. MIN이면 10000, SUM이면 90000, 첫이면 10000, 끝이면 30000 — 전부 실패.
+    assert_eq!(
+        calc_area_score(&mut pool.acquire().await.unwrap(), sid, &area, 0, &dummy_ctx()).await.unwrap(),
+        50_000
+    );
+}
+
 #[tokio::test]
 async fn calc_manual() {
     let pool = common::create_test_pool().await;
