@@ -65,14 +65,21 @@
     <div class="rounded-xl overflow-hidden mb-4"
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
       <div class="overflow-x-auto">
-        <table class="min-w-max w-full" style="border-collapse: collapse;">
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 880px;">
+          <colgroup>
+            <col style="width: 170px;">
+            <col style="width: 150px;">
+            <col style="width: 160px;">
+            <col style="width: 220px;">
+            <col>
+          </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 130px;">시각</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">행위자</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 160px;">행위</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 230px;">대상</th>
-              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569; width: 200px;">상세</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">시각</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">행위자</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">행위</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">대상</th>
+              <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">상세</th>
             </tr>
           </thead>
           <tbody>
