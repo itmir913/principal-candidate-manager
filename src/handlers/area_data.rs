@@ -30,6 +30,7 @@ pub struct ImportResult {
     pub rows: usize,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
+    pub info: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -233,6 +234,7 @@ async fn resolve_track(
     row_num: usize,
     errors: &mut Vec<String>,
     warnings: &mut Vec<String>,
+    info: &mut Vec<String>,
 ) -> Option<Option<i64>> {
     if area.lookup_scope == LookupScope::Composite {
         let un = excel::get_col(cols, col, "대학명");
@@ -248,7 +250,7 @@ async fn resolve_track(
         match find_or_create_track(conn, un, tn).await {
             Ok((track_id, created)) => {
                 if created {
-                    warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", un, tn));
+                    info.push(format!("'{}/{}' 모집단위 자동 추가됨", un, tn));
                 }
                 Some(Some(track_id))
             }
@@ -368,6 +370,7 @@ pub async fn numeric_table_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut info: Vec<String> = Vec::new();
     let mut seen: HashSet<(Option<i64>, i64)> = HashSet::new();
     let mut track_rows: HashMap<Option<i64>, Vec<(i64, i64)>> = HashMap::new();
 
@@ -395,7 +398,7 @@ pub async fn numeric_table_import(
             continue;
         }
 
-        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings, &mut info).await {
             Some(v) => v,
             None => continue,
         };
@@ -421,7 +424,7 @@ pub async fn numeric_table_import(
 
     if !errors.is_empty() {
         // tx이 drop되면 자동 rollback — 부분 삽입 없음
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![], info: vec![] })));
     }
 
     // ▲ 이상(Upper) 방향: 기준값 0 행이 없으면 최저값 미만 학생이 점수 산출 실패 → 경고
@@ -485,7 +488,7 @@ pub async fn numeric_table_import(
     }
 
     if !errors.is_empty() {
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![], info: vec![] })));
     }
 
     let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
@@ -501,7 +504,7 @@ pub async fn numeric_table_import(
         detail: serde_json::json!({ "area_name": area_name, "rows": rows }),
     }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings, info })))
 }
 
 // ── CATEGORY MAP ─────────────────────────────────────────────────
@@ -611,6 +614,7 @@ pub async fn category_map_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut info: Vec<String> = Vec::new();
     let mut seen: HashSet<(Option<i64>, String)> = HashSet::new();
 
     for (i, cols) in file_rows.iter().enumerate() {
@@ -636,7 +640,7 @@ pub async fn category_map_import(
             continue;
         }
 
-        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings, &mut info).await {
             Some(v) => v,
             None => continue,
         };
@@ -657,7 +661,7 @@ pub async fn category_map_import(
     }
 
     if !errors.is_empty() {
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![], info: vec![] })));
     }
 
     // 0점 항목 검증: (area_id, track_id) 그룹별로 score=0 행이 최소 1개 이상 필요
@@ -709,7 +713,7 @@ pub async fn category_map_import(
     }
 
     if !errors.is_empty() {
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![], info: vec![] })));
     }
 
     let area_name: String = sqlx::query_scalar("SELECT name FROM areas WHERE id = ?")
@@ -725,7 +729,7 @@ pub async fn category_map_import(
         detail: serde_json::json!({ "area_name": area_name, "rows": rows }),
     }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings, info })))
 }
 
 // ── BASE DATA ────────────────────────────────────────────────────
@@ -924,6 +928,7 @@ pub async fn base_data_import(
     let mut rows = 0usize;
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut info: Vec<String> = Vec::new();
     // multi_value=0 전형요소: (student_id, track_id) 중복 추적 — 첫 번째 행 우선
     let single_value = !area.multi_value;
     let mut seen: HashSet<(i64, Option<i64>)> = HashSet::new();
@@ -1039,7 +1044,7 @@ pub async fn base_data_import(
         };
 
         // COMPOSITE: 모집단위 조회/생성
-        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings).await {
+        let track_id = match resolve_track(&mut *tx, &area, cols, &col, row_num, &mut errors, &mut warnings, &mut info).await {
             Some(v) => v,
             None => continue,
         };
@@ -1068,7 +1073,7 @@ pub async fn base_data_import(
     }
 
     if !errors.is_empty() {
-        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![] })));
+        return Ok((StatusCode::UNPROCESSABLE_ENTITY, Json(ImportResult { rows: 0, errors, warnings: vec![], info: vec![] })));
     }
 
     if !single_value {
@@ -1103,6 +1108,7 @@ pub async fn base_data_import(
                             code
                         )],
                         warnings: vec![],
+                        info: vec![],
                     })));
                 }
                 return Err((StatusCode::INTERNAL_SERVER_ERROR, msg));
@@ -1132,7 +1138,7 @@ pub async fn base_data_import(
         detail: serde_json::json!({ "area_name": area_name, "student_type": q.student_type, "rows": rows }),
     }).await?;
     tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings, info })))
 }
 
 // ── LIST (JSON 조회) ─────────────────────────────────────────────

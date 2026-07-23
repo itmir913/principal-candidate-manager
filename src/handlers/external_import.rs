@@ -245,6 +245,7 @@ async fn do_import(
     }
 
     let mut warnings: Vec<String> = Vec::new();
+    let mut info: Vec<String> = Vec::new();
 
     let mut tx = db
         .begin()
@@ -254,7 +255,7 @@ async fn do_import(
     // find_or_create_track을 tx 안에서 실행 — import 실패 시 생성된 대학/트랙도 롤백됨
     let (track_id, created) = find_or_create_track(&mut *tx, &univ_name, &track_name).await?;
     if created {
-        warnings.push(format!("'{}/{}' 모집단위 자동 추가됨", univ_name, track_name));
+        info.push(format!("'{}/{}' 모집단위 자동 추가됨", univ_name, track_name));
     }
 
 
@@ -381,7 +382,7 @@ async fn do_import(
     if !errors.is_empty() {
         return Ok((
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ImportResult { rows: 0, errors, warnings: skipped }),
+            Json(ImportResult { rows: 0, errors, warnings: skipped, info: vec![] }),
         ));
     }
     // 모든 행이 건너뛰어졌으면 트랙만 생성되는 no-op — 데이터 0행과 동일하게 거부.
@@ -395,6 +396,7 @@ async fn do_import(
                     "저장된 행이 없습니다 — 모든 행의 석차 값이 비어 있거나 숫자로 변환할 수 없습니다".into(),
                 ],
                 warnings: skipped,
+                info: vec![],
             }),
         ));
     }
@@ -420,7 +422,7 @@ async fn do_import(
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings })))
+    Ok((StatusCode::OK, Json(ImportResult { rows, errors: vec![], warnings, info })))
 }
 
 // ── 핸들러 ───────────────────────────────────────────────────────
