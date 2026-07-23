@@ -345,18 +345,18 @@ async fn graduated_import_errors_point_at_the_real_rows_and_save_nothing() {
 /// 학급·학생·대학·전형요소·기준표·기초데이터·지원까지 끝내고 라운드를 마감한 상태.
 /// 반환: (내신 area_id, 복수값 CATEGORY area_id, student_id, round_id)
 async fn closed_round_fixture(pool: &SqlitePool) -> (i64, i64, i64, i64) {
-    import_classes(
+    let _ = import_classes(
         st(pool),
         common::csv_multipart("학년,반,담임명,비밀번호\n3,1,담임A,pass1234\n").await,
     )
     .await
     .unwrap();
-    import_enrolled(st(pool), common::csv_multipart("이름,학년,반,번호\n홍길동,3,1,1\n").await)
+    let _ = import_enrolled(st(pool), common::csv_multipart("이름,학년,반,번호\n홍길동,3,1,1\n").await)
         .await
         .unwrap();
 
     let a_grade = new_area(pool, numeric_area("내신")).await;
-    numeric_table_import(
+    let _ = numeric_table_import(
         st(pool),
         Path(a_grade),
         common::csv_multipart("기준값,점수\n0,0\n3,80\n4,100\n").await,
@@ -365,7 +365,7 @@ async fn closed_round_fixture(pool: &SqlitePool) -> (i64, i64, i64, i64) {
     .unwrap();
 
     let a_vol = new_area(pool, multi_category_area("봉사목록")).await;
-    category_map_import(
+    let _ = category_map_import(
         st(pool),
         Path(a_vol),
         common::csv_multipart("범주,점수\n해당없음,0\n교내봉사,5\n교외봉사,3\n").await,
@@ -404,7 +404,7 @@ async fn closed_round_fixture(pool: &SqlitePool) -> (i64, i64, i64, i64) {
     )
     .await
     .unwrap();
-    close_round(st(pool), Path(rid)).await.unwrap();
+    let _ = close_round(st(pool), Path(rid)).await.unwrap();
 
     (a_grade, a_vol, sid, rid)
 }
