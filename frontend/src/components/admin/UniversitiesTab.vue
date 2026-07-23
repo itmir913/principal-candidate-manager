@@ -213,15 +213,23 @@
           <div class="rounded-xl overflow-hidden"
             style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
             <div class="overflow-x-auto">
-              <table class="w-full min-w-max" style="border-collapse: collapse;">
+              <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 780px;">
+                <colgroup>
+                  <col>
+                  <col style="width: 110px;">
+                  <col style="width: 100px;">
+                  <col style="width: 100px;">
+                  <col style="width: 130px;">
+                  <col style="width: 160px;">
+                </colgroup>
                 <thead>
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">모집단위명</th>
-                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">제한인원</th>
-                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">추천인원</th>
-                    <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569; width: 110px;">잔여인원</th>
-                    <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569; width: 130px;">재학생 우선</th>
-                    <th style="padding: 14px 20px; width: 130px;"></th>
+                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">제한인원</th>
+                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">추천인원</th>
+                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">잔여인원</th>
+                    <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569;">재학생 우선</th>
+                    <th style="padding: 14px 20px;"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,13 +239,13 @@
                       <input v-model="trackForm.track_name" type="text"
                         class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                         style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;"
-                        placeholder="예) 자연계" />
+                        placeholder="예) 자연계열" />
                     </td>
                     <td style="padding: 10px 16px;">
                       <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
                     </td>
-                    <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                    <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                    <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                    <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
                     <td class="text-center" style="padding: 10px 16px;">
                       <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
                     </td>
@@ -262,17 +270,17 @@
                       class="hover:bg-slate-50"
                       style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
                       <td class="text-base" style="padding: 14px 20px; color: #1e293b;">{{ t.track_name }}</td>
-                      <td class="text-base text-right" style="padding: 14px 20px; color: #1e293b;">
+                      <td class="text-base" style="padding: 14px 20px; color: #1e293b;">
                         {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
                       </td>
-                      <td class="text-right" style="padding: 14px 20px;">
+                      <td style="padding: 14px 20px;">
                         <button
                           class="text-base font-medium underline"
                           style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
                           @click="openRecommendedModal(t)"
                         >{{ t.unit_used }}명</button>
                       </td>
-                      <td class="text-base text-right font-medium" style="padding: 14px 20px;"
+                      <td class="text-base font-medium" style="padding: 14px 20px;"
                         :style="{ color: t.unit_quota != null && t.unit_used >= t.unit_quota ? '#ef4444' : '#1e293b' }">
                         {{ remainingLabel(t.unit_used, t.unit_quota) }}
                       </td>
@@ -300,8 +308,8 @@
                       <td style="padding: 10px 16px;">
                         <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
                       </td>
-                      <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                      <td class="text-base text-right" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                      <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                      <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
                       <td class="text-center" style="padding: 10px 16px;">
                         <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
                       </td>
