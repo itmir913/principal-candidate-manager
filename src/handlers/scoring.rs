@@ -1170,6 +1170,62 @@ pub async fn recommend_result(
         ));
     }
 
+    // 5c. 크로스트랙 순서 가드 — 대학 정원이 유한할 때, 같은 대학의 다른 모집단위에
+    //     더 높은 대학 순위(ranking)를 가진 미해결 지원자가 있으면서 그 지원자의
+    //     모집단위에 빈자리가 남아 있으면 차단한다. 상위자의 트랙이 만석이면 추천
+    //     자체가 불가하므로 블로커에서 제외한다.
+    //     대학 정원이 무제한이면 squeeze-out이 불가능하므로 검사를 건너뛴다.
+    if total_quota.is_some() {
+        let cross_blocker: Blocker = sqlx::query_as(
+            "SELECT COUNT(*) AS blockers, MIN(r.ranking) AS top_rank
+             FROM results r
+             JOIN applications a ON a.student_id = r.student_id
+                                 AND a.track_id  = r.track_id
+                                 AND a.round_id  = r.round_id
+             JOIN univ_tracks ut ON ut.id = r.track_id
+             WHERE r.round_id = ?
+               AND ut.univ_id = ?
+               AND r.track_id != ?
+               AND r.recommended = 0
+               AND a.abandoned = 0
+               AND a.excluded = 0
+               AND r.ranking < (SELECT ranking FROM results
+                                WHERE student_id = ? AND track_id = ? AND round_id = ?)
+               AND (
+                   ut.unit_quota IS NULL
+                   OR (
+                       SELECT COUNT(*) FROM results r2
+                       JOIN applications a2 ON a2.student_id = r2.student_id
+                                            AND a2.track_id  = r2.track_id
+                                            AND a2.round_id  = r2.round_id
+                       WHERE r2.track_id = r.track_id
+                         AND r2.recommended = 1
+                         AND a2.abandoned = 0
+                   ) < ut.unit_quota
+               )",
+        )
+        .bind(rid).bind(track_info.univ_id).bind(tid)
+        .bind(sid).bind(tid).bind(rid)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if cross_blocker.blockers > 0 {
+            let top = cross_blocker.top_rank
+                .ok_or((StatusCode::INTERNAL_SERVER_ERROR,
+                        "상위 미추천자 대학 순위를 계산할 수 없습니다".to_string()))?;
+            return Err((
+                StatusCode::CONFLICT,
+                format!(
+                    "같은 대학 내 다른 모집단위에 아직 추천되지 않은 상위 대학 순위 지원자가 \
+                     {}명 있습니다 (최상위 대학 순위 {}위). 해당 모집단위에 빈자리가 있으므로, \
+                     상위 지원자를 먼저 추천하거나 미선발 처리 후 다시 시도하세요.",
+                    cross_blocker.blockers, top
+                ),
+            ));
+        }
+    }
+
     // 6. 추천 확정
     let affected = sqlx::query(
         "UPDATE results SET recommended = 1 WHERE student_id = ? AND track_id = ? AND round_id = ?",
