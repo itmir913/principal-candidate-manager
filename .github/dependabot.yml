@@ -1,0 +1,73 @@
+# Dependabot 설정.
+#
+# 이 파일은 **버전 업데이트 PR**만 담당한다. 보안 경고(Dependabot alerts)와 보안
+# 업데이트 PR은 저장소 설정이라 여기서 못 켠다 - Settings > Code security 에서
+# 직접 한 번 켜야 한다.
+#
+# **PR을 묶는다.** 관리자가 한 명인 저장소에서 생태계마다 패키지 단위로 PR이
+# 쏟아지면 아무것도 안 보게 되고, 그러면 안 켠 것보다 나쁘다 - 놓친 보안 업데이트가
+# 읽지 않은 알림 속에 묻힌다. 목표는 생태계마다 주 1회 PR 하나.
+#
+# 실제로 조심해야 하는 것은 **외부에서 올라온 파일(석차연명부 엑셀, 백업 zip 등)을
+# 직접 파싱하는 크레이트**다 - calamine·zip·csv·encoding_rs·image. 업로드된 파일이
+# 곧 입력이라 여기 취약점은 신뢰 경계 밖 데이터를 다룬다. 그래서 patch도 묶어서 받되
+# 별도 그룹으로 눈에 띄게 분리한다. 프론트엔드의 marked(마크다운 파싱)도 같은 이유.
+
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      # 업로드된 외부 파일을 직접 파싱/생성하는 크레이트. 신뢰 경계 밖 데이터라 먼저 본다.
+      parsers:
+        patterns:
+          - calamine
+          - rust_xlsxwriter
+          - zip
+          - csv
+          - encoding_rs
+          - image
+      # 나머지는 통째로 하나.
+      backend:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      # 루트는 concurrently, wait-on 뿐인 dev 툴링이라 그룹을 나누지 않는다.
+      tooling:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      # marked는 마크다운(외부 콘텐츠)을 파싱하는 유일한 의존성이라 따로 분리.
+      parsers:
+        patterns:
+          - marked
+      # 나머지는 통째로 하나.
+      frontend:
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - '*'
