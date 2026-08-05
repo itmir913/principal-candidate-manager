@@ -20,6 +20,15 @@ mime_guess  = "2"
 tracing     = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+# 두 지정은 성격이 다르다.
+#   features=["rust_crypto"] — **필수**. 10.x는 crypto provider를 feature로 고르게
+#     바뀌었고 기본값(use_pem)에는 provider가 없다. 빼면 컴파일은 통과하고
+#     토큰 서명·검증 시점에 패닉한다(= 로그인 전면 실패). 타입이 아니라 런타임에
+#     터지는 자리라 tests/auth.rs 의 roundtrip 테스트가 유일한 방어선이다.
+#     provider 등록이 이 feature 전체에 걸려 있어(crypto/mod.rs) hmac만 켜는 식으로
+#     좁힐 수 없다. aws_lc_rs 는 대안이지만 C 의존성을 끌어와 택하지 않았다.
+#   default-features=false — 선택. 기본값의 use_pem(pem·simple_asn1)을 뺀다.
+#     키를 PEM이 아니라 from_secret(HS256)으로만 다루므로 쓰지 않는 파서다.
 jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
 bcrypt       = "0.15"
 rand         = "0.8"
