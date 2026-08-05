@@ -109,10 +109,28 @@ warning을 남깁니다 (`src/docs/08_excel_import.md` §7-1).
 
 ### 스키마 변경
 
-**아직 배포 전 버전 관리 체계이므로 `migrations/v2`를 추가하지 마세요.**
-`migrations/v1/*.sql` 조각 파일을 직접 수정하고 DB를 재생성합니다.
-실행 순서는 `src/db.rs`의 `V1_FRAGMENTS` 배열이 결정하므로, **새 조각 파일을
-추가했다면 그 배열에도 등록**해야 합니다.
+**출시 후에는 이미 배포된 버전의 조각 파일을 고치지 마세요.** 현장 DB는 그 스키마로
+만들어져 있고 `PRAGMA user_version`으로 자기 버전을 알립니다. `migrations/v1/*.sql`을
+조용히 고치면 새로 만든 DB와 기존 DB의 구조가 갈라지는데, 둘 다 `user_version`이 1이라
+앱은 그 차이를 영영 감지하지 못합니다.
+
+스키마를 바꾸려면 **새 버전을 추가**하세요.
+
+1. `migrations/v2/` 에 조각 파일을 만듭니다. 이미 배포된 v1 DB 위에서 도는
+   `ALTER`/`CREATE` 문이어야 합니다 (v1처럼 맨바닥에서 만드는 `CREATE` 전문이 아닙니다).
+2. `src/db.rs`에 `V2_FRAGMENTS` 상수를 만들고 `MIGRATION_FRAGMENTS` 배열에 추가합니다.
+   실행 순서는 파일명이 아니라 이 배열이 결정합니다.
+3. `SCHEMA_VERSION`을 올립니다 (안 올리면 컴파일 타임 assert가 막습니다).
+4. 새 버전의 지문을 만들고 커밋합니다.
+
+   ```powershell
+   $env:PCM_WRITE_SCHEMA_SNAPSHOT=1; cargo test --test schema_freeze
+   ```
+
+`tests/schema_freeze.rs`가 `tests/schema_snapshots/v{N}.sql`의 지문과 실제 스키마를
+대조합니다. 배포된 버전의 조각을 고치면 이 테스트가 깨집니다. **그때 스냅샷 파일을
+현재 스키마에 맞춰 고치는 것은 해결이 아닙니다** — 위 절차대로 새 버전을 만드세요.
+주석·들여쓰기만 바꾸는 것은 지문에 영향을 주지 않습니다(정규화 후 비교).
 
 ---
 

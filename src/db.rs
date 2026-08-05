@@ -4,6 +4,11 @@ use sqlx::{
     SqlitePool,
 };
 
+/// 이 앱이 만들고 지원하는 DB 스키마 버전. DB에는 `PRAGMA user_version`으로 박힌다.
+///
+/// 출시 이후이므로 **이미 배포된 버전의 스키마는 동결**이다. 스키마를 바꾸려면 이 값을
+/// 올리고 새 버전 조각(`migrations/v{N}/`)을 추가해라. 자세한 절차는
+/// `MIGRATION_FRAGMENTS` 주석과 `tests/schema_freeze.rs` 참고.
 pub const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug)]
@@ -28,7 +33,11 @@ impl std::error::Error for SchemaTooNewError {}
 // ── v1 스키마 조각 ─────────────────────────────────────────────
 // migrations/v1/ 의 파일들. 이 배열의 순서가 실행 순서다 — 파일명의 번호는
 // 사람이 순서를 읽기 위한 표기일 뿐, 로더는 파일명을 정렬하지 않는다.
-// 릴리즈 전까지는 이 조각 파일들에 직접 반영. 새 버전(v2) 추가 금지.
+//
+// v1은 출시된 스키마다 — 동결. 현장 DB는 이 조각들로 만들어졌고 자기를 user_version=1로
+// 알린다. 조각 파일을 고치면 새로 만든 DB와 기존 DB의 구조가 갈라지는데, 둘 다
+// user_version이 1이라 앱은 그 차이를 영영 감지하지 못한다.
+// 스키마 변경은 새 버전으로만 — tests/schema_freeze.rs 가 지문 대조로 이 규칙을 강제한다.
 const V1_FRAGMENTS: &[&str] = &[
     include_str!("../migrations/v1/000-init.sql"),
     include_str!("../migrations/v1/001-classes.sql"),
@@ -45,6 +54,14 @@ const V1_FRAGMENTS: &[&str] = &[
 ];
 
 // 버전별 마이그레이션: index i → v(i+1). 각 항목은 해당 버전을 구성하는 조각 목록.
+//
+// 새 스키마 버전 추가 절차 (기존 버전 조각은 절대 손대지 않는다):
+//   1. migrations/v2/ 에 조각 파일 작성 — 이미 배포된 v1 DB 위에서 도는
+//      ALTER/CREATE 문이어야 한다 (v1처럼 맨바닥에서 만드는 CREATE 전문이 아니다)
+//   2. V2_FRAGMENTS 상수를 만들고 이 배열 끝에 추가
+//   3. SCHEMA_VERSION 상향 (안 올리면 컴파일 타임 assert가 막는다)
+//   4. `$env:PCM_WRITE_SCHEMA_SNAPSHOT=1; cargo test --test schema_freeze` 로
+//      새 버전 지문을 만들고 커밋
 const MIGRATION_FRAGMENTS: &[&[&str]] = &[V1_FRAGMENTS];
 
 // SCHEMA_VERSION과 MIGRATION_FRAGMENTS 길이가 일치하지 않으면 컴파일 타임에 오류

@@ -3,7 +3,7 @@
 한국 고등학교 학교장추천전형 점수·순위·추천 관리 시스템. 내부망(LAN) 단일 exe 배포.
 
 **스택**: Rust + Axum + SQLx + SQLite / Vue 3 + Vite + Tailwind CSS v4  
-**스키마**: `migrations/v1/*.sql` 조각 파일 직접 수정 (배포 전이므로 v2 버전 추가 금지, DB 재생성). 실행 순서는 `src/db.rs`의 `V1_FRAGMENTS` 배열이 결정 — 새 조각 추가 시 배열에도 등록  
+**스키마**: **출시 후 — 배포된 버전(v1)의 조각 파일은 동결.** 스키마를 바꾸려면 `migrations/v2/` 조각을 새로 만들고 `SCHEMA_VERSION`을 올린다. 실행 순서는 `src/db.rs`의 `V{N}_FRAGMENTS` 배열이 결정 — 새 조각 추가 시 배열에도 등록. `tests/schema_freeze.rs`가 버전별 지문을 대조해 무단 변경을 막는다  
 **커밋**: 반드시 GPG 서명 (`--no-gpg-sign` 우회 금지)  
 **테스트**: `cargo run` / `npm run dev` 금지 — 검증은 테스트 코드로
 
