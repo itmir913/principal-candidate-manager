@@ -20,7 +20,7 @@ mime_guess  = "2"
 tracing     = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 bcrypt       = "0.15"
 rand         = "0.8"
 calamine     = "0.22"
