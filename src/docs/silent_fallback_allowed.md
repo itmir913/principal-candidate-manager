@@ -60,9 +60,12 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 프론트엔드가 점수표 행을 하이라이팅하는 데만 사용. None이면 하이라이팅 없음. 점수 계산·추천 결정에 영향 없음.  
 **조건**: `area-score-preview` 응답의 `matched_keys` 필드에서만.
 
-### 13. `src/handlers/teacher_areas.rs` — `.unwrap()` (`CategoryAgg::Max`)
-바로 위 `if scores.is_empty() { return Ok(...) }` 통과 후. `scores`가 비어있지 않으므로 `max()`는 반드시 `Some`.  
-**조건**: 이 `unwrap()` 앞에 `scores.is_empty()` 조기 반환이 반드시 존재해야 함.
+### 13. `src/handlers/scoring.rs::compute_area_score` — `.expect()` (`CategoryAgg::Max`)
+바로 위에서 범주 0건을 오류로 걸러내므로 `scores`가 비어있지 않고 `max()`는 반드시 `Some`.  
+**조건**: 이 `expect()` 앞에 "범주 0건 → Err" 검사가 반드시 존재해야 함.  
+**이동 이력**: 원래 `teacher_areas.rs`의 `.unwrap()`이었으나 2026-07-19 공용 헬퍼
+(`compute_area_score`) 추출로 `scoring.rs`로 옮겨졌다. 문서가 옛 위치를 가리키던 것을
+2026-08-18 감사에서 발견해 바로잡았다(F-016).
 
 ### 14. `src/handlers/universities.rs` — `.unwrap_or_default()` (HashMap remove)
 라운드·모집단위가 없는 대학의 경우 빈 Vec가 올바른 값. 통계 표시용, 점수·추천과 무관.  
@@ -104,9 +107,11 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 `std::env::current_exe()` 실패 시 빈 문자열 → autostart 레지스트리 등록이 잘못되지만 서버 시작·점수 계산에 영향 없음. Windows 정상 환경에서 발생 불가.  
 **조건**: `main.rs` autostart 초기화 경로에서만.
 
-### 24. `src/handlers/system.rs` — `.unwrap_or(Path::new("."))` (백업 임시 파일 경로)
-`db_path.parent()`가 None인 경우(루트 경로) 현재 디렉토리 fallback. 백업 다운로드 기능에만 영향. 실패 시 사용자에게 파일 다운로드 오류 표시됨. 점수·추천과 무관.  
-**조건**: `download_db_backup`의 임시 파일 경로 생성에서만.
+### 24. (해소됨) `src/handlers/system.rs` — `.unwrap_or(Path::new("."))` (백업 임시 파일 경로)
+폴백이 제거됐다. 현재 코드(`system.rs::download_db_backup`)는 `ok_or_else`로 **즉시 500**을 반환한다 —
+자동시작 시 CWD가 System32라 전교생 PII가 담긴 파일이 조용히 엉뚱한 위치에 생기기 때문이다.
+더 이상 폴백 없음 — 번호 유지를 위해 항목만 남긴다.
+문서가 제거된 폴백을 계속 허용으로 기재하던 것을 2026-08-18 감사에서 발견했다(F-002).
 
 ### 25. (해소됨) `src/handlers/rounds.rs` / `src/handlers/scoring.rs` — `ROLLBACK ... .ok()`
 2026-07-15 수정으로 수동 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` 패턴을 sqlx 관리 트랜잭션(`Pool::begin_with("BEGIN IMMEDIATE")`)으로 전환. 오류 경로는 tx drop 시 sqlx가 롤백을 관리하며, 실패한 커넥션이 열린 tx를 문 채 풀로 반환되는 경로가 사라짐. 더 이상 `.ok()` 호출 없음 — 번호 유지를 위해 항목만 남긴다.
@@ -135,3 +140,48 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 - `external_import.rs::do_import`의 **석차 값 한 곳에서만**. 학년·반·번호 변환 실패, 미등록 학생, 파일 내 중복 행은 종전대로 error → 전체 422 (학생 식별 실패는 skip 대상이 아님).
 - 기초 데이터 업로드(`area_data.rs::base_data_import`)와 점수 기준 import로 확장 금지 — 그 경로들은 값 누락이 곧 관리자 입력 실수다.
 - skip 사유 warning을 응답에서 빼면 위반. 명세: `08_excel_import.md` §7-1
+
+---
+
+## 2026-08-18 추가 (F-015) — 목록 밖에 있던 12곳
+
+채점 정합성 감사의 Fail-Fast 전수 조사에서 **목록에 없는** silent fallback 12곳이 발견됐다.
+전부 "점수·학생 식별·추천 결정과 무관" 요건은 만족하지만, CLAUDE.md 규칙 2는
+"허용 예외는 이 문서에 명시된 위치만"이라고 규정하므로 목록에 없는 것 자체가 규칙 위반이었다.
+검토 후 아래와 같이 등재한다.
+
+### 30. `src/handlers/scoring.rs::write_roster_sheet` — `excluded_reason.as_deref().unwrap_or("")`
+미선발이 아니면 사유는 NULL이고, 엑셀에는 빈 칸이 올바른 값이다. #19와 동형.  
+**조건**: 명단 시트의 "미선발 사유" 열 기록에서만.
+
+### 31. `src/handlers/scoring.rs::run_auto_recommend` — `univ_pool.remove(&univ_id).unwrap_or_default()`
+순회하는 `univ_ids`가 `univ_pool.keys()`에서 나오므로 None은 도달 불가.  
+**조건**: 같은 함수 안에서 키 출처가 `univ_pool` 자신일 것.
+
+### 32. `src/handlers/universities.rs::export_quota_stats` — `apab.get(..).copied().unwrap_or((0, 0))`
+지원 0건 모집단위는 (지원 0, 포기 0)이 올바른 값. #16과 동형.  
+**조건**: 통계 집계 경로에서만.
+
+### 33. `src/handlers/universities.rs::settings_export` — `by_univ.remove(&u.id).unwrap_or_default()`
+모집단위가 없는 대학은 빈 Vec가 올바른 값. #14와 동형.
+
+### 34. `src/handlers/universities.rs::compute_settings_changes` — `accs.remove(&name).unwrap()`
+`order`의 원소가 모두 `accs`에 존재하도록 바로 위에서 함께 채운다.  
+**조건**: `order`와 `accs`를 같은 루프에서 채울 것.
+
+### 35. `src/handlers/areas.rs::score_template` — `Response::builder()...unwrap()`
+상수 status·header로만 만드는 응답이라 실패 경로가 없다. #10·#17과 동형.
+
+### 36·37. `src/main.rs` — `unwrap_or_else(|_| "info".into())` (로그 레벨 2곳)
+`RUST_LOG` 파싱 실패 시 기본 로그 레벨. 로깅 설정이며 점수·추천과 무관.
+
+### 38·39. `src/main.rs` — `let _ = ready_tx.send(..)` (기동 신호 2곳)
+수신자가 이미 drop된 경우(기동 중 종료) 신호를 버린다. 서버 기동 경로이며 데이터와 무관.
+
+### 40. `src/main.rs` — `let _ = webbrowser::open(&url)`
+브라우저 자동 실행 실패는 사용자가 직접 주소를 열면 된다. 기능 동작과 무관.
+
+### 41. `src/middleware.rs::bearer_token` — `.and_then(|v| v.to_str().ok())`
+Authorization 헤더가 비-ASCII라 디코드 실패하면 "토큰 없음"으로 처리되고, 호출자가 **401을
+명시적으로 반환**한다. 조용히 통과시키는 것이 아니라 **지연된 명시적 오류**다.  
+**조건**: 이 값을 받는 쪽이 None을 반드시 401로 변환할 것.

@@ -169,6 +169,20 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 - **JSON 역직렬화**: `(f * 100_000.0).round() as i64` — 예: JSON `30.5` → `3050000` (`score.rs:35`).  
   비유한 값·±10억 초과는 즉시 오류 (`score.rs:29, 33`).
 
+**두 진입점의 규칙이 다르다 (S-07)**: ×100000 정수로 들어오는 경로는 둘이고 거부 기준이 같지 않다.
+
+| | 유한성 | ±10억 초과 | **소수 6자리 이상** |
+|---|---|---|---|
+| `area_data.rs::parse_display_value` (Excel·담임 입력) | 거부 | 거부 | **거부** |
+| `score.rs`의 `Deserialize for Score` (JSON 본문) | 거부 | 거부 | **검사 없음 → `.round()`로 변환** |
+
+JSON으로 `Score`를 받는 필드는 현재 `CreateAreaBody.max_score` 하나뿐이다(나머지는 출력 전용).
+따라서 `{"max_score": 10.000006}`은 오류 없이 `10.00001`로 저장된다. 극단적으로
+`0.000001`은 raw 0 — 즉 **만점 0인 전형요소**가 된다(`create_area`는 `raw() < 0`만 막고 0은 합법).
+
+두 경로를 같게 만들지 않은 이유는 없다 — 규칙이 정해지지 않았을 뿐이다.
+합칠 때는 `parse_display_value` 쪽(6자리 거부)을 기준으로 삼는다.
+
 `Score: Ord`가 구현되어 정렬·비교 시 부동소수점 오차 없이 정수 비교한다 (`score.rs:3`).  
 `Score: Add + Sum`은 내부적으로 `checked_add` — overflow 시 panic (Fail-Fast, `score.rs:65, 71`).
 
@@ -218,6 +232,22 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 
 **CATEGORY 0점 처리**: `category_map` 설계 단계에서 "해당 없음" 범주를 score=0으로 등록하는 방식.  
 `category_map_import` 시 양수 점수 있는 그룹에 score=0 행이 없으면 import 거부(`08_excel_import.md` §4).
+
+#### base_data 의 track 스코핑 — **점수표와 달리 폴백이 없다** (S-02)
+
+| 무엇 | COMPOSITE area 에서 트랙별 행이 없을 때 |
+|------|----------------------------------------|
+| 점수표(`numeric_table` / `category_map`) | 공통(`track_id IS NULL`) 표로 **폴백한다** |
+| 기초데이터(`base_data`) | **폴백하지 않는다 → "base_data 없음" 오류** |
+
+의도된 비대칭이다. 점수표는 "모든 모집단위가 같은 기준을 쓴다"가 흔한 구성이지만,
+기초데이터는 **학생별 측정값**이라 트랙이 다르면 값도 달라야 하고, 없는 값을 다른 트랙 값으로
+대신 쓰면 조용히 틀린 점수가 나온다.
+
+**운영 증상 — 관리자가 알아야 할 것**: COMPOSITE 전형요소의 기초데이터를 모집단위 구분 없이
+공통 행으로만 올리면, 데이터가 실제로 존재하는데도 `기초데이터가 없습니다` 오류로
+**라운드 마감 전체가 롤백**된다(§2.5). 원인 파악이 어려우므로 COMPOSITE 전형요소는
+반드시 모집단위별로 기초데이터를 올려야 한다.
 
 #### MANUAL (수동 입력) — `scoring.rs::compute_area_score` (AreaScoreInput::Manual)
 
@@ -361,23 +391,38 @@ CAST(RANK() OVER (
 판단 기준은 **여러 라운드를 걸치는가** 하나뿐이다. CTE인지 인라인인지와는 무관하다 —
 아래 표에서 보듯 두 형태가 `true`/`false` 양쪽에 모두 존재한다.
 
-**사용 위치 7곳**:
+**호출 5곳** (`grep -n 'track_rank_window' src/handlers/scoring.rs` — 정의 1 + 호출 5):
 
-| 핸들러 | 용도 | 쿼리 형태 | 라운드 범위 | partition_by_round |
-|--------|------|----------|-----------|-------------------|
+| 호출부 | 소비자 | 쿼리 형태 | 라운드 범위 | partition_by_round |
+|--------|--------|----------|-----------|-------------------|
 | `get_results` | 화면 표시 | 인라인 | 단일(`WHERE r.round_id = ?`) | true¹ |
-| `export_results` | 엑셀 내보내기 | 인라인 | 단일(`WHERE r.round_id = ?`) | true¹ |
-| `export_round_summary` | 요약 내보내기 | CTE | **다중**(CTE에 라운드 필터 없음) | true |
-| `teacher_get_results` (졸업생 분기) | 담임 결과 조회 | CTE | **다중**(FINALIZED 전체) | true |
-| `teacher_get_results` (재학생 분기) | 담임 결과 조회 | CTE | **다중**(FINALIZED 전체) | true |
+| `write_roster_sheet` CTE `tr` | **`export_results`(단일 라운드)와 `export_quota_stats`(전 라운드)가 공유** | CTE | 호출자에 따라 단일·다중 | true |
+| `teacher_get_results` CTE `tr` | 담임 결과 조회 — **졸업생·재학생 두 분기가 같은 문자열을 공유** | CTE | 다중(FINALIZED 전체) | true |
 | `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | CTE | 단일 | false |
 | `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | 인라인 | 단일 | false |
 
 ¹ 단일 라운드이므로 `round_id` 파티션은 결과에 영향이 없다(무해한 잉여). 리팩터링 이전
 리터럴이 그러했고, 동작 변경을 피하기 위해 그대로 보존했다.
 
+**이 표의 이력**: 2026-08-18 감사 전까지 이 자리에는 "사용 위치 7곳" 표가 있었고 코드와 어긋나 있었다(F-001) —
+`export_round_summary`에는 `track_rank` 파생이 아예 **없고**, `export_results`는 인라인이 아니라
+`write_roster_sheet`의 CTE를 경유하며, 실제 소비자인 `export_quota_stats`는 표에 없었다.
+**호출 수를 셀 때는 이 표가 아니라 `grep track_rank_window`를 기준으로 삼아라.**
+
 어긋나면: 관리자가 화면에서 보는 순위와 가드·자동 추천이 비교하는 순위가 달라져  
 가드가 잘못된 후보를 막거나 허용하고, 자동 추천이 다른 결과를 낸다.
+
+### 3.3-1 순위 모집단에 무엇이 들어가는가 — `excluded` / `abandoned`
+
+- **`excluded=1`(미선발)은 순위 계산에 포함된다.** §5.3이 규정하는 대로 화면·수동 추천 가드와
+  같은 순위를 유지하기 위해서다. 후보에서만 빠진다.
+- **`abandoned=1`(포기)도 순위에서 빠지지 않는다.** `results` 행이 그대로 남고 `RANK()`는
+  `applications.abandoned`를 보지 않는다. 포기자는 순위를 유지한 채 **정원만 반환**한다
+  (정원 집계는 `recommended=1 AND abandoned=0` 기준 — §5.3·§6.1).
+- 근거: `abandoned=1`은 FINALIZED에서만 도달 가능하고(§6.1), FINALIZED 전이는 전원 결정을
+  요구하므로(§7.2) **포기자가 추천 판단을 흐리는 경로는 구조적으로 닫혀 있다.**
+
+(2026-08-18 감사 전까지 `abandoned` 쪽 규칙이 문서에 없었다 — S-08)
 
 ### 3.4 동점 처리 — Standard Competition Ranking
 

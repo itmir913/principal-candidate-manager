@@ -128,6 +128,11 @@
 | DELETE | `/universities/:id` | 대학 삭제 (applications 존재 시 409) | 204 |
 | GET | `/universities/quota-stats` | 잔여석 통계 | `[QuotaStatRow]` |
 | GET | `/universities/quota-stats/export` | 전체 명단·정원 현황 xlsx 2시트("전체 명단"=전 라운드 지원자 전원, "정원 현황"=모집단위별 지원·추천·포기·잔여). `?univ_id=` | blob |
+
+> **"정원 현황" 시트의 라운드 열 규약 (S-06)**: 열 라벨은 **실제 `round_id`**를 따른다(`{round_id}차 추천`).
+> 열 목록은 `rounds` 테이블이 아니라 **추천이 1건 이상 있는 라운드**에서 파생되므로, 지원자가 전원
+> 미선발로 끝난 라운드는 열 자체가 없다. 2026-08-18 이전에는 배열 인덱스(`i+1`) 기반이라
+> 1차가 빠지면 2차 수치가 "1차 추천" 열에 적혔다(F-010, `tests/audit_repro_round_label.rs`가 고정).
 | GET | `/universities/:id/tracks` | 모집단위 목록 | `[TrackRow]` |
 | POST | `/universities/:id/tracks` | 모집단위 생성 | 201 + `{id}` |
 | GET | `/univ-tracks` | 전체 모집단위 (대학명 포함) | `[TrackRow]` |
