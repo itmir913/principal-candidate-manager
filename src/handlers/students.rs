@@ -332,6 +332,10 @@ pub async fn upsert_student(
             (Some(g), Some(c), Some(s)) => (g, c, s),
             _ => return Err("재학생은 grade, class_no, seq_no 필수".into()),
         };
+        // upsert_enrolled_by_position 과 같은 기준 — 학생 일괄 업로드 경로의 방어선 (F-040)
+        if seq_no < 1 {
+            return Err(format!("번호는 1 이상이어야 합니다 (입력값 {})", seq_no));
+        }
 
         let class_ok: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ?",
@@ -662,6 +666,11 @@ pub async fn upsert_enrolled_by_position(
         (Some(g), Some(c), Some(s)) => (g, c, s),
         _ => return Err("grade, class_no, seq_no 필수".into()),
     };
+    // 번호 범위는 여기서 막는다 — JSON 단건 추가와 엑셀 일괄 업로드가 모두 이 헬퍼를 지난다.
+    // 핸들러에만 두면 엑셀 경로가 뚫린다(F-012 수정이 그랬다 → F-040).
+    if seq_no < 1 {
+        return Err(format!("번호는 1 이상이어야 합니다 (입력값 {})", seq_no));
+    }
 
     let class_ok: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ?",
@@ -728,11 +737,6 @@ pub async fn add_enrolled(
     let name = body.name.trim().to_string();
     if name.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "이름이 비어있습니다".into()));
-    }
-    // 학년·반은 upsert_enrolled_by_position 의 학급 조회가 걸러내지만 번호는 아무 검증이
-    // 없어 0·음수가 저장된다 — 화면 정렬(seq_no 오름차순)이 깨진다.
-    if body.seq_no < 1 {
-        return Err((StatusCode::BAD_REQUEST, "번호는 1 이상이어야 합니다".into()));
     }
     let rec = StudentRecord {
         student_code: String::new(),

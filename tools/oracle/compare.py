@@ -74,6 +74,16 @@ def main():
     error_agree = []
     spec_gap = []
 
+    # 공허 통과 방지: actual 이 비었거나 시나리오 일부만 덤프됐는데 "불일치 0" 으로
+    # 통과하면 대조가 없었던 것과 같다. 덤프 단계가 조용히 빠지는 경우를 여기서 잡는다.
+    if not actual:
+        print("actual.json 이 비어 있다 — 덤프 단계(audit_oracle_dump)가 돌지 않았다")
+        return 1
+    missing = set(scns) - {a["name"] for a in actual}
+    if missing:
+        print("덤프에 빠진 시나리오 %d개: %s" % (len(missing), ", ".join(sorted(missing)[:5])))
+        return 1
+
     for act in actual:
         name = act["name"]
         scn = scns[name]

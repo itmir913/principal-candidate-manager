@@ -114,9 +114,10 @@ async fn fresh_round_allows_auto_recommend() {
     assert_eq!(recommended_count(&pool, rid).await, 1, "정원 1석이 채워져야 한다");
 }
 
-/// 현재 동작 고정 — 낡은 라운드에서 자동 추천이 **성공하고 recommended 가 실제로 써진다.**
-/// (위 두 테스트가 "핸들러가 다른 이유로 Err 를 안 냈다"가 아니라
-///  "낡은 점수 위에서 추천이 확정됐다"임을 못박는다. 수정되면 이 테스트가 실패한다.)
+/// 불변식: 낡은 라운드에서 자동 추천이 차단될 때 **부분 쓰기가 없어야 한다.**
+/// 가드가 `BEGIN IMMEDIATE` 진입 직후에 있으므로 `recommended` 는 한 건도 써지지 않는다.
+/// (F-030 수정 이전에는 이 테스트가 "낡은 상태에서 추천이 확정된다"는 현행 동작을
+///  고정하고 있었다. 수정과 함께 불변식으로 전환했다.)
 #[tokio::test]
 async fn blocked_auto_recommend_writes_nothing() {
     let pool = common::create_test_pool().await;
