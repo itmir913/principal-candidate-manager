@@ -44,10 +44,9 @@ let fails = 0
 // 알려진 결함 — 아직 고치지 않았고, 고쳐질 때까지 CI 를 빨갛게 만들지 않는다.
 // 대신 **고쳐지면 여기서 실패한다** — 목록에 남은 채 통과하면 baseline 이 낡은 것이므로
 // 항목을 지우라고 요구한다. 결함을 조용히 덮는 장치가 아니라 만료일을 붙이는 장치다.
-const KNOWN_FAIL = new Map([
-  ['tieSet univ 보기 + 모집단위 필터 (동점 표식 누락)',
-   'F-014 — 모집단위 필터 + 대학 순위 보기에서 동점 상대가 서버 응답에서 빠진다'],
-])
+// 지금은 비어 있다 — F-014 는 2026-08-18 에 수정됐다(RoundsTab 이 라운드 전체를 받고
+// 표시 단계에서만 필터한다). 새 항목을 넣을 때는 반드시 F 번호와 함께 적는다.
+const KNOWN_FAIL = new Map([])
 
 const report = (name, bad, total, sample) => {
   const known = KNOWN_FAIL.get(name)
@@ -204,7 +203,11 @@ function exactDecimal(raw) {
   report('tieSet univ 보기 (2-90 / U-16)', badUniv, rows, sampleU)
 }
 
-// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 (선택된 트랙만 배열에 담김) ──
+// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 ─────────────────────
+// F-014 수정(2026-08-18): RoundsTab.loadResults 가 모집단위 필터를 **서버에 넘기지 않는다.**
+// 라운드 전체를 받아 tieSet 은 전체로 계산하고, 표시만 visibleResults 로 좁힌다.
+// 이 검사는 그 동작을 모사해 "필터를 걸어도 대학 전체 동점 표식이 유지되는가"를 본다.
+// 모사이므로 컴포넌트가 예전 방식으로 되돌아가는 것은 잡지 못한다 — 그건 3c 가 맡는다.
 {
   let missed = 0, cases = 0, sample = ''
   for (const scn of actual) {
@@ -216,6 +219,7 @@ function exactDecimal(raw) {
       ranking: r.ranking,
       univ_name: univOf[trackOf[r.track_id].univ_id].univ_name,
     }))
+    // 진실값: 대학 전체에서 같은 ranking 을 가진 행이 2개 이상이면 동점이다.
     const tieAll = new Set()
     {
       const g = {}
@@ -223,29 +227,50 @@ function exactDecimal(raw) {
       for (const rs of Object.values(g))
         if (rs.length > 1) for (const r of rs) tieAll.add(`${r.student_id}-${r.track_id}`)
     }
-    for (const t of src.tracks) {
-      const filtered = all.filter(r => r.track_id === t.id)
-      if (!filtered.length) continue
-      cases++
+    // 컴포넌트 모사: tieSet 은 results(전체)로 계산하고 표시만 필터한다.
+    const shownAll = new Set()
+    {
       const counts = {}
-      for (const r of filtered) {
+      for (const r of all) {
         if (r.ranking == null) continue
         const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
         ;(counts[k] ||= []).push(r)
       }
-      const shown = new Set()
       for (const rs of Object.values(counts))
-        if (rs.length > 1) for (const r of rs) shown.add(`${r.student_id}-${r.track_id}`)
-      for (const r of filtered) {
+        if (rs.length > 1) for (const r of rs) shownAll.add(`${r.student_id}-${r.track_id}`)
+    }
+    for (const t of src.tracks) {
+      const visible = all.filter(r => r.track_id === t.id)
+      if (!visible.length) continue
+      cases++
+      for (const r of visible) {
         const k = `${r.student_id}-${r.track_id}`
-        if (tieAll.has(k) && !shown.has(k)) {
+        if (tieAll.has(k) && !shownAll.has(k)) {
           missed++
           sample ||= `${scn.name} 트랙${t.id} 필터 시 ${k} (대학순위 ${r.ranking}) 동점 표식 누락`
         }
       }
     }
   }
-  report('tieSet univ 보기 + 모집단위 필터 (동점 표식 누락)', missed, cases, sample)
+  report('tieSet univ 보기 + 모집단위 필터 (동점 표식 유지)', missed, cases, sample)
+}
+
+// ── 3c. 소스 가드 — 컴포넌트가 필터를 서버로 다시 넘기면 실패한다 ──
+// 3b 는 모사라 되돌림을 못 잡는다. 여기서는 RoundsTab.vue 본문을 직접 읽어
+// F-014 수정의 두 축(전체 조회 / tieSet 은 전체 기준)이 살아 있는지 확인한다.
+{
+  const vue = fs.readFileSync(
+    path.join(HERE, '..', '..', 'frontend', 'src', 'components', 'admin', 'RoundsTab.vue'), 'utf8')
+  const problems = []
+  if (!/getResults\(selected\.value\.id,\s*null\)/.test(vue))
+    problems.push('loadResults 가 라운드 전체를 받지 않는다(필터를 서버에 넘긴다)')
+  if (!/const visibleResults = computed/.test(vue))
+    problems.push('visibleResults(표시용 필터)가 없다')
+  const tie = vue.slice(vue.indexOf('const tieSet = computed'))
+  const tieBody = tie.slice(0, tie.indexOf('return set'))
+  if (/visibleResults/.test(tieBody))
+    problems.push('tieSet 이 visibleResults 로 계산한다 — 전체(results)로 계산해야 한다')
+  report('RoundsTab 소스 가드 (F-014 회귀 방지)', problems.length, 3, problems.join(' / '))
 }
 
 // ── 4. resultsByUnivOnly 재정렬 vs 백엔드 ranking 순서 ───────────

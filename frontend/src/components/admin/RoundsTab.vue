@@ -283,7 +283,6 @@
                   v-model="selectedTrackId"
                   class="text-base rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                   style="border: 1px solid #e2e8f0; padding: 9px 12px; color: #1e293b;"
-                  @change="loadResults"
                 >
                   <option value="">전체 대학</option>
                   <option v-for="t in tracksInRound" :key="t.id" :value="t.id">
@@ -643,7 +642,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, watch, onMounted, inject } from 'vue'
 import {
   getRounds, openRound, closeRound, reopenRound, finalizeRound,
   calculateScores, getResults, recommendResult, unrecommendResult,
@@ -824,9 +823,20 @@ const trackQuotaMap = computed(() => {
 
 const rankView = ref('track')
 
+// 표시용 필터. results 는 항상 라운드 전체이고, 여기서만 모집단위를 좁힌다.
+// 동점 표식(tieSet)은 results 전체를 쓰므로 필터와 무관하게 유지된다.
+const visibleResults = computed(() => {
+  if (!selectedTrackId.value) return results.value
+  const tid = Number(selectedTrackId.value)
+  return results.value.filter(r => r.track_id === tid)
+})
+
+// 필터를 바꾸면 펼쳐 둔 행은 접는다(예전에는 재조회가 대신 해 주던 일).
+watch(selectedTrackId, () => { expandedRows.value = {} })
+
 const resultsByUniv = computed(() => {
   const map = {}
-  for (const r of results.value) {
+  for (const r of visibleResults.value) {
     const key = `${r.univ_name} ${r.track_name}`
     if (!map[key]) {
       const q = trackQuotaMap.value[r.track_id]
@@ -849,7 +859,7 @@ const resultsByUniv = computed(() => {
 
 const resultsByUnivOnly = computed(() => {
   const map = {}
-  for (const r of results.value) {
+  for (const r of visibleResults.value) {
     const key = r.univ_name
     if (!map[key]) {
       const q = trackQuotaMap.value[r.track_id]
@@ -977,17 +987,17 @@ async function loadApps() {
 
 async function loadResults() {
   if (!selected.value) return
+  // 모집단위 필터를 서버에 넘기지 않는다. 대학 순위 보기의 동점 판정은 같은 대학의
+  // **다른 모집단위 지원자**까지 봐야 하는데, 서버에서 걸러 받으면 그 상대가 배열에
+  // 없어 동점 표식이 사라진다. 전체를 받아 표시 단계에서만 거른다(visibleResults).
   ;[results.value, quotaStats.value] = await Promise.all([
-    getResults(selected.value.id, selectedTrackId.value || null),
+    getResults(selected.value.id, null),
     getQuotaStats(),
   ])
-  // 필터 없이 전체 결과를 불러올 때만 드롭다운 목록 갱신
-  if (!selectedTrackId.value) {
-    const seen = new Set()
-    allTracksInRound.value = results.value
-      .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
-      .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
-  }
+  const seen = new Set()
+  allTracksInRound.value = results.value
+    .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
+    .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
   expandedRows.value = {}
 }
 
