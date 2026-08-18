@@ -28,3 +28,8 @@ dist-ssr
 *.db*
 config.json
 .claude/
+
+# 오라클 대조 생성물 — `npm run test:oracle` 이 매번 다시 만든다
+tools/oracle/scenarios.json
+tools/oracle/actual.json
+tools/oracle/__pycache__/

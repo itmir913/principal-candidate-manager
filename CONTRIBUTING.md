@@ -48,7 +48,9 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 |---|---|
 | `npm run dev` | 백엔드 + 프론트엔드 동시 실행 |
 | `npm run dev:watch` | 백엔드 소스 변경 시 자동 재시작 |
-| `npm test` | `cargo test` — 전체 테스트 |
+| `npm test` | `cargo test` — 러스트 테스트 전체 |
+| `npm run test:oracle` | 독립 오라클 대조 + 프론트 파생값 대조 (Python 3 필요) |
+| `npm run ci` | 위 둘을 순서대로 — **CI 가 돌리는 것과 같다** |
 | `npm run build` | 릴리스 빌드 (`target/release/principal-candidate-manager.exe`) |
 
 ---
@@ -57,10 +59,10 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 
 1. 저장소를 fork 합니다
 2. 작업 브랜치를 만듭니다 (`fix/...`, `feat/...`)
-3. **로컬에서 `npm test`가 전부 통과하는지 확인합니다**
+3. **로컬에서 `npm run ci`가 전부 통과하는지 확인합니다**
 4. 무엇을 왜 바꿨는지 설명을 담아 PR을 보냅니다
 
-> PR을 올리면 `.github/workflows/test.yml`이 위와 **동일한 `npm test`**를
+> PR을 올리면 `.github/workflows/CI.yml`이 위와 **동일한 `npm run ci`**를
 > windows-latest에서 실행합니다. 다만 **CI는 백엔드 테스트만 검증합니다** —
 > 프론트엔드에는 자동화 테스트가 없으므로 Vue 변경은 여전히 사람이 확인해야 합니다.
 
