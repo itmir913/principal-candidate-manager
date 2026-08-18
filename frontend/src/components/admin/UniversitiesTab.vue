@@ -81,7 +81,7 @@
             <button
               class="text-base font-semibold rounded-lg disabled:opacity-40"
               style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-              :disabled="saving || !univForm.univ_name.trim()"
+              :disabled="saving || !univFormValid"
               @click="saveAddUniv"
             >{{ saving ? '저장 중…' : '저장' }}</button>
             <button
@@ -146,7 +146,7 @@
                   <button
                     class="text-base font-semibold rounded-lg disabled:opacity-40"
                     style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                    :disabled="saving || !univForm.univ_name.trim()"
+                    :disabled="saving || !univFormValid"
                     @click="saveEditUniv(u.id)"
                   >{{ saving ? '저장 중…' : '저장' }}</button>
                   <button class="text-base rounded-lg"
@@ -254,7 +254,7 @@
                         <button
                           class="text-base font-semibold rounded-lg disabled:opacity-40"
                           style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                          :disabled="saving || !trackForm.track_name.trim()"
+                          :disabled="saving || !trackFormValid"
                           @click="saveAddTrack"
                         >{{ saving ? '저장 중…' : '저장' }}</button>
                         <button class="text-base rounded-lg"
@@ -318,7 +318,7 @@
                           <button
                             class="text-base font-semibold rounded-lg disabled:opacity-40"
                             style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                            :disabled="saving || !trackForm.track_name.trim()"
+                            :disabled="saving || !trackFormValid"
                             @click="saveEditTrack(t.id)"
                           >{{ saving ? '저장 중…' : '저장' }}</button>
                           <button class="text-base rounded-lg"
@@ -582,11 +582,16 @@ const HELP = {
 const QuotaInput = defineComponent({
   props: {
     unlimited: Boolean,
+    // null 허용 — 입력칸이 비었거나 숫자가 아닐 때의 값이다.
+    // (Vue 는 null 에 대해 타입 검사를 건너뛴다)
     quota: { type: Number, default: 1 },
   },
   emits: ['update:unlimited', 'update:quota'],
   setup(props, { emit }) {
-    return () => h('div', { class: 'flex items-center gap-2' }, [
+    // 정원은 1 이상 정수만 유효하다 — 백엔드 validate_quota 와 같은 기준.
+    const valid = () => props.unlimited || (Number.isInteger(props.quota) && props.quota >= 1)
+    return () => h('div', {}, [
+    h('div', { class: 'flex items-center gap-2' }, [
       h('input', {
         type: 'checkbox',
         checked: props.unlimited,
@@ -601,11 +606,22 @@ const QuotaInput = defineComponent({
               value: props.quota,
               min: 1,
               style: 'width: 72px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; font-size: 16px;',
-              onInput: (e) => emit('update:quota', parseInt(e.target.value) || 1),
+              // 조용히 고치지 않는다. 예전에는 `parseInt(v) || 1` 이라 0 을 입력하면
+              // 관리자 모르게 1 로 바뀌었고 음수는 그대로 통과했다.
+              // 유효하지 않으면 null 을 올려보내 저장 버튼이 잠기게 한다.
+              onInput: (e) => {
+                const n = parseInt(e.target.value, 10)
+                emit('update:quota', Number.isFinite(n) ? n : null)
+              },
             }),
             h('span', { style: 'font-size: 16px; color: #64748b;' }, '명'),
           ])
         : null,
+    ]),
+    !valid()
+      ? h('p', { class: 'text-base', style: 'color: #b45309; margin-top: 6px;' },
+          '정원은 1명 이상이어야 합니다. 제한이 없으면 "무제한"을 선택하세요.')
+      : null,
     ])
   },
 })
@@ -625,6 +641,12 @@ const editingTrackId  = ref(null)
 
 const univForm  = ref(emptyUnivForm())
 const trackForm = ref(emptyTrackForm())
+
+// 저장 가능 조건 — 이름과 정원 둘 다 유효해야 한다.
+// 정원 기준은 백엔드 validate_quota(1 이상 또는 무제한)와 일치시킨다.
+const quotaOk = (f, key) => f.unlimited || (Number.isInteger(f[key]) && f[key] >= 1)
+const univFormValid  = computed(() => univForm.value.univ_name.trim() !== '' && quotaOk(univForm.value, 'total_quota'))
+const trackFormValid = computed(() => trackForm.value.track_name.trim() !== '' && quotaOk(trackForm.value, 'unit_quota'))
 
 const quotaStats = ref(null)
 

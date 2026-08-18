@@ -255,6 +255,10 @@ function exactDecimal(raw) {
   report('tieSet univ 보기 + 모집단위 필터 (동점 표식 유지)', missed, cases, sample)
 }
 
+// 소스 가드용 — 한 줄 주석을 걷어낸다. 옛 패턴을 인용한 주석이 금지 패턴 검사에
+// 걸리면 안 되기 때문이다(실제로 F-013 주석이 걸렸다).
+const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+
 // ── 3c. 소스 가드 — 컴포넌트가 필터를 서버로 다시 넘기면 실패한다 ──
 // 3b 는 모사라 되돌림을 못 잡는다. 여기서는 RoundsTab.vue 본문을 직접 읽어
 // F-014 수정의 두 축(전체 조회 / tieSet 은 전체 기준)이 살아 있는지 확인한다.
@@ -268,9 +272,23 @@ function exactDecimal(raw) {
     problems.push('visibleResults(표시용 필터)가 없다')
   const tie = vue.slice(vue.indexOf('const tieSet = computed'))
   const tieBody = tie.slice(0, tie.indexOf('return set'))
-  if (/visibleResults/.test(tieBody))
+  if (/visibleResults/.test(noComments(tieBody)))
     problems.push('tieSet 이 visibleResults 로 계산한다 — 전체(results)로 계산해야 한다')
   report('RoundsTab 소스 가드 (F-014 회귀 방지)', problems.length, 3, problems.join(' / '))
+}
+
+// ── 3d. 소스 가드 — 정원 입력이 값을 조용히 바꾸지 않는가 (F-013) ──
+// 예전 UniversitiesTab 은 `parseInt(v) || 1` 이라 0 을 1 로 치환하고 음수는 통과시켰다.
+// Fail-Fast 원칙상 UI 는 값을 고쳐 주는 대신 저장을 막아야 한다.
+{
+  const vue = fs.readFileSync(
+    path.join(HERE, '..', '..', 'frontend', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
+  const problems = []
+  if (/parseInt\([^)]*\)\s*\|\|/.test(noComments(vue)))
+    problems.push('parseInt(...) || 기본값 패턴이 남아 있다 — 입력을 조용히 치환한다')
+  if (!/const univFormValid\s*=\s*computed/.test(vue) || !/const trackFormValid\s*=\s*computed/.test(vue))
+    problems.push('정원 유효성을 저장 버튼 잠금 조건에 넣지 않았다')
+  report('UniversitiesTab 소스 가드 (F-013 회귀 방지)', problems.length, 2, problems.join(' / '))
 }
 
 // ── 4. resultsByUnivOnly 재정렬 vs 백엔드 ranking 순서 ───────────
