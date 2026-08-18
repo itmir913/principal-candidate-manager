@@ -28,6 +28,11 @@ function pythonCmd() {
   process.exit(1)
 }
 
+// Windows 러너의 파이썬은 stdout 인코딩이 cp1252 라서 한국어를 print 하는 순간
+// UnicodeEncodeError 로 죽는다(GitHub Actions windows-latest 에서 실제로 터졌다).
+// 로컬 콘솔이 UTF-8 이면 재현되지 않으므로 러너에서만 드러난다 — 여기서 못 박는다.
+const PY_ENV = { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+
 function run(label, cmd, args, opts = {}) {
   console.log(`\n=== ${label} ===`)
   const r = spawnSync(cmd, args, { stdio: 'inherit', shell: false, ...opts })
@@ -43,12 +48,18 @@ function run(label, cmd, args, opts = {}) {
 
 const py = pythonCmd()
 
-run('1/4 시나리오 생성', py, [path.join(HERE, 'generate.py')], { cwd: HERE })
+run('1/4 시나리오 생성', py, [path.join(HERE, 'generate.py')], {
+  cwd: HERE,
+  env: { ...process.env, ...PY_ENV },
+})
 run('2/4 구현 실측 덤프', 'cargo', ['test', '--test', 'audit_oracle_dump', '--', '--nocapture'], {
   cwd: REPO,
   env: { ...process.env, PCM_ORACLE_DIR: HERE },
 })
-run('3/4 오라클 대조', py, [path.join(HERE, 'compare.py')], { cwd: HERE })
+run('3/4 오라클 대조', py, [path.join(HERE, 'compare.py')], {
+  cwd: HERE,
+  env: { ...process.env, ...PY_ENV },
+})
 run('4/4 프론트 대조', process.execPath, [path.join(HERE, 'front_check.mjs')], { cwd: HERE })
 
 console.log('\n오라클 대조 전 단계 통과')
