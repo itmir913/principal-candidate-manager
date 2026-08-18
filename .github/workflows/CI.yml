@@ -37,7 +37,7 @@ jobs:
 
       # 오라클 대조(tools/oracle/*.py)용. 러너 기본 파이썬에 기대지 않고 고정한다.
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
