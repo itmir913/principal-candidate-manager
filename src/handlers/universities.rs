@@ -156,6 +156,7 @@ pub async fn create_university(
     }
     let univ_name = body.univ_name.trim().to_string();
     let total_quota = body.total_quota.flatten();
+    validate_quota(total_quota, "대학 정원")?;
     let enrolled = body.prioritize_enrolled as i64;
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -195,6 +196,9 @@ pub async fn update_university(
         if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "대학명은 필수입니다".into()));
         }
+    }
+    if let Some(v) = body.total_quota {
+        validate_quota(v, "대학 정원")?;
     }
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -341,6 +345,7 @@ pub async fn create_track(
     }
     let track_name = body.track_name.trim().to_string();
     let unit_quota = body.unit_quota.flatten();
+    validate_quota(unit_quota, "모집단위 정원")?;
     let enrolled = body.prioritize_enrolled as i64;
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -399,6 +404,9 @@ pub async fn update_track(
         if v.trim().is_empty() {
             return Err((StatusCode::BAD_REQUEST, "모집단위명은 필수입니다".into()));
         }
+    }
+    if let Some(v) = body.unit_quota {
+        validate_quota(v, "모집단위 정원")?;
     }
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -685,8 +693,11 @@ pub async fn export_quota_stats(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let apab: HashMap<i64, (i64, i64)> = apab_rows.into_iter().map(|(t, a, b)| (t, (a, b))).collect();
 
-    let round_labels: Vec<String> = stats.all_round_ids.iter().enumerate()
-        .map(|(i, _)| format!("{}차 추천", i + 1))
+    // 배열 인덱스가 아니라 실제 round_id 를 라벨로 쓴다. all_round_ids 는 추천이 있는
+    // 라운드만 담으므로(추천 0건 라운드는 빠진다) 인덱스를 쓰면 2차 수치가 "1차 추천"
+    // 열에 적힌다.
+    let round_labels: Vec<String> = stats.all_round_ids.iter()
+        .map(|rid| format!("{}차 추천", rid))
         .collect();
 
     let mut wb = Workbook::new();
@@ -829,6 +840,19 @@ const UNLIMITED_TEXT: &str = "무제한";
 
 fn fmt_prio(v: bool) -> &'static str {
     if v { "예" } else { "아니오" }
+}
+
+/// JSON API 의 정원 범위 검증 — Excel 설정 import 의 `parse_quota` 와 **같은 기준**이다
+/// (1 이상, `None` = 무제한). 같은 필드를 경로별로 다른 규칙으로 받으면 0·음수 정원이
+/// 저장되어 잔여석 계산(`export_quota_stats`)과 자동 추천에 그대로 흘러든다.
+fn validate_quota(v: Option<i64>, label: &str) -> Result<(), ApiError> {
+    match v {
+        Some(n) if n < 1 => Err((
+            StatusCode::BAD_REQUEST,
+            format!("{}은 1 이상이어야 합니다 (제한 없음은 값을 비워 두세요)", label),
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// 정원 문자열 파싱: "무제한" → None, 양의 정수 → Some, 그 외 → Err.

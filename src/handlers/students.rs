@@ -729,6 +729,11 @@ pub async fn add_enrolled(
     if name.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "이름이 비어있습니다".into()));
     }
+    // 학년·반은 upsert_enrolled_by_position 의 학급 조회가 걸러내지만 번호는 아무 검증이
+    // 없어 0·음수가 저장된다 — 화면 정렬(seq_no 오름차순)이 깨진다.
+    if body.seq_no < 1 {
+        return Err((StatusCode::BAD_REQUEST, "번호는 1 이상이어야 합니다".into()));
+    }
     let rec = StudentRecord {
         student_code: String::new(),
         name,
