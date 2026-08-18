@@ -1044,6 +1044,12 @@ pub async fn recommend_result(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
+    // 1a. 기초데이터가 계산 이후에 바뀌었으면 추천할 수 없다 (F-017).
+    //     낡은 순위로 추천을 확정하면 정원 판정 자체가 잘못된 근거 위에 선다.
+    if crate::handlers::rounds::needs_recalc(&mut *tx, rid).await? {
+        return Err((StatusCode::CONFLICT, crate::handlers::rounds::NEEDS_RECALC_MSG.into()));
+    }
+
     // 1b. 미선발 처리된 지원은 추천 불가 — 존재하지 않으면 이후 검증에서 자연히 404/409로 처리된다
     let excluded: Option<bool> = sqlx::query_scalar(
         "SELECT excluded = 1 FROM applications WHERE student_id = ? AND track_id = ? AND round_id = ?",

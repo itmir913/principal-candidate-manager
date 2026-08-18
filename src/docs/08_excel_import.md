@@ -229,7 +229,15 @@
 - **CLOSED 또는 FINALIZED** 상태 라운드가 존재하면 **409 Conflict** 반환 (`areas.rs:67-82`)
 - 이유: CLOSED/FINALIZED 라운드의 점수 기준을 수정하면 저장된 results와 불일치 발생
 
-`base_data_import`, 외부 import에는 이 guard 없음 (CLOSED 시 base_data 수정은 별도 trigger로 보호).
+`base_data_import`, 외부 import에는 이 guard **없음**. 보호 범위를 정확히 적는다:
+
+- 트리거 `trg_prevent_base_data_delete_for_applied`는 **BEGIN DELETE만** 막는다
+  (`008-applications.sql:57-70`). 같은 파일 주석이 밝히듯 `INSERT OR REPLACE`는 내부 DELETE에
+  대해 BEFORE DELETE를 발동시키지 않으므로 **UPSERT(수정)는 CLOSED에서도 통과한다.**
+  복수값 경로만 DELETE→INSERT라 트리거에 걸려 422가 된다.
+- 따라서 CLOSED 라운드에서 기초데이터가 바뀌면 `results`는 **낡은 채로 남는다.**
+  이 낡음은 `rounds.rs::needs_recalc_expr`가 감지해 화면에 "재계산 필요"로 표시하고,
+  추천 확정(409)·라운드 마감(422)을 차단한다 — `00_spec_round_and_scoring.md` §2.6.
 
 ---
 

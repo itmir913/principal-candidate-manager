@@ -235,8 +235,12 @@ round_status    // "OPEN" | "CLOSED" | "FINALIZED"
 
 ### RoundRow
 ```
-id, status, opened_at, closed_at (null 가능), finalized_at (null 가능)
+id, status, opened_at, closed_at (null 가능), finalized_at (null 가능), needs_recalc (bool)
 ```
+
+`needs_recalc` — 마지막 점수 계산 이후 기초데이터가 바뀌었는가. CLOSED 라운드에서만 true가 될 수 있다.
+프론트는 이 값으로 "재계산 필요" 배지와 결과 탭 경고를 띄운다(`RoundsTab.vue`).
+표시는 안내일 뿐이고 **실제 차단은 백엔드가 한다** — `00_spec_round_and_scoring.md` §2.6.
 
 ### Score 타입 직렬화
 - DB: `i64` (×100000)

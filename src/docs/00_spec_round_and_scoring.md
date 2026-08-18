@@ -259,6 +259,45 @@ DO UPDATE SET score_detail=excluded.score_detail,
 | NUMERIC EXACT 매칭 실패 | 일치하는 threshold 없음 |
 | CATEGORY 범주 매핑 실패 | category_map에 없는 범주값 |
 
+### 2.6 재계산 필요 판정 (`needs_recalc`) — CLOSED 이후 기초데이터 변경
+
+CLOSED 라운드에서도 기초데이터는 바뀔 수 있다. `base_data_import`에는 `guard_no_closed_round`가
+없고, 보호 트리거는 **명시 DELETE만** 막아 단일값 경로의 `INSERT OR REPLACE`가 통과하기 때문이다
+(`08_excel_import.md` §CLOSED 라운드 guard). 이때 `results`는 옛 총점 그대로 남는다.
+
+**판정** — `rounds.rs::needs_recalc_expr` 한 곳에만 있다(단일 출처):
+
+```sql
+CASE WHEN {r}.status = 'CLOSED' AND EXISTS(
+    SELECT 1 FROM audit_log al
+    WHERE al.action = 'BASE_DATA_IMPORTED'
+      AND al.at > (SELECT MIN(res.calculated_at) FROM results res WHERE res.round_id = {r}.id)
+) THEN 1 ELSE 0 END
+```
+
+- `base_data`에 타임스탬프 컬럼이 없고 v1 스키마는 동결(`11_release_decisions.md` §7)이라
+  **감사 로그 시각**을 기준으로 삼는다.
+- **의도된 과대 근사**: `base_data`는 라운드 스코프가 아니므로 다음 라운드용 데이터를 올려도
+  현 CLOSED 라운드가 잡힐 수 있다. 재계산은 추천 상태를 보존하고(§2.4) 부작용이 없으므로
+  놓치는 쪽보다 과대 근사를 택했다.
+- 계산한 적이 없으면(`MIN(calculated_at)` = NULL) 비교가 NULL이라 false다.
+
+**행위 제한** — 표시는 안내일 뿐이고 차단은 백엔드가 한다:
+
+| 행위 | 낡은 상태에서 | 근거 |
+|------|-------------|------|
+| 추천 확정 (`recommend_result`) | **409 Conflict** | 낡은 순위로는 정원 판정 자체가 잘못된 근거 위에 선다 |
+| 라운드 마감 (`finalize_round`) | **422 Unprocessable** | 되돌릴 수 없는 확정을 낡은 총점으로 하면 안 된다 |
+| 점수 재계산 (`calculate_scores`) | 허용 — 이것이 해소 수단이다 | |
+| 조회·내보내기 | 허용 | 값이 낡았다는 사실은 `needs_recalc`로 함께 전달된다 |
+
+두 가드는 같은 문장(`rounds.rs::NEEDS_RECALC_MSG`)을 쓴다.
+프론트는 라운드 목록 배지와 결과 탭 경고로 표시한다(`10_frontend_backend_contract.md` §RoundRow).
+
+**재계산 책임**: 관리자에게 있다. 시스템은 자동으로 재계산하지 **않는다** —
+재계산은 순위를 바꾸는데 `recommended`는 보존되므로(§2.4), 자동화하면 이미 확정된 추천이
+정원 밖으로 밀려난 상태가 조용히 만들어진다. 관리자가 재계산을 실행하는 행위가 그 검토 시점이다.
+
 ---
 
 ## 3. 순위 산출

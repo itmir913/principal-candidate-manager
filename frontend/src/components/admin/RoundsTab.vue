@@ -57,6 +57,13 @@
                   {{ roundStatusLabel(r.status) }}
                 </span>
 
+                <!-- 재계산 필요 배지 (F-017). 배지·pill 라벨이라 text-xs 예외 적용 -->
+                <span
+                  v-if="r.needs_recalc"
+                  class="text-xs font-semibold rounded-full whitespace-nowrap"
+                  style="padding: 3px 9px; background: #fef3c7; color: #b45309; border: 1px solid #fde68a;"
+                >재계산 필요</span>
+
                 <span class="text-base" style="color: #94a3b8;">
                   <template v-if="r.status === 'OPEN'">{{ fmtDt(r.opened_at) }}</template>
                   <template v-else-if="r.status === 'CLOSED'">{{ fmtDt(r.closed_at) }}</template>
@@ -277,6 +284,16 @@
 
           <!-- ── 결과 탭 ──────────────────────────────────── -->
           <div v-if="view === 'results'">
+            <!-- 재계산 필요 경고 (F-017) — 마감 후 기초데이터가 바뀌면 총점이 낡는다.
+                 백엔드도 추천 확정·마감을 막지만, 여기서 먼저 알린다. -->
+            <div
+              v-if="selected.needs_recalc"
+              class="text-base rounded-lg mb-3"
+              style="padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e;"
+            >
+              라운드 종료 후 기초 데이터가 변경되어 <strong>표시된 총점·순위가 최신이 아닙니다.</strong>
+              위의 "점수 전체 재계산"을 눌러 반영하세요. 재계산 전에는 추천 확정과 라운드 마감이 차단됩니다.
+            </div>
             <div class="sticky top-0 z-10" style="padding: 10px 0; margin: -10px 0 6px;">
               <div class="flex items-center gap-3 mb-3 flex-wrap">
                 <select

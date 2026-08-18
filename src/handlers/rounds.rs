@@ -20,14 +20,61 @@ pub struct RoundRow {
     pub opened_at: String,
     pub closed_at: Option<String>,
     pub finalized_at: Option<String>,
+    /// 마지막 점수 계산 이후 기초데이터가 바뀌었는가 (F-017). 자세한 판정은 `needs_recalc_expr`.
+    pub needs_recalc: bool,
 }
+
+/// `results` 가 현재 기초데이터보다 낡았는지 판정하는 SQL 조각 — **단일 출처**.
+/// `{r}` 자리에 rounds 테이블 별칭이 들어간다.
+///
+/// 왜 이렇게 파생하는가: `base_data` 에는 타임스탬프 컬럼이 없고 v1 스키마는 출시 후
+/// 동결(`11_release_decisions.md` §7)이라 컬럼을 추가할 수 없다. 대신 이미 기록되는
+/// 감사 로그(`BASE_DATA_IMPORTED`)의 시각과 `results.calculated_at` 을 비교한다.
+///
+/// 한계(의도된 과대 근사): `base_data` 는 라운드 스코프가 아니므로 다음 라운드용 데이터를
+/// 올려도 현 CLOSED 라운드가 "재계산 필요"로 잡힐 수 있다. 재계산은 추천 상태를 보존하고
+/// (§2.4) 부작용이 없으므로, 놓치는 쪽보다 과대 근사를 택했다.
+///
+/// 점수를 계산한 적이 없으면(`MIN(calculated_at)` = NULL) 비교가 NULL 이라 false 다 —
+/// 낡을 결과 자체가 없기 때문이다.
+fn needs_recalc_expr(r: &'static str) -> String {
+    format!(
+        "(CASE WHEN {r}.status = 'CLOSED' AND EXISTS(
+             SELECT 1 FROM audit_log al
+             WHERE al.action = 'BASE_DATA_IMPORTED'
+               AND al.at > (SELECT MIN(res.calculated_at) FROM results res WHERE res.round_id = {r}.id)
+         ) THEN 1 ELSE 0 END)"
+    )
+}
+
+/// 추천 확정·마감 가드용 단일 판정 (F-017). 호출자는 라운드 존재를 이미 확인한 상태여야 한다.
+pub(crate) async fn needs_recalc(
+    conn: &mut sqlx::SqliteConnection,
+    round_id: i64,
+) -> Result<bool, ApiError> {
+    sqlx::query_scalar(&format!(
+        "SELECT {} FROM rounds r WHERE r.id = ?",
+        needs_recalc_expr("r")
+    ))
+    .bind(round_id)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+/// 가드가 돌려줄 안내 — 추천 확정과 마감이 같은 문장을 쓴다.
+pub(crate) const NEEDS_RECALC_MSG: &str =
+    "기초데이터가 변경되어 점수가 최신이 아닙니다. 점수를 재계산한 뒤 다시 시도하세요.";
 
 pub async fn list_rounds(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<RoundRow>>, ApiError> {
-    let rows = sqlx::query_as::<_, RoundRow>(
-        "SELECT id, status, opened_at, closed_at, finalized_at FROM rounds ORDER BY id DESC",
-    )
+    let rows = sqlx::query_as::<_, RoundRow>(&format!(
+        "SELECT r.id, r.status, r.opened_at, r.closed_at, r.finalized_at,
+                {} AS needs_recalc
+         FROM rounds r ORDER BY r.id DESC",
+        needs_recalc_expr("r")
+    ))
     .fetch_all(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -37,9 +84,12 @@ pub async fn list_rounds(
 pub async fn get_current_round(
     State(state): State<AppState>,
 ) -> Result<Json<Option<RoundRow>>, ApiError> {
-    let row = sqlx::query_as::<_, RoundRow>(
-        "SELECT id, status, opened_at, closed_at, finalized_at FROM rounds WHERE status = 'OPEN' LIMIT 1",
-    )
+    let row = sqlx::query_as::<_, RoundRow>(&format!(
+        "SELECT r.id, r.status, r.opened_at, r.closed_at, r.finalized_at,
+                {} AS needs_recalc
+         FROM rounds r WHERE r.status = 'OPEN' LIMIT 1",
+        needs_recalc_expr("r")
+    ))
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -289,6 +339,12 @@ pub async fn finalize_round(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if status.as_deref() != Some("CLOSED") {
         return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없거나 CLOSED 상태가 아닙니다".into()));
+    }
+
+    // 기초데이터가 계산 이후에 바뀌었으면 마감할 수 없다 (F-017).
+    // 낡은 총점·순위로 결과를 확정하면 되돌릴 수 없다.
+    if needs_recalc(&mut *tx, id).await? {
+        return Err((StatusCode::UNPROCESSABLE_ENTITY, NEEDS_RECALC_MSG.into()));
     }
 
     // 미결정 지원 검증 — 추천도 제외도 되지 않은 지원이 있으면 마감 불가.

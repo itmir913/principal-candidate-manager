@@ -293,7 +293,8 @@ Body:
 
 ### RoundRow
 ```json
-{"id": 1, "status": "OPEN|CLOSED|FINALIZED", "opened_at": "...", "closed_at": null, "finalized_at": null}
+{"id": 1, "status": "OPEN|CLOSED|FINALIZED", "opened_at": "...", "closed_at": null, "finalized_at": null,
+ "needs_recalc": false}
 ```
 
 ### ResultRow
