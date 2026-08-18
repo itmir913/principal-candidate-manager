@@ -69,6 +69,20 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 > **소스 가드**로 특정 회귀(F-013·F-014)를 잡습니다. 다만 컴포넌트를 실제로
 > 렌더링하지는 않으므로, 화면 동작 자체는 여전히 사람이 확인해야 합니다.
 
+### 릴리스
+
+버전은 `Cargo.toml` 하나가 진실의 출처다(`publish.yml`이 여기서 읽는다).
+변경 내역은 `CHANGELOG.md`에 **0.2.13부터** 관리한다.
+
+1. `Cargo.toml` 버전 상향 + `CHANGELOG.md`에 해당 절 작성 → `Version X.Y.Z` 커밋
+2. CI 초록 확인 후 `git tag X.Y.Z && git push origin X.Y.Z`
+   (CI는 `master` push·PR에만 걸린다 — 태그 push로는 돌지 않는다)
+3. Actions 탭에서 `publish.yml` 수동 실행 → **초안(draft) 릴리스**가 만들어진다
+4. 초안 본문에 `CHANGELOG.md`의 해당 절을 붙여 넣고 공개
+
+**배포 시점은 학사 일정을 본다.** 선발(라운드) 진행 중 업그레이드는 관리자의 작업을
+가로막을 수 있다 — 0.2.13의 "업그레이드 직후 달라지는 것"이 그 사례다.
+
 ### 커밋 규약
 
 - **GPG 서명 필수.** `--no-gpg-sign` / `--no-verify` 우회 금지
