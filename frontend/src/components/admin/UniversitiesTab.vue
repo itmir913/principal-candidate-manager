@@ -610,8 +610,12 @@ const QuotaInput = defineComponent({
               // 관리자 모르게 1 로 바뀌었고 음수는 그대로 통과했다.
               // 유효하지 않으면 null 을 올려보내 저장 버튼이 잠기게 한다.
               onInput: (e) => {
-                const n = parseInt(e.target.value, 10)
-                emit('update:quota', Number.isFinite(n) ? n : null)
+                // parseInt 는 "5.7" → 5, "2e3" → 2 로 **잘라낸다**. type=number 는 이 둘을
+                // 유효한 입력으로 받으므로 조용한 절단이 된다 — Number 로 통째 해석하고
+                // 정수가 아니면 null 을 올려 저장을 막는다.
+                const s = e.target.value.trim()
+                const n = s === '' ? NaN : Number(s)
+                emit('update:quota', Number.isInteger(n) ? n : null)
               },
             }),
             h('span', { style: 'font-size: 16px; color: #64748b;' }, '명'),

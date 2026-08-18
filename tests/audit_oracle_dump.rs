@@ -1,8 +1,8 @@
 //! 감사 산출물 — 독립 오라클(E4) 대조용 실측값 덤프.
 //!
-//! `pcm-md/oracle/scenarios.json` 을 읽어 각 시나리오를 in-memory DB에 그대로 심고,
+//! `tools/oracle/scenarios.json` 을 읽어 각 시나리오를 in-memory DB에 그대로 심고,
 //! 실제 구현(`run_calculate_scores_on_conn` + `get_results` 핸들러)이 낸
-//! total_score / ranking / track_rank 를 `pcm-md/oracle/actual.json` 으로 덤프한다.
+//! total_score / ranking / track_rank 를 `tools/oracle/actual.json` 으로 덤프한다.
 //!
 //! 오라클(파이썬)이 같은 입력으로 계산한 값과 `compare.py` 가 대조한다.
 //!
@@ -17,7 +17,7 @@
 //! 일반 `cargo test` 실행에 영향을 주지 않기 위함.
 //!
 //! 실행:
-//!   PCM_ORACLE_DIR=/c/Users/user/Desktop/pcm-md/oracle cargo test --test audit_oracle_dump -- --nocapture
+//!   npm run test:oracle    # 또는 PCM_ORACLE_DIR=tools/oracle cargo test --test audit_oracle_dump
 
 mod common;
 

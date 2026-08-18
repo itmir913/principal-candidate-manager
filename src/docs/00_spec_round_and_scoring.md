@@ -287,9 +287,15 @@ CASE WHEN {r}.status = 'CLOSED' AND EXISTS(
 | 행위 | 낡은 상태에서 | 근거 |
 |------|-------------|------|
 | 추천 확정 (`recommend_result`) | **409 Conflict** | 낡은 순위로는 정원 판정 자체가 잘못된 근거 위에 선다 |
+| **자동 추천 확정** (`run_auto_recommend` — 전체·대학별 both) | **409 Conflict** | 여기가 더 강한 자리다. `ranking`·`track_rank`만 보고 `recommended=1`을 다수 행에 한꺼번에 쓴다 |
 | 라운드 마감 (`finalize_round`) | **422 Unprocessable** | 되돌릴 수 없는 확정을 낡은 총점으로 하면 안 된다 |
 | 점수 재계산 (`calculate_scores`) | 허용 — 이것이 해소 수단이다 | |
+| 추천 취소 (`unrecommend_result`) | 허용 | 되돌리는 행위다. 낡은 점수를 근거로 삼지 않는다 |
+| 미선발 처리 (`exclude_application`) | 허용 | 점수가 아니라 사유 기반 관리자 판단이다(§6.2). 낡은 총점과 무관하며, 막으면 마감 전 정리 작업이 멈춘다 |
 | 조회·내보내기 | 허용 | 값이 낡았다는 사실은 `needs_recalc`로 함께 전달된다 |
+
+이 표는 **닫힌 목록**이다. 추천을 쓰는 경로를 새로 만들면 여기에 행을 추가하고 가드를 넣어야 한다
+(2026-08-18 검증에서 자동 추천이 빠져 있던 것이 발견됐다 — F-030).
 
 두 가드는 같은 문장(`rounds.rs::NEEDS_RECALC_MSG`)을 쓴다.
 프론트는 라운드 목록 배지와 결과 탭 경고로 표시한다(`10_frontend_backend_contract.md` §RoundRow).

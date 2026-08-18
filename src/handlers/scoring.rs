@@ -1594,6 +1594,13 @@ async fn run_auto_recommend(
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
     }
 
+    // 1a. 기초데이터가 계산 이후에 바뀌었으면 자동 추천도 막는다 (F-017 / F-030).
+    //     수동 경로(recommend_result)보다 차단 이유가 더 강한 자리다 — 여기서는
+    //     ranking·track_rank 만 보고 recommended=1 을 다수 행에 한꺼번에 쓴다.
+    if crate::handlers::rounds::needs_recalc(&mut *tx, round_id).await? {
+        return Err((StatusCode::CONFLICT, crate::handlers::rounds::NEEDS_RECALC_MSG.into()));
+    }
+
     // 1b. 대학 지정 시 존재 확인 (Fail-Fast — 없는 대학을 조용히 빈 결과로 처리하지 않는다)
     if let Some(uid) = univ_filter {
         let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM universities WHERE id = ?")

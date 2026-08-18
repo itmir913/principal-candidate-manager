@@ -203,7 +203,11 @@ function exactDecimal(raw) {
   report('tieSet univ 보기 (2-90 / U-16)', badUniv, rows, sampleU)
 }
 
-// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 ─────────────────────
+// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 (문서용 모사 — 회귀 방어는 3c) ──
+// 주의: F-014 수정 이후 이 검사는 **구조적으로 실패할 수 없다.** tieAll·shownAll 이 둘 다
+// 라운드 전체에서 파생되고 필터 루프는 카운터에만 쓰이기 때문이다(변이 M5 로 실증됐다 —
+// 컴포넌트를 되돌려도 여기는 0건이고 3c 만 FAIL). 남겨 두는 이유는 "고친 뒤의 올바른
+// 동작이 무엇인가"를 실행 가능한 형태로 기록하기 위해서다. **회귀 방어는 3c 가 한다.**
 // F-014 수정(2026-08-18): RoundsTab.loadResults 가 모집단위 필터를 **서버에 넘기지 않는다.**
 // 라운드 전체를 받아 tieSet 은 전체로 계산하고, 표시만 visibleResults 로 좁힌다.
 // 이 검사는 그 동작을 모사해 "필터를 걸어도 대학 전체 동점 표식이 유지되는가"를 본다.
@@ -334,7 +338,7 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
     if (st.seq_no != null && st.seq_no <= 0) negSeq++
   }
   report('studentsByRound: 재학생 seq_no NULL (?? 999 발동)', nullSeq, total, '')
-  console.log(`        참고: 시나리오상 seq_no <= 0 재학생 ${negSeq}명 (JSON add_enrolled 는 범위 미검증 — P2 U-28)`)
+  console.log(`        참고: 시나리오상 seq_no <= 0 재학생 ${negSeq}명 (JSON add_enrolled 는 seq_no >= 1 을 강제한다 — F-012 수정 완료)`)
 }
 
 // ── 6. AreasTab totalMaxScore — f64 reduce 합산 vs 정확한 정수 합 ─

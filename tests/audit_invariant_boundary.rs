@@ -121,9 +121,13 @@ async fn max_score_boundary_caps_exactly() {
 
 // ── 음수 정원이 엑셀 산출물에 그대로 기록된다 (U-29 / U-30 후속) ──
 
-/// 불변식(현행 동작 고정): JSON API 로 저장된 음수 정원은 거부되지 않고
-/// 엑셀 "모집단위 정원"·"대학 전체 정원" 열에 **음수 그대로** 기록되며,
-/// 잔여 열만 `.max(0)` 으로 0 이 된다. 입력 관문이 생기면 이 테스트가 깨져야 한다.
+/// 불변식(현행 동작 고정): **raw 데이터에 이미 음수 정원이 있으면**(관문 이전에 저장된
+/// 레거시 행, 직접 SQL 등) 엑셀 "모집단위 정원"·"대학 전체 정원" 열에 **음수 그대로**
+/// 기록되며, 잔여 열만 `.max(0)` 으로 0 이 된다.
+///
+/// 픽스처가 raw SQL 로 심는 것이 의도다 — JSON API 관문(`validate_quota`, F-011)은
+/// `tests/audit_repro_quota_range.rs` 가 담당한다. 관문이 생겨도 이 테스트는 깨지지
+/// 않아야 하며(레거시 데이터는 그대로 남는다), 그 사실을 여기 명시해 둔다.
 #[tokio::test]
 async fn negative_quota_is_written_verbatim_into_excel() {
     let pool = common::create_test_pool().await;

@@ -292,7 +292,7 @@
               style="padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e;"
             >
               라운드 종료 후 기초 데이터가 변경되어 <strong>표시된 총점·순위가 최신이 아닙니다.</strong>
-              위의 "점수 전체 재계산"을 눌러 반영하세요. 재계산 전에는 추천 확정과 라운드 마감이 차단됩니다.
+              위의 "점수 전체 재계산"을 눌러 반영하세요. 재계산 전에는 추천 확정(수동·자동)과 라운드 마감이 차단됩니다.
             </div>
             <div class="sticky top-0 z-10" style="padding: 10px 0; margin: -10px 0 6px;">
               <div class="flex items-center gap-3 mb-3 flex-wrap">
@@ -1175,7 +1175,11 @@ async function handleCalculate() {
     const res = await calculateScores(roundId)
     if (selected.value?.id !== roundId) return
     calcMsg.value = { ok: true, text: `점수 재계산 완료: ${res.calculated}건` }
-    await loadResults()
+    // 라운드 목록도 다시 받는다 — needs_recalc 가 여기서 오므로, 갱신하지 않으면
+    // 재계산 후에도 "재계산 필요" 배지·경고가 남아 UI 가 거짓을 말한다 (F-032).
+    await Promise.all([loadResults(), loadRounds()])
+    const fresh = rounds.value.find(r => r.id === roundId)
+    if (fresh) selected.value = fresh
   } catch (e) {
     calcMsg.value = { ok: false, text: e.response?.data || e.message }
   } finally {
