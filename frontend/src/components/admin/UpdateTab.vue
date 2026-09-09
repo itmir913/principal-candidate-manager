@@ -7,181 +7,9 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">최신 버전 확인 및 데이터 백업·복원 안내</h1>
     </div>
 
-    <!-- 버전 상태 카드 -->
-    <div
-      class="rounded-xl mb-6"
-      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
-    >
-      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
-        <h2 class="text-base font-semibold" style="color: #1e293b;">버전 정보</h2>
-        <div class="flex items-center gap-2">
-          <a
-            v-if="!loading && !error && !isLatest && releaseUrl"
-            :href="releaseUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-center gap-1.5 text-base font-medium"
-            style="background:#2563eb;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;color:white;text-decoration:none;"
-          >
-            <Download :size="14" /> 최신 버전 다운로드
-          </a>
-          <button
-            @click="checkUpdate"
-            :disabled="loading"
-            class="flex items-center gap-1.5 text-base disabled:opacity-40"
-            style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#64748b;"
-          >
-            <RefreshCw :size="14" /> 다시 확인
-          </button>
-        </div>
-      </div>
-
-      <div class="px-6 py-5">
-        <!-- 로딩 -->
-        <div v-if="loading" class="flex items-center gap-3" style="color: #94a3b8;">
-          <div class="animate-spin rounded-full" style="width:18px;height:18px;border:2px solid #e2e8f0;border-top-color:#3b82f6;"></div>
-          <span class="text-base">버전 정보를 불러오는 중...</span>
-        </div>
-
-        <!-- 오류 -->
-        <div v-else-if="error" class="flex items-center gap-3 p-4 rounded-lg" style="background:#fef2f2; border: 1px solid #fecaca;">
-          <AlertCircle :size="18" style="color:#dc2626; flex-shrink:0;" />
-          <div>
-            <p class="text-base font-medium" style="color:#991b1b;">버전 확인 실패</p>
-            <p class="text-base" style="color:#b91c1c; margin-top:2px;">{{ error }}</p>
-          </div>
-        </div>
-
-        <!-- 최신 버전 -->
-        <div v-else-if="isLatest" class="flex items-center gap-4">
-          <div
-            class="flex items-center justify-center rounded-full flex-shrink-0"
-            style="width:40px;height:40px;background:#dcfce7;"
-          >
-            <CheckCircle2 :size="22" style="color:#16a34a;" />
-          </div>
-          <div>
-            <p class="text-base font-semibold" style="color:#15803d;">최신 버전입니다</p>
-            <p class="text-base mt-0.5" style="color:#64748b;">
-              현재 버전: <span class="font-mono font-medium" style="color:#1e293b;">v{{ currentVersion }}</span>
-            </p>
-          </div>
-        </div>
-
-        <!-- 업데이트 필요 -->
-        <div v-else class="flex items-center gap-4">
-          <div
-            class="flex items-center justify-center rounded-full flex-shrink-0"
-            style="width:40px;height:40px;background:#fef3c7;"
-          >
-            <RefreshCw :size="20" style="color:#d97706;" />
-          </div>
-          <div class="flex-1">
-            <p class="text-base font-semibold" style="color:#92400e;">새 버전이 있습니다</p>
-            <div class="flex items-center gap-3 mt-1 flex-wrap">
-              <span class="text-base" style="color:#64748b;">
-                현재: <span class="font-mono font-medium" style="color:#1e293b;">v{{ currentVersion }}</span>
-              </span>
-              <span style="color:#cbd5e1;">→</span>
-              <span class="text-base" style="color:#64748b;">
-                최신: <span class="font-mono font-semibold" style="color:#1d4ed8;">v{{ latestVersion }}</span>
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 최신 릴리스 노트 -->
-    <div
-      v-if="!loading && !error && releaseNotes"
-      class="rounded-xl mb-6"
-      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
-    >
-      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
-        <h2 class="text-base font-semibold" style="color: #1e293b;">
-          최신 버전 변경 내용
-          <span class="font-mono text-base font-normal ml-2" style="color:#64748b;">v{{ latestVersion }}</span>
-        </h2>
-        <a
-          v-if="releaseUrl"
-          :href="releaseUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center gap-1 text-base"
-          style="color:#3b82f6;text-decoration:none;"
-        >
-          <ExternalLink :size="13" /> GitHub
-        </a>
-      </div>
-      <div
-        class="px-6 py-5 prose prose-slate max-w-none
-               prose-headings:font-semibold
-               prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
-               prose-p:text-base prose-li:text-base prose-li:my-0
-               prose-ul:my-2 prose-ol:my-2
-               prose-hr:my-4"
-        v-html="renderedNotes"
-      />
-    </div>
-
-    <!-- 업데이트 방법 (업데이트가 있거나, 자동 확인 자체에 실패했을 때) -->
-    <div
-        v-if="!loading && (error || !isLatest)"
-        class="rounded-xl mb-6"
-        style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
-    >
-      <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h2 class="text-base font-semibold" style="color: #1e293b;">업데이트 방법</h2>
-      </div>
-      <div class="px-6 py-5 space-y-3">
-        <div v-if="error" class="rounded-lg text-base mb-2" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
-          이 프로그램은 인터넷 연결이 필요 없는 학내 LAN에서 동작하도록 설계되었습니다. 이 화면의 자동 버전 확인은 인터넷이 되어야 동작하므로, 인터넷이 차단된 PC에서는 방금처럼 "버전 확인 실패"로 표시될 수 있습니다. 새 버전이 나왔다는 소식을 다른 경로로 전달받았다면, 아래 절차는 그대로 따르면 됩니다.
-        </div>
-        <div class="flex gap-3">
-          <span
-              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
-          >1</span>
-          <p class="text-base" style="color:#374151;">아래 <strong>백업 파일 다운로드</strong> 버튼을 눌러 데이터를 먼저 백업합니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
-          >2</span>
-          <p class="text-base" style="color:#374151;">
-            맨 위 <strong>최신 버전 다운로드</strong> 버튼(표시되지 않으면 <strong>설정</strong> 탭 <strong>About</strong>의 <strong>GitHub</strong> 링크 → Releases)으로 이동해 최신 릴리스의 ZIP 파일을 내려받고 압축을 풉니다.
-            학교 PC에 인터넷이 안 되면, 인터넷이 되는 다른 PC에서 내려받아 USB로 옮겨도 됩니다.
-          </p>
-        </div>
-        <div class="flex gap-3">
-          <span
-              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
-          >3</span>
-          <p class="text-base" style="color:#374151;">시스템 트레이 아이콘을 우클릭한 후 <strong>종료</strong>를 선택해 프로그램을 완전히 닫습니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
-          >4</span>
-          <p class="text-base" style="color:#374151;">기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">principal-candidate-manager.exe</code>를 새 파일로 교체합니다. <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">pcm\</code> 폴더는 그대로 두세요 — 데이터는 그 폴더 안에 있고 실행 파일 교체와는 무관합니다.</p>
-        </div>
-        <div class="flex gap-3">
-          <span
-              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
-              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
-          >5</span>
-          <p class="text-base" style="color:#374151;">프로그램을 다시 실행하면 업데이트가 적용됩니다.</p>
-        </div>
-      </div>
-    </div>
-
     <!-- 데이터 백업 및 복원 -->
     <div
-      class="rounded-xl"
+      class="rounded-xl mb-6"
       style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
     >
       <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
@@ -289,6 +117,178 @@
           </p>
         </div>
       </div>
+    </div>
+
+    <!-- 버전 상태 카드 -->
+    <div
+      class="rounded-xl mb-6"
+      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
+    >
+      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
+        <h2 class="text-base font-semibold" style="color: #1e293b;">버전 정보</h2>
+        <div class="flex items-center gap-2">
+          <a
+            v-if="!loading && !error && !isLatest && releaseUrl"
+            :href="releaseUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-1.5 text-base font-medium"
+            style="background:#2563eb;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;color:white;text-decoration:none;"
+          >
+            <Download :size="14" /> 최신 버전 다운로드
+          </a>
+          <button
+            @click="checkUpdate"
+            :disabled="loading"
+            class="flex items-center gap-1.5 text-base disabled:opacity-40"
+            style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#64748b;"
+          >
+            <RefreshCw :size="14" /> 다시 확인
+          </button>
+        </div>
+      </div>
+
+      <div class="px-6 py-5">
+        <!-- 로딩 -->
+        <div v-if="loading" class="flex items-center gap-3" style="color: #94a3b8;">
+          <div class="animate-spin rounded-full" style="width:18px;height:18px;border:2px solid #e2e8f0;border-top-color:#3b82f6;"></div>
+          <span class="text-base">버전 정보를 불러오는 중...</span>
+        </div>
+
+        <!-- 오류 -->
+        <div v-else-if="error" class="flex items-center gap-3 p-4 rounded-lg" style="background:#fef2f2; border: 1px solid #fecaca;">
+          <AlertCircle :size="18" style="color:#dc2626; flex-shrink:0;" />
+          <div>
+            <p class="text-base font-medium" style="color:#991b1b;">버전 확인 실패</p>
+            <p class="text-base" style="color:#b91c1c; margin-top:2px;">{{ error }}</p>
+          </div>
+        </div>
+
+        <!-- 최신 버전 -->
+        <div v-else-if="isLatest" class="flex items-center gap-4">
+          <div
+            class="flex items-center justify-center rounded-full flex-shrink-0"
+            style="width:40px;height:40px;background:#dcfce7;"
+          >
+            <CheckCircle2 :size="22" style="color:#16a34a;" />
+          </div>
+          <div>
+            <p class="text-base font-semibold" style="color:#15803d;">최신 버전입니다</p>
+            <p class="text-base mt-0.5" style="color:#64748b;">
+              현재 버전: <span class="font-mono font-medium" style="color:#1e293b;">v{{ currentVersion }}</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- 업데이트 필요 -->
+        <div v-else class="flex items-center gap-4">
+          <div
+            class="flex items-center justify-center rounded-full flex-shrink-0"
+            style="width:40px;height:40px;background:#fef3c7;"
+          >
+            <RefreshCw :size="20" style="color:#d97706;" />
+          </div>
+          <div class="flex-1">
+            <p class="text-base font-semibold" style="color:#92400e;">새 버전이 있습니다</p>
+            <div class="flex items-center gap-3 mt-1 flex-wrap">
+              <span class="text-base" style="color:#64748b;">
+                현재: <span class="font-mono font-medium" style="color:#1e293b;">v{{ currentVersion }}</span>
+              </span>
+              <span style="color:#cbd5e1;">→</span>
+              <span class="text-base" style="color:#64748b;">
+                최신: <span class="font-mono font-semibold" style="color:#1d4ed8;">v{{ latestVersion }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 업데이트 방법 (업데이트가 있거나, 자동 확인 자체에 실패했을 때) -->
+    <div
+        v-if="!loading && (error || !isLatest)"
+        class="rounded-xl mb-6"
+        style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
+    >
+      <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
+        <h2 class="text-base font-semibold" style="color: #1e293b;">업데이트 방법</h2>
+      </div>
+      <div class="px-6 py-5 space-y-3">
+        <div v-if="error" class="rounded-lg text-base mb-2" style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;">
+          이 프로그램은 인터넷 연결이 필요 없는 학내 LAN에서 동작하도록 설계되었습니다. 이 화면의 자동 버전 확인은 인터넷이 되어야 동작하므로, 인터넷이 차단된 PC에서는 방금처럼 "버전 확인 실패"로 표시될 수 있습니다. 새 버전이 나왔다는 소식을 다른 경로로 전달받았다면, 아래 절차는 그대로 따르면 됩니다.
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
+          >1</span>
+          <p class="text-base" style="color:#374151;">아래 <strong>백업 파일 다운로드</strong> 버튼을 눌러 데이터를 먼저 백업합니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
+          >2</span>
+          <p class="text-base" style="color:#374151;">
+            맨 위 <strong>최신 버전 다운로드</strong> 버튼(표시되지 않으면 <strong>설정</strong> 탭 <strong>About</strong>의 <strong>GitHub</strong> 링크 → Releases)으로 이동해 최신 릴리스의 ZIP 파일을 내려받고 압축을 풉니다.
+            학교 PC에 인터넷이 안 되면, 인터넷이 되는 다른 PC에서 내려받아 USB로 옮겨도 됩니다.
+          </p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
+          >3</span>
+          <p class="text-base" style="color:#374151;">시스템 트레이 아이콘을 우클릭한 후 <strong>종료</strong>를 선택해 프로그램을 완전히 닫습니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
+          >4</span>
+          <p class="text-base" style="color:#374151;">기존 <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">principal-candidate-manager.exe</code>를 새 파일로 교체합니다. <code class="font-mono px-1 py-0.5 rounded" style="background:#f1f5f9;color:#1e293b;">pcm\</code> 폴더는 그대로 두세요 — 데이터는 그 폴더 안에 있고 실행 파일 교체와는 무관합니다.</p>
+        </div>
+        <div class="flex gap-3">
+          <span
+              class="flex-shrink-0 flex items-center justify-center rounded-full text-base font-bold"
+              style="width:28px;height:28px;background:#dbeafe;color:#1d4ed8;font-size:16px;"
+          >5</span>
+          <p class="text-base" style="color:#374151;">프로그램을 다시 실행하면 업데이트가 적용됩니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 최신 릴리스 노트 -->
+    <div
+      v-if="!loading && !error && releaseNotes"
+      class="rounded-xl mb-6"
+      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
+    >
+      <div class="px-6 py-4 flex items-center justify-between" style="border-bottom: 1px solid #f1f5f9;">
+        <h2 class="text-base font-semibold" style="color: #1e293b;">
+          최신 버전 변경 내용
+          <span class="font-mono text-base font-normal ml-2" style="color:#64748b;">v{{ latestVersion }}</span>
+        </h2>
+        <a
+          v-if="releaseUrl"
+          :href="releaseUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-1 text-base"
+          style="color:#3b82f6;text-decoration:none;"
+        >
+          <ExternalLink :size="13" /> GitHub
+        </a>
+      </div>
+      <div
+        class="px-6 py-5 prose prose-slate max-w-none
+               prose-headings:font-semibold
+               prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+               prose-p:text-base prose-li:text-base prose-li:my-0
+               prose-ul:my-2 prose-ol:my-2
+               prose-hr:my-4"
+        v-html="renderedNotes"
+      />
     </div>
 
   </div>
