@@ -20,16 +20,23 @@
           padding: collapsed ? '0' : '0 14px 0 16px',
         }"
       >
-        <div v-if="!collapsed" class="flex items-center gap-2 whitespace-nowrap">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- min-w-0 + truncate: 제목이 길어도 접기 버튼을 밀어내지 않는다.
+             학교 이름을 넣으면 기본 문구보다 훨씬 길어져 버튼이 사이드바 밖으로 나갔다.
+             잘린 제목은 title 속성으로 전체를 볼 수 있게 한다. -->
+        <div v-if="!collapsed" class="flex items-center gap-2 min-w-0 flex-1">
+          <svg class="flex-shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
             <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
-          <span class="text-base font-bold" style="color: #1e293b;">{{ appInfo.title }}</span>
+          <span
+            class="text-base font-bold truncate"
+            style="color: #1e293b;"
+            :title="appInfo.title"
+          >{{ appInfo.title }}</span>
         </div>
         <button
           @click="collapsed = !collapsed"
-          class="flex items-center justify-center p-1.5 rounded-md"
+          class="flex items-center justify-center p-1.5 rounded-md flex-shrink-0"
           style="background: none; border: none; cursor: pointer; color: #94a3b8;"
         >
           <ChevronRight v-if="collapsed" :size="18" />
