@@ -46,4 +46,6 @@ export const AUDIT_ACTION_LABELS = {
   DB_BACKUP_DOWNLOADED:     '백업 파일 다운로드',
   TEACHER_PASSWORD_CHANGED: '담임 비밀번호 변경',
   ADMIN_PASSWORD_CHANGED:   '관리자 비밀번호 변경',
+  // 설정
+  APP_INFO_UPDATED:         '프로그램 제목 변경',
 }
