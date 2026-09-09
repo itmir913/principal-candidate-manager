@@ -33,7 +33,50 @@
             </p>
         </div>
 
-        <!-- Q3 -->
+        <!-- Q3: 두 프로그램 동시 운영 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
+            <p class="font-bold text-slate-700 mb-2">
+                <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
+                인원 제한이 있는 대학과 없는 대학을 나눠서 운영할 수 있나요?
+            </p>
+            <p class="text-slate-600 leading-relaxed mb-3">
+                프로그램을 <strong>두 벌 설치해 동시에 운영</strong>하면 됩니다. 학교장추천 인원이 정해진 대학과 그렇지
+                않은 대학은 관리 방식이 달라서, 한 프로그램에 섞어 두면 전형요소 설정이 서로 발목을 잡습니다.
+            </p>
+            <p class="text-slate-600 leading-relaxed mb-3">
+                서로 다른 폴더에 각각 설치한 뒤, 각 폴더의
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm/config.json</code>
+                에서 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">"port"</code>
+                를 서로 다르게 지정합니다. 예를 들어 한쪽은
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">8080</code>,
+                다른 쪽은 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">8081</code>
+                로 둡니다. 포트가 같으면 나중에 켠 프로그램이 시작하지 못합니다.
+            </p>
+            <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3 print-keep-bg">
+                <p class="font-bold text-slate-700 mb-2">운영 방식 예시</p>
+                <ul class="list-disc pl-5 space-y-2 text-slate-600 leading-relaxed">
+                    <li>
+                        <strong>인원 제한이 있는 대학</strong>(포트 8080) — 전형요소를 모두 등록하고 점수 기준표와
+                        기초 데이터를 갖춥니다. 정원이 걸린 만큼 순위가 정확해야 하므로 설정을 완전히 마칩니다.
+                    </li>
+                    <li>
+                        <strong>인원 제한이 없는 대학</strong>(포트 8081) — 대학·모집단위와 내신 정도만 설정합니다.
+                        정원 경쟁이 없어 세부 전형요소가 필요 없으므로, 담임교사는 <strong>학생이 어느 대학에
+                        지원하는지만 입력</strong>하면 됩니다.
+                    </li>
+                </ul>
+            </div>
+            <p class="text-slate-600 leading-relaxed">
+                두 프로그램은 데이터가 완전히 분리됩니다(각 폴더의
+                <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded print-keep-bg">pcm</code> 폴더).
+                담임교사가 어느 쪽에 접속했는지 헷갈리지 않도록,
+                <strong>설정</strong> 탭에서 프로그램마다 제목과 설명을 다르게 지정하십시오
+                (예: 설명에 &ldquo;인원 제한 있는 대학&rdquo; / &ldquo;인원 제한 없는 대학&rdquo;).
+                작업 표시줄 아이콘에 마우스를 올리면 제목과 포트 번호가 함께 표시됩니다.
+            </p>
+        </div>
+
+        <!-- Q4 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -45,7 +88,7 @@
             </p>
         </div>
 
-        <!-- Q4 -->
+        <!-- Q5 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -61,7 +104,7 @@
             </p>
         </div>
 
-        <!-- Q5 -->
+        <!-- Q6 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -78,7 +121,7 @@
             </p>
         </div>
 
-        <!-- Q6 -->
+        <!-- Q7 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -97,7 +140,7 @@
             </p>
         </div>
 
-        <!-- Q7 -->
+        <!-- Q8 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -115,7 +158,7 @@
             </p>
         </div>
 
-        <!-- Q8 -->
+        <!-- Q9 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -130,7 +173,7 @@
             </p>
         </div>
 
-        <!-- Q9 -->
+        <!-- Q10 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -153,7 +196,7 @@
             </p>
         </div>
 
-        <!-- Q10 -->
+        <!-- Q11 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -170,7 +213,7 @@
             </p>
         </div>
 
-        <!-- Q11 -->
+        <!-- Q12 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
@@ -186,7 +229,7 @@
             </p>
         </div>
 
-        <!-- Q12 -->
+        <!-- Q13 -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg print-keep-bg">
             <p class="font-bold text-slate-700 mb-2">
                 <span class="inline-block bg-indigo-100 text-indigo-700 border border-indigo-200 rounded px-2 py-0.5 text-base font-bold mr-2 print-keep-bg">Q</span>
