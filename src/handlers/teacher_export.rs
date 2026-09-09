@@ -76,7 +76,10 @@ fn build_csv(rows: &[ResultRow], with_round: bool) -> Result<Vec<u8>, ApiError> 
     });
 
     let mut wtr = csv::Writer::from_writer(Vec::new());
-    wtr.write_record(["학번", "학년", "반", "번호", "이름", "선발결과"])
+    // "학생코드"는 저장소 표준 용어다 — 스키마 컬럼명(student_code)이자 학생 명단·기초데이터
+    // 엑셀 헤더가 모두 이 낱말을 쓴다(students.rs, area_data.rs, scoring.rs). 담임이 다른
+    // 파일과 대조할 때 같은 열이 다른 이름으로 보이면 안 된다.
+    wtr.write_record(["학생코드", "학년", "반", "번호", "이름", "선발결과"])
         .map_err(csv_err)?;
 
     for sid in order {

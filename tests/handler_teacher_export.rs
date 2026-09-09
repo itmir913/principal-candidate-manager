@@ -174,7 +174,7 @@ async fn columns_are_limited_to_delivery_needs() {
     let text = round_csv(&pool, 3, 1, rid).await;
 
     let header = text.lines().next().unwrap().trim_start_matches('\u{feff}');
-    assert_eq!(header, "학번,학년,반,번호,이름,선발결과");
+    assert_eq!(header, "학생코드,학년,반,번호,이름,선발결과");
     assert!(!text.contains("총점"), "총점 열이 있으면 안 된다");
     assert!(!text.contains("순위"), "순위 열이 있으면 안 된다");
 }
