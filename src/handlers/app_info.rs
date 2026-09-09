@@ -32,6 +32,13 @@ pub const MAX_DESC_LEN: usize = 60;
 pub struct AppInfo {
     pub title: String,
     pub desc: String,
+    /// 관리자가 제목을 실제로 지정했는가. 기본 문구를 쓰고 있는 상태와 구분한다.
+    ///
+    /// 화면 안의 "설치본 이름" 카드는 인스턴스가 둘 이상일 때 어느 쪽인지 가리는 장치다.
+    /// 설정하지 않았다면 가릴 대상이 없고, 기본 문구는 고정 제품명을 쪼갠 것이라 제품 정보
+    /// 카드와 같은 말이 두 번 뜬다. 그래서 프론트는 이 값이 false 면 그 카드를 그리지 않는다.
+    /// 로그인·시작 화면과 브라우저 탭은 무엇이든 띄워야 하므로 기본 문구를 그대로 쓴다.
+    pub configured: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,8 +60,12 @@ pub async fn read_app_info(conn: &mut sqlx::SqliteConnection) -> Result<AppInfo,
 
     let pick = |k: &str| rows.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
 
+    let stored_title = pick(TITLE_KEY);
+
     Ok(AppInfo {
-        title: pick(TITLE_KEY).unwrap_or_else(|| DEFAULT_TITLE.to_string()),
+        // 제목 행의 존재 여부가 기준이다 — 설명은 비워 두는 운영이 있어 판단 근거가 못 된다
+        configured: stored_title.is_some(),
+        title: stored_title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
         desc: pick(DESC_KEY).unwrap_or_else(|| DEFAULT_DESC.to_string()),
     })
 }
@@ -132,5 +143,5 @@ pub async fn update_app_info(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(AppInfo { title, desc }))
+    Ok(Json(AppInfo { title, desc, configured: true }))
 }

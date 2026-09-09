@@ -47,6 +47,42 @@ async fn only_title_set_falls_back_to_default_desc() {
     assert_eq!(info.desc, DEFAULT_DESC);
 }
 
+/// 화면 안의 "설치본 이름" 카드는 이 값으로 표시 여부를 가른다 — 기본 문구를 쓰는 상태에서
+/// 카드를 그리면 고정 제품명과 같은 말이 두 번 뜬다.
+#[tokio::test]
+async fn configured_is_false_until_admin_sets_a_title() {
+    let pool = common::create_test_pool().await;
+
+    let Json(before) = get_app_info(app_state(pool.clone())).await.unwrap();
+    assert!(!before.configured, "지정 전에는 false");
+
+    let _ = save(&pool, "한빛고", "인원 제한 없는 대학").await.unwrap();
+
+    let Json(after) = get_app_info(app_state(pool)).await.unwrap();
+    assert!(after.configured, "지정 후에는 true");
+}
+
+/// 설명을 비운 채 제목만 지정한 경우도 "지정했다" — 판단 근거는 제목 행의 존재다.
+/// 설명으로 판단하면 학교명만 쓰는 운영에서 카드가 영영 안 뜬다.
+#[tokio::test]
+async fn configured_is_true_when_only_title_is_set() {
+    let pool = common::create_test_pool().await;
+    let _ = save(&pool, "한빛고", "").await.unwrap();
+
+    let Json(info) = get_app_info(app_state(pool)).await.unwrap();
+    assert!(info.configured);
+    assert_eq!(info.desc, "");
+}
+
+/// 저장 응답도 곧바로 configured 를 참으로 알려야 한다 — 프론트가 이 응답으로 상태를
+/// 갱신하므로, 여기서 false 가 오면 방금 이름을 지정하고도 카드가 안 뜬다.
+#[tokio::test]
+async fn update_response_reports_configured() {
+    let pool = common::create_test_pool().await;
+    let Json(saved_info) = save(&pool, "한빛고", "인원 제한 있는 대학").await.unwrap();
+    assert!(saved_info.configured);
+}
+
 // ── 저장 ──────────────────────────────────────────────────────────
 
 #[tokio::test]

@@ -29,7 +29,7 @@
             v-model="title"
             type="text"
             :maxlength="MAX_TITLE"
-            placeholder="학교장 추천자"
+            placeholder="○○고등학교 학교장추천"
             class="w-full rounded-lg text-base"
             style="padding: 10px 12px; border: 1px solid #cbd5e1;"
           />
@@ -40,7 +40,7 @@
             v-model="desc"
             type="text"
             :maxlength="MAX_DESC"
-            placeholder="선발 관리 시스템"
+            placeholder="인원 제한 없는 대학"
             class="w-full rounded-lg text-base"
             style="padding: 10px 12px; border: 1px solid #cbd5e1;"
           />
@@ -167,30 +167,33 @@ const MAX_DESC = 60
 
 const appInfo = useAppInfoStore()
 
-const title = ref(appInfo.title)
-const desc = ref(appInfo.desc)
+// 아직 지정하지 않았으면 입력칸을 비워 둔다. 기본 문구를 미리 채워 넣으면 placeholder 의
+// 예시("○○고등학교 학교장추천")가 보이지 않아, 무엇을 넣으라는 건지 알 수가 없다.
+const baseline = computed(() => (appInfo.configured
+  ? { title: appInfo.title, desc: appInfo.desc }
+  : { title: '', desc: '' }))
+
+const title = ref(baseline.value.title)
+const desc = ref(baseline.value.desc)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 
 // 앱 시작 직후 저장소가 아직 서버 응답을 못 받았으면 기본값이 들어 있다.
 // 도착하면 사용자가 손대기 전에 한해 입력칸을 채운다.
-watch(
-  () => [appInfo.title, appInfo.desc],
-  ([t, d]) => {
-    if (!dirty.value) {
-      title.value = t
-      desc.value = d
-    }
+watch(baseline, (b) => {
+  if (!dirty.value) {
+    title.value = b.title
+    desc.value = b.desc
   }
-)
+})
 
-const dirty = computed(() => title.value !== appInfo.title || desc.value !== appInfo.desc)
+const dirty = computed(() => title.value !== baseline.value.title || desc.value !== baseline.value.desc)
 const canSave = computed(() => !saving.value && dirty.value && title.value.trim().length > 0)
 
 function reset() {
-  title.value = appInfo.title
-  desc.value = appInfo.desc
+  title.value = baseline.value.title
+  desc.value = baseline.value.desc
   error.value = ''
   saved.value = false
 }

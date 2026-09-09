@@ -25,8 +25,28 @@
       <ProductInfoCard :version="data.version" />
 
       <!-- ② 설치본 이름 — 담임 화면 세 탭과 같은 카드.
-           관리자도 지금 어느 프로그램(인원제한 O/X)을 보고 있는지 알아야 한다. -->
+           관리자도 지금 어느 프로그램(인원제한 O/X)을 보고 있는지 알아야 한다.
+           아직 지정하지 않았으면 카드 대신 안내를 띄운다. 담임 화면에서는 아무것도 그리지
+           않지만(고칠 수 있는 사람이 아니다), 관리자에게는 설정할 자리가 있다고 알려야 한다. -->
       <AppInfoCard />
+      <div
+        v-if="appInfo.loaded && !appInfo.configured"
+        class="rounded-xl flex items-center gap-3 flex-wrap"
+        style="padding: 16px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+      >
+        <div>
+          <p class="text-base font-semibold" style="color: #475569; margin: 0;">프로그램 제목이 지정되지 않았습니다</p>
+          <p class="text-base" style="color: #94a3b8; margin: 2px 0 0;">
+            학교 이름이나 전형 구분을 넣으면 로그인 화면과 담임 화면에 표시됩니다.
+            프로그램을 두 개 운영할 때 서로 구분됩니다.
+          </p>
+        </div>
+        <button
+            class="flex items-center gap-1 text-base font-medium rounded-lg ml-auto flex-shrink-0"
+            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+            @click="setActiveTab('settings')"
+        >설정하러 가기 <ArrowRight :size="15" /></button>
+      </div>
 
       <!-- ③ 서버 접속 정보 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
@@ -385,6 +405,7 @@ import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
 import AppInfoCard from '../common/AppInfoCard.vue'
+import { useAppInfoStore } from '../../stores/appInfo.js'
 
 
 // ── 섹션 레이블 헬퍼 컴포넌트 (인라인) ─────────────────────────
@@ -398,6 +419,7 @@ const SectionLabel = {
   },
 }
 
+const appInfo = useAppInfoStore()
 const setActiveTab = inject('setActiveTab', () => {})
 
 // ── 상태 ──────────────────────────────────────────────────────

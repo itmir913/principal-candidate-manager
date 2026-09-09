@@ -15,6 +15,8 @@ export const useAppInfoStore = defineStore('appInfo', () => {
   const title = ref(FALLBACK_TITLE)
   const desc = ref(FALLBACK_DESC)
   const loaded = ref(false)
+  // 관리자가 제목을 실제로 지정했는가. 앱 안의 설치본 이름 카드는 이 값이 true 일 때만 뜬다
+  const configured = ref(false)
 
   /// 제목 + 부제를 한 줄로 — 브라우저 탭·문서 제목처럼 한 줄만 쓰는 자리용.
   const fullTitle = computed(() => (desc.value ? `${title.value} ${desc.value}` : title.value))
@@ -22,6 +24,7 @@ export const useAppInfoStore = defineStore('appInfo', () => {
   function _apply(data) {
     title.value = data.title
     desc.value = data.desc
+    configured.value = data.configured
     loaded.value = true
     document.title = fullTitle.value
   }
@@ -43,5 +46,5 @@ export const useAppInfoStore = defineStore('appInfo', () => {
     _apply(data)
   }
 
-  return { title, desc, loaded, fullTitle, load, set }
+  return { title, desc, configured, loaded, fullTitle, load, set }
 })
