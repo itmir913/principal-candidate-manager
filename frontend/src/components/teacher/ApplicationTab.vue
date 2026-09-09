@@ -37,8 +37,10 @@
       </div>
     </div>
 
-    <div class="px-4 sm:px-10 pb-5">
-      <AppInfoCard />
+    <!-- 여백은 카드가 갖는다. wrapper 에 두면 제목 미지정으로 카드가 숨었을 때
+         빈 20px 만 남아 헤더와 도움말 사이가 벌어진다 (다른 탭과 같은 방식). -->
+    <div class="px-4 sm:px-10">
+      <AppInfoCard class="mb-5" />
     </div>
 
     <div v-if="loaded && !loadError" class="px-4 sm:px-10 pb-5">

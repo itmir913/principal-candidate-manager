@@ -29,6 +29,7 @@
             v-model="title"
             type="text"
             :maxlength="MAX_TITLE"
+            :disabled="saving"
             placeholder="○○고등학교 학교장추천"
             class="w-full rounded-lg text-base"
             style="padding: 10px 12px; border: 1px solid #cbd5e1;"
@@ -40,6 +41,7 @@
             v-model="desc"
             type="text"
             :maxlength="MAX_DESC"
+            :disabled="saving"
             placeholder="인원 제한 없는 대학"
             class="w-full rounded-lg text-base"
             style="padding: 10px 12px; border: 1px solid #cbd5e1;"
@@ -204,7 +206,9 @@ async function save() {
   saved.value = false
   try {
     const data = await updateAppInfo({ title: title.value, desc: desc.value })
-    // 저장 응답이 곧 서버가 확정한 값(trim 적용본)이다 — 그대로 반영한다
+    // 저장 응답이 곧 서버가 확정한 값(trim 적용본)이다 — 그대로 반영한다.
+    // 응답을 기다리는 동안 입력칸을 잠그므로(:disabled="saving") 사용자가 방금 친 글자를
+    // 덮어쓸 일은 없다. 잠그지 않으면 저장 직후 타이핑이 조용히 사라진다.
     appInfo.set(data)
     title.value = data.title
     desc.value = data.desc

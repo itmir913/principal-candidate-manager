@@ -127,7 +127,10 @@
             </p>
           </div>
 
-          <div v-else class="overflow-auto" style="max-height: 70vh;">
+          <!-- overflow-x-auto/overflow-y-auto 를 함께 쓴다. style.css 의 스크롤바 숨김 규칙이
+               이 두 클래스만 가리키므로, overflow-auto 로 두면 이 표에만 네이티브 스크롤바가
+               떠서 다른 표와 달라 보인다. -->
+          <div v-else class="overflow-x-auto overflow-y-auto" style="max-height: 70vh;">
             <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
               <colgroup>
                 <col style="width: 160px;">
@@ -147,7 +150,11 @@
                     class="text-base font-semibold"
                     :class="h.align"
                     scope="col"
-                    style="position: sticky; top: 0; z-index: 2; padding: 12px 16px; color: #334155; background: #e2e8f0; box-shadow: inset 0 -1px 0 #cbd5e1;"
+                    :style="{
+                      position: 'sticky', top: 0, zIndex: 2, padding: h.pad,
+                      color: '#334155', background: '#e2e8f0',
+                      boxShadow: 'inset 0 -1px 0 #cbd5e1',
+                    }"
                   >{{ h.label }}</th>
                 </tr>
               </thead>
@@ -230,14 +237,15 @@ const loadError = ref('')
 const rankView  = ref('track')
 
 // 표 헤더 정의. 한 곳에 모아 두면 열을 늘릴 때 colgroup 과 함께 여기만 보면 된다.
+// pad 는 아래 본문 td 의 좌우 패딩과 짝을 맞춘다 — 다르면 헤더 글자와 값의 시작점이 어긋난다
 const headers = computed(() => [
-  { label: '대학명',   align: 'text-left' },
-  { label: '모집단위', align: 'text-left' },
-  { label: '지원 학과', align: 'text-left' },
-  { label: rankView.value === 'track' ? '모집단위 순위' : '대학 순위', align: 'text-center' },
-  { label: '총점',     align: 'text-left' },
-  { label: '상태',     align: 'text-center' },
-  { label: '비고',     align: 'text-center' },
+  { label: '대학명',   align: 'text-left',   pad: '12px 20px' },
+  { label: '모집단위', align: 'text-left',   pad: '12px 16px' },
+  { label: '지원 학과', align: 'text-left',   pad: '12px 16px' },
+  { label: rankView.value === 'track' ? '모집단위 순위' : '대학 순위', align: 'text-center', pad: '12px 16px' },
+  { label: '총점',     align: 'text-left',   pad: '12px 20px' },
+  { label: '상태',     align: 'text-center', pad: '12px 16px' },
+  { label: '비고',     align: 'text-center', pad: '12px 16px' },
 ])
 
 const hasFinalized = computed(() => rounds.value.some(r => r.status === 'FINALIZED'))
