@@ -13,16 +13,7 @@
       <span class="text-base" style="color: #64748b;">{{ students.length }}명</span>
     </div>
 
-    <!-- 앱 정보 — 관리자 개요 탭의 "앱 정보" 카드를 담임 화면에 맞춰 옮긴 것.
-         두 프로그램(인원제한 O/X)을 함께 돌릴 때 담임도 지금 어느 쪽에 접속했는지
-         알아야 한다. 관리자만 알면 "어느 창에 입력하죠?"를 매번 묻게 된다. -->
-    <div
-      class="rounded-xl mb-5"
-      style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
-    >
-      <p class="text-xl font-bold" style="color: #1e293b; margin: 0;">{{ appInfo.title }}</p>
-      <p v-if="appInfo.desc" class="text-base mt-0.5" style="color: #94a3b8; margin: 0;">{{ appInfo.desc }}</p>
-    </div>
+    <AppInfoCard class="mb-5" />
 
     <HelpBox
       :key="helpBox.key"
@@ -119,7 +110,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { useAppInfoStore } from '../../stores/appInfo.js'
+import AppInfoCard from '../common/AppInfoCard.vue'
 import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'
 import {
@@ -130,7 +121,6 @@ import {
 } from '../../api/teacher.js'
 
 const auth = useAuthStore()
-const appInfo = useAppInfoStore()
 
 const currentRound = ref(null)
 const students     = ref([])

@@ -37,6 +37,10 @@
       </div>
     </div>
 
+    <div class="px-4 sm:px-10 pb-5">
+      <AppInfoCard />
+    </div>
+
     <div v-if="loaded && !loadError" class="px-4 sm:px-10 pb-5">
       <HelpBox
         :key="helpBox.key"
@@ -442,6 +446,7 @@ import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import { dialog } from '../common/dialog.js'
+import AppInfoCard from '../common/AppInfoCard.vue'
 import {
   getCurrentRound,
   teacherGetStudents,
