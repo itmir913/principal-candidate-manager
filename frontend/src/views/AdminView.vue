@@ -278,14 +278,16 @@ const mainMenus = [
   { key: 'areas',    label: '전형요소 설정', icon: SlidersHorizontal },
   { key: 'univs',    label: '대학 설정',     icon: Building2 },
   { key: 'rounds',   label: '라운드 관리',   icon: Trophy },
-  { key: 'audit',    label: '감사 기록',     icon: ScrollText },
 ]
 
 const hasUpdate = ref(false)
 
+// 주 메뉴는 선발을 진행하는 순서(개요 → 학급·학생 → 전형요소·대학 → 라운드)다.
+// 감사 기록은 그 흐름을 돌리는 화면이 아니라 지나간 일을 들춰 보는 화면이라 아래 묶음에 둔다.
 const subMenus = computed(() => [
   { key: 'settings', label: '설정',    icon: Settings,  badge: false      },
   { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false      },
+  { key: 'audit',   label: '감사 기록', icon: ScrollText, badge: false     },
   { key: 'update',  label: '업데이트 & 백업', icon: RefreshCw, badge: hasUpdate.value },
 ])
 
