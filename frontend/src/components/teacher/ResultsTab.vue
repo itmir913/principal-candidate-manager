@@ -270,7 +270,9 @@ const rounds    = ref([])
 const results   = ref([])
 const loading   = ref(false)
 const loadError = ref('')
-const rankView  = ref('track')
+// 기본값은 대학 전체 순위 — 관리자 [결과] 탭과 같은 기준이다. 역할마다 기본값이 다르면
+// 같은 학생의 순위가 담임과 관리자에게 다른 수로 보여 통화가 꼬인다.
+const rankView  = ref('univ')
 // 다운로드 중에는 버튼을 잠근다 — 같은 파일을 두 번 받는 조작을 막는다(저장소 공통 패턴)
 const downloading = ref(false)
 
