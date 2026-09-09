@@ -198,3 +198,16 @@ Authorization 헤더가 비-ASCII라 디코드 실패하면 "토큰 없음"으�
 옛 항목이 남아 부팅 때 같은 exe 가 두 번 실행되는데 로그에 단서가 없다(2026-09-09 Fable 감사 지적).
 자동 실행은 OS 편의 기능이라 실패가 서버 기동을 막아서는 안 된다(#23·#28과 같은 취지).
 **조건**: 레거시 이관 경로에서만. 새 이름(`PCM-<해시>`) 등록·해제 실패는 별도로 경고를 남긴다.
+
+### 44. `src/handlers/teacher_export.rs` — `unwrap_or_default()` (CSV 의 학년·반·번호 칸)
+졸업생은 스키마 CHECK(`migrations/v1/002-students.sql`)상 `grade`·`class_no`·`seq_no` 가 NULL 이다.
+CSV 에서는 그 칸을 빈 문자열로 둔다 — 오류를 감추는 것이 아니라 "해당 없음"의 표현이다.
+재학생은 같은 CHECK 가 세 값을 NOT NULL 로 강제하므로 재학생 행이 빈칸이 될 경로가 없다.
+**조건**: CSV 셀 문자열화에만. 이 값으로 분기·계산·조회를 하면 위반.
+
+### 45. `src/handlers/teacher_export.rs::csv_response` — `.expect("CSV 응답 생성")`
+`Response::builder()` 는 헤더 값이 잘못됐을 때만 실패한다. 여기 들어가는 값은 정적 문자열과
+`round{i64}_results_{YYYYMMDD_HHMMSS}.csv` 형태의 ASCII 파일명뿐이라 실패할 입력이 없다.
+허용 목록 #10·#17·#35 의 `Response::builder().unwrap()` 과 같은 성격이다.
+**조건**: 파일명에 사용자 입력(학교명·학생명 등)을 넣게 되면 `unwrap`/`expect` 를 걷어내고
+오류를 전파할 것 — 비-ASCII 헤더 값은 실제로 build 를 실패시킨다.

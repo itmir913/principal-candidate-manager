@@ -51,7 +51,9 @@ fn entry_text(r: &ResultRow, with_round: bool) -> String {
 /// 입력은 `fetch_teacher_results` 의 정렬 순서(라운드 → 번호/학번 → 모집단위)를 그대로
 /// 따른다고 전제한다. 학생의 등장 순서를 그 순서로 보존하려고 별도 정렬을 하지 않는다.
 fn build_csv(rows: &[ResultRow], with_round: bool) -> Result<Vec<u8>, ApiError> {
-    // 학생별 묶기 — 첫 등장 순서를 유지해야 담임이 보는 화면 순서와 같다
+    // 학생별로 묶는다. 입력은 라운드 → 번호 → 모집단위 순이라, 그대로 접으면 전 라운드
+    // 내보내기에서 "1라운드에 지원한 학생들 다음에 2라운드에만 지원한 학생" 순서가 된다
+    // (3번, 7번, 5번). 담임은 이 파일을 Excel 로 열어 출석부와 대조하므로 번호순이어야 한다.
     let mut order: Vec<i64> = Vec::new();
     let mut grouped: std::collections::HashMap<i64, Vec<&ResultRow>> = std::collections::HashMap::new();
     for r in rows {
@@ -60,6 +62,18 @@ fn build_csv(rows: &[ResultRow], with_round: bool) -> Result<Vec<u8>, ApiError> 
         }
         grouped.entry(r.student_id).or_default().push(r);
     }
+
+    // 재학생은 번호, 졸업생은 학번 순 — 화면(ResultsTab 의 studentsByRound)과 같은 기준이다.
+    // 졸업생은 seq_no 가 모두 None 이라 학번 비교로 넘어간다(Option 은 None < Some).
+    order.sort_by(|a, b| {
+        let key = |sid: &i64| {
+            grouped
+                .get(sid)
+                .and_then(|e| e.first())
+                .map(|r| (r.seq_no, r.student_code.clone()))
+        };
+        key(a).cmp(&key(b))
+    });
 
     let mut wtr = csv::Writer::from_writer(Vec::new());
     wtr.write_record(["학번", "학년", "반", "번호", "이름", "선발결과"])

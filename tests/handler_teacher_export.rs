@@ -312,3 +312,180 @@ async fn graduate_rows_have_empty_class_columns() {
     assert_eq!(&rows[0][3], "", "번호가 비어 있다");
     assert_eq!(&rows[0][4], "졸업생김");
 }
+
+// ── 라운드 필터 ───────────────────────────────────────────────────
+
+/// 2라운드를 하나 더 열고, 1번 학생만 그 라운드에 지원시킨다.
+async fn add_second_round(pool: &sqlx::SqlitePool) -> i64 {
+    let rid2: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at, finalized_at)          VALUES ('FINALIZED', '2026-02-01T00:00:00Z', '2026-02-02T00:00:00Z', '2026-02-03T00:00:00Z')          RETURNING id",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    let sid: i64 = sqlx::query_scalar("SELECT id FROM students WHERE student_code = 'S001'")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO applications (student_id, track_id, round_id) VALUES (?, 2, ?)")
+        .bind(sid)
+        .bind(rid2)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)          VALUES (?, 2, ?, '{}', 8000000, 1, 1, '2026-02-02T01:00:00Z')",
+    )
+    .bind(sid)
+    .bind(rid2)
+    .execute(pool)
+    .await
+    .unwrap();
+    rid2
+}
+
+/// 라운드별 CSV 에 **다른 라운드 결과가 섞이면 안 된다.** 섞이면 담임이 지난 라운드 결과를
+/// 이번 라운드 것으로 알고 발송한다 — 라운드별 파일에는 라운드 표기가 없어 눈치챌 수도 없다.
+#[tokio::test]
+async fn round_csv_contains_only_that_round() {
+    let pool = common::create_test_pool().await;
+    let rid1 = setup(&pool).await;
+    let rid2 = add_second_round(&pool).await;
+
+    let text1 = round_csv(&pool, 3, 1, rid1).await;
+    let hong1 = parse(&text1).into_iter().find(|r| &r[4] == "홍길동").expect("1라운드 홍길동");
+    assert!(hong1[5].contains("한국대학교"), "1라운드 지원: {}", &hong1[5]);
+    assert_eq!(
+        hong1[5].matches("민족대학교").count(),
+        1,
+        "1라운드의 민족대 지원 1건만이어야 한다(2라운드 것이 섞이면 2건): {}",
+        &hong1[5]
+    );
+
+    let text2 = round_csv(&pool, 3, 1, rid2).await;
+    let rows2 = parse(&text2);
+    assert_eq!(rows2.len(), 1, "2라운드에 지원한 학생은 1명뿐:
+{text2}");
+    assert!(!rows2[0][5].contains("한국대학교"), "1라운드 지원이 섞였다: {}", &rows2[0][5]);
+}
+
+/// 전 라운드 파일에서는 학생이 번호순이어야 한다. 입력이 라운드 순으로 오므로, 정렬하지
+/// 않으면 나중 라운드에 처음 등장한 학생이 번호와 무관하게 뒤로 밀린다.
+///
+/// 픽스처가 중요하다: 1라운드에 1·2·5번, 2라운드에만 3번이 지원한다. 정렬이 없으면
+/// 1,2,5,3 순으로 나온다 — 5번과 3번이 뒤바뀐다. (정렬 없이도 번호순이 되는 픽스처로는
+/// 이 테스트가 헛돈다. 실제로 처음 작성했을 때 그랬고, 변이 검사로 잡았다.)
+#[tokio::test]
+async fn all_rounds_export_is_ordered_by_seq_no() {
+    let pool = common::create_test_pool().await;
+    let rid = setup(&pool).await;
+    let rid2 = add_second_round(&pool).await;
+
+    // 1라운드에 5번, 2라운드에만 3번
+    for (code, name, seq, round) in [("S005", "최민수", 5i64, rid), ("S003", "이영희", 3, rid2)] {
+        let sid: i64 = sqlx::query_scalar(
+            "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled)              VALUES (?, ?, 3, 1, ?, 1) RETURNING id",
+        )
+        .bind(code)
+        .bind(name)
+        .bind(seq)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id) VALUES (?, 1, ?)")
+            .bind(sid)
+            .bind(round)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at)              VALUES (?, 1, ?, '{}', 7000000, 2, 0, '2026-02-02T01:00:00Z')",
+        )
+        .bind(sid)
+        .bind(round)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let res = teacher_all_results_csv(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(3, 1)),
+    )
+    .await
+    .unwrap();
+    let text = body_text(res).await;
+
+    let seqs: Vec<String> = parse(&text).into_iter().map(|r| r[3].to_string()).collect();
+    assert_eq!(seqs, vec!["1", "2", "3", "5"], "번호순이어야 한다:
+{text}");
+}
+
+// ── 상태 표기 ─────────────────────────────────────────────────────
+
+/// 포기한 지원은 "포기됨"으로 적는다 — 추천으로 읽히면 이미 자리를 비운 학생에게
+/// 합격 문자가 나간다.
+#[tokio::test]
+async fn abandoned_application_is_labeled_as_abandoned() {
+    let pool = common::create_test_pool().await;
+    let rid = setup(&pool).await;
+
+    let sid: i64 = sqlx::query_scalar("SELECT id FROM students WHERE student_code = 'S001'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE applications SET abandoned = 1 WHERE student_id = ? AND track_id = 1 AND round_id = ?")
+        .bind(sid)
+        .bind(rid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let text = round_csv(&pool, 3, 1, rid).await;
+    let hong = parse(&text).into_iter().find(|r| &r[4] == "홍길동").expect("홍길동 행");
+    assert!(hong[5].contains("포기됨"), "포기 표기: {}", &hong[5]);
+    assert!(!hong[5].contains("한국대학교 컴퓨터공학, 전기공학(추천 확정)"), "추천으로 적히면 안 된다: {}", &hong[5]);
+}
+
+// ── 화면과 파일의 동치 ────────────────────────────────────────────
+
+/// 화면(`teacher_get_results`)과 CSV 가 같은 학생 집합을 봐야 한다.
+///
+/// 지금은 두 경로가 같은 `fetch_teacher_results` 를 쓰므로 이 테스트는 동어반복에 가깝다.
+/// 그래도 두는 이유는, 누군가 한쪽 SQL 을 다시 인라인하는 순간을 잡는 **유일한** 장치이기
+/// 때문이다. 화면과 파일이 갈라지면 그 차이는 담임이 문자를 보낸 뒤에야 드러난다.
+#[tokio::test]
+async fn screen_and_csv_cover_the_same_students() {
+    use principal_candidate_manager::handlers::scoring::teacher_get_results;
+
+    let pool = common::create_test_pool().await;
+    let rid = setup(&pool).await;
+    let _ = add_second_round(&pool).await;
+
+    let axum::Json(screen) = teacher_get_results(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(3, 1)),
+    )
+    .await
+    .unwrap();
+
+    let mut from_screen: Vec<String> =
+        screen.results.iter().map(|r| r.student_code.clone()).collect();
+    from_screen.sort();
+    from_screen.dedup();
+
+    let res = teacher_all_results_csv(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(3, 1)),
+    )
+    .await
+    .unwrap();
+    let text = body_text(res).await;
+    let mut from_csv: Vec<String> = parse(&text).into_iter().map(|r| r[0].to_string()).collect();
+    from_csv.sort();
+
+    assert_eq!(from_screen, from_csv, "화면과 파일의 학생 집합이 달라졌다
+{text}");
+    let _ = rid;
+}
