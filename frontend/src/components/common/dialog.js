@@ -9,6 +9,7 @@ export const dialogState = reactive({
   message: '',
   confirmText: '확인',
   cancelText: '취소',
+  warnNotice: '',         // 레벨과 무관하게 본문 아래 빨간 패널로 띄울 경고 (미확정 학급 등)
   dangerNotice: '',       // danger 2단계 경고 패널에 표시할 결과 설명 문장
   finalConfirmText: '',   // danger 2단계 빨간 버튼 라벨
   step: 1,                // danger 전용: 1(1차 확인) → 2(최종 확인)
@@ -25,6 +26,7 @@ function openDialog(opts) {
     dialogState.message          = opts.message ?? ''
     dialogState.confirmText      = opts.confirmText ?? '확인'
     dialogState.cancelText       = opts.cancelText ?? '취소'
+    dialogState.warnNotice       = opts.warnNotice ?? ''
     dialogState.dangerNotice     = opts.dangerNotice ?? ''
     dialogState.finalConfirmText = opts.finalConfirmText ?? opts.confirmText ?? '확인'
     dialogState.step             = 1
@@ -46,6 +48,8 @@ export const dialog = {
   /**
    * 확인/취소 다이얼로그. 확인=true, 취소·ESC=false.
    * level: 'normal'(파란 확인 버튼) | 'warn'(흰 배경+빨간 테두리) | 'danger'(2단계 검증)
+   * warnNotice: 본문과 분리해 빨간 패널로 띄울 경고. 놓치면 안 되는 사실(미확정 학급 등)을
+   *   중립적인 본문에 섞어 두면 그냥 읽고 지나친다. danger 2단계와 달리 레벨을 가리지 않는다.
    * danger는 1차 확인 후 경고 패널 + 빨간 배경 버튼(finalConfirmText)으로 한 번 더 묻는다.
    */
   confirm(opts) { return openDialog({ ...opts, kind: 'confirm' }) },

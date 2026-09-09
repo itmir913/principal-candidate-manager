@@ -1052,23 +1052,27 @@ async function handleOpenRound() {
 async function handleCloseRound(id) {
   if (roundActing.value) return
 
-  // 미확정 학급 조회
-  let closeMsg = '라운드를 종료하시겠습니까?\n담임교사의 입력이 차단되고, 모든 지원자의 점수가 계산됩니다.\n필요하면 "다시 열기"로 되돌릴 수 있습니다.'
+  // 미확정 학급 조회 — 본문에 섞지 않고 빨간 경고 패널(warnNotice)로 분리한다.
+  // 중립적인 안내문에 이어 붙이면 종료 절차 설명의 일부처럼 읽혀 그냥 지나친다.
+  const closeMsg = '라운드를 종료하시겠습니까?\n담임교사의 입력이 차단되고, 모든 지원자의 점수가 계산됩니다.\n필요하면 "다시 열기"로 되돌릴 수 있습니다.'
+  let closeWarn = ''
   try {
     const status = await getRoundConfirmationStatus(id)
     const unconfirmed = status.classes.filter(c => !c.confirmed)
     if (unconfirmed.length > 0) {
       const labels = unconfirmed.slice(0, 10).map(classLabel)
       const extra = unconfirmed.length > 10 ? `\n외 ${unconfirmed.length - 10}곳` : ''
-      closeMsg += `\n\n⚠ 아직 입력을 확정하지 않은 학급이 있습니다:\n${labels.join(', ')}${extra}`
+      closeWarn = `아직 입력을 확정하지 않은 학급이 있습니다:\n${labels.join(', ')}${extra}`
     }
   } catch {
-    closeMsg += '\n\n확정 현황을 불러오지 못했습니다'
+    // 조회 실패도 경고다 — 미확정 학급이 없다는 뜻이 아니라 알 수 없다는 뜻이다
+    closeWarn = '확정 현황을 불러오지 못했습니다. 미확정 학급이 있는지 확인할 수 없습니다.'
   }
 
   if (!(await dialog.confirm({
     title: '라운드 종료',
     message: closeMsg,
+    warnNotice: closeWarn,
     confirmText: '종료하기',
     level: 'warn',
   }))) return

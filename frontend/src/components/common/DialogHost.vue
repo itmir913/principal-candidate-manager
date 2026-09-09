@@ -26,6 +26,20 @@
         <!-- 메시지 (\n 줄바꿈 유지) -->
         <p class="text-base" style="margin: 0; color: #475569; line-height: 1.6; white-space: pre-line;">{{ s.message }}</p>
 
+        <!-- 일반 경고 패널 — 레벨·단계와 무관하게 warnNotice 가 있으면 띄운다 -->
+        <div
+          v-if="s.warnNotice"
+          class="rounded-lg mt-4"
+          style="padding: 12px 16px; background: #fef2f2; border: 1px solid #fca5a5;"
+        >
+          <div class="flex items-start gap-2">
+            <AlertTriangle :size="16" style="color: #ef4444;" class="flex-shrink-0 mt-1" />
+            <p class="text-base" style="margin: 0; color: #b91c1c; line-height: 1.6; white-space: pre-line;">
+              {{ s.warnNotice }}
+            </p>
+          </div>
+        </div>
+
         <!-- danger 2단계 경고 패널 -->
         <div
           v-if="s.kind === 'confirm' && s.level === 'danger' && s.step === 2"
