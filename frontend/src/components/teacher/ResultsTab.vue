@@ -176,11 +176,10 @@
                   <th
                     v-for="h in headers"
                     :key="h.label"
-                    class="text-base font-semibold"
+                    class="text-base font-semibold round-card-th"
                     :class="h.align"
                     scope="col"
                     :style="{
-                      position: 'sticky', top: '64px', zIndex: 2,
                       padding: h.pad,
                       color: '#334155', background: '#e2e8f0',
                       boxShadow: 'inset 0 -1px 0 #cbd5e1',
@@ -420,13 +419,26 @@ onMounted(load)
 </script>
 
 <style scoped>
-/* 카드 헤더 고정 — 기준 스크롤 영역은 TeacherView 의 <main class="overflow-y-auto"> 다.
-   배경을 반드시 칠해야 한다. 투명하면 아래 행들이 헤더 글자 뒤로 비쳐 지나간다. */
-.round-card-head {
-  position: sticky;
-  top: 0;
-  z-index: 3;   /* 표 머리글(2)보다 위 */
-  background: white;
+/* 배경은 항상 칠한다. 투명하면 고정됐을 때 아래 행들이 헤더 글자 뒤로 비쳐 지나간다. */
+.round-card-head { background: white; }
+
+/* 카드 제목 줄과 표 머리글을 **같은 조건에서 함께** 고정한다.
+   기준 스크롤 영역은 TeacherView 의 <main class="overflow-y-auto"> 다.
+
+   980px 은 표 감싸개가 가로 스크롤을 끄는 지점과 같다. 그보다 좁으면 감싸개가 스크롤
+   컨테이너가 되어 표 머리글은 고정될 수 없는데, 그때 제목 줄만 붙어 있으면 둘 사이가
+   흰 여백으로 벌어진다. 둘 다 붙거나 둘 다 풀리거나여야 한다. */
+@container (min-width: 980px) {
+  .round-card-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;   /* 표 머리글(2)보다 위 */
+  }
+  .round-card-th {
+    position: sticky;
+    top: 64px;    /* 위 제목 줄 높이 */
+    z-index: 2;
+  }
 }
 
 /* overflow-hidden 을 걷어냈으므로(그게 sticky 를 막는다) 표가 카드의 둥근 모서리를 넘는다.
