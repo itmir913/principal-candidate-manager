@@ -79,7 +79,7 @@
         <button
           v-if="hasFinalized"
           class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto"
-          style="padding: 6px 14px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+          style="padding: 6px 14px; border: none; background: #16a34a; color: white; cursor: pointer;"
           :disabled="downloading"
           @click="downloadAllCsv"
         >{{ downloading ? '내려받는 중…' : '전체 결과 CSV' }}</button>
@@ -89,11 +89,16 @@
       <div
         v-for="round in rounds"
         :key="round.id"
-        class="rounded-xl overflow-hidden"
+        class="rounded-xl @container round-card"
         style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
       >
         <!-- 카드 헤더 -->
-        <div class="flex items-center gap-3 px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
+        <!-- 카드 위 두 줄(라운드 제목 / 표 머리글)을 고정한다. 기준 스크롤 영역은
+             TeacherView 의 <main class="overflow-y-auto"> 다.
+             높이를 64px 로 고정하는 이유: 아래 thead 가 top: 64px 로 이 줄 바로 밑에 붙는다.
+             값이 어긋나면 표 머리글이 제목을 가리거나 사이가 뜬다. -->
+        <div class="flex items-center gap-3 px-6 round-card-head"
+          style="height: 64px; border-bottom: 1px solid #f1f5f9; border-top-left-radius: 12px; border-top-right-radius: 12px;">
           <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">
             <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
             <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
@@ -111,7 +116,7 @@
           <button
             v-if="round.status === 'FINALIZED'"
             class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto"
-            style="padding: 6px 14px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            style="padding: 6px 14px; border: none; background: #16a34a; color: white; cursor: pointer;"
             :disabled="downloading"
             @click="downloadRoundCsv(round.id)"
           >{{ downloading ? '내려받는 중…' : '이 라운드 CSV' }}</button>
@@ -150,7 +155,10 @@
           <!-- 가로만 스크롤한다(표가 940px 보다 좁은 화면). overflow-auto 가 아니라
                overflow-x-auto 를 쓰는 이유는 style.css 의 스크롤바 숨김 규칙이 이 클래스만
                가리켜서다 — overflow-auto 로 두면 이 표에만 네이티브 스크롤바가 뜬다. -->
-          <div v-else class="overflow-x-auto">
+          <!-- overflow-x-auto 는 스크롤 컨테이너를 만들어 sticky 를 무력화한다.
+               카드가 표(min-width 940px)를 담을 만큼 넓으면 가로 스크롤이 필요 없으므로 끈다.
+               좁을 때는 가로 스크롤을 살리고, 그 대신 고정이 걸리지 않는다. -->
+          <div v-else class="overflow-x-auto @min-[980px]:overflow-x-visible">
             <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
               <colgroup>
                 <col style="width: 160px;">
@@ -162,8 +170,8 @@
                 <col style="width: 120px;">
               </colgroup>
               <thead>
-                <!-- 헤더는 고정되지 않는다. 고정하려면 세로 스크롤 컨테이너가 있어야 하는데,
-                     그건 곧 표 안에서 스크롤한다는 뜻이라 명단이 잘린다. -->
+                <!-- th 마다 sticky 를 건다 — tr 에 걸면 브라우저가 무시한다.
+                     top: 64px 은 위 카드 헤더 높이다. -->
                 <tr>
                   <th
                     v-for="h in headers"
@@ -172,6 +180,7 @@
                     :class="h.align"
                     scope="col"
                     :style="{
+                      position: 'sticky', top: '64px', zIndex: 2,
                       padding: h.pad,
                       color: '#334155', background: '#e2e8f0',
                       boxShadow: 'inset 0 -1px 0 #cbd5e1',
@@ -411,6 +420,25 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* 카드 헤더 고정 — 기준 스크롤 영역은 TeacherView 의 <main class="overflow-y-auto"> 다.
+   배경을 반드시 칠해야 한다. 투명하면 아래 행들이 헤더 글자 뒤로 비쳐 지나간다. */
+.round-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;   /* 표 머리글(2)보다 위 */
+  background: white;
+}
+
+/* overflow-hidden 을 걷어냈으므로(그게 sticky 를 막는다) 표가 카드의 둥근 모서리를 넘는다.
+   마지막 행의 아래 모서리를 직접 둥글린다. rounded-xl 과 같은 12px. */
+.round-card tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+.round-card tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
+/* 표가 아닌 마지막 블록(진행중·종료 안내, 지원자 없음)도 같은 모서리를 갖는다 */
+.round-card > :last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
 /* 행 배경(추천 확정·동점·미선발)은 의미를 담은 색이라 호버로 덮으면 안 된다.
    td 배경은 tr 배경 위에 얹히므로, 반투명 한 겹으로 색조는 두고 어둡게만 만든다.
    tr 의 background 는 인라인 style 이라 hover:bg-* 같은 클래스로는 애초에 덮이지도 않는다. */
