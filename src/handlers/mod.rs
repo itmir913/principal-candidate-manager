@@ -13,4 +13,5 @@ pub mod scoring;
 pub mod students;
 pub mod system;
 pub mod teacher_areas;
+pub mod teacher_export;
 pub mod universities;

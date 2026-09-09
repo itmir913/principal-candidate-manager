@@ -56,3 +56,10 @@ export const teacherConfirmRound = (roundId) =>
 
 export const teacherRevokeRoundConfirmation = (roundId) =>
   axios.delete(`/api/teacher/rounds/${roundId}/confirm`)
+
+// 문자 일괄발송용 CSV (이슈 #24) — 라운드별 / 마감된 전 라운드
+export const teacherRoundResultsCsv = (roundId) =>
+  axios.get(`/api/teacher/rounds/${roundId}/results/csv`, { responseType: 'blob' })
+
+export const teacherAllResultsCsv = () =>
+  axios.get('/api/teacher/results/csv', { responseType: 'blob' })

@@ -843,6 +843,9 @@ fn build_router(state: AppState) -> Router {
         .route("/area-context", get(handlers::teacher_areas::teacher_area_context))
         .route("/area-score-preview", post(handlers::teacher_areas::teacher_area_score_preview))
         .route("/results", get(handlers::scoring::teacher_get_results))
+        // 문자 일괄발송용 CSV (이슈 #24) — 라운드별 / 마감된 전 라운드
+        .route("/results/csv", get(handlers::teacher_export::teacher_all_results_csv))
+        .route("/rounds/:id/results/csv", get(handlers::teacher_export::teacher_round_results_csv))
         .route("/rounds/:id/confirm", get(handlers::round_confirmations::teacher_get_confirmation))
         .route("/rounds/:id/confirm", post(handlers::round_confirmations::teacher_confirm_round))
         .route("/rounds/:id/confirm", delete(handlers::round_confirmations::teacher_revoke_confirmation))

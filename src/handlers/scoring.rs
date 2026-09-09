@@ -839,6 +839,77 @@ pub struct TeacherResultsResponse {
     pub results: Vec<ResultRow>,
 }
 
+/// 담임(또는 졸업생 담당)이 볼 수 있는 FINALIZED 결과 행을 가져온다.
+///
+/// 화면(`teacher_get_results`)과 CSV 내보내기가 **같은 쿼리**를 지나야 한다. 따로 쓰면
+/// 필터 하나가 어긋나는 순간 화면과 파일이 다른 명단을 보여주게 되고, 그 차이는 담임이
+/// 문자를 보낸 뒤에야 드러난다.
+///
+/// `round_id` 가 Some 이면 그 라운드만 — 라운드별 CSV 가 쓴다.
+/// track_rank 는 FINALIZED 전체 결과 기준으로 계산한다(학급 필터 이전).
+pub async fn fetch_teacher_results(
+    db: &sqlx::SqlitePool,
+    claims: &TeacherClaims,
+    round_id: Option<i64>,
+) -> Result<Vec<ResultRow>, sqlx::Error> {
+    let tr_cte = track_rank_window("r2", "ut2", "s2", true);
+
+    // 졸업생 담당(0/0)은 졸업생 전원, 일반 담임은 자기 학급만 본다
+    let is_grad = claims.grade == 0 && claims.class_no == 0;
+    let scope_clause = if is_grad {
+        "AND s.is_enrolled = 0"
+    } else {
+        "AND s.grade = ? AND s.class_no = ?"
+    };
+    let round_clause = if round_id.is_some() { "AND r.round_id = ?" } else { "" };
+    // 졸업생은 학년·반·번호가 NULL 이라 학번으로 정렬한다
+    let order_by = if is_grad { "s.student_code" } else { "s.seq_no" };
+
+    let sql = format!(
+        "WITH tr AS (
+             SELECT r2.student_id, r2.track_id, r2.round_id,
+                    {tr_cte}
+             FROM results r2
+             JOIN students s2    ON s2.id   = r2.student_id
+             JOIN univ_tracks ut2 ON ut2.id = r2.track_id
+             JOIN rounds rnd2    ON rnd2.id  = r2.round_id
+             WHERE rnd2.status = 'FINALIZED'
+         )
+         SELECT r.student_id, r.track_id, r.round_id,
+                r.total_score, r.score_detail, r.ranking, r.recommended,
+                COALESCE(a.abandoned, 0) AS abandoned,
+                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
+                s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
+                u.univ_name, ut.track_name,
+                COALESCE(a.department_name, '') AS department_name,
+                tr.track_rank
+         FROM results r
+         JOIN students s ON r.student_id = s.id
+         JOIN univ_tracks ut ON r.track_id = ut.id
+         JOIN universities u ON ut.univ_id = u.id
+         JOIN rounds rnd ON rnd.id = r.round_id
+         LEFT JOIN applications a ON a.student_id = r.student_id
+                                  AND a.track_id  = r.track_id
+                                  AND a.round_id  = r.round_id
+         JOIN tr ON tr.student_id = r.student_id
+                 AND tr.track_id  = r.track_id
+                 AND tr.round_id  = r.round_id
+         WHERE rnd.status = 'FINALIZED'
+           {scope_clause}
+           {round_clause}
+         ORDER BY r.round_id, {order_by}, r.track_id"
+    );
+
+    let mut q = sqlx::query_as::<_, ResultRow>(&sql);
+    if !is_grad {
+        q = q.bind(claims.grade).bind(claims.class_no);
+    }
+    if let Some(rid) = round_id {
+        q = q.bind(rid);
+    }
+    q.fetch_all(db).await
+}
+
 pub async fn teacher_get_results(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
@@ -850,87 +921,9 @@ pub async fn teacher_get_results(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // track_rank는 FINALIZED 전체 결과 기준으로 계산(grade/class 필터 전)
-    let tr_cte = track_rank_window("r2", "ut2", "s2", true);
-    let results = if claims.grade == 0 && claims.class_no == 0 {
-        let sql = format!(
-            "WITH tr AS (
-                 SELECT r2.student_id, r2.track_id, r2.round_id,
-                        {tr_cte}
-                 FROM results r2
-                 JOIN students s2    ON s2.id   = r2.student_id
-                 JOIN univ_tracks ut2 ON ut2.id = r2.track_id
-                 JOIN rounds rnd2    ON rnd2.id  = r2.round_id
-                 WHERE rnd2.status = 'FINALIZED'
-             )
-             SELECT r.student_id, r.track_id, r.round_id,
-                    r.total_score, r.score_detail, r.ranking, r.recommended,
-                    COALESCE(a.abandoned, 0) AS abandoned,
-                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
-                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                    u.univ_name, ut.track_name,
-                    COALESCE(a.department_name, '') AS department_name,
-                    tr.track_rank
-             FROM results r
-             JOIN students s ON r.student_id = s.id
-             JOIN univ_tracks ut ON r.track_id = ut.id
-             JOIN universities u ON ut.univ_id = u.id
-             JOIN rounds rnd ON rnd.id = r.round_id
-             LEFT JOIN applications a ON a.student_id = r.student_id
-                                      AND a.track_id  = r.track_id
-                                      AND a.round_id  = r.round_id
-             JOIN tr ON tr.student_id = r.student_id
-                     AND tr.track_id  = r.track_id
-                     AND tr.round_id  = r.round_id
-             WHERE rnd.status = 'FINALIZED'
-               AND s.is_enrolled = 0
-             ORDER BY r.round_id, s.student_code, r.track_id"
-        );
-        sqlx::query_as::<_, ResultRow>(&sql)
-            .fetch_all(&state.db)
-            .await
-    } else {
-        let sql = format!(
-            "WITH tr AS (
-                 SELECT r2.student_id, r2.track_id, r2.round_id,
-                        {tr_cte}
-                 FROM results r2
-                 JOIN students s2    ON s2.id   = r2.student_id
-                 JOIN univ_tracks ut2 ON ut2.id = r2.track_id
-                 JOIN rounds rnd2    ON rnd2.id  = r2.round_id
-                 WHERE rnd2.status = 'FINALIZED'
-             )
-             SELECT r.student_id, r.track_id, r.round_id,
-                    r.total_score, r.score_detail, r.ranking, r.recommended,
-                    COALESCE(a.abandoned, 0) AS abandoned,
-                COALESCE(a.excluded, 0) AS excluded, a.excluded_reason,
-                    s.student_code, s.name, s.grade, s.class_no, s.seq_no, s.is_enrolled,
-                    u.univ_name, ut.track_name,
-                    COALESCE(a.department_name, '') AS department_name,
-                    tr.track_rank
-             FROM results r
-             JOIN students s ON r.student_id = s.id
-             JOIN univ_tracks ut ON r.track_id = ut.id
-             JOIN universities u ON ut.univ_id = u.id
-             JOIN rounds rnd ON rnd.id = r.round_id
-             LEFT JOIN applications a ON a.student_id = r.student_id
-                                      AND a.track_id  = r.track_id
-                                      AND a.round_id  = r.round_id
-             JOIN tr ON tr.student_id = r.student_id
-                     AND tr.track_id  = r.track_id
-                     AND tr.round_id  = r.round_id
-             WHERE rnd.status = 'FINALIZED'
-               AND s.grade = ?
-               AND s.class_no = ?
-             ORDER BY r.round_id, s.seq_no, r.track_id"
-        );
-        sqlx::query_as::<_, ResultRow>(&sql)
-            .bind(claims.grade)
-            .bind(claims.class_no)
-            .fetch_all(&state.db)
-            .await
-    }
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let results = fetch_teacher_results(&state.db, &claims, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(TeacherResultsResponse { rounds, results }))
 }

@@ -74,6 +74,15 @@
           }"
           @click="rankView = 'univ'"
         >대학 전체 순위</button>
+
+        <!-- 문자 일괄발송용 CSV (이슈 #24). 마감된 라운드가 하나도 없으면 받을 것이 없다. -->
+        <button
+          v-if="hasFinalized"
+          class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto"
+          style="padding: 6px 14px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+          :disabled="downloading"
+          @click="downloadAllCsv"
+        >{{ downloading ? '내려받는 중…' : '전체 결과 CSV' }}</button>
       </div>
       <div
         v-for="round in rounds"
@@ -96,6 +105,14 @@
                 ? { background: '#dbeafe', color: '#1d4ed8' }
                 : { background: '#dcfce7', color: '#15803d' }"
           >{{ roundStatusLabel(round.status) }}</span>
+
+          <button
+            v-if="round.status === 'FINALIZED'"
+            class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto"
+            style="padding: 6px 14px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
+            :disabled="downloading"
+            @click="downloadRoundCsv(round.id)"
+          >{{ downloading ? '내려받는 중…' : '이 라운드 CSV' }}</button>
         </div>
 
         <!-- 진행중/종료 -->
@@ -221,9 +238,15 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.js'
+import {
+  teacherGetResults,
+  teacherAbandonApplication,
+  teacherRoundResultsCsv,
+  teacherAllResultsCsv,
+} from '../../api/teacher.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
+import { blobErrMsg } from '../../utils/blobError.js'
 import HelpBox from '../common/HelpBox.vue'
 import AppInfoCard from '../common/AppInfoCard.vue'
 import { formatScore } from '../../utils/scorePreviewShared.js'
@@ -235,6 +258,8 @@ const results   = ref([])
 const loading   = ref(false)
 const loadError = ref('')
 const rankView  = ref('track')
+// 다운로드 중에는 버튼을 잠근다 — 같은 파일을 두 번 받는 조작을 막는다(저장소 공통 패턴)
+const downloading = ref(false)
 
 // 표 헤더 정의. 한 곳에 모아 두면 열을 늘릴 때 colgroup 과 함께 여기만 보면 된다.
 // pad 는 아래 본문 td 의 좌우 패딩과 짝을 맞춘다 — 다르면 헤더 글자와 값의 시작점이 어긋난다
@@ -341,6 +366,36 @@ const studentsByRound = computed(() => {
   }
   return out
 })
+
+/// 응답 헤더의 파일명을 그대로 쓴다 — 서버가 라운드 번호와 시각을 붙여 준다.
+async function saveCsv(request, fallbackName) {
+  downloading.value = true
+  try {
+    const res = await request()
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.headers['content-disposition']?.match(/filename="(.+)"/)?.[1] ?? fallbackName
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    await dialog.alert({
+      title: 'CSV 내려받기 실패',
+      message: await blobErrMsg(e),
+      level: 'error',
+    })
+  } finally {
+    downloading.value = false
+  }
+}
+
+function downloadRoundCsv(roundId) {
+  return saveCsv(() => teacherRoundResultsCsv(roundId), `round${roundId}_results.csv`)
+}
+
+function downloadAllCsv() {
+  return saveCsv(teacherAllResultsCsv, 'all_results.csv')
+}
 
 async function load() {
   loading.value = true

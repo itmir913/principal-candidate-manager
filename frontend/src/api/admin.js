@@ -1,17 +1,9 @@
 import axios from 'axios'
 
-// blob responseType 요청에서 에러가 발생하면 response.data가 Blob 객체로 오기 때문에
-// alert(e.response?.data)가 "[object Blob]"을 표시한다.
-// 이 헬퍼는 Blob이면 text()로 읽어 문자열로 반환한다.
-export async function blobErrMsg(e) {
-  const d = e.response?.data
-  if (d instanceof Blob) {
-    try { return await d.text() } catch { /* fall through */ }
-  }
-  return typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
-}
+// blob 오류 메시지 헬퍼는 utils 로 옮겼다 — 담임 화면도 쓴다.
+// 기존 import 경로를 지키려고 여기서 다시 내보낸다.
+export { blobErrMsg } from '../utils/blobError.js'
 
-// 제목·부제 (이슈 #23). GET은 로그인 전 화면도 쓰는 공개 경로라 인증이 필요 없다.
 export const updateAppInfo = (body) => axios.put('/api/app-info', body).then(r => r.data)
 
 export const getOverview = () => axios.get('/api/overview').then(r => r.data)
