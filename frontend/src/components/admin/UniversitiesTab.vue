@@ -115,7 +115,9 @@
          2열이 유지된 채 카드 안 표가 가로로 잘린다.
          1456px = 카드 최소 폭 720 × 2 + 간격 16. 이보다 좁으면 1열이다. -->
     <div class="@container">
-      <div class="grid grid-cols-1 @min-[1456px]:grid-cols-2 gap-4 items-start">
+      <!-- items-start 를 쓰지 않는다(그리드 기본값 stretch). 카드마다 모집단위 수가 달라
+           높이가 제각각이면 같은 줄의 카드 아래가 들쭉날쭉해 보인다. 같은 줄은 높이를 맞춘다. -->
+      <div class="grid grid-cols-1 @min-[1456px]:grid-cols-2 gap-4">
       <div
         v-for="u in visibleUnivs"
         :key="u.id"
