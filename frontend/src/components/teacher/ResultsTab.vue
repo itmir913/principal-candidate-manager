@@ -108,45 +108,55 @@
 
         <!-- FINALIZED 결과 -->
         <template v-else>
-          <div
-            v-for="student in studentsByRound[round.id] ?? []"
-            :key="student.student_id"
-            style="border-bottom: 1px solid #f1f5f9;"
-          >
-            <!-- 학생 행 헤더 -->
-            <div class="flex items-center gap-3 px-6 py-3" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <span class="text-base font-semibold" style="color: #1e293b;">{{ student.name }}</span>
-              <span class="text-base" style="color: #64748b;">{{ student.student_code }}</span>
-              <span v-if="auth.grade !== 0" class="text-base" style="color: #94a3b8;">{{ student.seq_no }}번</span>
-            </div>
+          <!-- 라운드마다 표 하나. 예전에는 학생마다 표를 따로 만들어 "대학명·모집단위…" 헤더가
+               학생 수만큼 반복됐다. 하나로 합쳐야 헤더를 상단에 고정할 수 있다 (이슈 #29).
 
-            <!-- 결과 테이블 -->
-            <div class="overflow-x-auto">
-              <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
-                <colgroup>
-                  <col style="width: 160px;">
-                  <col style="width: 190px;">
-                  <col style="width: 160px;">
-                  <col style="width: 100px;">
-                  <col style="width: 100px;">
-                  <col style="width: 110px;">
-                  <col style="width: 120px;">
-                </colgroup>
-                <thead>
-                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">대학명</th>
-                    <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">모집단위</th>
-                    <th class="text-base font-semibold text-left" style="padding: 12px 16px; color: #475569;">지원 학과</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">{{ rankView === 'track' ? '모집단위 순위' : '대학 순위' }}</th>
-                    <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">총점</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">상태</th>
-                    <th class="text-base font-semibold text-center" style="padding: 12px 16px; color: #475569;">비고</th>
+               세로 스크롤 컨테이너가 있어야 sticky 가 걸린다 — overflow-x 만 있으면 세로로
+               움직일 범위가 없어 헤더가 그냥 같이 밀려 올라간다. 그래서 max-height 를 준다. -->
+          <div class="overflow-auto" style="max-height: 70vh;">
+            <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
+              <colgroup>
+                <col style="width: 160px;">
+                <col style="width: 190px;">
+                <col style="width: 160px;">
+                <col style="width: 100px;">
+                <col style="width: 100px;">
+                <col style="width: 110px;">
+                <col style="width: 120px;">
+              </colgroup>
+              <thead>
+                <!-- th 마다 sticky 를 건다 — tr 에 걸면 브라우저가 무시한다 -->
+                <tr>
+                  <th
+                    v-for="(h, i) in headers"
+                    :key="i"
+                    class="text-base font-semibold"
+                    :class="h.align"
+                    style="position: sticky; top: 0; z-index: 2; padding: 12px 16px; color: #334155; background: #e2e8f0; border-bottom: 1px solid #cbd5e1;"
+                  >{{ h.label }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template
+                  v-for="student in studentsByRound[round.id] ?? []"
+                  :key="student.student_id"
+                >
+                  <!-- 학생 구분 행 — 표 안에서 학생이 바뀌는 지점이라 결과 행보다 진하게 둔다 -->
+                  <tr>
+                    <td
+                      colspan="7"
+                      style="padding: 11px 20px; background: #f1f5f9; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;"
+                    >
+                      <span class="text-base font-semibold" style="color: #0f172a;">{{ student.name }}</span>
+                      <span class="text-base" style="color: #475569; margin-left: 10px;">{{ student.student_code }}</span>
+                      <span v-if="auth.grade !== 0" class="text-base" style="color: #64748b; margin-left: 10px;">{{ student.seq_no }}번</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
+
                   <tr
                     v-for="r in student.results"
                     :key="r.track_id"
+                    class="transition hover:brightness-95"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
                       background:
@@ -176,9 +186,9 @@
                       >추천 포기</button>
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
+                </template>
+              </tbody>
+            </table>
           </div>
         </template>
       </div>
@@ -203,6 +213,17 @@ const results   = ref([])
 const loading   = ref(false)
 const loadError = ref('')
 const rankView  = ref('track')
+
+// 표 헤더 정의. 한 곳에 모아 두면 열을 늘릴 때 colgroup 과 함께 여기만 보면 된다.
+const headers = computed(() => [
+  { label: '대학명',   align: 'text-left' },
+  { label: '모집단위', align: 'text-left' },
+  { label: '지원 학과', align: 'text-left' },
+  { label: rankView.value === 'track' ? '모집단위 순위' : '대학 순위', align: 'text-center' },
+  { label: '총점',     align: 'text-left' },
+  { label: '상태',     align: 'text-center' },
+  { label: '비고',     align: 'text-center' },
+])
 
 const hasFinalized = computed(() => rounds.value.some(r => r.status === 'FINALIZED'))
 
