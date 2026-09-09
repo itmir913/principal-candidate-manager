@@ -3,7 +3,9 @@
        관리자 개요 탭에만 있던 것을 담임 화면과 공유하려고 컴포넌트로 뽑았다.
 
        AppInfoCard 와 역할이 다르다: 이쪽은 "이 소프트웨어가 무엇인가",
-       AppInfoCard 는 "이 설치본을 학교가 뭐라고 이름 붙였는가"다. -->
+       AppInfoCard 는 "이 설치본을 학교가 뭐라고 이름 붙였는가"다.
+       그래서 제목은 설정값(app_title)이 아니라 고정 제품명이다 — 학교가 이름을 바꿔도
+       제품 자체의 이름은 그대로여야 문의·문서·릴리스에서 말이 통한다. -->
   <div
     class="rounded-xl"
     style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
@@ -13,7 +15,7 @@
         <p class="text-base font-semibold" style="color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em;">
           Teacher Utility Kit
         </p>
-        <p class="text-xl font-bold mt-0.5" style="color: #1e293b;">{{ appInfo.fullTitle }}</p>
+        <p class="text-xl font-bold mt-0.5" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
       </div>
       <div class="lg:text-right">
         <p class="text-base font-semibold" style="color: #475569;">© luminousky</p>
@@ -28,15 +30,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { useAppInfoStore } from '../../stores/appInfo.js'
 
 // 관리자 개요는 이미 overview 응답에 버전이 실려 오므로 그대로 넘긴다.
 // 담임 화면에는 그 API 가 없어서, 값이 없으면 공개 엔드포인트로 직접 받는다.
 const props = defineProps({
   version: { type: String, default: '' },
 })
-
-const appInfo = useAppInfoStore()
 const fetched = ref('')
 
 const shownVersion = computed(() => props.version || fetched.value)

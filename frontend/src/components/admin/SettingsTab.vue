@@ -100,7 +100,9 @@
         <h2 class="text-base font-semibold" style="color: #1e293b;">About</h2>
       </div>
       <div class="px-6 py-5 flex flex-col gap-1.5">
-        <p class="text-xl font-semibold" style="color: #1e293b;">{{ appInfo.fullTitle }}</p>
+        <!-- 제품명은 고정이다 — 제작자·라이선스와 함께 "이 소프트웨어가 무엇인가"를 밝히는
+             자리라, 학교가 설정한 이름(바로 위 카드)을 여기 다시 쓰면 같은 문구가 두 번 뜬다 -->
+        <p class="text-xl font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
         <div class="flex flex-col gap-2">
           <p class="text-base" style="color:#64748b; line-height:1.6;">
             <strong>luminousky</strong> · © 2026<br>
