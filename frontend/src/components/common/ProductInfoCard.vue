@@ -10,23 +10,29 @@
     class="rounded-xl"
     style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
   >
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <!-- 두 열의 줄 수가 다르다(왼쪽 최대 3줄, 오른쪽 2줄). 위로 붙이면 오른쪽 아래가 크게
+         비어 카드 절반의 여백이 어긋나 보인다 — 넓은 화면에서는 세로 가운데로 맞춘다.
+         좁은 화면에서는 세로로 쌓이므로 그냥 왼쪽 정렬이다. -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:items-center">
       <div class="min-w-0">
-        <p class="text-base font-semibold" style="color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em;">
-          Teacher Utility Kit
-        </p>
-        <p class="text-2xl font-bold mt-0.5" style="color: #1e293b;">{{ appInfo.cardTitle }}</p>
+        <!-- 줄 높이를 명시한다. text-base 의 기본 줄 높이는 24px 이라 16px 라벨에 느슨하고,
+             그만큼이 카드 위쪽 여백에 얹혀 아래쪽보다 넓어 보인다. -->
+        <p
+          class="text-base font-semibold"
+          style="color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin: 0; line-height: 1.25;"
+        >Teacher Utility Kit</p>
+        <p class="text-2xl font-bold" style="color: #1e293b; margin: 6px 0 0; line-height: 1.3;">{{ appInfo.cardTitle }}</p>
         <!-- 설명에는 "인원 제한 있는 대학" 같은 구분이 들어온다. 장식이 아니라 담임이 읽고
              판단하는 문구라 흐린 회색을 쓰지 않는다. -->
         <p
           v-if="appInfo.cardDesc"
           class="text-lg"
-          style="color: #475569; margin: 6px 0 0; line-height: 1.5;"
+          style="color: #475569; margin: 6px 0 0; line-height: 1.4;"
         >{{ appInfo.cardDesc }}</p>
       </div>
       <div class="lg:text-right">
-        <p class="text-base font-semibold" style="color: #475569;">© luminousky</p>
-        <p class="text-base mt-0.5" style="color: #94a3b8;">
+        <p class="text-base font-semibold" style="color: #475569; margin: 0; line-height: 1.4;">© luminousky</p>
+        <p class="text-base" style="color: #94a3b8; margin: 4px 0 0; line-height: 1.4;">
           Principal Candidate Manager<template v-if="shownVersion"> · v{{ shownVersion }}</template>
         </p>
       </div>
