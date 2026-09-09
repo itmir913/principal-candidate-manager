@@ -84,6 +84,8 @@
           @click="downloadAllCsv"
         >{{ downloading ? '내려받는 중…' : '전체 결과 CSV' }}</button>
       </div>
+
+
       <div
         v-for="round in rounds"
         :key="round.id"
@@ -198,10 +200,11 @@
                     class="result-row"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
-                      background:
-                        r.recommended && !r.abandoned ? '#f0fdf4' :
-                        tieSet.has(`${r.student_id}-${r.track_id}-${round.id}`) ? '#fffbeb' :
-                        '#fff1f2',
+                      // 담임은 마감된 라운드만 본다. 색은 선발 결과만 나타낸다 —
+                      // 추천 확정은 초록, 미선발과 포기는 빨강.
+                      // 동점(노란색)은 관리자가 추천을 고르는 동안(CLOSED)에만 쓰는 '유의' 표시라
+                      // 결과가 확정된 화면에는 뜻이 없다. 관리자 RoundsTab 의 FINALIZED 분기와 같다.
+                      background: r.recommended && !r.abandoned ? '#f0fdf4' : '#fef2f2',
                     }"
                   >
                     <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
@@ -282,7 +285,7 @@ const helpBox = computed(() => {
       title: '도움말 — 결과 보는 방법',
       intro: '마감된 라운드의 우리 반 학생 결과입니다.',
       items: [
-        '초록색 배경의 "추천 확정"은 학교장추천 대상으로 확정된 것이고, 붉은색 배경의 "미선발"은 이번 라운드에서 추천되지 않은 것입니다.',
+        '초록색 배경의 "추천 확정"은 학교장추천 대상으로 확정된 것이고, 붉은색 배경은 이번 라운드에서 추천되지 않았거나("미선발") 추천을 포기한("포기됨") 것입니다.',
         '추천이 확정된 학생이 추천을 포기하려면 "추천 포기"를 누르세요.',
         { text: '포기는 되돌릴 수 없습니다. 반드시 학생·학부모와 확인한 뒤 처리하세요. 다시 추천받으려면 다음 라운드에서 재지원해야 합니다.', warn: true },
         '"미선발"된 학생은 다음 라운드가 열리면 다시 지원할 수 있습니다.',
@@ -308,34 +311,6 @@ const helpBox = computed(() => {
       '마감되면 이 화면에 우리 반 학생들의 순위·총점·추천 여부가 표시됩니다.',
     ],
   }
-})
-
-const tieSet = computed(() => {
-  const set = new Set()
-  if (rankView.value === 'track') {
-    const counts = {}
-    for (const r of results.value) {
-      if (r.track_rank == null) continue
-      const k = `${r.track_id}-${r.round_id}-${r.track_rank}`
-      if (!counts[k]) counts[k] = []
-      counts[k].push(r)
-    }
-    for (const rows of Object.values(counts)) {
-      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}-${r.round_id}`)
-    }
-  } else {
-    const counts = {}
-    for (const r of results.value) {
-      if (r.ranking == null) continue
-      const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
-      if (!counts[k]) counts[k] = []
-      counts[k].push(r)
-    }
-    for (const rows of Object.values(counts)) {
-      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}-${r.round_id}`)
-    }
-  }
-  return set
 })
 
 // round_id → { student_id → { ...student, results[] } } 구조
