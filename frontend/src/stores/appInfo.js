@@ -7,6 +7,12 @@ import axios from 'axios'
 const FALLBACK_TITLE = '학교장 추천자'
 const FALLBACK_DESC = '선발 관리 시스템'
 
+// 사이드바는 한 줄짜리 고정 폭(240px)이라 title 만 쓴다. 그런데 미지정 상태의 title
+// ('학교장 추천자')은 제품명이 아니라 문장 조각이라 단독으로는 어색하다.
+// 지정 전에는 0.2.15 이전에 하드코딩돼 있던 문구를 그대로 쓴다 — 설정하지 않은 학교의
+// 화면이 예전과 같아야 한다는 것이 이 기능의 전제다.
+const SIDEBAR_FALLBACK = '학교장추천 선발 시스템'
+
 /// 프로그램 제목·부제 (이슈 #23).
 ///
 /// 로그인·시작·서버오류 화면이 인증 전에 제목을 그려야 해서 GET은 공개 엔드포인트다.
@@ -20,6 +26,9 @@ export const useAppInfoStore = defineStore('appInfo', () => {
 
   /// 제목 + 부제를 한 줄로 — 브라우저 탭·문서 제목처럼 한 줄만 쓰는 자리용.
   const fullTitle = computed(() => (desc.value ? `${title.value} ${desc.value}` : title.value))
+
+  /// 사이드바용 — 지정 전에는 예전 문구, 지정 후에는 학교가 붙인 이름.
+  const sidebarTitle = computed(() => (configured.value ? title.value : SIDEBAR_FALLBACK))
 
   function _apply(data) {
     title.value = data.title
@@ -46,5 +55,5 @@ export const useAppInfoStore = defineStore('appInfo', () => {
     _apply(data)
   }
 
-  return { title, desc, configured, loaded, fullTitle, load, set }
+  return { title, desc, configured, loaded, fullTitle, sidebarTitle, load, set }
 })

@@ -31,8 +31,8 @@
           <span
             class="text-base font-bold truncate"
             style="color: #1e293b;"
-            :title="appInfo.title"
-          >{{ appInfo.title }}</span>
+            :title="appInfo.sidebarTitle"
+          >{{ appInfo.sidebarTitle }}</span>
         </div>
         <button
           @click="collapsed = !collapsed"
