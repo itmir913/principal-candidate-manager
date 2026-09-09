@@ -838,7 +838,9 @@ const trackQuotaMap = computed(() => {
   return map
 })
 
-const rankView = ref('track')
+// 기본값은 대학 전체 순위다. 옆의 [지원 현황] 탭이 대학별로 묶어 보여주므로(appsByUniv),
+// 결과 탭만 모집단위 기준으로 열리면 같은 학생의 순위가 탭마다 달라 보인다.
+const rankView = ref('univ')
 
 // 표시용 필터. results 는 항상 라운드 전체이고, 여기서만 모집단위를 좁힌다.
 // 동점 표식(tieSet)은 results 전체를 쓰므로 필터와 무관하게 유지된다.
