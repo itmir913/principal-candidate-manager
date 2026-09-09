@@ -22,22 +22,7 @@
     <div v-else-if="data" class="flex flex-col gap-4">
 
       <!-- ① 앱 정보 -->
-      <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div>
-            <p class="text-base font-semibold" style="color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em;">
-              Teacher Utility Kit
-            </p>
-            <p class="text-xl font-bold mt-0.5" style="color: #1e293b;">{{ appInfo.fullTitle }}</p>
-          </div>
-          <div class="lg:text-right">
-            <p class="text-base font-semibold" style="color: #475569;">© luminousky</p>
-            <p class="text-base mt-0.5" style="color: #94a3b8;">
-              Principal Candidate Manager · v{{ data.version }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <ProductInfoCard :version="data.version" />
 
       <!-- ② 서버 접속 정보 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
@@ -391,12 +376,11 @@ import { ref, computed, onMounted, inject, h } from 'vue'
 import { Copy, Check, AlertTriangle, CheckCircle2, XCircle, ArrowRight } from 'lucide-vue-next'
 import { getOverview, getClasses, getStudents, getAreas, getUniversities } from '../../api/admin.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
-import { useAppInfoStore } from '../../stores/appInfo.js'
 
 import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
+import ProductInfoCard from '../common/ProductInfoCard.vue'
 
-const appInfo = useAppInfoStore()
 
 // ── 섹션 레이블 헬퍼 컴포넌트 (인라인) ─────────────────────────
 const SectionLabel = {
