@@ -40,41 +40,148 @@
 
     <HelpBox class="mb-5" storage-key="univs" :title="HELP.title" :intro="HELP.intro" :items="HELP.items" />
 
-    <div class="flex flex-col lg:flex-row lg:items-start gap-6" style="min-height: 480px;">
+    <!-- 대학마다 카드 한 장. 예전에는 왼쪽 목록 + 오른쪽 상세로 나뉘어 있었는데, 대학당
+         모집단위가 2~3개뿐이라 오른쪽이 대부분 빈 공간이었고 대학을 하나씩 눌러야 모집단위가
+         보였다. 카드로 펼치면 한 화면에서 전부 읽힌다.
 
-      <!-- ── 좌측: 대학 목록 ─────────────────────────────────── -->
-      <div class="flex flex-col flex-shrink-0 w-full lg:w-[300px]">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold" style="color: #1e293b;">대학 목록</h2>
-          <button
-            class="text-base font-medium rounded-lg disabled:opacity-40"
-            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-            :disabled="saving"
-            @click="startAddUniv"
-          >+ 대학 추가</button>
+         대신 대학 수만큼 페이지가 길어지므로 검색이 함께 있어야 한다 — 검색이 없으면
+         "빈 오른쪽"을 "끝없는 스크롤"과 맞바꾸는 셈이다. -->
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <input
+          v-model="search"
+          type="text"
+          class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+          style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; width: 260px; box-sizing: border-box;"
+          placeholder="대학명 · 모집단위명 검색"
+        />
+        <span class="text-base" style="color: #94a3b8;">
+          <template v-if="search.trim()">{{ visibleUnivs.length }} / {{ univs.length }}개 대학</template>
+          <template v-else>{{ univs.length }}개 대학</template>
+        </span>
+      </div>
+      <button
+        class="text-base font-medium rounded-lg disabled:opacity-40"
+        style="padding: 8px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
+        :disabled="saving"
+        @click="startAddUniv"
+      >+ 대학 추가</button>
+    </div>
+
+    <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
+
+    <!-- 대학 추가 폼 — "+ 추가"는 모달이 아니라 목록 위 inline (저장소 공통 패턴) -->
+    <div v-if="addingUniv" class="rounded-xl mb-4"
+      style="padding: 18px 22px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+      <h3 class="text-base font-semibold mb-3" style="color: #1e293b;">새 대학 추가</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
+          <input v-model="univForm.univ_name" type="text"
+            class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
+            placeholder="예) 한국대학교" />
+        </div>
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전체 정원</label>
+          <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
+        </div>
+        <div class="flex items-end">
+          <div class="flex items-center gap-2" style="padding-bottom: 9px;">
+            <input v-model="univForm.prioritize_enrolled" type="checkbox" id="add-univ-pe" class="accent-blue-600 w-4 h-4" />
+            <label for="add-univ-pe" class="text-base" style="color: #475569;">재학생 우선</label>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button
+          class="text-base font-semibold rounded-lg disabled:opacity-40"
+          style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+          :disabled="saving || !univFormValid"
+          @click="saveAddUniv"
+        >{{ saving ? '저장 중…' : '저장' }}</button>
+        <button
+          class="text-base rounded-lg"
+          style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+          :disabled="saving"
+          @click="addingUniv = false"
+        >취소</button>
+      </div>
+    </div>
+
+    <!-- ── 대학 카드 ───────────────────────────────────────────── -->
+    <div class="flex flex-col gap-4">
+      <div
+        v-for="u in visibleUnivs"
+        :key="u.id"
+        class="rounded-xl overflow-hidden"
+        style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
+      >
+        <!-- 카드 머리: 대학 정보 + 동작 -->
+        <div v-if="editingUnivId !== u.id"
+          class="flex items-start justify-between gap-3 flex-wrap"
+          style="padding: 18px 22px; border-bottom: 1px solid #f1f5f9;">
+          <div class="min-w-0">
+            <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
+            <p class="text-base" style="margin: 4px 0 0; color: #64748b;">
+              대학 정원:
+              <span class="font-medium" style="color: #1e293b;">
+                {{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}
+              </span>
+              <template v-if="statsOf(u.id)">
+                &nbsp;·&nbsp;추천인원:
+                <span class="font-medium" style="color: #1e293b;">{{ statsOf(u.id).total_used }}명</span>
+                &nbsp;·&nbsp;잔여인원:
+                <span class="font-medium"
+                  :style="{ color: u.total_quota != null && statsOf(u.id).total_used >= u.total_quota ? '#ef4444' : '#1e293b' }">
+                  {{ remainingLabel(statsOf(u.id).total_used, u.total_quota) }}
+                </span>
+              </template>
+              &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap flex-shrink-0">
+            <button
+              class="text-base font-medium rounded-lg disabled:opacity-40"
+              style="padding: 7px 14px; border: none; background: #16a34a; color: white; cursor: pointer;"
+              :disabled="downloading"
+              @click="doExportQuotaStats(false, u)"
+            >명단·정원 현황</button>
+            <button
+              class="text-base font-medium rounded-lg disabled:opacity-40"
+              style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+              :disabled="saving"
+              @click="startAddTrack(u.id)"
+            >+ 모집단위</button>
+            <span style="color: #cbd5e1; user-select: none;">|</span>
+            <button class="text-base font-medium disabled:opacity-40"
+              style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0 4px;"
+              :disabled="saving" @click="startEditUniv(u)">편집</button>
+            <button class="text-base font-medium disabled:opacity-40"
+              style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0 4px;"
+              :disabled="saving" @click="removeUniv(u.id)">삭제</button>
+          </div>
         </div>
 
-        <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
-
-        <!-- 대학 추가 폼 -->
-        <div v-if="addingUniv" class="rounded-xl mb-3"
-          style="padding: 16px 18px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-          <h3 class="text-base font-semibold mb-3" style="color: #1e293b;">새 대학 추가</h3>
-          <div class="space-y-3">
+        <!-- 카드 머리: 대학 편집 -->
+        <div v-else style="padding: 18px 22px; background: #fefce8; border-bottom: 1px solid #fde68a;">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
               <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
               <input v-model="univForm.univ_name" type="text"
                 class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
-                placeholder="예) 한국대학교" />
+                style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
             </div>
             <div>
               <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전체 정원</label>
               <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
             </div>
-            <div class="flex items-center gap-2">
-              <input v-model="univForm.prioritize_enrolled" type="checkbox" id="add-univ-pe" class="accent-blue-600 w-4 h-4" />
-              <label for="add-univ-pe" class="text-base" style="color: #475569;">재학생 우선</label>
+            <div class="flex items-end">
+              <div class="flex items-center gap-2" style="padding-bottom: 9px;">
+                <input v-model="univForm.prioritize_enrolled" type="checkbox"
+                  :id="`edit-univ-pe-${u.id}`" class="accent-blue-600 w-4 h-4" />
+                <label :for="`edit-univ-pe-${u.id}`" class="text-base" style="color: #475569;">재학생 우선</label>
+              </div>
             </div>
           </div>
           <div class="flex gap-2 mt-4">
@@ -82,263 +189,153 @@
               class="text-base font-semibold rounded-lg disabled:opacity-40"
               style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
               :disabled="saving || !univFormValid"
-              @click="saveAddUniv"
+              @click="saveEditUniv(u.id)"
             >{{ saving ? '저장 중…' : '저장' }}</button>
-            <button
-              class="text-base rounded-lg"
+            <button class="text-base rounded-lg"
               style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-              :disabled="saving"
-              @click="addingUniv = false"
-            >취소</button>
+              :disabled="saving" @click="editingUnivId = null">취소</button>
           </div>
         </div>
 
-        <!-- 대학 카드 목록 -->
-        <div class="overflow-y-auto flex-1 space-y-2">
-          <div
-            v-for="u in univs"
-            :key="u.id"
-            class="rounded-xl transition-all"
-            :style="{
-              background: selectedUnivId === u.id ? '#eff6ff' : 'white',
-              border: selectedUnivId === u.id ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
-            }"
-          >
-            <template v-if="editingUnivId !== u.id">
-              <div class="cursor-pointer" style="padding: 14px 16px;" @click="selectUniv(u.id)">
-                <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
-                <p class="text-base" style="margin: 4px 0 0; color: #64748b;">
-                  대학 정원: <span class="font-medium">{{ u.total_quota != null ? u.total_quota + '명' : '무제한' }}</span>
-                  &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
-                </p>
-                <div class="flex gap-3">
-                  <button class="text-base font-medium disabled:opacity-40"
-                          style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
-                          :disabled="saving" @click.stop="startEditUniv(u)">편집</button>
-                  <button class="text-base font-medium disabled:opacity-40"
-                          style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                          :disabled="saving" @click.stop="removeUniv(u.id)">삭제</button>
-                </div>
-              </div>
-            </template>
+        <!-- 모집단위 표 -->
+        <div class="overflow-x-auto">
+          <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 780px;">
+            <colgroup>
+              <col>
+              <col style="width: 110px;">
+              <col style="width: 100px;">
+              <col style="width: 100px;">
+              <col style="width: 130px;">
+              <col style="width: 160px;">
+            </colgroup>
+            <thead>
+              <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">모집단위명</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">제한인원</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">추천인원</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">잔여인원</th>
+                <th class="text-base font-semibold text-center" style="padding: 12px 20px; color: #475569;">재학생 우선</th>
+                <th style="padding: 12px 20px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 추가 행 -->
+              <tr v-if="addingTrackUnivId === u.id" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+                <td style="padding: 10px 16px;">
+                  <input v-model="trackForm.track_name" type="text"
+                    class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;"
+                    placeholder="예) 자연계열" />
+                </td>
+                <td style="padding: 10px 16px;">
+                  <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
+                </td>
+                <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                <td class="text-center" style="padding: 10px 16px;">
+                  <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4"
+                    :disabled="!!u.prioritize_enrolled" />
+                </td>
+                <td style="padding: 10px 16px;">
+                  <div class="flex gap-2">
+                    <button
+                      class="text-base font-semibold rounded-lg disabled:opacity-40"
+                      style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                      :disabled="saving || !trackFormValid"
+                      @click="saveAddTrack(u.id)"
+                    >{{ saving ? '저장 중…' : '저장' }}</button>
+                    <button class="text-base rounded-lg"
+                      style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                      :disabled="saving" @click="addingTrackUnivId = null">취소</button>
+                  </div>
+                </td>
+              </tr>
 
-            <template v-else>
-              <div style="padding: 14px 16px; background: #fefce8; border-radius: 10px;">
-                <div class="space-y-3">
-                  <div>
-                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
-                    <input v-model="univForm.univ_name" type="text"
-                      class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;" />
-                  </div>
-                  <div>
-                    <label class="block text-base font-medium mb-1.5" style="color: #64748b;">전체 정원</label>
-                    <QuotaInput v-model:unlimited="univForm.unlimited" v-model:quota="univForm.total_quota" />
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <input v-model="univForm.prioritize_enrolled" type="checkbox"
-                      :id="`edit-univ-pe-${u.id}`" class="accent-blue-600 w-4 h-4" />
-                    <label :for="`edit-univ-pe-${u.id}`" class="text-base" style="color: #475569;">재학생 우선</label>
-                  </div>
-                </div>
-                <div class="flex gap-2 mt-4">
-                  <button
-                    class="text-base font-semibold rounded-lg disabled:opacity-40"
-                    style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                    :disabled="saving || !univFormValid"
-                    @click="saveEditUniv(u.id)"
-                  >{{ saving ? '저장 중…' : '저장' }}</button>
-                  <button class="text-base rounded-lg"
-                    style="padding: 8px 18px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                    :disabled="saving" @click="editingUnivId = null">취소</button>
-                </div>
-              </div>
-            </template>
-          </div>
+              <template v-for="t in tracksOf(u.id)" :key="t.id">
+                <!-- 보기 행 -->
+                <tr v-if="editingTrackId !== t.id"
+                  class="hover:bg-slate-50"
+                  style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
+                  <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ t.track_name }}</td>
+                  <td class="text-base" style="padding: 13px 20px; color: #1e293b;">
+                    {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
+                  </td>
+                  <td style="padding: 13px 20px;">
+                    <button
+                      class="text-base font-medium underline"
+                      style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                      @click="openRecommendedModal(t)"
+                    >{{ t.unit_used }}명</button>
+                  </td>
+                  <td class="text-base font-medium" style="padding: 13px 20px;"
+                    :style="{ color: t.unit_quota != null && t.unit_used >= t.unit_quota ? '#ef4444' : '#1e293b' }">
+                    {{ remainingLabel(t.unit_used, t.unit_quota) }}
+                  </td>
+                  <td class="text-base text-center" style="padding: 13px 20px; color: #1e293b;">
+                    {{ t.prioritize_enrolled ? '○' : '-' }}
+                  </td>
+                  <td style="padding: 13px 20px;">
+                    <div class="flex gap-3">
+                      <button class="text-base font-medium disabled:opacity-40"
+                        style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
+                        :disabled="saving" @click="startEditTrack(t)">편집</button>
+                      <button class="text-base font-medium disabled:opacity-40"
+                        style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
+                        :disabled="saving" @click="removeTrack(t.id)">삭제</button>
+                    </div>
+                  </td>
+                </tr>
+                <!-- 편집 행 -->
+                <tr v-else style="background: #fefce8; border-bottom: 1px solid #fde68a;">
+                  <td style="padding: 10px 16px;">
+                    <input v-model="trackForm.track_name" type="text"
+                      class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      style="width: 100%; border: 1px solid #fbbf24; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;" />
+                  </td>
+                  <td style="padding: 10px 16px;">
+                    <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
+                  </td>
+                  <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                  <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
+                  <td class="text-center" style="padding: 10px 16px;">
+                    <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4"
+                      :disabled="!!u.prioritize_enrolled" />
+                  </td>
+                  <td style="padding: 10px 16px;">
+                    <div class="flex gap-2">
+                      <button
+                        class="text-base font-semibold rounded-lg disabled:opacity-40"
+                        style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                        :disabled="saving || !trackFormValid"
+                        @click="saveEditTrack(t.id)"
+                      >{{ saving ? '저장 중…' : '저장' }}</button>
+                      <button class="text-base rounded-lg"
+                        style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                        :disabled="saving" @click="editingTrackId = null">취소</button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
 
-          <div v-if="univs.length === 0 && !addingUniv"
-            class="text-base text-center" style="padding: 48px 0; color: #94a3b8;">
-            등록된 대학이 없습니다.
-          </div>
+              <tr v-if="tracksOf(u.id).length === 0 && addingTrackUnivId !== u.id">
+                <td colspan="6" class="text-base text-center" style="padding: 28px 20px; color: #94a3b8;">
+                  등록된 모집단위가 없습니다.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- ── 우측: 모집단위 ───────────────────────────────────── -->
-      <div class="flex-1 min-w-0">
-        <div v-if="!selectedUniv" class="flex items-center justify-center" style="height: 300px;">
-          <p class="text-base" style="color: #94a3b8;">왼쪽에서 대학을 선택하면 모집단위를 관리할 수 있습니다.</p>
-        </div>
-
-        <template v-else>
-          <!-- 헤더 -->
-          <div class="flex items-start justify-between mb-4 flex-wrap gap-2">
-            <div>
-              <h2 class="text-lg font-semibold" style="color: #1e293b; margin: 0;">
-                {{ selectedUniv.univ_name }} — 모집단위
-              </h2>
-              <p class="text-base" style="color: #64748b; margin: 4px 0 0;">
-                대학 전체 정원:
-                <span class="font-medium" style="color: #1e293b;">
-                  {{ selectedUniv.total_quota != null ? selectedUniv.total_quota + '명' : '무제한' }}
-                </span>
-                <template v-if="selectedUnivStats">
-                  &nbsp;·&nbsp;대학 전체 추천인원:
-                  <span class="font-medium" style="color: #1e293b;">{{ selectedUnivStats.total_used }}명</span>
-                  &nbsp;·&nbsp;대학 전체 잔여인원:
-                  <span class="font-medium"
-                    :style="{ color: selectedUniv.total_quota != null && selectedUnivStats.total_used >= selectedUniv.total_quota ? '#ef4444' : '#1e293b' }">
-                    {{ remainingLabel(selectedUnivStats.total_used, selectedUniv.total_quota) }}
-                  </span>
-                </template>
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <button
-                class="text-base font-medium rounded-lg disabled:opacity-40"
-                style="padding: 8px 16px; border: none; background: #16a34a; color: white; cursor: pointer;"
-                :disabled="downloading"
-                @click="doExportQuotaStats(false)"
-              >이 대학 명단·정원 현황</button>
-              <button
-                class="text-base font-medium rounded-lg disabled:opacity-40"
-                style="padding: 8px 16px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                :disabled="saving"
-                @click="startAddTrack"
-              >+ 모집단위 추가</button>
-            </div>
-          </div>
-
-          <!-- 모집단위 테이블 -->
-          <div class="rounded-xl overflow-hidden"
-            style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
-            <div class="overflow-x-auto">
-              <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 780px;">
-                <colgroup>
-                  <col>
-                  <col style="width: 110px;">
-                  <col style="width: 100px;">
-                  <col style="width: 100px;">
-                  <col style="width: 130px;">
-                  <col style="width: 160px;">
-                </colgroup>
-                <thead>
-                  <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">모집단위명</th>
-                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">제한인원</th>
-                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">추천인원</th>
-                    <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">잔여인원</th>
-                    <th class="text-base font-semibold text-center" style="padding: 14px 20px; color: #475569;">재학생 우선</th>
-                    <th style="padding: 14px 20px;"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- 추가 행 -->
-                  <tr v-if="addingTrack" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
-                    <td style="padding: 10px 16px;">
-                      <input v-model="trackForm.track_name" type="text"
-                        class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;"
-                        placeholder="예) 자연계열" />
-                    </td>
-                    <td style="padding: 10px 16px;">
-                      <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
-                    </td>
-                    <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                    <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                    <td class="text-center" style="padding: 10px 16px;">
-                      <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
-                    </td>
-                    <td style="padding: 10px 16px;">
-                      <div class="flex gap-2">
-                        <button
-                          class="text-base font-semibold rounded-lg disabled:opacity-40"
-                          style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                          :disabled="saving || !trackFormValid"
-                          @click="saveAddTrack"
-                        >{{ saving ? '저장 중…' : '저장' }}</button>
-                        <button class="text-base rounded-lg"
-                          style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                          :disabled="saving" @click="addingTrack = false">취소</button>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <template v-for="t in tracksWithStats" :key="t.id">
-                    <!-- 보기 행 -->
-                    <tr v-if="editingTrackId !== t.id"
-                      class="hover:bg-slate-50"
-                      style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
-                      <td class="text-base" style="padding: 14px 20px; color: #1e293b;">{{ t.track_name }}</td>
-                      <td class="text-base" style="padding: 14px 20px; color: #1e293b;">
-                        {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
-                      </td>
-                      <td style="padding: 14px 20px;">
-                        <button
-                          class="text-base font-medium underline"
-                          style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
-                          @click="openRecommendedModal(t)"
-                        >{{ t.unit_used }}명</button>
-                      </td>
-                      <td class="text-base font-medium" style="padding: 14px 20px;"
-                        :style="{ color: t.unit_quota != null && t.unit_used >= t.unit_quota ? '#ef4444' : '#1e293b' }">
-                        {{ remainingLabel(t.unit_used, t.unit_quota) }}
-                      </td>
-                      <td class="text-base text-center" style="padding: 14px 20px; color: #1e293b;">
-                        {{ t.prioritize_enrolled ? '○' : '-' }}
-                      </td>
-                      <td style="padding: 14px 20px;">
-                        <div class="flex gap-3">
-                          <button class="text-base font-medium disabled:opacity-40"
-                            style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
-                            :disabled="saving" @click="startEditTrack(t)">편집</button>
-                          <button class="text-base font-medium disabled:opacity-40"
-                            style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 0;"
-                            :disabled="saving" @click="removeTrack(t.id)">삭제</button>
-                        </div>
-                      </td>
-                    </tr>
-                    <!-- 편집 행 -->
-                    <tr v-else style="background: #fefce8; border-bottom: 1px solid #fde68a;">
-                      <td style="padding: 10px 16px;">
-                        <input v-model="trackForm.track_name" type="text"
-                          class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-                          style="width: 100%; border: 1px solid #fbbf24; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;" />
-                      </td>
-                      <td style="padding: 10px 16px;">
-                        <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
-                      </td>
-                      <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                      <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                      <td class="text-center" style="padding: 10px 16px;">
-                        <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4" :disabled="univPrioritize" />
-                      </td>
-                      <td style="padding: 10px 16px;">
-                        <div class="flex gap-2">
-                          <button
-                            class="text-base font-semibold rounded-lg disabled:opacity-40"
-                            style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-                            :disabled="saving || !trackFormValid"
-                            @click="saveEditTrack(t.id)"
-                          >{{ saving ? '저장 중…' : '저장' }}</button>
-                          <button class="text-base rounded-lg"
-                            style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
-                            :disabled="saving" @click="editingTrackId = null">취소</button>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-
-                  <tr v-if="tracks.length === 0 && !addingTrack">
-                    <td colspan="6" class="text-base text-center" style="padding: 48px 20px; color: #94a3b8;">
-                      등록된 모집단위가 없습니다.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
+      <div v-if="univs.length === 0 && !addingUniv"
+        class="rounded-xl text-base text-center"
+        style="padding: 48px 0; color: #94a3b8; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        등록된 대학이 없습니다.
+      </div>
+      <div v-else-if="visibleUnivs.length === 0"
+        class="rounded-xl text-base text-center"
+        style="padding: 48px 0; color: #94a3b8; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
+        검색과 일치하는 대학·모집단위가 없습니다.
       </div>
     </div>
   </div>
@@ -556,7 +553,7 @@
 import { ref, computed, onMounted, defineComponent, h } from 'vue'
 import {
   getUniversities, createUniversity, updateUniversity, deleteUniversity,
-  getUnivTracks, createTrack, updateTrack, deleteTrack,
+  getAllTracks, createTrack, updateTrack, deleteTrack,
   getQuotaStats, exportQuotaStats, getTrackRecommendedList,
   downloadUnivSettingsTemplate, exportUnivSettings, previewUnivSettings, importUnivSettings,
   blobErrMsg,
@@ -568,7 +565,8 @@ const HELP = {
   title: '도움말 — 대학 설정',
   intro: '학생이 지원할 대학과 모집단위(예: 인문계열, 자연계열)를 등록하고, 학교장추천 가능 인원(정원)을 정하는 곳입니다.',
   items: [
-    '"+ 대학 추가"로 대학을 만들고, 그 대학을 클릭한 뒤 "+ 모집단위 추가"로 모집단위를 등록하세요.',
+    '"+ 대학 추가"로 대학을 만들면 카드가 하나 생깁니다. 카드 안의 "+ 모집단위"로 그 대학의 모집단위를 등록하세요.',
+    '대학이 많아지면 위쪽 검색칸에 대학명이나 모집단위명을 넣어 좁힐 수 있습니다.',
     '정원 설정: 대학 전체 인원만 제한하는 대학이면 대학 정원만 입력하고 모집단위는 무제한으로 두세요. 모집단위별 인원 제한이 있으면 모집단위 정원을 입력하세요.',
     '"재학생 우선"을 켜면 추천 순위에서 재학생이 졸업생보다 항상 앞섭니다. 대학의 "재학생 우선"을 켜면 그 대학의 모든 모집단위도 함께 켜지고, 다시 끄면 모집단위도 함께 꺼집니다.',
     '대학은 끄고 특정 모집단위만 "재학생 우선"으로 둘 수 있습니다. 이 경우 그 모집단위 안에서만 재학생이 먼저 추천되며, 대학 전체 정원으로 인원을 줄일 때도 그 모집단위 내부 순서는 유지됩니다.',
@@ -632,16 +630,17 @@ const QuotaInput = defineComponent({
 
 // ── 상태 ──────────────────────────────────────────────────────
 const univs        = ref([])
-const tracks       = ref([])
+const tracks       = ref([])   // 전 대학의 모집단위 (getAllTracks)
 const error        = ref('')
 const saving       = ref(false)
 const downloading  = ref(false)
 
-const selectedUnivId  = ref(null)
-const addingUniv      = ref(false)
-const editingUnivId   = ref(null)
-const addingTrack     = ref(false)
-const editingTrackId  = ref(null)
+// 카드 구조에는 "선택된 대학"이 없다. 모집단위 추가 폼만 어느 카드에서 열렸는지 알면 된다.
+const addingTrackUnivId = ref(null)
+const search            = ref('')
+const addingUniv        = ref(false)
+const editingUnivId     = ref(null)
+const editingTrackId    = ref(null)
 
 const univForm  = ref(emptyUnivForm())
 const trackForm = ref(emptyTrackForm())
@@ -670,28 +669,47 @@ const canApplySettings = computed(() =>
   settings.value.errors.length === 0 && !settings.value.hasBlocked &&
   settings.value.changes.length > 0)
 
-const selectedUniv = computed(() => univs.value.find(u => u.id === selectedUnivId.value) ?? null)
-const univPrioritize = computed(() => !!(selectedUniv.value?.prioritize_enrolled))
-
-const selectedUnivStats = computed(() => {
-  if (!quotaStats.value || !selectedUnivId.value) return null
-  return quotaStats.value.univs.find(u => u.univ_id === selectedUnivId.value) ?? null
+/// 검색은 대학명과 모집단위명을 함께 본다. 관리자는 "동국대"로도 찾지만 "자연계열이 어느
+/// 대학에 있더라"로도 찾는다.
+const visibleUnivs = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return univs.value
+  return univs.value.filter(u => {
+    if (u.univ_name.toLowerCase().includes(q)) return true
+    return tracksOf(u.id).some(t => t.track_name.toLowerCase().includes(q))
+  })
 })
 
-// 기존 tracks 목록에 통계(unit_used, by_round) 병합
-const tracksWithStats = computed(() => {
+/// 대학별 정원 통계. quotaStats 는 전 대학을 담고 있어 카드마다 여기서 꺼내 쓴다.
+function statsOf(univId) {
+  if (!quotaStats.value) return null
+  return quotaStats.value.univs.find(u => u.univ_id === univId) ?? null
+}
+
+/// 대학 id → 그 대학의 모집단위(통계 병합). 한 번만 묶어 둔다 — 카드마다 전체 목록을
+/// 훑으면 대학 수 × 모집단위 수만큼 반복되고, 검색어를 한 글자 칠 때마다 다시 돈다.
+const tracksByUniv = computed(() => {
   const statMap = {}
-  if (selectedUnivStats.value) {
-    for (const t of selectedUnivStats.value.tracks) {
-      statMap[t.track_id] = t
+  if (quotaStats.value) {
+    for (const u of quotaStats.value.univs) {
+      for (const t of u.tracks) statMap[t.track_id] = t
     }
   }
-  return tracks.value.map(t => ({
-    ...t,
-    unit_used: statMap[t.id]?.unit_used ?? 0,
-    by_round:  statMap[t.id]?.by_round  ?? [],
-  }))
+  const map = new Map()
+  for (const t of tracks.value) {
+    if (!map.has(t.univ_id)) map.set(t.univ_id, [])
+    map.get(t.univ_id).push({
+      ...t,
+      unit_used: statMap[t.id]?.unit_used ?? 0,
+      by_round:  statMap[t.id]?.by_round  ?? [],
+    })
+  }
+  return map
 })
+
+function tracksOf(univId) {
+  return tracksByUniv.value.get(univId) ?? []
+}
 
 // 모달에서 라운드별 그룹핑
 const groupedByRound = computed(() => {
@@ -785,7 +803,7 @@ async function applySettings() {
     settings.value.open = false
     settings.value.file = null
     await Promise.all([loadUnivs(), loadQuotaStats()])
-    if (selectedUnivId.value) await loadTracks(selectedUnivId.value)
+    await loadTracks()
   } catch (e) {
     // import 가 preview 이후 상태 변화로 거부되면(422/409) 오류 목록을 그대로 보여준다
     const d = e.response?.data
@@ -809,18 +827,18 @@ async function loadQuotaStats() {
 }
 
 // ── 내보내기 ──────────────────────────────────────────────────
-async function doExportQuotaStats(all = false) {
+async function doExportQuotaStats(all = false, univ = null) {
   if (downloading.value) return
   downloading.value = true
   try {
-    const res = await exportQuotaStats(all ? null : selectedUnivId.value)
+    const res = await exportQuotaStats(all ? null : univ?.id)
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     a.download = all
       ? `전체_명단_정원현황_${date}.xlsx`
-      : `${selectedUniv.value?.univ_name ?? '대학'}_명단_정원현황_${date}.xlsx`
+      : `${univ?.univ_name ?? '대학'}_명단_정원현황_${date}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
@@ -869,21 +887,12 @@ async function loadUnivs() {
   try { univs.value = await getUniversities() }
   catch (e) { error.value = e.response?.data ?? e.message }
 }
-async function loadTracks(univId) {
-  try { tracks.value = await getUnivTracks(univId) }
+async function loadTracks() {
+  try { tracks.value = await getAllTracks() }
   catch (e) { error.value = e.response?.data ?? e.message }
 }
 
 // ── 대학 선택 ─────────────────────────────────────────────────
-function selectUniv(id) {
-  if (selectedUnivId.value === id) return
-  selectedUnivId.value = id
-  editingTrackId.value = null
-  addingTrack.value    = false
-  tracks.value         = []
-  loadTracks(id)
-}
-
 // ── 대학 CRUD ─────────────────────────────────────────────────
 function startAddUniv() { univForm.value = emptyUnivForm(); editingUnivId.value = null; addingUniv.value = true }
 
@@ -902,7 +911,7 @@ async function saveEditUniv(id) {
   // 대학 재학생 우선 값이 바뀌면 그 대학 모든 모집단위에 cascade 된다(양방향).
   // 실제로 값이 달라지는 모집단위가 있을 때만 확인 — 무변경엔 유령 확인을 띄우지 않는다.
   if (current && !!current.prioritize_enrolled !== body.prioritize_enrolled) {
-    const uTracks = selectedUnivId.value === id ? tracks.value : await getUnivTracks(id)
+    const uTracks = tracks.value.filter(t => t.univ_id === id)
     const changing = uTracks.filter(t => !!t.prioritize_enrolled !== body.prioritize_enrolled).length
     if (changing > 0) {
       const ok = await dialog.confirm({
@@ -919,7 +928,7 @@ async function saveEditUniv(id) {
     await updateUniversity(id, body)
     editingUnivId.value = null
     await loadUnivs()
-    if (selectedUnivId.value === id) await loadTracks(id)
+    await loadTracks()
   }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
@@ -937,38 +946,43 @@ async function removeUniv(id) {
   saving.value = true; error.value = ''
   try {
     await deleteUniversity(id)
-    if (selectedUnivId.value === id) { selectedUnivId.value = null; tracks.value = [] }
+    await loadTracks()
     await loadUnivs()
   } catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }
 
 // ── 모집단위 CRUD ─────────────────────────────────────────────
-function startAddTrack() {
+function startAddTrack(univId) {
   trackForm.value = emptyTrackForm()
-  if (univPrioritize.value) trackForm.value.prioritize_enrolled = true
+  // 대학이 재학생 우선이면 모집단위도 따라간다(백엔드 cascade 와 같은 규칙)
+  if (univs.value.find(u => u.id === univId)?.prioritize_enrolled) {
+    trackForm.value.prioritize_enrolled = true
+  }
   editingTrackId.value = null
-  addingTrack.value = true
+  addingTrackUnivId.value = univId
 }
 
-async function saveAddTrack() {
-  if (!selectedUnivId.value) return
+async function saveAddTrack(univId) {
+  if (!univId) return
   saving.value = true; error.value = ''
-  try { await createTrack(selectedUnivId.value, trackFormToBody(trackForm.value)); addingTrack.value = false; await loadTracks(selectedUnivId.value) }
+  try { await createTrack(univId, trackFormToBody(trackForm.value)); addingTrackUnivId.value = null; await loadTracks() }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }
 
 function startEditTrack(t) {
-  addingTrack.value = false
+  addingTrackUnivId.value = null
   editingTrackId.value = t.id
   trackForm.value = trackToForm(t)
-  if (univPrioritize.value) trackForm.value.prioritize_enrolled = true
+  if (univs.value.find(u => u.id === t.univ_id)?.prioritize_enrolled) {
+    trackForm.value.prioritize_enrolled = true
+  }
 }
 
 async function saveEditTrack(id) {
   saving.value = true; error.value = ''
-  try { await updateTrack(id, trackFormToBody(trackForm.value)); editingTrackId.value = null; await loadTracks(selectedUnivId.value) }
+  try { await updateTrack(id, trackFormToBody(trackForm.value)); editingTrackId.value = null; await loadTracks() }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }
@@ -983,10 +997,10 @@ async function removeTrack(id) {
     finalConfirmText: '영구 삭제',
   }))) return
   saving.value = true; error.value = ''
-  try { await deleteTrack(id); await loadTracks(selectedUnivId.value) }
+  try { await deleteTrack(id); await loadTracks() }
   catch (e) { error.value = e.response?.data ?? e.message }
   finally { saving.value = false }
 }
 
-onMounted(() => { loadUnivs(); loadQuotaStats() })
+onMounted(() => { loadUnivs(); loadTracks(); loadQuotaStats() })
 </script>
