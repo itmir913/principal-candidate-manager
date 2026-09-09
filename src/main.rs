@@ -276,7 +276,9 @@ async fn save_autostart(db: &sqlx::SqlitePool, enabled: bool) {
 fn autostart_registry_set(exe_path: &str) {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_ALL_ACCESS) {
+    // 실제로 하는 일은 값 읽기(레거시 판정)·쓰기·삭제뿐이다. KEY_ALL_ACCESS 를 요구하면
+    // Run 키 ACL 이 좁혀진 관리 PC 에서 키 열기부터 ACCESS_DENIED 가 된다.
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_QUERY_VALUE | KEY_SET_VALUE) {
         Ok(key) => {
             let name = principal_candidate_manager::paths::autostart_value_name(exe_path);
             if let Err(e) = key.set_value(&name, &exe_path) {
@@ -299,8 +301,18 @@ fn autostart_registry_set(exe_path: &str) {
 fn cleanup_legacy_autostart(key: &winreg::RegKey, exe_path: &str) {
     use principal_candidate_manager::paths::LEGACY_AUTOSTART_VALUE_NAME;
 
-    let legacy: Result<String, _> = key.get_value(LEGACY_AUTOSTART_VALUE_NAME);
-    let Ok(legacy_path) = legacy else { return };
+    let legacy_path = match key.get_value::<String, _>(LEGACY_AUTOSTART_VALUE_NAME) {
+        Ok(path) => path,
+        // 값 없음이 정상이다 — 이미 이관됐거나 처음부터 자동 실행을 안 켠 설치본.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        // 그 밖의 오류(예: 누군가 PCM 값을 문자열이 아닌 타입으로 만들어 둔 경우)는
+        // "항목 없음"과 구별되지 않은 채 넘어가면 안 된다. 정리를 못 했으므로 옛 항목이
+        // 남아 부팅 때 같은 exe 가 두 번 실행되고, 두 번째는 포트 충돌로 실패한다.
+        Err(e) => {
+            tracing::warn!("레거시 자동 실행 항목을 읽지 못해 정리를 건너뛴다: {}", e);
+            return;
+        }
+    };
 
     // 경로 비교는 data_dir·해시와 같은 기준으로 정규화한다
     let same = principal_candidate_manager::paths::autostart_value_name(&legacy_path)
@@ -320,7 +332,9 @@ fn cleanup_legacy_autostart(key: &winreg::RegKey, exe_path: &str) {
 fn autostart_registry_remove(exe_path: &str) {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_ALL_ACCESS) {
+    // 실제로 하는 일은 값 읽기(레거시 판정)·쓰기·삭제뿐이다. KEY_ALL_ACCESS 를 요구하면
+    // Run 키 ACL 이 좁혀진 관리 PC 에서 키 열기부터 ACCESS_DENIED 가 된다.
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_QUERY_VALUE | KEY_SET_VALUE) {
         Ok(key) => {
             let name = principal_candidate_manager::paths::autostart_value_name(exe_path);
             if let Err(e) = key.delete_value(&name) {
@@ -597,12 +611,14 @@ fn main() {
     let tooltip = match opt_db {
         Some(ref pool) => {
             let title = match rt_handle.block_on(async {
-                let mut conn = pool.acquire().await.ok()?;
-                handlers::app_info::read_app_info(&mut conn).await.ok()
+                let mut conn = pool.acquire().await?;
+                handlers::app_info::read_app_info(&mut conn).await
             }) {
-                Some(info) => info.title,
-                None => {
-                    tracing::warn!("트레이 툴팁용 제목 조회 실패 — 기본 문구 사용");
+                Ok(info) => info.title,
+                // 표시용 문구라 여기서 기동을 막지는 않는다. 대신 원인을 남긴다 —
+                // 버리면 "왜 기본 문구가 떴나"를 로그로 되짚을 수 없다.
+                Err(e) => {
+                    tracing::warn!("트레이 툴팁용 제목 조회 실패, 기본 문구 사용: {}", e);
                     handlers::app_info::DEFAULT_TITLE.to_string()
                 }
             };

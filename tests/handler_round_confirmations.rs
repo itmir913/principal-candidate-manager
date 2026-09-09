@@ -9,7 +9,7 @@ use principal_candidate_manager::{
     enums::AuditAction,
     handlers::{
         applications::{teacher_create_application, teacher_delete_application, CreateApplicationBody},
-        classes::{delete_class, list_classes},
+        classes::{delete_class, ensure_graduate_class, list_classes},
         overview::get_overview,
         round_confirmations::{
             admin_get_confirmation_status, teacher_confirm_round, teacher_revoke_confirmation,
@@ -610,12 +610,12 @@ async fn overview_confirmed_class_and_graduated_fields() {
     let pool = common::create_test_pool().await;
     let (_, _, rid) = setup(&pool).await;
 
-    let hash = bcrypt::hash("pass", 4u32).unwrap();
-    sqlx::query("INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (0, 0, '졸업담당', ?)")
-        .bind(&hash)
-        .execute(&pool)
-        .await
-        .unwrap();
+    // 0/0 행은 운영에서 오직 ensure_graduate_class 가 만든다 — 담임명은 NULL 이고 비밀번호
+    // 해시는 인증에 쓸 수 없는 값이다. 여기서 손수 그럴듯한 행을 넣으면 운영에 없는 상태를
+    // 고정하게 된다(#28 이 그렇게 테스트를 통과한 채 배포됐다).
+    let mut conn = pool.acquire().await.unwrap();
+    ensure_graduate_class(&mut conn).await.unwrap();
+    drop(conn);
 
     let uid: i64 = sqlx::query_scalar("SELECT id FROM universities LIMIT 1")
         .fetch_one(&pool)
@@ -667,7 +667,8 @@ async fn overview_confirmed_class_and_graduated_fields() {
     assert_eq!(grad.submitted, 1, "졸업생 지원 1건");
     assert!(grad.confirmed, "0/0 확정됨");
     assert!(grad.confirmed_at.is_some(), "0/0 confirmed_at 있음");
-    assert_eq!(grad.teacher_name.as_deref(), Some("졸업담당"));
+    // 졸업생 담당의 담임명은 관리하지 않는다 — 화면의 "졸업생 담당" 라벨은 코드가 붙인다
+    assert_eq!(grad.teacher_name, None, "sentinel 행의 teacher_name 은 NULL");
 }
 
 #[tokio::test]

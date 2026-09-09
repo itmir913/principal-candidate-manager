@@ -57,6 +57,19 @@ fn name_is_safe_for_registry_value() {
     assert!(name.len() < 64, "레지스트리 값 이름 길이: {}", name.len());
 }
 
+/// 골든 값. 정규화나 해시를 바꾸면 **기존에 등록된 이름과 달라진다** — 새 이름으로 등록되고
+/// 옛 이름은 아무도 지우지 않아, 부팅 때 같은 exe 가 두 번 실행되고 두 번째가 포트 충돌로
+/// 실패한다(#30 이 만든 레거시 이관 부담이 그대로 재발한다).
+/// 이 테스트가 깨지면 "값을 고쳐 통과시켜라"가 아니라 "이관 코드를 함께 써라"는 신호다.
+#[test]
+fn generated_name_is_stable_across_versions() {
+    assert_eq!(
+        autostart_value_name(r"C:\pcm\app.exe"),
+        "PCM-0c7e2ef036b3e4c1",
+        "이름이 바뀌면 기존 자동 실행 등록이 유령이 된다 — 이관 코드를 함께 작성하라"
+    );
+}
+
 /// 한 글자 차이도 갈라야 한다 — 폴더 이름만 다른 두 설치가 흔하다.
 #[test]
 fn one_character_path_difference_changes_name() {

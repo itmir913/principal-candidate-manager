@@ -29,7 +29,7 @@ pub const README_FILENAME: &str = "복원방법.txt";
 /// exe 위치는 데이터 폴더의 기준이기도 해서(`data_dir()`) 인스턴스 정체성에 더 가깝다.
 ///
 /// 대소문자와 구분자를 정규화한다 — Windows 경로는 대소문자를 가리지 않고,
-/// 같은 exe가 `C:\pcm.exe`와 `C:/pcm/a.exe`로 들어와도 같은 인스턴스다.
+/// 같은 exe가 `C:\pcm\a.exe`와 `C:/pcm/a.exe`로 들어와도 같은 인스턴스다.
 pub fn autostart_value_name(exe_path: &str) -> String {
     let normalized = exe_path.replace('/', "\\").to_lowercase();
 
