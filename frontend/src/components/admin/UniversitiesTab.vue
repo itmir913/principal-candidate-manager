@@ -110,7 +110,12 @@
     </div>
 
     <!-- ── 대학 카드 ───────────────────────────────────────────── -->
-    <div class="flex flex-col gap-4">
+    <!-- @container: 뷰포트가 아니라 이 영역의 실제 폭을 본다. 사이드바를 접거나 창을
+         반으로 나눠 쓰면 뷰포트는 그대로인데 본문 폭만 좁아지므로, 미디어 쿼리로는
+         2열이 유지된 채 카드 안 표가 가로로 잘린다.
+         1456px = 카드 최소 폭 720 × 2 + 간격 16. 이보다 좁으면 1열이다. -->
+    <div class="@container">
+      <div class="grid grid-cols-1 @min-[1456px]:grid-cols-2 gap-4 items-start">
       <div
         v-for="u in visibleUnivs"
         :key="u.id"
@@ -199,44 +204,44 @@
 
         <!-- 모집단위 표 -->
         <div class="overflow-x-auto">
-          <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 780px;">
+          <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 720px;">
             <colgroup>
               <col>
-              <col style="width: 110px;">
               <col style="width: 100px;">
-              <col style="width: 100px;">
-              <col style="width: 130px;">
-              <col style="width: 160px;">
+              <col style="width: 96px;">
+              <col style="width: 96px;">
+              <col style="width: 120px;">
+              <col style="width: 140px;">
             </colgroup>
             <thead>
               <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">모집단위명</th>
-                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">제한인원</th>
-                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">추천인원</th>
-                <th class="text-base font-semibold text-left" style="padding: 12px 20px; color: #475569;">잔여인원</th>
-                <th class="text-base font-semibold text-center" style="padding: 12px 20px; color: #475569;">재학생 우선</th>
-                <th style="padding: 12px 20px;"></th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 14px; color: #475569;">모집단위명</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 14px; color: #475569;">제한인원</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 14px; color: #475569;">추천인원</th>
+                <th class="text-base font-semibold text-left" style="padding: 12px 14px; color: #475569;">잔여인원</th>
+                <th class="text-base font-semibold text-center" style="padding: 12px 14px; color: #475569;">재학생 우선</th>
+                <th style="padding: 12px 14px;"></th>
               </tr>
             </thead>
             <tbody>
               <!-- 추가 행 -->
               <tr v-if="addingTrackUnivId === u.id" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
-                <td style="padding: 10px 16px;">
+                <td style="padding: 10px 12px;">
                   <input v-model="trackForm.track_name" type="text"
                     class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                     style="width: 100%; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;"
                     placeholder="예) 자연계열" />
                 </td>
-                <td style="padding: 10px 16px;">
+                <td style="padding: 10px 12px;">
                   <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
                 </td>
-                <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                <td class="text-center" style="padding: 10px 16px;">
+                <td class="text-base" style="padding: 10px 12px; color: #94a3b8;">—</td>
+                <td class="text-base" style="padding: 10px 12px; color: #94a3b8;">—</td>
+                <td class="text-center" style="padding: 10px 12px;">
                   <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4"
                     :disabled="!!u.prioritize_enrolled" />
                 </td>
-                <td style="padding: 10px 16px;">
+                <td style="padding: 10px 12px;">
                   <div class="flex gap-2">
                     <button
                       class="text-base font-semibold rounded-lg disabled:opacity-40"
@@ -256,25 +261,25 @@
                 <tr v-if="editingTrackId !== t.id"
                   class="hover:bg-slate-50"
                   style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
-                  <td class="text-base" style="padding: 13px 20px; color: #1e293b;">{{ t.track_name }}</td>
-                  <td class="text-base" style="padding: 13px 20px; color: #1e293b;">
+                  <td class="text-base" style="padding: 13px 14px; color: #1e293b;">{{ t.track_name }}</td>
+                  <td class="text-base" style="padding: 13px 14px; color: #1e293b;">
                     {{ t.unit_quota != null ? t.unit_quota + '명' : '무제한' }}
                   </td>
-                  <td style="padding: 13px 20px;">
+                  <td style="padding: 13px 14px;">
                     <button
                       class="text-base font-medium underline"
                       style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
                       @click="openRecommendedModal(t)"
                     >{{ t.unit_used }}명</button>
                   </td>
-                  <td class="text-base font-medium" style="padding: 13px 20px;"
+                  <td class="text-base font-medium" style="padding: 13px 14px;"
                     :style="{ color: t.unit_quota != null && t.unit_used >= t.unit_quota ? '#ef4444' : '#1e293b' }">
                     {{ remainingLabel(t.unit_used, t.unit_quota) }}
                   </td>
-                  <td class="text-base text-center" style="padding: 13px 20px; color: #1e293b;">
+                  <td class="text-base text-center" style="padding: 13px 14px; color: #1e293b;">
                     {{ t.prioritize_enrolled ? '○' : '-' }}
                   </td>
-                  <td style="padding: 13px 20px;">
+                  <td style="padding: 13px 14px;">
                     <div class="flex gap-3">
                       <button class="text-base font-medium disabled:opacity-40"
                         style="color: #2563eb; background: none; border: none; cursor: pointer; padding: 0;"
@@ -287,21 +292,21 @@
                 </tr>
                 <!-- 편집 행 -->
                 <tr v-else style="background: #fefce8; border-bottom: 1px solid #fde68a;">
-                  <td style="padding: 10px 16px;">
+                  <td style="padding: 10px 12px;">
                     <input v-model="trackForm.track_name" type="text"
                       class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                       style="width: 100%; border: 1px solid #fbbf24; border-radius: 6px; padding: 8px 10px; box-sizing: border-box;" />
                   </td>
-                  <td style="padding: 10px 16px;">
+                  <td style="padding: 10px 12px;">
                     <QuotaInput v-model:unlimited="trackForm.unlimited" v-model:quota="trackForm.unit_quota" />
                   </td>
-                  <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                  <td class="text-base" style="padding: 10px 16px; color: #94a3b8;">—</td>
-                  <td class="text-center" style="padding: 10px 16px;">
+                  <td class="text-base" style="padding: 10px 12px; color: #94a3b8;">—</td>
+                  <td class="text-base" style="padding: 10px 12px; color: #94a3b8;">—</td>
+                  <td class="text-center" style="padding: 10px 12px;">
                     <input v-model="trackForm.prioritize_enrolled" type="checkbox" class="accent-blue-600 w-4 h-4"
                       :disabled="!!u.prioritize_enrolled" />
                   </td>
-                  <td style="padding: 10px 16px;">
+                  <td style="padding: 10px 12px;">
                     <div class="flex gap-2">
                       <button
                         class="text-base font-semibold rounded-lg disabled:opacity-40"
@@ -328,14 +333,15 @@
       </div>
 
       <div v-if="univs.length === 0 && !addingUniv"
-        class="rounded-xl text-base text-center"
+        class="rounded-xl text-base text-center @min-[1456px]:col-span-2"
         style="padding: 48px 0; color: #94a3b8; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         등록된 대학이 없습니다.
       </div>
       <div v-else-if="visibleUnivs.length === 0"
-        class="rounded-xl text-base text-center"
+        class="rounded-xl text-base text-center @min-[1456px]:col-span-2"
         style="padding: 48px 0; color: #94a3b8; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         검색과 일치하는 대학·모집단위가 없습니다.
+      </div>
       </div>
     </div>
   </div>
