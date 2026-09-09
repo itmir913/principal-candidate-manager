@@ -125,8 +125,9 @@
         style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
       >
         <!-- 카드 머리: 대학 정보 + 동작 -->
+        <!-- 대학명 길이에 따라 버튼이 같은 줄에 붙기도 하고 아래로 접히기도 해서 카드마다
+             모양이 달라 보였다. 항상 아래 줄에 둬 어느 카드든 같은 배치가 되게 한다. -->
         <div v-if="editingUnivId !== u.id"
-          class="flex items-start justify-between gap-3 flex-wrap"
           style="padding: 18px 22px; border-bottom: 1px solid #f1f5f9;">
           <div class="min-w-0">
             <p class="text-lg font-semibold" style="color: #1e293b; margin: 0;">{{ u.univ_name }}</p>
@@ -147,7 +148,7 @@
               &nbsp;·&nbsp;재학생 우선: {{ u.prioritize_enrolled ? '○' : '-' }}
             </p>
           </div>
-          <div class="flex items-center gap-2 flex-wrap flex-shrink-0">
+          <div class="flex items-center gap-2 flex-wrap" style="margin-top: 12px;">
             <button
               class="text-base font-medium rounded-lg disabled:opacity-40"
               style="padding: 7px 14px; border: none; background: #16a34a; color: white; cursor: pointer;"
