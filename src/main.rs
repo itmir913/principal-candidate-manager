@@ -241,8 +241,6 @@ fn load_config(data_dir: &std::path::Path) -> Config {
 #[cfg(not(feature = "dev"))]
 const AUTOSTART_KEY: &str = "autostart_enabled";
 #[cfg(all(target_os = "windows", not(feature = "dev")))]
-const AUTOSTART_REG_NAME: &str = "PCM";
-#[cfg(all(target_os = "windows", not(feature = "dev")))]
 const AUTOSTART_REG_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// DB에서 자동 실행 설정을 읽는다. 행 없음 = 최초 실행 → 기본값 true(활성화).
@@ -278,28 +276,62 @@ async fn save_autostart(db: &sqlx::SqlitePool, enabled: bool) {
 fn autostart_registry_set(exe_path: &str) {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_ALL_ACCESS) {
         Ok(key) => {
-            if let Err(e) = key.set_value(AUTOSTART_REG_NAME, &exe_path) {
+            let name = principal_candidate_manager::paths::autostart_value_name(exe_path);
+            if let Err(e) = key.set_value(&name, &exe_path) {
                 tracing::warn!("자동 실행 레지스트리 등록 실패: {}", e);
+                return;
             }
+            cleanup_legacy_autostart(&key, exe_path);
         }
         Err(e) => tracing::warn!("자동 실행 레지스트리 키 열기 실패: {}", e),
     }
 }
 
+/// 0.2.14 이전이 쓰던 고정 이름 `PCM` 항목을 정리한다 (이슈 #30).
+///
+/// **이 exe를 가리킬 때만 지운다.** 두 인스턴스를 쓰던 사용자의 레지스트리에는 마지막에
+/// 켠 인스턴스의 경로가 `PCM`에 남아 있는데, 그게 다른 exe라면 그 인스턴스가 아직 이관되지
+/// 않은 것이다. 남의 등록을 지우면 그 프로그램의 자동 실행이 조용히 사라진다 —
+/// 각 인스턴스가 자기 것을 만나면 자기 손으로 이관한다.
 #[cfg(all(target_os = "windows", not(feature = "dev")))]
-fn autostart_registry_remove() {
+fn cleanup_legacy_autostart(key: &winreg::RegKey, exe_path: &str) {
+    use principal_candidate_manager::paths::LEGACY_AUTOSTART_VALUE_NAME;
+
+    let legacy: Result<String, _> = key.get_value(LEGACY_AUTOSTART_VALUE_NAME);
+    let Ok(legacy_path) = legacy else { return };
+
+    // 경로 비교는 data_dir·해시와 같은 기준으로 정규화한다
+    let same = principal_candidate_manager::paths::autostart_value_name(&legacy_path)
+        == principal_candidate_manager::paths::autostart_value_name(exe_path);
+    if !same {
+        tracing::info!("레거시 자동 실행 항목이 다른 인스턴스({})를 가리켜 두었다", legacy_path);
+        return;
+    }
+
+    match key.delete_value(LEGACY_AUTOSTART_VALUE_NAME) {
+        Ok(()) => tracing::info!("레거시 자동 실행 항목(PCM)을 인스턴스별 이름으로 이관했다"),
+        Err(e) => tracing::warn!("레거시 자동 실행 항목 정리 실패: {}", e),
+    }
+}
+
+#[cfg(all(target_os = "windows", not(feature = "dev")))]
+fn autostart_registry_remove(exe_path: &str) {
     use winreg::{enums::*, RegKey};
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_SET_VALUE) {
+    match hkcu.open_subkey_with_flags(AUTOSTART_REG_PATH, KEY_ALL_ACCESS) {
         Ok(key) => {
-            if let Err(e) = key.delete_value(AUTOSTART_REG_NAME) {
+            let name = principal_candidate_manager::paths::autostart_value_name(exe_path);
+            if let Err(e) = key.delete_value(&name) {
                 // 값이 원래 없던 경우(NotFound)는 정상 — 이미 해제된 상태
                 if e.kind() != std::io::ErrorKind::NotFound {
                     tracing::warn!("자동 실행 레지스트리 해제 실패: {}", e);
                 }
             }
+            // 해제할 때도 이 exe를 가리키는 레거시 항목은 함께 걷어낸다 —
+            // 남겨두면 껐는데도 부팅 시 실행된다
+            cleanup_legacy_autostart(&key, exe_path);
         }
         Err(e) => tracing::warn!("자동 실행 레지스트리 키 열기 실패: {}", e),
     }
@@ -534,7 +566,7 @@ fn main() {
                     if on {
                         autostart_registry_set(&exe_path);
                     } else {
-                        autostart_registry_remove();
+                        autostart_registry_remove(&exe_path);
                     }
                     on
                 }
@@ -555,16 +587,34 @@ fn main() {
     menu.append(&open_item).expect("메뉴 항목 추가 실패");
     menu.append(&quit_item).expect("메뉴 항목 추가 실패");
 
-    let tooltip = if opt_db.is_some() {
-        "학교장추천 관리 시스템"
-    } else {
-        "학교장추천 관리 시스템 (서버 오류)"
+    // 툴팁으로 인스턴스를 구분한다 (이슈 #30) — 인원제한 O/X 두 개를 함께 돌리면
+    // 트레이에 같은 아이콘이 두 개 뜨고, 어느 쪽이 어느 프로그램인지 알 방법이 없었다.
+    // 제목은 DB(app_configs), 포트는 config.json이라 출처가 둘이다.
+    //
+    // 여기서 한 번 만들고 끝이다 — 설정 탭에서 제목을 바꿔도 이 툴팁은 다음 실행부터
+    // 반영된다. 트레이 핸들을 붙들고 갱신하려면 스레드 경계를 넘어야 해서, 설정 화면에
+    // 재시작 안내를 두는 쪽을 택했다.
+    let tooltip = match opt_db {
+        Some(ref pool) => {
+            let title = match rt_handle.block_on(async {
+                let mut conn = pool.acquire().await.ok()?;
+                handlers::app_info::read_app_info(&mut conn).await.ok()
+            }) {
+                Some(info) => info.title,
+                None => {
+                    tracing::warn!("트레이 툴팁용 제목 조회 실패 — 기본 문구 사용");
+                    handlers::app_info::DEFAULT_TITLE.to_string()
+                }
+            };
+            format!("{} (포트 {})", title, port)
+        }
+        None => format!("학교장추천 관리 시스템 (포트 {} — 서버 오류)", port),
     };
 
     let _tray = TrayIconBuilder::new()
         .with_icon(icon)
         .with_menu(Box::new(menu))
-        .with_tooltip(tooltip)
+        .with_tooltip(&tooltip)
         .build()
         .expect("트레이 생성 실패");
 
@@ -588,7 +638,7 @@ fn main() {
                         if new_state {
                             autostart_registry_set(&exe_path);
                         } else {
-                            autostart_registry_remove();
+                            autostart_registry_remove(&exe_path);
                         }
                         rt_handle.block_on(save_autostart(db_for_tray, new_state));
                         continue;
