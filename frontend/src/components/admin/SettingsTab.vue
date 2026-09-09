@@ -12,42 +12,55 @@
     <HelpBox v-bind="HELP" storage-key="help_settings" class="mb-5" />
 
     <!-- 제목 설정 카드 -->
-    <div class="rounded-xl" style="border: 1px solid #e2e8f0; background: white; padding: 24px; max-width: 640px;">
+    <div class="rounded-xl" style="border: 1px solid #e2e8f0; background: white; padding: 24px;">
       <h2 class="text-lg font-semibold" style="color: #1e293b; margin: 0 0 4px;">프로그램 제목</h2>
       <p class="text-base" style="color: #64748b; margin: 0 0 20px; line-height: 1.6;">
         로그인 화면과 사이드바에 표시됩니다. 학교 이름을 넣거나, 두 개의 프로그램을 함께
         운영할 때 서로 구분하는 데 씁니다.
       </p>
 
-      <label class="block text-base font-medium mb-1.5" style="color: #475569;">제목</label>
-      <input
-        v-model="title"
-        type="text"
-        :maxlength="MAX_TITLE"
-        placeholder="학교장 추천자"
-        class="w-full rounded-lg text-base"
-        style="padding: 10px 12px; border: 1px solid #cbd5e1;"
-      />
-      <p class="text-base" style="color: #94a3b8; margin: 4px 0 16px;">{{ title.length }} / {{ MAX_TITLE }}자</p>
+      <!-- 입력 | 미리보기 — 좁은 화면에서는 세로로 쌓인다.
+           lg 기준을 쓰는 이유: 사이드바가 폭을 먹어서 md 에서는 두 열이 다 좁아진다. -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-5">
+        <!-- 왼쪽: 입력 -->
+        <div>
+          <label class="block text-base font-medium mb-1.5" style="color: #475569;">제목</label>
+          <input
+            v-model="title"
+            type="text"
+            :maxlength="MAX_TITLE"
+            placeholder="학교장 추천자"
+            class="w-full rounded-lg text-base"
+            style="padding: 10px 12px; border: 1px solid #cbd5e1;"
+          />
+          <p class="text-base" style="color: #94a3b8; margin: 4px 0 16px;">{{ title.length }} / {{ MAX_TITLE }}자</p>
 
-      <label class="block text-base font-medium mb-1.5" style="color: #475569;">설명</label>
-      <input
-        v-model="desc"
-        type="text"
-        :maxlength="MAX_DESC"
-        placeholder="선발 관리 시스템"
-        class="w-full rounded-lg text-base"
-        style="padding: 10px 12px; border: 1px solid #cbd5e1;"
-      />
-      <p class="text-base" style="color: #94a3b8; margin: 4px 0 20px;">
-        비워 두면 제목만 표시됩니다. {{ desc.length }} / {{ MAX_DESC }}자
-      </p>
+          <label class="block text-base font-medium mb-1.5" style="color: #475569;">설명</label>
+          <input
+            v-model="desc"
+            type="text"
+            :maxlength="MAX_DESC"
+            placeholder="선발 관리 시스템"
+            class="w-full rounded-lg text-base"
+            style="padding: 10px 12px; border: 1px solid #cbd5e1;"
+          />
+          <p class="text-base" style="color: #94a3b8; margin: 4px 0 0;">
+            비워 두면 제목만 표시됩니다. {{ desc.length }} / {{ MAX_DESC }}자
+          </p>
+        </div>
 
-      <!-- 미리보기 — 로그인 화면과 같은 배치 -->
-      <div class="rounded-lg mb-5" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; text-align: center;">
-        <p class="text-base" style="color: #94a3b8; margin: 0 0 10px;">로그인 화면 미리보기</p>
-        <p class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">{{ title.trim() || '제목을 입력하세요' }}</p>
-        <p v-if="desc.trim()" class="text-base" style="color: #94a3b8; margin: 0;">{{ desc.trim() }}</p>
+        <!-- 오른쪽: 미리보기. 라벨은 상자 밖에 두어 왼쪽의 "제목"·"설명" 라벨과 같은 층위로 읽힌다 -->
+        <div class="flex flex-col">
+          <p class="text-base font-medium mb-1.5" style="color: #475569;">로그인 화면 미리보기</p>
+          <!-- flex-1 로 남은 높이를 채운다 — h-full 은 라벨 높이만큼 넘친다 -->
+          <div
+            class="rounded-lg flex flex-col items-center justify-center flex-1"
+            style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 24px 20px; text-align: center; min-height: 140px;"
+          >
+            <p class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">{{ title.trim() || '제목을 입력하세요' }}</p>
+            <p v-if="desc.trim()" class="text-base" style="color: #94a3b8; margin: 0;">{{ desc.trim() }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- 트레이 아이콘은 시작할 때 한 번만 문구를 읽는다 -->
@@ -81,7 +94,7 @@
          버전·백업 안내보다 설정 화면에 있는 편이 찾기 쉽다. -->
     <div
       class="rounded-xl mt-6"
-      style="border: 1px solid #e2e8f0; background: white; overflow: hidden; max-width: 640px;"
+      style="border: 1px solid #e2e8f0; background: white; overflow: hidden;"
     >
       <div class="px-6 py-4" style="border-bottom: 1px solid #f1f5f9;">
         <h2 class="text-base font-semibold" style="color: #1e293b;">About</h2>
