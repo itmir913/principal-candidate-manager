@@ -65,11 +65,15 @@
     <div class="rounded-xl overflow-hidden mb-4"
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
       <div class="overflow-x-auto">
-        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 880px;">
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 1040px;">
           <colgroup>
-            <col style="width: 170px;">
-            <col style="width: 150px;">
-            <col style="width: 160px;">
+            <!-- 시각: "2026-09-09 15:09:33" 19자를 고정폭 글꼴로 nowrap 표시한다.
+                 좌우 패딩 40px 을 빼고도 들어가야 하므로 170px 로는 모자라 옆 열을 침범했다. -->
+            <col style="width: 230px;">
+            <!-- 행위자: "3학년 1반 김철수" 형태(fmtActor)라 150px 로는 모자랐다 -->
+            <col style="width: 190px;">
+            <!-- 행위: 가장 긴 라벨이 "대학 설정 일괄 가져오기" -->
+            <col style="width: 230px;">
             <col style="width: 220px;">
             <col>
           </colgroup>
