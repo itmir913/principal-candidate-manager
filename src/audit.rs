@@ -43,8 +43,10 @@ pub async fn log_with_ip(
     };
 
     // TEACHER: 행위 시점 담임명 스냅샷.
-    // grade=0, class_no=0은 졸업생 담당 특수 계정 — classes 행은 존재하지만 UI에서 숨겨져
-    // teacher_name을 관리하지 않으므로, 로그 가독성을 위해 고정 라벨을 쓴다.
+    // grade=0, class_no=0은 졸업생 담당 특수 계정 — 로그인이 classes를 거치지 않으므로
+    // (auth::teacher_login) 담임명을 관리하지 않는다. 로그 가독성을 위해 고정 라벨을 쓴다.
+    // classes의 0/0 행은 round_confirmations FK를 위한 sentinel일 뿐이고(이슈 #28,
+    // handlers::classes::ensure_graduate_class), 확정 전에는 아예 없을 수도 있다.
     // 일반 학급 계정이 없으면 fail-fast.
     let actor_name: Option<String> = match (grade, class_no) {
         (Some(0), Some(0)) => Some("졸업생".to_string()),

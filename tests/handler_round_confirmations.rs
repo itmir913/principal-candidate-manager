@@ -9,6 +9,7 @@ use principal_candidate_manager::{
     enums::AuditAction,
     handlers::{
         applications::{teacher_create_application, teacher_delete_application, CreateApplicationBody},
+        classes::{delete_class, list_classes},
         overview::get_overview,
         round_confirmations::{
             admin_get_confirmation_status, teacher_confirm_round, teacher_revoke_confirmation,
@@ -373,13 +374,9 @@ async fn grad_teacher_confirm_included_in_admin_status() {
     let pool = common::create_test_pool().await;
     let (_, _, rid) = setup(&pool).await;
 
-    let hash = bcrypt::hash("pass", 4u32).unwrap();
-    sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (0, 0, ?)")
-        .bind(&hash)
-        .execute(&pool)
-        .await
-        .unwrap();
-
+    // 0/0 classes 행을 미리 만들지 않는다 — 운영에서 졸업생 담당 로그인은 classes를 거치지
+    // 않으므로(auth::teacher_login) 그 행은 존재하지 않는다. 예전 이 테스트가 행을 손수
+    // 넣어 두는 바람에 이슈 #28(FK 787)이 테스트를 통과한 채로 배포됐다.
     teacher_confirm_round(
         app_state(pool.clone()),
         Extension(common::teacher_claims(0, 0)),
@@ -395,6 +392,88 @@ async fn grad_teacher_confirm_included_in_admin_status() {
     let grad_cls = status.classes.iter().find(|c| c.grade == 0 && c.class_no == 0);
     assert!(grad_cls.is_some(), "0/0 학급이 결과에 포함");
     assert!(grad_cls.unwrap().confirmed, "0/0 확정 표시");
+}
+
+/// 이슈 #28 회귀: classes에 0/0 행이 없는 상태(= 운영 그대로)에서 졸업생 담당이 입력 마감을
+/// 누르면 FOREIGN KEY constraint failed(787)로 실패했다.
+#[tokio::test]
+async fn grad_teacher_confirm_succeeds_without_preexisting_class_row() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup(&pool).await;
+
+    let pre: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes WHERE grade = 0 AND class_no = 0")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(pre, 0, "전제: 0/0 학급 행은 존재하지 않는다");
+
+    teacher_confirm_round(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(0, 0)),
+        Path(rid),
+    )
+    .await
+    .expect("졸업생 담당 확정이 FK 오류 없이 성공해야 한다");
+
+    let confirmed: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM round_confirmations WHERE round_id = ? AND grade = 0 AND class_no = 0",
+    )
+    .bind(rid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(confirmed, 1, "확정 행이 저장된다");
+}
+
+/// sentinel 행은 확정을 위한 FK 대상일 뿐 — 학급 목록·양식에 진짜 학급으로 새지 않아야 한다.
+#[tokio::test]
+async fn grad_sentinel_row_is_not_listed_as_a_real_class() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup(&pool).await;
+
+    teacher_confirm_round(
+        app_state(pool.clone()),
+        Extension(common::teacher_claims(0, 0)),
+        Path(rid),
+    )
+    .await
+    .unwrap();
+
+    let sentinel: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes WHERE grade = 0 AND class_no = 0")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(sentinel, 1, "확정 시 sentinel 행이 생긴다");
+
+    // 재학생만 있는 상태 → list_classes는 졸업생 항목을 합성하지 않는다.
+    // sentinel 행이 그대로 실리면 여기서 0/0이 튀어나온다.
+    let Json(classes) = list_classes(app_state(pool.clone())).await.unwrap();
+    assert!(
+        !classes.iter().any(|c| c.grade == 0 && c.class_no == 0),
+        "학급 목록에 sentinel 행이 노출되면 안 된다"
+    );
+}
+
+/// sentinel 행을 지우면 졸업생 확정이 다시 FK 오류로 깨진다 — 삭제를 막는다.
+#[tokio::test]
+async fn delete_graduate_sentinel_class_is_rejected() {
+    let pool = common::create_test_pool().await;
+    let (_, _, rid) = setup(&pool).await;
+
+    teacher_confirm_round(app_state(pool.clone()), Extension(common::teacher_claims(0, 0)), Path(rid))
+        .await
+        .unwrap();
+
+    let err = delete_class(app_state(pool.clone()), Path((0i64, 0i64)))
+        .await
+        .expect_err("졸업생 sentinel 학급 삭제는 거부되어야 한다");
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+    let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes WHERE grade = 0 AND class_no = 0")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(remaining, 1, "sentinel 행이 살아 있어야 한다");
 }
 
 // ── 9. admin confirmation-status: 전 학급 반환 + confirmed 플래그 ──

@@ -338,7 +338,9 @@ pub async fn upsert_student(
         }
 
         let class_ok: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ?",
+            // 0/0은 졸업생 담당 sentinel 행이라 실재하는 학급이 아니다 — 재학생을 여기에
+            // 배정하면 안 되므로 존재 검사에서 제외한다 (이슈 #28의 sentinel 도입 부작용 차단)
+            "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ? AND NOT (grade = 0 AND class_no = 0)",
         )
         .bind(grade)
         .bind(class_no)
@@ -673,7 +675,9 @@ pub async fn upsert_enrolled_by_position(
     }
 
     let class_ok: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ?",
+        // 0/0은 졸업생 담당 sentinel 행이라 실재하는 학급이 아니다 — 재학생을 여기에
+        // 배정하면 안 되므로 존재 검사에서 제외한다 (이슈 #28의 sentinel 도입 부작용 차단)
+        "SELECT COUNT(*) FROM classes WHERE grade = ? AND class_no = ? AND NOT (grade = 0 AND class_no = 0)",
     )
     .bind(grade).bind(class_no)
     .fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;

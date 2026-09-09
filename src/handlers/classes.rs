@@ -18,6 +18,34 @@ use crate::{
 
 type ApiError = (StatusCode, String);
 
+/// 졸업생 담당 특수 계정의 학급 좌표. classes에 실재하지 않는 논리적 학급이며
+/// 로그인은 `auth::teacher_login`이 classes를 거치지 않고 관리자 비밀번호로 처리한다.
+pub const GRADUATE_GRADE: i64 = 0;
+pub const GRADUATE_CLASS_NO: i64 = 0;
+
+/// 졸업생 담당(0학년 0반) sentinel 학급 행을 보장한다.
+///
+/// `round_confirmations`가 `(grade, class_no) → classes` FK를 걸고 있어서, 이 행이 없으면
+/// 졸업생 담당의 입력 확정이 FOREIGN KEY 위반(code 787)으로 실패한다 (이슈 #28).
+/// FK 자체를 없애려면 스키마 버전을 올려야 하는데, v2 DB는 구버전 앱으로 열 수 없어
+/// (`db::SchemaTooNewError`) 전형 진행 중 롤백 경로가 사라진다. 그래서 스키마는 그대로 두고
+/// 참조 대상 행을 채우는 쪽을 택했다.
+///
+/// password_hash는 bcrypt 해시로 파싱되지 않는 값을 넣어 이 행으로는 인증이 성립하지 않게 한다
+/// (teacher_login이 0/0을 앞에서 가로채므로 실제로 도달하지도 않는다).
+/// teacher_name은 NULL로 둔다 — 화면의 "졸업생" 라벨은 코드가 붙이는 고정 문구다.
+pub async fn ensure_graduate_class(conn: &mut sqlx::SqliteConnection) -> Result<(), ApiError> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO classes (grade, class_no, teacher_name, password_hash)          VALUES (?, ?, NULL, '!')",
+    )
+    .bind(GRADUATE_GRADE)
+    .bind(GRADUATE_CLASS_NO)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(())
+}
+
 #[derive(Serialize, FromRow)]
 pub struct ClassRow {
     pub grade: i64,
@@ -34,8 +62,10 @@ pub struct UpsertClassBody {
 pub async fn list_classes(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ClassRow>>, ApiError> {
+    // 0/0 sentinel 행(ensure_graduate_class)은 진짜 학급이 아니다 — 아래에서 졸업생 유무에
+    // 따라 합성해 붙이므로 DB 행을 그대로 실으면 중복되거나 졸업생 없이도 노출된다.
     let mut rows = sqlx::query_as::<_, ClassRow>(
-        "SELECT grade, class_no, teacher_name FROM classes ORDER BY grade, class_no",
+        "SELECT grade, class_no, teacher_name FROM classes          WHERE NOT (grade = 0 AND class_no = 0) ORDER BY grade, class_no",
     )
     .fetch_all(&state.db)
     .await
@@ -206,8 +236,9 @@ pub async fn import_classes(
 pub async fn export_classes(
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
+    // 0/0 sentinel 행은 학급 목록 양식의 대상이 아니다 (import는 학년·반 > 0만 받는다)
     let rows = sqlx::query_as::<_, ClassRow>(
-        "SELECT grade, class_no, teacher_name FROM classes ORDER BY grade, class_no",
+        "SELECT grade, class_no, teacher_name FROM classes          WHERE NOT (grade = 0 AND class_no = 0) ORDER BY grade, class_no",
     )
     .fetch_all(&state.db)
     .await
@@ -239,6 +270,12 @@ pub async fn delete_class(
     State(state): State<AppState>,
     Path((grade, class_no)): Path<(i64, i64)>,
 ) -> Result<StatusCode, ApiError> {
+    // 0/0은 졸업생 담당 sentinel — 지우면 졸업생 입력 확정이 다시 FK 오류로 깨진다.
+    // upsert_class의 생성 차단과 짝을 이루는 삭제 차단.
+    if grade == GRADUATE_GRADE && class_no == GRADUATE_CLASS_NO {
+        return Err((StatusCode::BAD_REQUEST, "졸업생 담당 항목은 삭제할 수 없습니다".into()));
+    }
+
     let mut tx = state.db.begin().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

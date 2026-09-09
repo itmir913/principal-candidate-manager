@@ -263,6 +263,40 @@ async fn enrolled_by_position_missing_class_returns_error() {
     assert!(res.unwrap_err().contains("학급 목록에 없습니다"));
 }
 
+/// 이슈 #28의 sentinel 도입 부작용 차단 — classes의 0/0 행은 졸업생 담당 확정을 위한
+/// FK 대상일 뿐이라, 재학생을 0학년 0반에 배정하는 입력은 두 경로 모두에서 거부되어야 한다.
+#[tokio::test]
+async fn enrolled_student_cannot_be_assigned_to_graduate_sentinel_class() {
+    let pool = common::create_test_pool().await;
+    // 졸업생 담당이 한 번이라도 입력 마감을 누른 뒤의 상태를 재현한다
+    sqlx::query("INSERT INTO classes (grade, class_no, teacher_name, password_hash) VALUES (0, 0, NULL, '!')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    let mut ins = 0;
+    let mut upd = 0;
+
+    let rec = enrolled_rec("SC900", "홍길동", 0, 0, 1);
+    let res = upsert_student(&mut *tx, &rec, &mut ins, &mut upd).await;
+    assert!(res.is_err(), "upsert_student가 0학년 0반을 거부해야 한다");
+    assert!(res.unwrap_err().contains("학급 목록에 없습니다"));
+
+    let rec2 = StudentRecord {
+        student_code: String::new(),
+        name: "홍길동".into(),
+        is_enrolled: true,
+        grade: Some(0),
+        class_no: Some(0),
+        seq_no: Some(1),
+        grad_year: None,
+    };
+    let res2 = upsert_enrolled_by_position(&mut *tx, &rec2, &mut ins, &mut upd).await;
+    assert!(res2.is_err(), "upsert_enrolled_by_position이 0학년 0반을 거부해야 한다");
+    assert!(res2.unwrap_err().contains("학급 목록에 없습니다"));
+}
+
 // ── find_unique_code ──────────────────────────────────────────────
 
 #[tokio::test]

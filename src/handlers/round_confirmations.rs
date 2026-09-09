@@ -128,6 +128,15 @@ pub async fn teacher_confirm_round(
         return Err((StatusCode::CONFLICT, "이미 확정되었습니다".into()));
     }
 
+    // 졸업생 담당(0/0)은 classes에 실재하지 않는 논리적 학급이라 그대로 INSERT하면
+    // (grade, class_no) → classes FK가 787로 터진다 (이슈 #28). 같은 tx 안에서 sentinel 행을
+    // 보장한 뒤 삽입한다 — 확정이 롤백되면 sentinel 생성도 함께 되돌아간다.
+    if claims.grade == crate::handlers::classes::GRADUATE_GRADE
+        && claims.class_no == crate::handlers::classes::GRADUATE_CLASS_NO
+    {
+        crate::handlers::classes::ensure_graduate_class(&mut tx).await?;
+    }
+
     sqlx::query(
         "INSERT INTO round_confirmations (round_id, grade, class_no, confirmed_at) \
          VALUES (?, ?, ?, ?)",
@@ -239,11 +248,13 @@ pub async fn admin_get_confirmation_status(
         return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into()));
     }
 
+    // 0/0 sentinel 행은 진짜 학급이 아니므로 목록에서 빼고, 졸업생 담당은 아래에서 따로 붙인다.
     let rows = sqlx::query_as::<_, ClassConfirmRow>(
         "SELECT c.grade, c.class_no, c.teacher_name, rc.confirmed_at
          FROM classes c
          LEFT JOIN round_confirmations rc
                ON rc.round_id = ? AND rc.grade = c.grade AND rc.class_no = c.class_no
+         WHERE NOT (c.grade = 0 AND c.class_no = 0)
          ORDER BY c.grade, c.class_no",
     )
     .bind(round_id)
@@ -251,7 +262,7 @@ pub async fn admin_get_confirmation_status(
     .await
     .map_err(db_err)?;
 
-    let classes = rows
+    let mut classes: Vec<ClassConfirmation> = rows
         .into_iter()
         .map(|r| ClassConfirmation {
             grade: r.grade,
@@ -261,6 +272,37 @@ pub async fn admin_get_confirmation_status(
             confirmed_at: r.confirmed_at,
         })
         .collect();
+
+    // 졸업생 담당(0/0) — classes 행의 존재 여부와 무관하게 따로 붙인다.
+    // 표시 조건은 "졸업생이 있거나(list_classes·overview와 같은 기준) 이미 확정 기록이 있을 때".
+    // 확정 기록이 있으면 무조건 보여준다 — 기록이 남았는데 화면에서 사라지는 쪽이 더 나쁘다.
+    // 이게 없으면 졸업생 담당이 입력 확정을 해도 관리자 화면에는 아무 흔적이 남지 않는다 (이슈 #28).
+    let grad_confirmed_at: Option<String> = sqlx::query_scalar(
+        "SELECT confirmed_at FROM round_confirmations          WHERE round_id = ? AND grade = ? AND class_no = ?",
+    )
+    .bind(round_id)
+    .bind(crate::handlers::classes::GRADUATE_GRADE)
+    .bind(crate::handlers::classes::GRADUATE_CLASS_NO)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_err)?;
+
+    let has_graduates: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM students WHERE is_enrolled = 0)",
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(db_err)?;
+
+    if has_graduates || grad_confirmed_at.is_some() {
+        classes.push(ClassConfirmation {
+            grade: crate::handlers::classes::GRADUATE_GRADE,
+            class_no: crate::handlers::classes::GRADUATE_CLASS_NO,
+            teacher_name: Some("졸업생".into()),
+            confirmed: grad_confirmed_at.is_some(),
+            confirmed_at: grad_confirmed_at,
+        });
+    }
 
     Ok(Json(ConfirmationStatusResponse { classes }))
 }
