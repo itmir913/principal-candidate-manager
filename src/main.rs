@@ -654,6 +654,8 @@ fn build_router(state: AppState) -> Router {
 
     let admin_routes = Router::new()
         .route("/overview", get(handlers::overview::get_overview))
+        // 제목·부제 저장은 관리자만. 읽기(GET)는 로그인 화면도 필요해서 공개 라우트에 있다
+        .route("/app-info", put(handlers::app_info::update_app_info))
         // classes GET은 로그인 폼(반 목록 조회)에서도 필요하므로 공개 라우트에 별도 등록
         .route("/students", get(handlers::students::list_students))
         .route("/students/grade-options", get(handlers::students::grade_options))
@@ -786,6 +788,8 @@ fn build_router(state: AppState) -> Router {
     let api = Router::new()
         .route("/health", get(health))
         .route("/version", get(handlers::system::get_version))
+        // 로그인·시작·서버오류 화면이 인증 전에 제목을 그려야 하므로 공개
+        .route("/app-info", get(handlers::app_info::get_app_info))
         .route("/rounds/current", get(handlers::rounds::get_current_round))
         .route("/classes", get(handlers::classes::list_classes))
         .nest("/auth", auth_routes)

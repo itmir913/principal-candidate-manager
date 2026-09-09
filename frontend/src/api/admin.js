@@ -11,6 +11,9 @@ export async function blobErrMsg(e) {
   return typeof d === 'string' ? d : (e.message ?? '오류가 발생했습니다')
 }
 
+// 제목·부제 (이슈 #23). GET은 로그인 전 화면도 쓰는 공개 경로라 인증이 필요 없다.
+export const updateAppInfo = (body) => axios.put('/api/app-info', body).then(r => r.data)
+
 export const getOverview = () => axios.get('/api/overview').then(r => r.data)
 
 export const getClasses = () => axios.get('/api/classes').then(r => r.data)

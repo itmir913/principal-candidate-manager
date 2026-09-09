@@ -25,7 +25,7 @@
             <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
             <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
-          <span class="text-base font-bold" style="color: #1e293b;">학교장추천 선발 시스템</span>
+          <span class="text-base font-bold" style="color: #1e293b;">{{ appInfo.title }}</span>
         </div>
         <button
           @click="collapsed = !collapsed"
@@ -238,15 +238,18 @@ import { ref, computed, defineAsyncComponent, onMounted, provide } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { useAppInfoStore } from '../stores/appInfo.js'
+
 import { changeAdminPassword, getCurrentRound } from '../api/admin.js'
 import { dialog } from '../components/common/dialog.js'
 import {
   Home, Trophy, LayoutGrid, Users, SlidersHorizontal,
-  Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu, ScrollText,
+  Building2, BookOpen, RefreshCw, ChevronRight, LogOut, KeyRound, Menu, ScrollText, Settings,
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const auth = useAuthStore()
+const appInfo = useAppInfoStore()
 
 // ── 탭 컴포넌트 ──────────────────────────────────────────────
 const OverviewTab = defineAsyncComponent(() => import('../components/admin/OverviewTab.vue'))
@@ -258,6 +261,7 @@ const UnivTab     = defineAsyncComponent(() => import('../components/admin/Unive
 const UpdateTab   = defineAsyncComponent(() => import('../components/admin/UpdateTab.vue'))
 const ManualTab   = defineAsyncComponent(() => import('../components/admin/ManualTab.vue'))
 const AuditTab    = defineAsyncComponent(() => import('../components/admin/AuditTab.vue'))
+const SettingsTab = defineAsyncComponent(() => import('../components/admin/SettingsTab.vue'))
 
 // ── 메뉴 정의 ────────────────────────────────────────────────
 const mainMenus = [
@@ -273,6 +277,7 @@ const mainMenus = [
 const hasUpdate = ref(false)
 
 const subMenus = computed(() => [
+  { key: 'settings', label: '설정',    icon: Settings,  badge: false      },
   { key: 'manual',  label: '매뉴얼',   icon: BookOpen,  badge: false      },
   { key: 'update',  label: '업데이트 & 백업', icon: RefreshCw, badge: hasUpdate.value },
 ])
@@ -292,6 +297,7 @@ const currentTab = computed(() => {
   if (active.value === 'update')   return UpdateTab
   if (active.value === 'manual')   return ManualTab
   if (active.value === 'audit')    return AuditTab
+  if (active.value === 'settings') return SettingsTab
   return null
 })
 

@@ -28,7 +28,7 @@
             <p class="text-base font-semibold" style="color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em;">
               Teacher Utility Kit
             </p>
-            <p class="text-xl font-bold mt-0.5" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
+            <p class="text-xl font-bold mt-0.5" style="color: #1e293b;">{{ appInfo.fullTitle }}</p>
           </div>
           <div class="lg:text-right">
             <p class="text-base font-semibold" style="color: #475569;">© luminousky</p>
@@ -391,8 +391,12 @@ import { ref, computed, onMounted, inject, h } from 'vue'
 import { Copy, Check, AlertTriangle, CheckCircle2, XCircle, ArrowRight } from 'lucide-vue-next'
 import { getOverview, getClasses, getStudents, getAreas, getUniversities } from '../../api/admin.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
+import { useAppInfoStore } from '../../stores/appInfo.js'
+
 import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
+
+const appInfo = useAppInfoStore()
 
 // ── 섹션 레이블 헬퍼 컴포넌트 (인라인) ─────────────────────────
 const SectionLabel = {

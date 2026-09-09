@@ -15,8 +15,8 @@
             <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
         </div>
-        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">학교장 추천자</h1>
-        <p class="text-base" style="color: #94a3b8; margin: 0;">선발 관리 시스템</p>
+        <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">{{ appInfo.title }}</h1>
+        <p v-if="appInfo.desc" class="text-base" style="color: #94a3b8; margin: 0;">{{ appInfo.desc }}</p>
       </div>
 
       <!-- 역할 토글 -->
@@ -130,9 +130,11 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useAppInfoStore } from '../stores/appInfo'
 
 const router = useRouter()
 const auth = useAuthStore()
+const appInfo = useAppInfoStore()
 
 const LS_GRADE = 'login_teacher_grade'
 const LS_CLASS = 'login_teacher_class'

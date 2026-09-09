@@ -17,7 +17,7 @@
           </svg>
         </div>
         <h1 class="text-2xl font-bold" style="color: #1e293b; margin: 0 0 6px;">서버 시작 오류</h1>
-        <p class="text-base" style="color: #94a3b8; margin: 0;">학교장 추천자 선발 관리 시스템</p>
+        <p class="text-base" style="color: #94a3b8; margin: 0;">{{ appInfo.fullTitle }}</p>
       </div>
 
       <!-- 스키마 버전 불일치 -->
@@ -84,8 +84,10 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAppInfoStore } from '../stores/appInfo'
 
 const route = useRoute()
+const appInfo = useAppInfoStore()
 
 const code    = computed(() => route.query.code ?? 'SERVER_ERROR')
 const message = computed(() => route.query.message ?? '알 수 없는 오류가 발생했습니다.')

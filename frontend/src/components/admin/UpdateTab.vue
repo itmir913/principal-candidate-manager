@@ -300,7 +300,7 @@
         <h2 class="text-base font-semibold" style="color: #1e293b;">About</h2>
       </div>
       <div class="px-6 py-5 flex flex-col gap-1.5">
-        <p class="text-xl font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
+        <p class="text-xl font-semibold" style="color: #1e293b;">{{ appInfo.fullTitle }}</p>
         <div class="flex flex-col gap-2">
           <p class="text-base" style="color:#64748b; line-height:1.6;">
             <strong>luminousky</strong> · © 2026<br>
@@ -357,11 +357,14 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { marked } from 'marked'
 import { blobErrMsg } from '../../api/admin.js'
+import { useAppInfoStore } from '../../stores/appInfo.js'
 import { dialog } from '../common/dialog.js'
 import {
   RefreshCw, CheckCircle2, AlertCircle,
   Download, Database, ExternalLink,
 } from 'lucide-vue-next'
+
+const appInfo = useAppInfoStore()
 
 const GITHUB_API = 'https://api.github.com/repos/itmir913/principal-candidate-manager/releases/latest'
 

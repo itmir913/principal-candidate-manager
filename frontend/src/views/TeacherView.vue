@@ -25,7 +25,7 @@
             <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
             <path d="M6 12v5c3 3 9 3 12 0v-5"/>
           </svg>
-          <span class="text-base font-bold" style="color: #1e293b;">학교장추천 선발 시스템</span>
+          <span class="text-base font-bold" style="color: #1e293b;">{{ appInfo.title }}</span>
         </div>
         <button
           @click="collapsed = !collapsed"
@@ -228,9 +228,13 @@
 import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { useAppInfoStore } from '../stores/appInfo.js'
+
 import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
 import { dialog } from '../components/common/dialog.js'
 import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu, BookOpen, ExternalLink } from 'lucide-vue-next'
+
+const appInfo = useAppInfoStore()
 
 const router = useRouter()
 const auth   = useAuthStore()

@@ -93,4 +93,6 @@ pub enum AuditAction {
     DbBackupDownloaded,
     TeacherPasswordChanged,
     AdminPasswordChanged,
+    // 프로그램 제목·부제 (이슈 #23)
+    AppInfoUpdated,
 }

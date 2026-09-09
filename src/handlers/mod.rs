@@ -1,3 +1,4 @@
+pub mod app_info;
 pub mod applications;
 pub mod audit;
 pub mod area_data;
