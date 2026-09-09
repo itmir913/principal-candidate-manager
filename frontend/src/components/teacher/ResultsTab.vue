@@ -9,6 +9,8 @@
       </div>
     </div>
 
+    <AppInfoCard class="mb-5" />
+
     <HelpBox
       v-if="!loading && !loadError"
       :key="helpBox.key"
@@ -191,6 +193,7 @@ import { teacherGetResults, teacherAbandonApplication } from '../../api/teacher.
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'
+import AppInfoCard from '../common/AppInfoCard.vue'
 import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const auth = useAuthStore()
