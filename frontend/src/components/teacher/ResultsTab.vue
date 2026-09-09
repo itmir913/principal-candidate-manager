@@ -128,10 +128,11 @@
         <!-- FINALIZED 결과 -->
         <template v-else>
           <!-- 라운드마다 표 하나. 예전에는 학생마다 표를 따로 만들어 "대학명·모집단위…" 헤더가
-               학생 수만큼 반복됐다. 하나로 합쳐야 헤더를 상단에 고정할 수 있다 (이슈 #29).
+               학생 수만큼 반복됐다 (이슈 #29).
 
-               세로 스크롤 컨테이너가 있어야 sticky 가 걸린다 — overflow-x 만 있으면 세로로
-               움직일 범위가 없어 헤더가 그냥 같이 밀려 올라간다. 그래서 max-height 를 준다. -->
+               표 안에서 세로로 스크롤하지 않는다 — 지원자가 많아도 페이지에서 쭉 내려가며
+               본다. 한때 sticky 헤더를 걸려고 max-height 를 줬는데, 그러면 카드 안에 스크롤
+               영역이 생겨 명단이 잘린다. 명단을 다 보는 쪽이 헤더 고정보다 중요하다. -->
           <!-- rounds 는 전체 라운드를, results 는 우리 반 것만 담아 온다(teacher_get_results).
                지원자가 한 명도 없는 마감 라운드가 있을 수 있는데, 그때 표를 그리면 헤더만
                덩그러니 남아 불러오기에 실패한 것처럼 보인다. -->
@@ -146,10 +147,10 @@
             </p>
           </div>
 
-          <!-- overflow-x-auto/overflow-y-auto 를 함께 쓴다. style.css 의 스크롤바 숨김 규칙이
-               이 두 클래스만 가리키므로, overflow-auto 로 두면 이 표에만 네이티브 스크롤바가
-               떠서 다른 표와 달라 보인다. -->
-          <div v-else class="overflow-x-auto overflow-y-auto" style="max-height: 70vh;">
+          <!-- 가로만 스크롤한다(표가 940px 보다 좁은 화면). overflow-auto 가 아니라
+               overflow-x-auto 를 쓰는 이유는 style.css 의 스크롤바 숨김 규칙이 이 클래스만
+               가리켜서다 — overflow-auto 로 두면 이 표에만 네이티브 스크롤바가 뜬다. -->
+          <div v-else class="overflow-x-auto">
             <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
               <colgroup>
                 <col style="width: 160px;">
@@ -161,7 +162,8 @@
                 <col style="width: 120px;">
               </colgroup>
               <thead>
-                <!-- th 마다 sticky 를 건다 — tr 에 걸면 브라우저가 무시한다 -->
+                <!-- 헤더는 고정되지 않는다. 고정하려면 세로 스크롤 컨테이너가 있어야 하는데,
+                     그건 곧 표 안에서 스크롤한다는 뜻이라 명단이 잘린다. -->
                 <tr>
                   <th
                     v-for="h in headers"
@@ -170,7 +172,7 @@
                     :class="h.align"
                     scope="col"
                     :style="{
-                      position: 'sticky', top: 0, zIndex: 2, padding: h.pad,
+                      padding: h.pad,
                       color: '#334155', background: '#e2e8f0',
                       boxShadow: 'inset 0 -1px 0 #cbd5e1',
                     }"
