@@ -113,7 +113,21 @@
 
                세로 스크롤 컨테이너가 있어야 sticky 가 걸린다 — overflow-x 만 있으면 세로로
                움직일 범위가 없어 헤더가 그냥 같이 밀려 올라간다. 그래서 max-height 를 준다. -->
-          <div class="overflow-auto" style="max-height: 70vh;">
+          <!-- rounds 는 전체 라운드를, results 는 우리 반 것만 담아 온다(teacher_get_results).
+               지원자가 한 명도 없는 마감 라운드가 있을 수 있는데, 그때 표를 그리면 헤더만
+               덩그러니 남아 불러오기에 실패한 것처럼 보인다. -->
+          <div
+            v-if="(studentsByRound[round.id] ?? []).length === 0"
+            class="flex items-center justify-center"
+            style="height: 120px;"
+          >
+            <p class="text-base" style="color: #94a3b8;">
+              <template v-if="auth.grade === 0">이 라운드에 지원한 졸업생이 없습니다.</template>
+              <template v-else>이 라운드에 지원한 우리 반 학생이 없습니다.</template>
+            </p>
+          </div>
+
+          <div v-else class="overflow-auto" style="max-height: 70vh;">
             <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 940px;">
               <colgroup>
                 <col style="width: 160px;">
@@ -128,11 +142,12 @@
                 <!-- th 마다 sticky 를 건다 — tr 에 걸면 브라우저가 무시한다 -->
                 <tr>
                   <th
-                    v-for="(h, i) in headers"
-                    :key="i"
+                    v-for="h in headers"
+                    :key="h.label"
                     class="text-base font-semibold"
                     :class="h.align"
-                    style="position: sticky; top: 0; z-index: 2; padding: 12px 16px; color: #334155; background: #e2e8f0; border-bottom: 1px solid #cbd5e1;"
+                    scope="col"
+                    style="position: sticky; top: 0; z-index: 2; padding: 12px 16px; color: #334155; background: #e2e8f0; box-shadow: inset 0 -1px 0 #cbd5e1;"
                   >{{ h.label }}</th>
                 </tr>
               </thead>
@@ -144,7 +159,7 @@
                   <!-- 학생 구분 행 — 표 안에서 학생이 바뀌는 지점이라 결과 행보다 진하게 둔다 -->
                   <tr>
                     <td
-                      colspan="7"
+                      :colspan="headers.length"
                       style="padding: 11px 20px; background: #f1f5f9; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;"
                     >
                       <span class="text-base font-semibold" style="color: #0f172a;">{{ student.name }}</span>
@@ -156,7 +171,7 @@
                   <tr
                     v-for="r in student.results"
                     :key="r.track_id"
-                    class="transition hover:brightness-95"
+                    class="result-row"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
                       background:
@@ -354,3 +369,15 @@ async function handleAbandon(r) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+/* 행 배경(추천 확정·동점·미선발)은 의미를 담은 색이라 호버로 덮으면 안 된다.
+   td 배경은 tr 배경 위에 얹히므로, 반투명 한 겹으로 색조는 두고 어둡게만 만든다.
+   tr 의 background 는 인라인 style 이라 hover:bg-* 같은 클래스로는 애초에 덮이지도 않는다. */
+.result-row td {
+  transition: background-color 0.12s ease;
+}
+.result-row:hover td {
+  background-color: rgba(15, 23, 42, 0.06);
+}
+</style>
