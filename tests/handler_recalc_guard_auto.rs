@@ -108,7 +108,8 @@ async fn fresh_round_allows_auto_recommend() {
     // 계산 **이전** 시각의 import — 낡음이 아니다.
     log_base_data_import(&pool, "2026-01-01T12:00:00Z").await;
 
-    auto_recommend_results(State(common::make_state(pool.clone())), Path(rid))
+    // 반환된 요약(Json)은 이 테스트의 관심사가 아니다 — 통과 여부와 아래 정원 집계로 본다
+    let _ = auto_recommend_results(State(common::make_state(pool.clone())), Path(rid))
         .await
         .expect("낡지 않은 라운드에서는 자동 추천이 통과해야 한다");
     assert_eq!(recommended_count(&pool, rid).await, 1, "정원 1석이 채워져야 한다");
