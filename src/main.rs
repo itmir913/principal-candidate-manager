@@ -568,7 +568,53 @@ fn main() {
         Icon::from_rgba(img.into_raw(), w, h).expect("트레이 아이콘 생성 실패")
     };
 
+    // 트레이에 표시할 프로그램 정보. 인원제한 O/X 두 개를 함께 돌리면 트레이에 같은 아이콘이
+    // 둘 뜨는데, 어느 쪽이 어느 프로그램인지 알 방법이 있어야 한다 (이슈 #30).
+    // 제목·설명은 DB(app_configs), 포트는 config.json 이라 출처가 둘이다.
+    //
+    // 여기서 한 번 읽고 끝이다 — 설정 탭에서 제목을 바꾸면 다음 실행부터 반영된다.
+    // 트레이 핸들을 붙들고 갱신하려면 스레드 경계를 넘어야 해서, 설정 화면에 재시작 안내를 뒀다.
+    let (app_title, app_desc) = match opt_db {
+        Some(ref pool) => match rt_handle.block_on(async {
+            let mut conn = pool.acquire().await?;
+            handlers::app_info::read_app_info(&mut conn).await
+        }) {
+            Ok(info) => (info.title, info.desc),
+            // 표시용 문구라 기동을 막지 않는다. 대신 원인을 남긴다 —
+            // 버리면 "왜 기본 문구가 떴나"를 로그로 되짚을 수 없다.
+            Err(e) => {
+                tracing::warn!("트레이용 제목 조회 실패, 기본 문구 사용: {}", e);
+                (
+                    handlers::app_info::DEFAULT_TITLE.to_string(),
+                    handlers::app_info::DEFAULT_DESC.to_string(),
+                )
+            }
+        },
+        None => (
+            handlers::app_info::DEFAULT_TITLE.to_string(),
+            "서버 오류".to_string(),
+        ),
+    };
+
     let menu = Menu::new();
+
+    // 메뉴 맨 위에 제목·설명·포트를 둔다. 툴팁은 마우스를 올려야 뜨고 Windows 에서
+    // 잘 나타나지 않는 경우가 있어서, 아이콘을 눌렀을 때 항상 보이는 자리에도 적는다.
+    // 누를 수 없는 항목(enabled=false)이라 동작과 섞이지 않는다.
+    let title_item = MenuItem::new(&app_title, false, None);
+    menu.append(&title_item).expect("메뉴 항목 추가 실패");
+    let desc_item = if app_desc.is_empty() {
+        None
+    } else {
+        let item = MenuItem::new(&app_desc, false, None);
+        menu.append(&item).expect("메뉴 항목 추가 실패");
+        Some(item)
+    };
+    let port_item = MenuItem::new(format!("포트 {}", port), false, None);
+    menu.append(&port_item).expect("메뉴 항목 추가 실패");
+    menu.append(&PredefinedMenuItem::separator()).expect("메뉴 항목 추가 실패");
+    let _ = &desc_item;
+
     let open_item = MenuItem::new("열기", true, None);
     let quit_item = MenuItem::new("종료", true, None);
 
@@ -601,30 +647,11 @@ fn main() {
     menu.append(&open_item).expect("메뉴 항목 추가 실패");
     menu.append(&quit_item).expect("메뉴 항목 추가 실패");
 
-    // 툴팁으로 인스턴스를 구분한다 (이슈 #30) — 인원제한 O/X 두 개를 함께 돌리면
-    // 트레이에 같은 아이콘이 두 개 뜨고, 어느 쪽이 어느 프로그램인지 알 방법이 없었다.
-    // 제목은 DB(app_configs), 포트는 config.json이라 출처가 둘이다.
-    //
-    // 여기서 한 번 만들고 끝이다 — 설정 탭에서 제목을 바꿔도 이 툴팁은 다음 실행부터
-    // 반영된다. 트레이 핸들을 붙들고 갱신하려면 스레드 경계를 넘어야 해서, 설정 화면에
-    // 재시작 안내를 두는 쪽을 택했다.
-    let tooltip = match opt_db {
-        Some(ref pool) => {
-            let title = match rt_handle.block_on(async {
-                let mut conn = pool.acquire().await?;
-                handlers::app_info::read_app_info(&mut conn).await
-            }) {
-                Ok(info) => info.title,
-                // 표시용 문구라 여기서 기동을 막지는 않는다. 대신 원인을 남긴다 —
-                // 버리면 "왜 기본 문구가 떴나"를 로그로 되짚을 수 없다.
-                Err(e) => {
-                    tracing::warn!("트레이 툴팁용 제목 조회 실패, 기본 문구 사용: {}", e);
-                    handlers::app_info::DEFAULT_TITLE.to_string()
-                }
-            };
-            format!("{} (포트 {})", title, port)
-        }
-        None => format!("학교장추천 관리 시스템 (포트 {} — 서버 오류)", port),
+    // 툴팁에도 같은 정보를 담는다 — 마우스를 올렸을 때 굳이 메뉴를 열지 않아도 되게.
+    let tooltip = if app_desc.is_empty() {
+        format!("{} (포트 {})", app_title, port)
+    } else {
+        format!("{} — {} (포트 {})", app_title, app_desc, port)
     };
 
     let _tray = TrayIconBuilder::new()
