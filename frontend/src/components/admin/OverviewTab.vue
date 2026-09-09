@@ -24,7 +24,11 @@
       <!-- ① 앱 정보 -->
       <ProductInfoCard :version="data.version" />
 
-      <!-- ② 서버 접속 정보 -->
+      <!-- ② 설치본 이름 — 담임 화면 세 탭과 같은 카드.
+           관리자도 지금 어느 프로그램(인원제한 O/X)을 보고 있는지 알아야 한다. -->
+      <AppInfoCard />
+
+      <!-- ③ 서버 접속 정보 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         <SectionLabel title="서버 접속 정보" />
         <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-2">
@@ -111,7 +115,7 @@
           :items="helpBox.items"
       />
 
-      <!-- ③ 현재 라운드 -->
+      <!-- ④ 현재 라운드 -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         <SectionLabel title="현재 라운드" />
         <div v-if="data.round" class="flex items-center gap-3 flex-wrap">
@@ -132,7 +136,7 @@
         </div>
       </div>
 
-      <!-- ④ 학급별 지원자 현황 (라운드 있을 때만) -->
+      <!-- ⑤ 학급별 지원자 현황 (라운드 있을 때만) -->
       <template v-if="data.round">
         <div class="rounded-xl overflow-hidden flex flex-col" style="min-height: 200px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
           <div style="padding: 20px 24px 0;">
@@ -256,7 +260,7 @@
           </div>
         </div>
 
-        <!-- ⑤ 모집단위별 지원 현황 -->
+        <!-- ⑥ 모집단위별 지원 현황 -->
         <div class="rounded-xl overflow-hidden flex flex-col" style="min-height: 200px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
           <div style="padding: 20px 24px 0;">
             <SectionLabel title="이번 라운드 · 모집단위별 지원 현황" />
@@ -354,7 +358,7 @@
         </div>
       </template>
 
-      <!-- ⑥ 전체 누적 통계 (항상 표시) -->
+      <!-- ⑦ 전체 누적 통계 (항상 표시) -->
       <div class="rounded-xl" style="padding: 20px 24px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
         <SectionLabel title="전체 누적 통계" />
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -380,6 +384,7 @@ import { roundStatusLabel } from '../../data/roundStatus.js'
 import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
+import AppInfoCard from '../common/AppInfoCard.vue'
 
 
 // ── 섹션 레이블 헬퍼 컴포넌트 (인라인) ─────────────────────────
