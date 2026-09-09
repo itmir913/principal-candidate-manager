@@ -2175,7 +2175,7 @@ dependencies = [
 
 [[package]]
 name = "principal-candidate-manager"
-version = "0.2.16"
+version = "0.2.17"
 dependencies = [
  "anyhow",
  "axum",
