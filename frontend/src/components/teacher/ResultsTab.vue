@@ -9,7 +9,7 @@
       </div>
     </div>
 
-    <AppInfoCard class="mb-5" />
+    <ProductInfoCard class="mb-5" />
 
     <HelpBox
       v-if="!loading && !loadError"
@@ -248,7 +248,7 @@ import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
 import { blobErrMsg } from '../../utils/blobError.js'
 import HelpBox from '../common/HelpBox.vue'
-import AppInfoCard from '../common/AppInfoCard.vue'
+import ProductInfoCard from '../common/ProductInfoCard.vue'
 import { formatScore } from '../../utils/scorePreviewShared.js'
 
 const auth = useAuthStore()

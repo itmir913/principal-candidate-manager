@@ -21,14 +21,10 @@
     <!-- 본문 -->
     <div v-else-if="data" class="flex flex-col gap-4">
 
-      <!-- ① 앱 정보 -->
+      <!-- ① 앱 정보 — 제목·설명과 제작자·버전이 한 장에 들어 있다.
+           아직 제목을 지정하지 않았으면 아래에 안내를 띄운다. 담임 화면에는 넣지 않는다
+           (고칠 수 있는 사람이 아니라 알려도 할 수 있는 게 없다). -->
       <ProductInfoCard :version="data.version" />
-
-      <!-- ② 설치본 이름 — 담임 화면 세 탭과 같은 카드.
-           관리자도 지금 어느 프로그램(인원제한 O/X)을 보고 있는지 알아야 한다.
-           아직 지정하지 않았으면 카드 대신 안내를 띄운다. 담임 화면에서는 아무것도 그리지
-           않지만(고칠 수 있는 사람이 아니다), 관리자에게는 설정할 자리가 있다고 알려야 한다. -->
-      <AppInfoCard />
       <div
         v-if="appInfo.loaded && !appInfo.configured"
         class="rounded-xl flex items-center gap-3 flex-wrap"
@@ -404,7 +400,6 @@ import { roundStatusLabel } from '../../data/roundStatus.js'
 import MiniPie from './MiniPie.vue'
 import HelpBox from '../common/HelpBox.vue'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
-import AppInfoCard from '../common/AppInfoCard.vue'
 import { useAppInfoStore } from '../../stores/appInfo.js'
 
 

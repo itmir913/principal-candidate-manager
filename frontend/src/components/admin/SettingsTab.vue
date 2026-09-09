@@ -103,8 +103,9 @@
       </div>
       <div class="px-6 py-5 flex flex-col gap-1.5">
         <!-- 제품명은 고정이다 — 제작자·라이선스와 함께 "이 소프트웨어가 무엇인가"를 밝히는
-             자리라, 학교가 설정한 이름(바로 위 카드)을 여기 다시 쓰면 같은 문구가 두 번 뜬다 -->
-        <p class="text-xl font-semibold" style="color: #1e293b;">학교장 추천자 선발 관리 시스템</p>
+             자리라, 학교가 설정한 이름(바로 위 카드)을 여기 다시 쓰면 같은 문구가 두 번 뜬다.
+             상단 머리 카드의 미지정 폴백과 같은 상수를 본다 — 두 곳이 갈라지면 안 된다 -->
+        <p class="text-xl font-semibold" style="color: #1e293b;">{{ PRODUCT_NAME }}</p>
         <div class="flex flex-col gap-2">
           <p class="text-base" style="color:#64748b; line-height:1.6;">
             <strong>luminousky</strong> · © 2026<br>
@@ -159,7 +160,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { updateAppInfo } from '../../api/admin.js'
-import { useAppInfoStore } from '../../stores/appInfo.js'
+import { useAppInfoStore, PRODUCT_NAME } from '../../stores/appInfo.js'
 import HelpBox from '../common/HelpBox.vue'
 
 // 백엔드 app_info::MAX_TITLE_LEN / MAX_DESC_LEN 과 같은 값.

@@ -13,9 +13,7 @@
       <span class="text-base" style="color: #64748b;">{{ students.length }}명</span>
     </div>
 
-    <ProductInfoCard class="mb-4" />
-
-    <AppInfoCard class="mb-5" />
+    <ProductInfoCard class="mb-5" />
 
     <HelpBox
       :key="helpBox.key"
@@ -112,7 +110,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import AppInfoCard from '../common/AppInfoCard.vue'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
 import { dialog } from '../common/dialog.js'
 import HelpBox from '../common/HelpBox.vue'

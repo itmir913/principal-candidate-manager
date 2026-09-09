@@ -13,6 +13,10 @@ const FALLBACK_DESC = '선발 관리 시스템'
 // 화면이 예전과 같아야 한다는 것이 이 기능의 전제다.
 const SIDEBAR_FALLBACK = '학교장추천 선발 시스템'
 
+// 고정 제품명. 학교가 이름을 바꿔도 제품 자체의 이름은 그대로여야 문의·문서·릴리스에서
+// 말이 통한다. 상단 카드의 미지정 폴백과 설정 탭 About 이 같은 값을 본다.
+export const PRODUCT_NAME = '학교장 추천자 선발 관리 시스템'
+
 /// 프로그램 제목·부제 (이슈 #23).
 ///
 /// 로그인·시작·서버오류 화면이 인증 전에 제목을 그려야 해서 GET은 공개 엔드포인트다.
@@ -29,6 +33,11 @@ export const useAppInfoStore = defineStore('appInfo', () => {
 
   /// 사이드바용 — 지정 전에는 예전 문구, 지정 후에는 학교가 붙인 이름.
   const sidebarTitle = computed(() => (configured.value ? title.value : SIDEBAR_FALLBACK))
+
+  /// 상단 카드용. 지정 전에는 제품명 한 줄만 보인다 — 기본 제목/설명을 그대로 쓰면
+  /// 같은 카드 안 오른쪽의 제품명과 같은 말이 두 번 뜬다.
+  const cardTitle = computed(() => (configured.value ? title.value : PRODUCT_NAME))
+  const cardDesc = computed(() => (configured.value ? desc.value : ''))
 
   function _apply(data) {
     title.value = data.title
@@ -55,5 +64,5 @@ export const useAppInfoStore = defineStore('appInfo', () => {
     _apply(data)
   }
 
-  return { title, desc, configured, loaded, fullTitle, sidebarTitle, load, set }
+  return { title, desc, configured, loaded, fullTitle, sidebarTitle, cardTitle, cardDesc, load, set }
 })
