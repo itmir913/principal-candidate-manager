@@ -4,7 +4,7 @@
 //! 수신자"를 전제하므로, 학생이 여러 대학에 지원했어도 **학생 한 명이 한 행**이어야 한다.
 //! 그래서 지원 건들은 한 칸에 쉼표로 이어 붙인다.
 //!
-//! 열은 발송에 필요한 것만 둔다 — 학번·학년·반·번호·이름·선발결과. 총점과 순위는 담지
+//! 열은 발송에 필요한 것만 둔다 — 학생코드·학년·반·번호·이름·선발결과. 총점과 순위는 담지
 //! 않는다. 문자로 나갈 파일에 굳이 넣을 정보가 아니고, 실수로 치환 문구에 섞이면 그대로
 //! 학생에게 전송된다.
 
@@ -48,7 +48,7 @@ fn entry_text(r: &ResultRow, with_round: bool) -> String {
 
 /// 결과 행들을 학생 단위로 접어 CSV 로 만든다.
 ///
-/// 입력은 `fetch_teacher_results` 의 정렬 순서(라운드 → 번호/학번 → 모집단위)를 그대로
+/// 입력은 `fetch_teacher_results` 의 정렬 순서(라운드 → 번호/학생코드 → 모집단위)를 그대로
 /// 따른다고 전제한다. 학생의 등장 순서를 그 순서로 보존하려고 별도 정렬을 하지 않는다.
 fn build_csv(rows: &[ResultRow], with_round: bool) -> Result<Vec<u8>, ApiError> {
     // 학생별로 묶는다. 입력은 라운드 → 번호 → 모집단위 순이라, 그대로 접으면 전 라운드
@@ -63,8 +63,8 @@ fn build_csv(rows: &[ResultRow], with_round: bool) -> Result<Vec<u8>, ApiError> 
         grouped.entry(r.student_id).or_default().push(r);
     }
 
-    // 재학생은 번호, 졸업생은 학번 순 — 화면(ResultsTab 의 studentsByRound)과 같은 기준이다.
-    // 졸업생은 seq_no 가 모두 None 이라 학번 비교로 넘어간다(Option 은 None < Some).
+    // 재학생은 번호, 졸업생은 학생코드 순 — 화면(ResultsTab 의 studentsByRound)과 같은 기준이다.
+    // 졸업생은 seq_no 가 모두 None 이라 학생코드 비교로 넘어간다(Option 은 None < Some).
     order.sort_by(|a, b| {
         let key = |sid: &i64| {
             grouped

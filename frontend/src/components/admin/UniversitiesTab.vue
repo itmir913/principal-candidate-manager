@@ -388,7 +388,7 @@
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">순위</th>
                     <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">이름</th>
-                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">학번</th>
+                    <th class="text-base font-semibold text-left" style="padding: 10px 14px; color: #475569;">학생코드</th>
                     <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569;">구분</th>
                     <th class="text-base font-semibold text-center" style="padding: 10px 14px; color: #475569;">상태</th>
                   </tr>

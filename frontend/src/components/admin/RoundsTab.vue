@@ -226,7 +226,7 @@
                     </colgroup>
                     <thead>
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">모집단위</th>
@@ -426,7 +426,7 @@
                       <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th style="padding: 13px 8px;"></th>
                         <th class="text-base font-semibold text-center" style="padding: 13px 16px; color: #475569;">순위</th>
-                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학번/학생코드</th>
+                        <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생코드</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">학생 이름</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">구분</th>
                         <th class="text-base font-semibold text-left" style="padding: 13px 18px; color: #475569;">{{ rankView === 'track' ? '지원 학과' : '모집단위 · 지원 학과' }}</th>
@@ -624,7 +624,7 @@
               <thead>
                 <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0;">
                   <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 110px;">학년/반</th>
-                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 140px;">학번</th>
+                  <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 140px;">학생코드</th>
                   <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 100px;">이름</th>
                   <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 150px;">대학</th>
                   <th class="text-base font-semibold text-left" style="padding: 11px 16px; color: #475569; width: 150px;">모집단위</th>

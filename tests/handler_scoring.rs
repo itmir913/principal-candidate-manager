@@ -2162,7 +2162,7 @@ async fn export_round_summary_track_sheet_computes_remaining_seats() {
          VALUES ('CLOSED', '2025-02-01', '2025-02-05') RETURNING id",
     ).fetch_one(&pool).await.unwrap();
 
-    // (학번, 라운드, recommended, abandoned)
+    // (학생코드, 라운드, recommended, abandoned)
     //  이전 라운드 1명 확정 → before_count=1 / 이번 라운드 1명 확정 → this_count=1
     //  포기자는 어느 쪽에도 세지 않아야 한다
     for (seq, (code, rid, rec, aband)) in [
@@ -2658,7 +2658,7 @@ async fn export_round_summary_counts_applied_and_abandoned() {
         "INSERT INTO rounds (status, opened_at, closed_at) VALUES ('CLOSED', '2025-01-01', '2025-01-05') RETURNING id",
     ).fetch_one(&pool).await.unwrap();
 
-    // (학번, recommended, abandoned): 3명 지원 / 1명 추천(포기 아님) / 1명 포기
+    // (학생코드, recommended, abandoned): 3명 지원 / 1명 추천(포기 아님) / 1명 포기
     for (seq, (code, rec, aband)) in [("S001", 1, 0), ("S002", 0, 0), ("S003", 1, 1)].into_iter().enumerate() {
         let sid: i64 = sqlx::query_scalar(
             "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
@@ -2761,7 +2761,7 @@ async fn export_results_roster_is_one_row_per_application() {
 }
 
 /// 명단 정렬 고정: 재학생이 졸업생보다 위, 그 안에서 학생코드 오름차순.
-/// (관리자가 학번순으로 "누가 어디 지원/선발됐나"를 읽는 기준.)
+/// (관리자가 학생코드순으로 "누가 어디 지원/선발됐나"를 읽는 기준.)
 #[tokio::test]
 async fn export_results_roster_sorts_enrolled_first_then_student_code() {
     let pool = common::create_test_pool().await;

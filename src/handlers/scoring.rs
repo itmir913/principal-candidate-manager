@@ -862,7 +862,7 @@ pub async fn fetch_teacher_results(
         "AND s.grade = ? AND s.class_no = ?"
     };
     let round_clause = if round_id.is_some() { "AND r.round_id = ?" } else { "" };
-    // 졸업생은 학년·반·번호가 NULL 이라 학번으로 정렬한다
+    // 졸업생은 학년·반·번호가 NULL 이라 학생코드로 정렬한다
     let order_by = if is_grad { "s.student_code" } else { "s.seq_no" };
 
     let sql = format!(

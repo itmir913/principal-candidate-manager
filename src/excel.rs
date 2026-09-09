@@ -261,7 +261,7 @@ pub fn decode_bytes(bytes: &[u8]) -> anyhow::Result<String> {
 /// calamine DataType → 문자열 변환. 예상하지 못한 variant는 오류로 승격한다.
 ///
 /// 이전에는 wildcard `_ => String::new()`로 DateTime/Duration/DateTimeIso/DurationIso/Error
-/// variant를 조용히 빈 문자열로 만들었다. 학번·점수·대학명 셀에 사용자가 실수로 날짜
+/// variant를 조용히 빈 문자열로 만들었다. 학생코드·점수·대학명 셀에 사용자가 실수로 날짜
 /// 서식을 적용하거나 `#REF!` 같은 수식 오류가 있으면 downstream `is_empty()` 체크에
 /// 우연히 걸리기만 하고, 특히 `resolve_track`의 `(true, true) => Some(None)` 경로에서는
 /// COMPOSITE 트랙 값이 공통 테이블로 조용히 강등 저장되는 실질 사고까지 났었다
