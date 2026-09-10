@@ -254,27 +254,29 @@
                         <td class="text-base" style="padding: 12px 18px; color: #1e293b;">{{ app.track_name }}</td>
                         <!-- 학과명은 점수에 영향이 없어 라운드 상태와 무관하게 고칠 수 있다 (이슈 #32) -->
                         <td class="text-base" style="padding: 12px 18px; color: #475569;" @click.stop>
-                          <div v-if="isEditingDept(app)" class="flex items-center gap-2">
+                          <div v-if="isEditingDept(app)" class="flex flex-col gap-1.5" style="min-width: 0;">
                             <input
                               v-model="editingDeptName"
                               class="text-base"
-                              style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 110px;"
+                              style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 0; box-sizing: border-box;"
                               placeholder="학과명"
                               @keyup.enter="saveDept(app)"
                               @keyup.esc="cancelDeptEdit"
                             />
-                            <button
-                              class="text-base whitespace-nowrap"
-                              style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
-                              :disabled="savingDept || !editingDeptName.trim()"
-                              @click="saveDept(app)"
-                            >저장</button>
-                            <button
-                              class="text-base whitespace-nowrap"
-                              style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
-                              :disabled="savingDept"
-                              @click="cancelDeptEdit"
-                            >취소</button>
+                            <div class="flex gap-1.5 flex-wrap">
+                              <button
+                                class="text-base whitespace-nowrap"
+                                style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                                :disabled="savingDept || !editingDeptName.trim()"
+                                @click="saveDept(app)"
+                              >저장</button>
+                              <button
+                                class="text-base whitespace-nowrap"
+                                style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                                :disabled="savingDept"
+                                @click="cancelDeptEdit"
+                              >취소</button>
+                            </div>
                           </div>
                           <button
                             v-else
@@ -499,27 +501,29 @@
                           <td style="padding: 12px 18px; overflow: hidden;">
                             <div v-if="rankView === 'univ'" class="text-base font-medium" style="color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.track_name }}</div>
                             <!-- 학과명 인라인 수정 (이슈 #32). 두 보기 모두 같은 편집기를 쓴다 -->
-                            <div v-if="isEditingDept(r)" class="flex items-center gap-2" @click.stop>
+                            <div v-if="isEditingDept(r)" class="flex flex-col gap-1.5" style="min-width: 0;" @click.stop>
                               <input
                                 v-model="editingDeptName"
                                 class="text-base"
-                                style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 110px;"
+                                style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 0; box-sizing: border-box;"
                                 placeholder="학과명"
                                 @keyup.enter="saveDept(r)"
                                 @keyup.esc="cancelDeptEdit"
                               />
-                              <button
-                                class="text-base whitespace-nowrap"
-                                style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
-                                :disabled="savingDept || !editingDeptName.trim()"
-                                @click="saveDept(r)"
-                              >저장</button>
-                              <button
-                                class="text-base whitespace-nowrap"
-                                style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
-                                :disabled="savingDept"
-                                @click="cancelDeptEdit"
-                              >취소</button>
+                              <div class="flex gap-1.5 flex-wrap">
+                                <button
+                                  class="text-base whitespace-nowrap"
+                                  style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                                  :disabled="savingDept || !editingDeptName.trim()"
+                                  @click="saveDept(r)"
+                                >저장</button>
+                                <button
+                                  class="text-base whitespace-nowrap"
+                                  style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                                  :disabled="savingDept"
+                                  @click="cancelDeptEdit"
+                                >취소</button>
+                              </div>
                             </div>
                             <button
                               v-else

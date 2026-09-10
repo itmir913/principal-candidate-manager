@@ -221,27 +221,29 @@
                     <td class="text-base" style="padding: 12px 16px; color: #1e293b;">{{ r.track_name }}</td>
                     <!-- 학과명은 점수에 영향이 없어 마감 후에도 고칠 수 있다 (이슈 #32) -->
                     <td class="text-base" style="padding: 12px 16px; color: #475569;">
-                      <div v-if="isEditing(r)" class="flex items-center gap-2">
+                      <div v-if="isEditing(r)" class="flex flex-col gap-1.5" style="min-width: 0;">
                         <input
                           v-model="editingName"
                           class="text-base"
-                          style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 120px;"
+                          style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 0; box-sizing: border-box;"
                           placeholder="학과명"
                           @keyup.enter="saveDepartment(r)"
                           @keyup.esc="cancelEdit"
                         />
-                        <button
-                          class="text-base whitespace-nowrap"
-                          style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
-                          :disabled="savingDepartment || !editingName.trim()"
-                          @click="saveDepartment(r)"
-                        >저장</button>
-                        <button
-                          class="text-base whitespace-nowrap"
-                          style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
-                          :disabled="savingDepartment"
-                          @click="cancelEdit"
-                        >취소</button>
+                        <div class="flex gap-1.5 flex-wrap">
+                          <button
+                            class="text-base whitespace-nowrap"
+                            style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                            :disabled="savingDepartment || !editingName.trim()"
+                            @click="saveDepartment(r)"
+                          >저장</button>
+                          <button
+                            class="text-base whitespace-nowrap"
+                            style="flex: 0 0 auto; padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                            :disabled="savingDepartment"
+                            @click="cancelEdit"
+                          >취소</button>
+                        </div>
                       </div>
                       <button
                         v-else
