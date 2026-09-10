@@ -214,7 +214,11 @@
                       // 추천 확정은 초록, 미선발과 포기는 빨강.
                       // 동점(노란색)은 관리자가 추천을 고르는 동안(CLOSED)에만 쓰는 '유의' 표시라
                       // 결과가 확정된 화면에는 뜻이 없다. 관리자 RoundsTab 의 FINALIZED 분기와 같다.
-                      background: r.recommended && !r.abandoned ? '#f0fdf4' : '#fef2f2',
+                      //
+                      // 색은 tr 이 아니라 td 에 칠한다(아래 .result-row td). tr 에 직접 주면
+                      // 이 표처럼 sticky 셀이 있는 곳에서 행 높이가 바뀔 때 배경이 다시 칠해지지
+                      // 않는 일이 생긴다 — 값은 멀쩡한데 화면만 비는 리페인트 문제다.
+                      '--row-bg': r.recommended && !r.abandoned ? '#dcfce7' : '#fee2e2',
                     }"
                   >
                     <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
@@ -528,13 +532,20 @@ onMounted(load)
   border-bottom-right-radius: 12px;
 }
 
-/* 행 배경(추천 확정·동점·미선발)은 의미를 담은 색이라 호버로 덮으면 안 된다.
-   td 배경은 tr 배경 위에 얹히므로, 반투명 한 겹으로 색조는 두고 어둡게만 만든다.
-   tr 의 background 는 인라인 style 이라 hover:bg-* 같은 클래스로는 애초에 덮이지도 않는다. */
+/* 행 배경(추천 확정·미선발)은 의미를 담은 색이다.
+
+   **tr 이 아니라 td 에 칠한다.** 이 표는 제목 줄과 머리글이 sticky 라, tr 에 배경을
+   주면 행 높이가 바뀔 때(학과명 편집기 열기·닫기) 브라우저가 tr 배경을 다시 칠하지
+   않는 일이 간헐적으로 생긴다. DOM 도 computed 도 정상인데 화면만 비어 회색으로
+   보인다. 같은 표의 학생 구분 행이 한 번도 안 깨진 이유가 배경을 td 에 두었기 때문이다.
+
+   호버 음영도 background-color 를 덮어쓰지 않고 inset box-shadow 로 위에 겹친다.
+   덮어쓰면 행 색이 사라져 "추천 확정/미선발" 구분이 호버 중에 없어진다. */
 .result-row td {
-  transition: background-color 0.12s ease;
+  background-color: var(--row-bg, transparent);
+  transition: box-shadow 0.12s ease;
 }
 .result-row:hover td {
-  background-color: rgba(15, 23, 42, 0.06);
+  box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);
 }
 </style>

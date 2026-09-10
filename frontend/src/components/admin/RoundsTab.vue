@@ -475,10 +475,12 @@
                           class="cursor-pointer transition-colors"
                           :style="{
                             borderBottom: '1px solid #f1f5f9',
+                            // -50 계열은 흰 카드 위에서 흰색과 구분되지 않는다(채널 차이 한 자릿수).
+                            // 담임 [라운드 결과]와 같은 -100 계열로 맞춘다. 셋 다 이 앱의 배지 색이다.
                             background:
-                              selected.status === 'FINALIZED' && (r.abandoned || !r.recommended) ? '#fef2f2' :
-                              selected.status === 'FINALIZED' && r.recommended && !r.abandoned ? '#f0fdf4' :
-                              tieSet.has(`${r.student_id}-${r.track_id}`) ? '#fffbeb' :
+                              selected.status === 'FINALIZED' && (r.abandoned || !r.recommended) ? '#fee2e2' :
+                              selected.status === 'FINALIZED' && r.recommended && !r.abandoned ? '#dcfce7' :
+                              tieSet.has(`${r.student_id}-${r.track_id}`) ? '#fef3c7' :
                               undefined,
                           }"
                           @click="toggleRow(`${r.student_id}-${r.track_id}`)"
