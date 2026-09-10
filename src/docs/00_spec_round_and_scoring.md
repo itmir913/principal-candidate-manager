@@ -74,6 +74,10 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 | `POST /teacher/applications` | 404 | **201** | 400 | 400 |
 | `DELETE /teacher/applications/:sid/:tid/:rid` | 404 | **204** | 400 | 400 |
 | `PUT /teacher/applications/:sid/:tid/:rid/abandon` | 404 | 400 | 400 | **204**³ |
+| `PUT /applications/:sid/:tid/:rid/department` (관리자) | 404 | **204** | **204** | **204** |
+| `PUT /teacher/applications/:sid/:tid/:rid/department` | 404 | 400 | 400 | **204**⁵ |
+
+⁵ 담임은 FINALIZED 에서만 고칠 수 있다. OPEN 은 `POST /teacher/applications`(upsert)가 담당하고 — 그쪽만 담임 확정을 함께 철회한다 — CLOSED 는 담임이 그 라운드를 보는 화면이 없어 관리자 몫이다. §7.5 참고.
 
 ¹ 전건 결정 완료(미결정 없음) + 정원 이내일 때 204. 미결정 있으면 422 + 전원 명단. 정원 초과 있으면 422 + 위반 목록. 미결정 검증이 정원 검증보다 먼저다.  
 ² 정원 찼으면 409. 미선발 처리됐으면 409. 같은 모집단위 상위 미결정자 있으면 409. results 없으면 404.  
@@ -738,6 +742,13 @@ JOIN 하므로 값 하나만 바꾸면 재계산 없이 반영된다.
 
 FINALIZED 에서는 `round_confirmations` 를 **철회하지 않는다** — 확정·철회가 OPEN
 전용이라 지우면 담임이 다시 확정할 방법이 없다.
+
+**관리자 경로는 어느 상태에서도 담임 확정을 철회하지 않는다.** 관리자가 OPEN 라운드의
+`applications` 를 쓰는 것은 이 엔드포인트가 처음이므로(포기는 FINALIZED 전용, 미선발은
+CLOSED 전용) 전례로 삼을 것이 없어 여기 적어 둔다. 학과명은 점수·정원과 무관하니
+담임의 "입력 완료 확정" 이 뜻하는 바 — 그 반의 지원 입력이 끝났다 — 가 관리자의 학과명
+수정으로 달라지지 않는다고 보았다. 점수에 영향을 주는 값을 관리자가 OPEN 에서 고치는
+경로가 생긴다면 그때는 철회 여부를 다시 판단해야 한다.
 
 ---
 

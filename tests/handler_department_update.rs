@@ -88,8 +88,14 @@ async fn new_round(pool: &SqlitePool, status: &str) -> i64 {
     sqlx::query_scalar(sql).fetch_one(pool).await.unwrap()
 }
 
-/// 지원 행은 라운드가 OPEN 인 동안 넣어야 한다 — 마감 상태에서 곧바로 INSERT 하면
-/// 실제 운영 흐름과 달라진다. 라운드를 만든 뒤 상태를 올리는 순서로 맞춘다.
+/// 지원 행은 라운드가 OPEN 인 동안 넣는다. 다만 상태는 `UPDATE rounds` 로 직접 올리므로
+/// **실제 마감 흐름(close_round → finalize_round)을 거치지 않는다.** FINALIZED 로 올릴 때
+/// `trg_require_all_decided_before_finalize` 는 `OLD.status = 'CLOSED'` 조건이라 발화하지
+/// 않고, 그래서 여기 만들어지는 FINALIZED 라운드에는 `results` 행이 없다.
+///
+/// 학과명 경로는 `results` 를 읽지도 쓰지도 않으므로 이 파일의 단언에는 영향이 없다.
+/// 다만 **`results` 에 의존하는 기능을 이 헬퍼로 시험하면 통과하면서 아무것도 막지 못한다** —
+/// 그때는 `finalize_round` 핸들러를 태우는 픽스처를 따로 만들어라.
 async fn apply_then_set_status(
     pool: &SqlitePool,
     fx: &Fx,
@@ -660,6 +666,48 @@ async fn teacher_update_is_logged_as_teacher() {
 
     assert_eq!(actor, "TEACHER");
     assert_eq!((grade, class_no), (Some(1), Some(1)));
+
+    // 전후 값도 담임 경로에서 직접 단언한다. 지금은 관리자와 같은 헬퍼를 쓰지만,
+    // 진입점마다 확인해 두어야 헬퍼를 우회하는 리팩터링이 생겼을 때 잡힌다.
+    let detail: String = sqlx::query_scalar("SELECT detail FROM audit_log ORDER BY id DESC LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&detail).unwrap();
+    assert_eq!(json["previous_department_name"], "기계공학과");
+    assert_eq!(json["department_name"], "전기공학과");
+}
+
+/// 관리자가 OPEN 라운드에서 학과명을 고쳐도 담임 확정은 유지된다 — **의도된 동작**이다.
+/// 담임 전용 경로가 OPEN 을 거부하는 이유가 "확정이 남은 채 값만 바뀐다" 인데,
+/// 관리자 경로에는 정확히 그 상황이 생긴다. 학과명은 점수·정원과 무관하고 담임의
+/// "입력 완료 확정" 이 뜻하는 바(그 반의 입력이 끝났다)가 달라지지 않으므로 유지한다.
+/// 근거는 00_spec §7.5 에 적혀 있다. 이 테스트는 그 판단을 고정한다.
+#[tokio::test]
+async fn admin_open_update_keeps_teacher_confirmation() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "OPEN").await;
+    sqlx::query(
+        "INSERT INTO round_confirmations (round_id, grade, class_no, confirmed_at)          VALUES (?, 1, 1, '2025-01-02T00:00:00Z')",
+    )
+    .bind(rid)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    update_application_department(st(&pool), Path((fx.sid, fx.tid, rid)), body("전기공학과"))
+        .await
+        .unwrap();
+
+    let still: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM round_confirmations WHERE round_id = ?")
+            .bind(rid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(still, 1, "관리자의 학과명 수정이 담임 확정을 철회했다 (의도와 다름)");
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "전기공학과");
 }
 
 #[tokio::test]
@@ -750,9 +798,12 @@ async fn v1_database_with_data_upgrades_to_v2_and_opens_department_only() {
         .unwrap();
     assert_eq!(ver, 1);
 
-    // ② 데이터를 넣고 라운드를 마감한다
+    // ② 데이터를 넣고 라운드를 마감한다.
+    //    현장 DB 에는 FINALIZED 와 CLOSED 가 함께 있을 수 있으므로 둘 다 만든다
+    //    (idx_one_active_round 가 비-FINALIZED 를 하나로 제한하므로 순서가 중요하다).
     let fx = setup(&pool).await;
     let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
+    let closed_rid = apply_then_set_status(&pool, &fx, "화학과", "CLOSED").await;
 
     // v1 에서는 학과명 수정이 막혀 있었다 — 이것이 이슈 #32 의 출발점이다
     let blocked_on_v1 = sqlx::query(
@@ -797,10 +848,31 @@ async fn v1_database_with_data_upgrades_to_v2_and_opens_department_only() {
         "승격 후에도 계열·모집단위 변경은 막혀야 한다"
     );
 
-    // ⑥ 기존 데이터가 승격 과정에서 사라지지 않았다
+    // ⑥ CLOSED 라운드도 같이 열렸는지 — 관리자는 상태를 가리지 않는다
+    update_application_department(st(&pool), Path((fx.sid, fx.tid, closed_rid)), body("생명과학과"))
+        .await
+        .expect("승격 후 CLOSED 라운드의 학과명도 고칠 수 있어야 한다");
+    assert_eq!(
+        department_of(&pool, fx.sid, fx.tid, closed_rid).await,
+        "생명과학과"
+    );
+
+    // CLOSED 에서도 계열은 계속 막힌다
+    let closed_track = sqlx::query(
+        "UPDATE applications SET track_id = ?          WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(fx.other_tid)
+    .bind(fx.sid)
+    .bind(fx.tid)
+    .bind(closed_rid)
+    .execute(&pool)
+    .await;
+    assert!(closed_track.is_err(), "CLOSED 에서도 계열 변경은 막혀야 한다");
+
+    // ⑦ 기존 데이터가 승격 과정에서 사라지지 않았다
     let apps: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM applications")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(apps, 1, "승격이 기존 지원 행을 잃어버렸다");
+    assert_eq!(apps, 2, "승격이 기존 지원 행을 잃어버렸다");
 }
