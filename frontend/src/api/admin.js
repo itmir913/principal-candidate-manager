@@ -193,6 +193,10 @@ export const excludeApplication = (sid, tid, rid, reason) =>
 export const clearApplicationExclusion = (sid, tid, rid) =>
   axios.delete(`/api/applications/${sid}/${tid}/${rid}/exclude`)
 
+// 학과명 수정 (이슈 #32) — 라운드 상태와 무관하게 관리자는 언제든 고칠 수 있다
+export const updateApplicationDepartment = (sid, tid, rid, departmentName) =>
+  axios.put(`/api/applications/${sid}/${tid}/${rid}/department`, { department_name: departmentName })
+
 // ── 현재 라운드 (공용) ─────────────────────────────────────────
 export const getCurrentRound = () => axios.get('/api/rounds/current').then(r => r.data)
 

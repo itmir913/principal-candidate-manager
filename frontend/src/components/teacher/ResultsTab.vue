@@ -219,7 +219,38 @@
                   >
                     <td class="text-base" style="padding: 12px 20px; color: #1e293b;">{{ r.univ_name }}</td>
                     <td class="text-base" style="padding: 12px 16px; color: #1e293b;">{{ r.track_name }}</td>
-                    <td class="text-base" style="padding: 12px 16px; color: #475569;">{{ r.department_name }}</td>
+                    <!-- 학과명은 점수에 영향이 없어 마감 후에도 고칠 수 있다 (이슈 #32) -->
+                    <td class="text-base" style="padding: 12px 16px; color: #475569;">
+                      <div v-if="isEditing(r)" class="flex items-center gap-2">
+                        <input
+                          v-model="editingName"
+                          class="text-base"
+                          style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 120px;"
+                          placeholder="학과명"
+                          @keyup.enter="saveDepartment(r)"
+                          @keyup.esc="cancelEdit"
+                        />
+                        <button
+                          class="text-base whitespace-nowrap"
+                          style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                          :disabled="savingDepartment || !editingName.trim()"
+                          @click="saveDepartment(r)"
+                        >저장</button>
+                        <button
+                          class="text-base whitespace-nowrap"
+                          style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                          :disabled="savingDepartment"
+                          @click="cancelEdit"
+                        >취소</button>
+                      </div>
+                      <button
+                        v-else
+                        class="text-base text-left"
+                        style="border: none; background: none; color: #475569; cursor: pointer; padding: 0;"
+                        title="학과명 수정"
+                        @click="startEdit(r)"
+                      >{{ r.department_name || '—' }}</button>
+                    </td>
                     <td class="text-base text-center" style="padding: 12px 16px; color: #64748b;">{{ rankView === 'track' ? (r.track_rank ?? '-') : (r.ranking ?? '-') }}</td>
                     <td class="text-base text-left font-semibold" style="padding: 12px 20px; color: #1e293b;">
                       {{ formatScore(r.total_score) }}
@@ -256,6 +287,7 @@ import {
   teacherAbandonApplication,
   teacherRoundResultsCsv,
   teacherAllResultsCsv,
+  teacherUpdateApplicationDepartment,
 } from '../../api/teacher.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { dialog } from '../common/dialog.js'
@@ -275,6 +307,45 @@ const loadError = ref('')
 const rankView  = ref('univ')
 // 다운로드 중에는 버튼을 잠근다 — 같은 파일을 두 번 받는 조작을 막는다(저장소 공통 패턴)
 const downloading = ref(false)
+
+// 학과명 인라인 수정 (이슈 #32). 이 화면은 FINALIZED 라운드만 보여주므로
+// 담임 엔드포인트(CLOSED/FINALIZED 전용)의 조건을 언제나 만족한다.
+const editingKey       = ref(null)
+const editingName      = ref('')
+const savingDepartment = ref(false)
+
+function resultKey(r) {
+  return `${r.student_id}-${r.track_id}-${r.round_id}`
+}
+
+function isEditing(r) {
+  return editingKey.value === resultKey(r)
+}
+
+function startEdit(r) {
+  editingKey.value  = resultKey(r)
+  editingName.value = r.department_name || ''
+}
+
+function cancelEdit() {
+  editingKey.value  = null
+  editingName.value = ''
+}
+
+async function saveDepartment(r) {
+  const name = editingName.value.trim()
+  if (!name || savingDepartment.value) return
+  savingDepartment.value = true
+  try {
+    await teacherUpdateApplicationDepartment(r.student_id, r.track_id, r.round_id, name)
+    await load()
+    cancelEdit()
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    savingDepartment.value = false
+  }
+}
 
 // 표 헤더 정의. 한 곳에 모아 두면 열을 늘릴 때 colgroup 과 함께 여기만 보면 된다.
 // pad 는 아래 본문 td 의 좌우 패딩과 짝을 맞춘다 — 다르면 헤더 글자와 값의 시작점이 어긋난다

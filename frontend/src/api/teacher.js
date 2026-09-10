@@ -63,3 +63,8 @@ export const teacherRoundResultsCsv = (roundId) =>
 
 export const teacherAllResultsCsv = () =>
   axios.get('/api/teacher/results/csv', { responseType: 'blob' })
+
+// 학과명 수정 (이슈 #32) — 마감된 라운드 전용.
+// 진행 중인 라운드는 지원 재저장(teacherCreateApplication)이 담당한다.
+export const teacherUpdateApplicationDepartment = (sid, tid, rid, departmentName) =>
+  axios.put(`/api/teacher/applications/${sid}/${tid}/${rid}/department`, { department_name: departmentName })

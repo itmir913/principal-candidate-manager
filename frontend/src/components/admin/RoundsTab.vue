@@ -252,7 +252,38 @@
                           </span>
                         </td>
                         <td class="text-base" style="padding: 12px 18px; color: #1e293b;">{{ app.track_name }}</td>
-                        <td class="text-base" style="padding: 12px 18px; color: #475569;">{{ app.department_name }}</td>
+                        <!-- 학과명은 점수에 영향이 없어 라운드 상태와 무관하게 고칠 수 있다 (이슈 #32) -->
+                        <td class="text-base" style="padding: 12px 18px; color: #475569;" @click.stop>
+                          <div v-if="isEditingDept(app)" class="flex items-center gap-2">
+                            <input
+                              v-model="editingDeptName"
+                              class="text-base"
+                              style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 110px;"
+                              placeholder="학과명"
+                              @keyup.enter="saveDept(app)"
+                              @keyup.esc="cancelDeptEdit"
+                            />
+                            <button
+                              class="text-base whitespace-nowrap"
+                              style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                              :disabled="savingDept || !editingDeptName.trim()"
+                              @click="saveDept(app)"
+                            >저장</button>
+                            <button
+                              class="text-base whitespace-nowrap"
+                              style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                              :disabled="savingDept"
+                              @click="cancelDeptEdit"
+                            >취소</button>
+                          </div>
+                          <button
+                            v-else
+                            class="text-base text-left"
+                            style="border: none; background: none; color: #475569; cursor: pointer; padding: 0;"
+                            title="학과명 수정"
+                            @click="startDeptEdit(app)"
+                          >{{ app.department_name || '—' }}</button>
+                        </td>
                         <td class="text-base text-center" style="padding: 12px 18px;">
                           <span v-if="app.abandoned" style="color: #cbd5e1;">-</span>
                           <span v-else-if="selected.status === 'FINALIZED' && app.recommended"
@@ -465,12 +496,38 @@
                               {{ r.is_enrolled ? '재학생' : '졸업생' }}
                             </span>
                           </td>
-                          <td style="padding: 12px 18px; overflow: hidden;">
-                            <template v-if="rankView === 'univ'">
-                              <div class="text-base font-medium" style="color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.track_name }}</div>
-                              <div class="text-base" style="color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.department_name }}</div>
-                            </template>
-                            <span v-else class="text-base" style="color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;">{{ r.department_name }}</span>
+                          <td style="padding: 12px 18px; overflow: hidden;" @click.stop>
+                            <div v-if="rankView === 'univ'" class="text-base font-medium" style="color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.track_name }}</div>
+                            <!-- 학과명 인라인 수정 (이슈 #32). 두 보기 모두 같은 편집기를 쓴다 -->
+                            <div v-if="isEditingDept(r)" class="flex items-center gap-2">
+                              <input
+                                v-model="editingDeptName"
+                                class="text-base"
+                                style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; width: 100%; min-width: 110px;"
+                                placeholder="학과명"
+                                @keyup.enter="saveDept(r)"
+                                @keyup.esc="cancelDeptEdit"
+                              />
+                              <button
+                                class="text-base whitespace-nowrap"
+                                style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
+                                :disabled="savingDept || !editingDeptName.trim()"
+                                @click="saveDept(r)"
+                              >저장</button>
+                              <button
+                                class="text-base whitespace-nowrap"
+                                style="padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
+                                :disabled="savingDept"
+                                @click="cancelDeptEdit"
+                              >취소</button>
+                            </div>
+                            <button
+                              v-else
+                              class="text-base text-left"
+                              :style="{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: rankView === 'univ' ? '#94a3b8' : '#475569' }"
+                              title="학과명 수정"
+                              @click="startDeptEdit(r)"
+                            >{{ r.department_name || '—' }}</button>
                           </td>
                           <td class="text-base text-left font-semibold" style="padding: 12px 18px; color: #1e293b;">
                             {{ formatScore(r.total_score) }}
@@ -664,7 +721,7 @@ import {
   getRounds, openRound, closeRound, reopenRound, finalizeRound,
   calculateScores, getResults, recommendResult, unrecommendResult,
   getApplications, abandonApplication,
-  excludeApplication, clearApplicationExclusion,
+  excludeApplication, clearApplicationExclusion, updateApplicationDepartment,
   getAreas,
   exportResultsExcel,
   exportRoundSummary,
@@ -997,6 +1054,48 @@ async function selectRound(r) {
   selectedTrackId.value = ''
   allTracksInRound.value = []
   await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
+}
+
+// ── 학과명 인라인 수정 (이슈 #32) ───────────────────────────────
+// 지원자 표와 결과 표가 같은 편집기를 쓴다. 두 표의 행 모두
+// student_id/track_id/round_id 를 갖고 있어 키가 같다.
+// 라운드 상태를 가리지 않는다 — 관리자는 마감 후에도 명단을 관리해야 한다.
+const editingDeptKey  = ref(null)
+const editingDeptName = ref('')
+const savingDept      = ref(false)
+
+function deptKey(row) {
+  return `${row.student_id}-${row.track_id}-${row.round_id}`
+}
+
+function isEditingDept(row) {
+  return editingDeptKey.value === deptKey(row)
+}
+
+function startDeptEdit(row) {
+  editingDeptKey.value  = deptKey(row)
+  editingDeptName.value = row.department_name || ''
+}
+
+function cancelDeptEdit() {
+  editingDeptKey.value  = null
+  editingDeptName.value = ''
+}
+
+async function saveDept(row) {
+  const name = editingDeptName.value.trim()
+  if (!name || savingDept.value) return
+  savingDept.value = true
+  try {
+    await updateApplicationDepartment(row.student_id, row.track_id, row.round_id, name)
+    // 두 표가 같은 값을 보여주므로 함께 되읽는다
+    await Promise.all([loadApps(), loadResults()])
+    cancelDeptEdit()
+  } catch (e) {
+    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+  } finally {
+    savingDept.value = false
+  }
 }
 
 async function loadApps() {
