@@ -9,7 +9,7 @@ use sqlx::{
 /// 출시 이후이므로 **이미 배포된 버전의 스키마는 동결**이다. 스키마를 바꾸려면 이 값을
 /// 올리고 새 버전 조각(`migrations/v{N}/`)을 추가해라. 자세한 절차는
 /// `MIGRATION_FRAGMENTS` 주석과 `tests/schema_freeze.rs` 참고.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug)]
 pub struct SchemaTooNewError {
@@ -53,6 +53,9 @@ const V1_FRAGMENTS: &[&str] = &[
     include_str!("../migrations/v1/011-round-confirmations.sql"),
 ];
 
+// v2: 마감 후 학과명 수정 허용 (이슈 #32). 이미 배포된 v1 DB 위에서 도는 조각이다.
+const V2_FRAGMENTS: &[&str] = &[include_str!("../migrations/v2/001-department-editable.sql")];
+
 // 버전별 마이그레이션: index i → v(i+1). 각 항목은 해당 버전을 구성하는 조각 목록.
 //
 // 새 스키마 버전 추가 절차 (기존 버전 조각은 절대 손대지 않는다):
@@ -62,7 +65,7 @@ const V1_FRAGMENTS: &[&str] = &[
 //   3. SCHEMA_VERSION 상향 (안 올리면 컴파일 타임 assert가 막는다)
 //   4. `$env:PCM_WRITE_SCHEMA_SNAPSHOT=1; cargo test --test schema_freeze` 로
 //      새 버전 지문을 만들고 커밋
-const MIGRATION_FRAGMENTS: &[&[&str]] = &[V1_FRAGMENTS];
+const MIGRATION_FRAGMENTS: &[&[&str]] = &[V1_FRAGMENTS, V2_FRAGMENTS];
 
 // SCHEMA_VERSION과 MIGRATION_FRAGMENTS 길이가 일치하지 않으면 컴파일 타임에 오류
 const _: () = assert!(
