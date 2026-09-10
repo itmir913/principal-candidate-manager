@@ -215,7 +215,7 @@
     <div class="rounded-xl overflow-hidden"
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
       <div class="overflow-x-auto">
-        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 710px;">
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 740px;">
           <colgroup>
             <col style="width: 130px;">
             <col style="width: 130px;">
@@ -224,7 +224,9 @@
             <col style="width: 60px;">
             <col style="width: 60px;">
             <col style="width: 100px;">
-            <col style="width: 80px;">
+            <!-- 삭제 버튼(55px) + 좌우 패딩(40px)이 들어가야 한다. 폰트가 달라져도
+                 넘치지 않도록 여유를 둔다 -->
+            <col style="width: 110px;">
           </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">

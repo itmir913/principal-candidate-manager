@@ -207,14 +207,15 @@
 
         <!-- 모집단위 표 -->
         <div class="overflow-x-auto">
-          <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 720px;">
+          <table style="border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 740px;">
             <colgroup>
               <col>
               <col style="width: 100px;">
               <col style="width: 96px;">
               <col style="width: 96px;">
               <col style="width: 120px;">
-              <col style="width: 140px;">
+              <!-- 저장·취소 두 버튼이 한 줄에 들어가야 한다 (160px - 패딩 24px = 136px) -->
+              <col style="width: 160px;">
             </colgroup>
             <thead>
               <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
@@ -245,15 +246,17 @@
                     :disabled="!!u.prioritize_enrolled" />
                 </td>
                 <td style="padding: 10px 12px;">
-                  <div class="flex gap-2">
+                  <!-- whitespace-nowrap 이 없으면 좁은 열에서 버튼이 눌려 글자가 세로로 쪼개진다.
+                       flex-wrap 은 "저장 중…" 처럼 라벨이 길어질 때 버튼끼리 줄을 나누는 안전망이다. -->
+                  <div class="flex gap-2 flex-wrap">
                     <button
-                      class="text-base font-semibold rounded-lg disabled:opacity-40"
-                      style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                      class="text-base font-semibold rounded-lg disabled:opacity-40 whitespace-nowrap"
+                      style="flex: 0 0 auto; padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
                       :disabled="saving || !trackFormValid"
                       @click="saveAddTrack(u.id)"
                     >{{ saving ? '저장 중…' : '저장' }}</button>
-                    <button class="text-base rounded-lg"
-                      style="padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
+                    <button class="text-base rounded-lg whitespace-nowrap"
+                      style="flex: 0 0 auto; padding: 7px 14px; border: 1px solid #e2e8f0; background: white; color: #64748b; cursor: pointer;"
                       :disabled="saving" @click="addingTrackUnivId = null">취소</button>
                   </div>
                 </td>
