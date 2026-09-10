@@ -407,7 +407,7 @@
                     v-for="e in group.entries"
                     :key="e.student_id"
                     :style="{
-                      background: e.abandoned ? '#fef2f2' : '#f0fdf4',
+                      background: e.abandoned ? '#fee2e2' : '#dcfce7',
                       borderBottom: '1px solid #f1f5f9',
                       textDecoration: e.abandoned ? 'line-through' : 'none',
                     }"
@@ -517,7 +517,7 @@
                   <tr v-for="(c, i) in grp.rows" :key="i"
                     :style="{
                       borderBottom: '1px solid #f1f5f9',
-                      background: c.blocked ? '#fef2f2' : (c.op === 'create' ? '#f0fdf4' : '#fffbeb'),
+                      background: c.blocked ? '#fee2e2' : (c.op === 'create' ? '#dcfce7' : '#fef3c7'),
                     }">
                     <td class="text-base" style="padding: 10px 16px; vertical-align: top;">
                       <span class="text-base font-semibold" :style="{ color: badgeColor(c) }">{{ badgeLabel(c) }}</span>

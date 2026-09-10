@@ -262,9 +262,9 @@
                       {{ formatScore(r.total_score) }}
                     </td>
                     <td class="text-center" style="padding: 12px 16px;">
-                      <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
-                      <span v-else-if="r.recommended" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
-                      <span v-else class="text-base font-semibold" style="color: #ef4444;">미선발</span>
+                      <span v-if="r.abandoned" class="text-base font-semibold" style="color: #991b1b;">포기됨</span>
+                      <span v-else-if="r.recommended" class="text-base font-semibold" style="color: #166534;">추천 확정</span>
+                      <span v-else class="text-base font-semibold" style="color: #991b1b;">미선발</span>
                     </td>
                     <td class="text-center" style="padding: 12px 16px;">
                       <button
@@ -543,7 +543,7 @@ onMounted(load)
    덮어쓰면 행 색이 사라져 "추천 확정/미선발" 구분이 호버 중에 없어진다. */
 .result-row td {
   background-color: var(--row-bg, transparent);
-  transition: box-shadow 0.12s ease;
+  transition: box-shadow 0.12s ease, background-color 0.12s ease;
 }
 .result-row:hover td {
   box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);

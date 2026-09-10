@@ -576,7 +576,7 @@ function handleCopy() {
    배경을 td 로 내리고 호버는 위에 겹친다. src/docs/13_frontend_pitfalls.md §2 */
 .cls-row td {
   background-color: var(--row-bg, transparent);
-  transition: box-shadow 0.12s ease;
+  transition: box-shadow 0.12s ease, background-color 0.12s ease;
 }
 .cls-row:hover td {
   box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);

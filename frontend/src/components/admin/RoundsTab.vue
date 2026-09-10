@@ -475,7 +475,7 @@
                           class="cursor-pointer res-row"
                           :style="{
                             borderBottom: '1px solid #f1f5f9',
-                            // -50 계열은 흰 카드 위에서 흰색과 구분되지 않는다(채널 차이 한 자릿수).
+                            // -50 계열은 흰 카드 위에서 흰색과 구분되지 않는다(채널당 최대 20/255 차이).
                             // 담임 [라운드 결과]와 같은 -100 계열로 맞춘다. 셋 다 이 앱의 배지 색이다.
                             //
                             // 색은 tr 이 아니라 td 에 칠한다(아래 .res-row td). 이 표에는 아직
@@ -545,9 +545,9 @@
                           </td>
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <div class="flex flex-col items-center gap-1">
-                            <span v-if="r.abandoned" class="text-base font-semibold" style="color: #ef4444;">포기됨</span>
+                            <span v-if="r.abandoned" class="text-base font-semibold" style="color: #991b1b;">포기됨</span>
                             <template v-else-if="r.recommended">
-                              <span class="text-base font-semibold" style="color: #16a34a;">추천 확정됨</span>
+                              <span class="text-base font-semibold" style="color: #166534;">추천 확정됨</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg whitespace-nowrap"
@@ -563,7 +563,7 @@
                               @click="handleRecommend(r)"
                             >추천 확정</button>
                             <span v-else-if="selected.status === 'CLOSED' && r.excluded" style="color: #cbd5e1;">-</span>
-                            <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
+                            <span v-else-if="selected.status === 'FINALIZED'" class="text-base font-semibold" style="color: #991b1b;">미선발</span>
                             <span v-else class="text-base font-semibold" style="color: #94a3b8;">-</span>
                             </div>
                           </td>
@@ -579,7 +579,7 @@
                           <td class="text-center" style="padding: 12px 18px;" @click.stop>
                             <div class="flex flex-col items-center gap-1">
                             <template v-if="r.excluded">
-                              <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #d97706;">미선발</span>
+                              <span class="text-base font-semibold" :title="r.excluded_reason" style="color: #92400e;">미선발</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
                                 class="text-base rounded-lg whitespace-nowrap disabled:opacity-40"
@@ -1488,7 +1488,7 @@ onMounted(loadRounds)
    src/docs/13_frontend_pitfalls.md §1 */
 .res-row td {
   background-color: var(--row-bg, transparent);
-  transition: box-shadow 0.12s ease;
+  transition: box-shadow 0.12s ease, background-color 0.12s ease;
 }
 /* 호버는 배경을 덮어쓰지 않고 위에 겹친다 — 덮으면 추천 확정·미선발·동점 구분이
    마우스를 올린 행에서만 사라진다. 같은 문서 §2 */
