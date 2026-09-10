@@ -456,7 +456,7 @@ function downloadAllCsv() {
 }
 
 async function load() {
-  cancelDeptEdit()
+  cancelEdit()
   loading.value = true
   loadError.value = ''
   try {
