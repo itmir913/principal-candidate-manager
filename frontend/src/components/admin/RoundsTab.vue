@@ -472,12 +472,17 @@
                     <tbody>
                       <template v-for="r in group.results" :key="r.student_id">
                         <tr
-                          class="cursor-pointer transition-colors"
+                          class="cursor-pointer res-row"
                           :style="{
                             borderBottom: '1px solid #f1f5f9',
                             // -50 계열은 흰 카드 위에서 흰색과 구분되지 않는다(채널 차이 한 자릿수).
                             // 담임 [라운드 결과]와 같은 -100 계열로 맞춘다. 셋 다 이 앱의 배지 색이다.
-                            background:
+                            //
+                            // 색은 tr 이 아니라 td 에 칠한다(아래 .res-row td). 이 표에는 아직
+                            // sticky 셀이 없어 tr 에 줘도 지금은 동작하지만, 학과명 편집기로 행
+                            // 높이가 바뀌므로 sticky 를 붙이는 순간 담임 [라운드 결과]에서 겪은
+                            // 리페인트 누락이 그대로 재현된다. src/docs/13_frontend_pitfalls.md §1.
+                            '--row-bg':
                               selected.status === 'FINALIZED' && (r.abandoned || !r.recommended) ? '#fee2e2' :
                               selected.status === 'FINALIZED' && r.recommended && !r.abandoned ? '#dcfce7' :
                               tieSet.has(`${r.student_id}-${r.track_id}`) ? '#fef3c7' :
@@ -594,9 +599,11 @@
                           </td>
                         </tr>
                         <!-- 전형요소 점수 상세 -->
+                        <!-- 이 행도 배경을 td 에 둔다 — v-if 로 나타났다 사라지며 표 높이를
+                             바꾸므로 같은 규칙을 따른다. 13_frontend_pitfalls.md §1 -->
                         <tr v-if="expandedRows[`${r.student_id}-${r.track_id}`]"
-                          style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
-                          <td colspan="10" style="padding: 14px 36px;">
+                          style="border-bottom: 1px solid #f1f5f9;">
+                          <td colspan="10" style="padding: 14px 36px; background: #f8fafc;">
                             <div class="flex flex-wrap gap-x-6 gap-y-2">
                               <div v-for="area in areas" :key="area.id" class="flex items-center gap-2">
                                 <span class="text-base" style="color: #64748b;">{{ area.name }}</span>
@@ -1475,3 +1482,17 @@ async function handleUnrecommend(r) {
 
 onMounted(loadRounds)
 </script>
+
+<style scoped>
+/* 행 색은 td 가 칠한다 — tr 에 주면 sticky 표에서 리페인트가 누락된다.
+   src/docs/13_frontend_pitfalls.md §1 */
+.res-row td {
+  background-color: var(--row-bg, transparent);
+  transition: box-shadow 0.12s ease;
+}
+/* 호버는 배경을 덮어쓰지 않고 위에 겹친다 — 덮으면 추천 확정·미선발·동점 구분이
+   마우스를 올린 행에서만 사라진다. 같은 문서 §2 */
+.res-row:hover td {
+  box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);
+}
+</style>

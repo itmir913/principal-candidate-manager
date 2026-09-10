@@ -212,9 +212,9 @@
                   <tr
                     v-for="c in data.classes"
                     :key="`${c.grade}-${c.class_no}`"
-                    style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;"
-                    :style="c.submitted === 0 ? { background: '#fef2f2' } : {}"
-                    class="hover:bg-slate-50"
+                    style="border-bottom: 1px solid #f1f5f9;"
+                    :style="{ '--row-bg': c.submitted === 0 ? '#fee2e2' : undefined }"
+                    class="cls-row"
                   >
                     <td class="text-base font-semibold" style="padding: 14px 20px; color: #1e293b;">
                       {{ c.grade }}학년 {{ c.class_no }}반
@@ -244,9 +244,9 @@
                   <!-- 졸업생 행 -->
                   <tr
                     v-if="data.graduated"
-                    style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;"
-                    :style="data.graduated.submitted === 0 ? { background: '#fef2f2' } : {}"
-                    class="hover:bg-slate-50"
+                    style="border-bottom: 1px solid #f1f5f9;"
+                    :style="{ '--row-bg': data.graduated.submitted === 0 ? '#fee2e2' : undefined }"
+                    class="cls-row"
                   >
                     <td class="text-base font-semibold" style="padding: 14px 20px; color: #1e293b;">졸업생 담당</td>
                     <td class="text-base" style="padding: 14px 20px; color: #475569;">{{ data.graduated.teacher_name ?? '관리자' }}</td>
@@ -569,3 +569,16 @@ function handleCopy() {
   }
 }
 </script>
+
+<style scoped>
+/* 인라인 background 와 hover:bg-* 를 한 tr 에 같이 쓰면 인라인이 이겨서
+   색이 있는 행(미제출)만 호버가 먹지 않는다 — 행마다 동작이 달라진다.
+   배경을 td 로 내리고 호버는 위에 겹친다. src/docs/13_frontend_pitfalls.md §2 */
+.cls-row td {
+  background-color: var(--row-bg, transparent);
+  transition: box-shadow 0.12s ease;
+}
+.cls-row:hover td {
+  box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.06);
+}
+</style>
