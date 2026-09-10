@@ -308,8 +308,8 @@ const rankView  = ref('univ')
 // 다운로드 중에는 버튼을 잠근다 — 같은 파일을 두 번 받는 조작을 막는다(저장소 공통 패턴)
 const downloading = ref(false)
 
-// 학과명 인라인 수정 (이슈 #32). 이 화면은 FINALIZED 라운드만 보여주므로
-// 담임 엔드포인트(CLOSED/FINALIZED 전용)의 조건을 언제나 만족한다.
+// 학과명 인라인 수정 (이슈 #32). 담임의 학과명 수정은 이 화면 하나뿐이다.
+// 이 화면이 FINALIZED 만 보여주므로 담임 엔드포인트도 FINALIZED 전용이다.
 const editingKey       = ref(null)
 const editingName      = ref('')
 const savingDepartment = ref(false)

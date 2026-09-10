@@ -5,10 +5,12 @@
 //! 바뀌면 안 된다 — 스키마 v2 는 department_name 한 컬럼만 열었고, 이 파일은
 //! "열린 것"과 "여전히 닫힌 것"을 양쪽 다 고정한다.
 //!
-//! 담임 엔드포인트가 CLOSED/FINALIZED 전용인 이유: OPEN 라운드의 수정은 기존
-//! 지원 등록(upsert)이 담당하고 그쪽은 담임 확정을 함께 철회한다. 확정·철회는
-//! OPEN 에서만 가능하므로, 여기서 OPEN 을 받으면 확정이 남은 채 값만 바뀌어
-//! 관리자가 보는 "확정됨"이 거짓이 된다.
+//! 담임 엔드포인트는 FINALIZED 전용이다. 담임이 지난 라운드를 보는 화면은
+//! [라운드 결과] 하나뿐이고 그 화면은 FINALIZED 만 보여주므로, 다른 상태를
+//! API 만 열어 두면 실제 흐름으로는 지나가지 않는 경로가 남는다.
+//! OPEN 은 기존 지원 등록(upsert)이 담당한다 — 그쪽만 담임 확정을 함께
+//! 철회하고, 확정·철회는 OPEN 에서만 가능하다. CLOSED 는 관리자가 추천을
+//! 확정하는 구간이라 담임이 볼 화면이 없다.
 
 mod common;
 
@@ -191,31 +193,53 @@ async fn admin_update_trims_surrounding_whitespace() {
     assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "전기공학과");
 }
 
-// ── 담임: CLOSED/FINALIZED 전용 ───────────────────────────────────
+// ── 담임: FINALIZED 전용 ──────────────────────────────────────────
 
 #[tokio::test]
-async fn teacher_updates_department_after_close() {
-    for status in ["CLOSED", "FINALIZED"] {
-        let pool = common::create_test_pool().await;
-        let fx = setup(&pool).await;
-        let rid = apply_then_set_status(&pool, &fx, "기계공학과", status).await;
+async fn teacher_updates_department_in_finalized_round() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
 
-        let got = teacher_update_application_department(
-            st(&pool),
-            Extension(common::teacher_claims(1, 1)),
-            Path((fx.sid, fx.tid, rid)),
-            body("전기공학과"),
-        )
+    let got = teacher_update_application_department(
+        st(&pool),
+        Extension(common::teacher_claims(1, 1)),
+        Path((fx.sid, fx.tid, rid)),
+        body("전기공학과"),
+    )
+    .await
+    .expect("FINALIZED 라운드에서 담임 수정이 되어야 한다");
+
+    assert_eq!(got, StatusCode::NO_CONTENT);
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "전기공학과");
+}
+
+/// CLOSED 거부는 "아직 안 만든 기능" 이 아니라 의도된 경계다.
+/// 담임에게는 CLOSED 라운드를 보는 화면이 없다 — [라운드 결과] 는
+/// FINALIZED 만 보여준다. 화면 없는 API 를 열어 두지 않는다.
+#[tokio::test]
+async fn teacher_update_is_rejected_in_closed_round() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "CLOSED").await;
+
+    let err = teacher_update_application_department(
+        st(&pool),
+        Extension(common::teacher_claims(1, 1)),
+        Path((fx.sid, fx.tid, rid)),
+        body("전기공학과"),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "기계공학과");
+
+    // 같은 라운드를 관리자는 고칠 수 있다 — 급하면 관리자에게 요청하는 경로다
+    update_application_department(st(&pool), Path((fx.sid, fx.tid, rid)), body("전기공학과"))
         .await
-        .unwrap_or_else(|e| panic!("{status} 라운드에서 담임 수정 실패: {e:?}"));
-
-        assert_eq!(got, StatusCode::NO_CONTENT, "{status}");
-        assert_eq!(
-            department_of(&pool, fx.sid, fx.tid, rid).await,
-            "전기공학과",
-            "{status}"
-        );
-    }
+        .expect("관리자는 CLOSED 에서도 고칠 수 있어야 한다");
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "전기공학과");
 }
 
 #[tokio::test]
@@ -555,7 +579,7 @@ async fn results_snapshot_is_untouched() {
 async fn teacher_confirmation_survives_department_update() {
     let pool = common::create_test_pool().await;
     let fx = setup(&pool).await;
-    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "CLOSED").await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
     sqlx::query(
         "INSERT INTO round_confirmations (round_id, grade, class_no, confirmed_at) \
          VALUES (?, 1, 1, '2025-01-02T00:00:00Z')",

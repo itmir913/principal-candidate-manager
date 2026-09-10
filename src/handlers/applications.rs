@@ -581,9 +581,16 @@ pub async fn update_application_department(
 
 // URL: /teacher/applications/:sid/:tid/:rid/department  (PUT — 담임)
 //
-// CLOSED/FINALIZED 전용이다. OPEN 라운드의 수정은 기존 POST 지원 등록(upsert)이
-// 담당한다 — 그쪽은 담임 확정을 함께 철회하는데(확정·철회는 OPEN 에서만 가능),
-// 여기서 OPEN 을 받으면 확정을 철회하지 않아 "확정됨" 표시가 거짓이 된다.
+// FINALIZED 전용이다. 담임이 지난 라운드를 보는 화면은 [라운드 결과] 하나뿐이고
+// 그 화면은 FINALIZED 만 보여준다(scoring.rs::teacher_get_results). 화면이 없는
+// 상태를 API 만 열어 두면 실제 흐름으로는 한 번도 지나가지 않는 경로가 남는다.
+//
+// OPEN 라운드의 수정은 기존 POST 지원 등록(upsert)이 담당한다 — 그쪽은 담임
+// 확정을 함께 철회하는데(확정·철회는 OPEN 에서만 가능), 여기서 OPEN 을 받으면
+// 확정을 철회하지 않아 "확정됨" 표시가 거짓이 된다.
+//
+// CLOSED 는 관리자가 추천을 확정하는 구간이라 담임이 볼 화면 자체가 없다.
+// 그 사이에 고쳐야 하면 관리자 엔드포인트를 쓴다(라운드 상태를 가리지 않는다).
 pub async fn teacher_update_application_department(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,
@@ -603,11 +610,17 @@ pub async fn teacher_update_application_department(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     match status {
-        Some(RoundStatus::Closed) | Some(RoundStatus::Finalized) => {}
+        Some(RoundStatus::Finalized) => {}
         Some(RoundStatus::Open) => {
             return Err((
                 StatusCode::BAD_REQUEST,
                 "진행 중인 라운드의 학과명은 지원 수정 화면에서 바꿔 주세요".into(),
+            ))
+        }
+        Some(RoundStatus::Closed) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "마감 처리 중인 라운드입니다. 학과명 수정이 필요하면 관리자에게 요청하세요".into(),
             ))
         }
         None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),

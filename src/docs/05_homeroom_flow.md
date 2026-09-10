@@ -70,7 +70,7 @@
 - 즉, 동일 (student, track, round) 조합이 이미 있으면 `department_name`만 업데이트한다. **INSERT OR IGNORE가 아닌 ON CONFLICT DO UPDATE 패턴**.
 - 이 경로는 **OPEN 라운드 전용**이고 담임 확정(`round_confirmations`)을 함께 철회한다.
   마감된 라운드의 학과명 수정은 별도 엔드포인트가 담당한다 →
-  `PUT /teacher/applications/:sid/:tid/:rid/department` (CLOSED/FINALIZED 전용, 이슈 #32).
+  `PUT /teacher/applications/:sid/:tid/:rid/department` (FINALIZED 전용, 이슈 #32).
   그쪽은 확정을 철회하지 않는다 — 확정·철회 자체가 OPEN 에서만 가능하므로 지우면 복구할 수 없다.
 
 **③ 점수 계산** (트랜잭션 내에서 실행)

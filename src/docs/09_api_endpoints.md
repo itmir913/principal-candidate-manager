@@ -236,7 +236,7 @@
 | POST | `/teacher/applications` | 지원 등록+기초데이터+점수계산 (단일 tx) | 아래 상세 참조 |
 | DELETE | `/teacher/applications/:sid/:tid/:rid` | 지원 취소 (OPEN에서만) | results도 함께 삭제 |
 | PUT | `/teacher/applications/:sid/:tid/:rid/abandon` | 포기 (FINALIZED에서만). 지원 없으면 404 | 담당 학생 검증 |
-| PUT | `/teacher/applications/:sid/:tid/:rid/department` | 학과명 수정 (**CLOSED/FINALIZED에서만**). Body: `{"department_name":"..."}` | 담당 학생 검증(403). OPEN은 400 — 지원 재저장이 담당한다. `round_confirmations`를 철회하지 않는다 |
+| PUT | `/teacher/applications/:sid/:tid/:rid/department` | 학과명 수정 (**FINALIZED에서만**). Body: `{"department_name":"..."}` | 담당 학생 검증(403). OPEN·CLOSED는 400 — 담임이 그 라운드를 보는 화면이 [라운드 결과](FINALIZED 전용)뿐이다. `round_confirmations`를 철회하지 않는다 |
 | PUT | `/teacher/password` | 담임 비밀번호 변경 | 졸업생 담임 불가 |
 | GET | `/teacher/area-context` | 전형요소+저장된 기초데이터. `?student_id=&track_id=` | |
 | POST | `/teacher/area-score-preview` | 입력값 기반 점수 미리보기 (비저장). 응답: `{score, matched_keys, warning, error}` | |

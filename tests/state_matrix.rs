@@ -453,9 +453,9 @@ async fn matrix_teacher_abandon() {
     .await;
 }
 
-// 학과명 수정 (이슈 #32): 관리자는 전 상태, 담임은 마감 후에만.
-// 담임의 OPEN 거부는 의도된 것이다 — OPEN 수정은 기존 지원 등록(upsert)이
-// 담당하고 그쪽만 담임 확정을 함께 철회한다.
+// 학과명 수정 (이슈 #32): 관리자는 전 상태, 담임은 FINALIZED 에서만.
+// 담임의 OPEN 거부는 기존 지원 등록(upsert)이 그 자리를 담당하기 때문이고,
+// CLOSED 거부는 담임에게 CLOSED 라운드를 보는 화면이 없기 때문이다.
 #[tokio::test]
 async fn matrix_admin_department() {
     use StatusCode as S;
@@ -471,7 +471,7 @@ async fn matrix_teacher_department() {
     use StatusCode as S;
     assert_matrix_row(
         Ep::TeacherDepartment,
-        [S::NOT_FOUND, S::BAD_REQUEST, S::NO_CONTENT, S::NO_CONTENT],
+        [S::NOT_FOUND, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
     )
     .await;
 }

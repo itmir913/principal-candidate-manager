@@ -128,7 +128,7 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 | `teacherChangePassword(current, new)` | PUT /teacher/password | - |
 | `teacherGetResults` | GET /teacher/results | `TeacherResultsResponse` |
 | `teacherAbandonApplication(sid, tid, rid)` | PUT /teacher/applications/:sid/:tid/:rid/abandon | - |
-| `teacherUpdateApplicationDepartment(sid, tid, rid, departmentName)` | PUT /teacher/applications/:sid/:tid/:rid/department | `{department_name}` (CLOSED/FINALIZED 전용) |
+| `teacherUpdateApplicationDepartment(sid, tid, rid, departmentName)` | PUT /teacher/applications/:sid/:tid/:rid/department | `{department_name}` (FINALIZED 전용) |
 | `teacherGetRoundConfirmation(roundId)` | GET /teacher/rounds/:id/confirm | `{confirmed, confirmed_at}` |
 | `teacherConfirmRound(roundId)` | POST /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |
 | `teacherRevokeRoundConfirmation(roundId)` | DELETE /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |

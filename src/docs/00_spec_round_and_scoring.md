@@ -718,18 +718,26 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 | 관리자 포기 처리 | **가능** | FINALIZED 상태 전용 |
 | 담임 포기 처리 | **가능** | FINALIZED 상태 전용 |
 | 학과명 수정 (관리자) | **가능** | 라운드 상태 무관. 스키마 v2 (이슈 #32) |
-| 학과명 수정 (담임) | **가능** | CLOSED/FINALIZED 전용 — OPEN은 지원 재저장이 담당 |
+| 학과명 수정 (담임) | **가능** | FINALIZED 전용 — OPEN은 지원 재저장이 담당, CLOSED는 관리자 몫 |
 | 계열·모집단위(`track_id`) 변경 | **불가** | 선발 단위 자체. v2에서도 트리거가 계속 막는다 |
 
 학과명만 여는 이유: 점수 산출에 쓰이지 않고 `results` 에 박제되지도 않는다
 (`score_detail` 은 `{area_id: score}` 뿐). 조회·내보내기가 `applications` 를 실시간
 JOIN 하므로 값 하나만 바꾸면 재계산 없이 반영된다.
 
-담임 경로가 OPEN 을 거부하는 이유: OPEN 라운드의 수정은 `teacher_create_application`
-(upsert)이 담당하는데 그쪽은 담임 확정(`round_confirmations`)을 함께 철회한다.
-확정·철회는 OPEN 에서만 가능하므로, 전용 엔드포인트가 OPEN 을 받으면 확정이 남은 채
-값만 바뀌어 관리자가 보는 "확정됨" 이 거짓이 된다. 반대로 마감된 라운드에서는
-확정을 **철회하지 않는다** — 지우면 담임이 다시 확정할 방법이 없다.
+담임 경로가 FINALIZED 전용인 이유: 담임이 지난 라운드를 보는 화면은 [라운드 결과]
+하나뿐이고 그 화면은 FINALIZED 만 보여준다(`teacher_get_results` 의
+`WHERE rnd.status = 'FINALIZED'`). 화면 없는 상태를 API 만 열어 두면 실제 흐름으로는
+한 번도 지나가지 않는 경로가 남는다.
+
+- **OPEN**: `teacher_create_application`(upsert)이 담당한다. 그쪽은 담임 확정
+  (`round_confirmations`)을 함께 철회하는데, 확정·철회는 OPEN 에서만 가능하므로
+  전용 엔드포인트가 OPEN 을 받으면 확정이 남은 채 값만 바뀌어 "확정됨" 이 거짓이 된다.
+- **CLOSED**: 관리자가 추천을 확정하는 구간이라 담임이 볼 화면이 없다. 그 사이에
+  고쳐야 하면 관리자 엔드포인트를 쓴다(라운드 상태를 가리지 않는다).
+
+FINALIZED 에서는 `round_confirmations` 를 **철회하지 않는다** — 확정·철회가 OPEN
+전용이라 지우면 담임이 다시 확정할 방법이 없다.
 
 ---
 
