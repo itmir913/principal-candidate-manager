@@ -168,7 +168,7 @@ pub async fn admin_list_applications(
          LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE (? IS NULL OR a.round_id = ?)
            AND (? IS NULL OR a.track_id = ?)
-         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no, s.student_code",
+         ORDER BY u.univ_name, ut.track_name, s.is_enrolled DESC, s.grade, s.class_no, s.seq_no, s.student_code",
     )
     .bind(q.round_id)
     .bind(q.round_id)

@@ -881,7 +881,8 @@ const appsByUniv = computed(() => {
       return a.track_name.localeCompare(b.track_name, 'ko')
     })
   }
-  return map
+  // 결과 카드와 같은 이유로 키 순서를 여기서 확정한다 — v-for 는 삽입 순서를 쓴다
+  return sortGroups(map)
 })
 
 function appTotalScore(app) {

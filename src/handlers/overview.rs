@@ -223,7 +223,9 @@ pub async fn get_overview(
     .await
     .map_err(db_err)?;
 
-    // 대학별로 묶기 (SQL이 u.id 기준으로 정렬되어 있으므로 순차 처리)
+    // 대학별로 묶기 — 같은 대학 행이 연속이어야 올바르다. 정렬키는 univ_name 이고,
+    // universities.univ_name 이 UNIQUE(005-universities.sql)라 이름순 = 대학별 연속이 보장된다.
+    // 정렬키를 다시 바꾸거나 그 UNIQUE 를 떼면 이 루프가 조용히 깨진다.
     let mut universities: Vec<OverviewUniversity> = Vec::new();
     for row in univ_rows {
         if universities.last().map(|u: &OverviewUniversity| u.univ_id) != Some(row.univ_id) {
