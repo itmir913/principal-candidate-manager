@@ -1,6 +1,7 @@
 //! 상태기계 × 쓰기 엔드포인트 매트릭스 테스트.
 //!
-//! src/docs/11_state_matrix.md의 표를 실행으로 고정한다.
+//! src/docs/00_spec_round_and_scoring.md §1.2 의 표를 실행으로 고정한다.
+//! (옛 11_state_matrix.md 는 00_spec 으로 통합되며 삭제됐다)
 //! 한 케이스 = 표의 한 셀. 거부 셀은 상태코드에 더해
 //! rounds·applications·results 세 테이블의 완전 불변까지 단언한다.
 

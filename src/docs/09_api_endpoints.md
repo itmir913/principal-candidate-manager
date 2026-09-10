@@ -209,6 +209,7 @@
 | PUT | `/applications/:sid/:tid/:rid/abandon` | 포기. FINALIZED에서만. 지원 없으면 404 |
 | PUT | `/applications/:sid/:tid/:rid/exclude` | 미선발 처리. CLOSED에서만. Body: `{"reason":"..."}` 사유 필수. 이미 추천 확정이면 409. 이미 미선발이면 409 |
 | DELETE | `/applications/:sid/:tid/:rid/exclude` | 미선발 해제. CLOSED에서만. 미선발 상태 아니면 409 |
+| PUT | `/applications/:sid/:tid/:rid/department` | 학과명 수정. **라운드 상태 무관**. Body: `{"department_name":"..."}`. 공백만이면 400, 라운드/지원 없으면 404. 값이 그대로면 감사 기록 없이 204 (이슈 #32) |
 
 ---
 
@@ -235,6 +236,7 @@
 | POST | `/teacher/applications` | 지원 등록+기초데이터+점수계산 (단일 tx) | 아래 상세 참조 |
 | DELETE | `/teacher/applications/:sid/:tid/:rid` | 지원 취소 (OPEN에서만) | results도 함께 삭제 |
 | PUT | `/teacher/applications/:sid/:tid/:rid/abandon` | 포기 (FINALIZED에서만). 지원 없으면 404 | 담당 학생 검증 |
+| PUT | `/teacher/applications/:sid/:tid/:rid/department` | 학과명 수정 (**CLOSED/FINALIZED에서만**). Body: `{"department_name":"..."}` | 담당 학생 검증(403). OPEN은 400 — 지원 재저장이 담당한다. `round_confirmations`를 철회하지 않는다 |
 | PUT | `/teacher/password` | 담임 비밀번호 변경 | 졸업생 담임 불가 |
 | GET | `/teacher/area-context` | 전형요소+저장된 기초데이터. `?student_id=&track_id=` | |
 | POST | `/teacher/area-score-preview` | 입력값 기반 점수 미리보기 (비저장). 응답: `{score, matched_keys, warning, error}` | |

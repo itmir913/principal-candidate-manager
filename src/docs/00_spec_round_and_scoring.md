@@ -93,7 +93,7 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 | `trg_prevent_delete_closed_result` | `009-results.sql:36` | CLOSED/FINALIZED 라운드 results DELETE |
 | `trg_prevent_exclude_recommended` | `008-applications.sql:76` | 추천 확정 행에 excluded=1 설정 |
 | `trg_prevent_delete_closed_application` | `008-applications.sql:23` | CLOSED/FINALIZED 라운드 applications DELETE |
-| `trg_prevent_update_closed_application` | `008-applications.sql:32` | CLOSED 라운드: excluded/excluded_reason 외 수정. FINALIZED: abandoned 0→1 외 수정 |
+| `trg_prevent_update_closed_application` | `v2/001-department-editable.sql:18` | CLOSED 라운드: excluded/excluded_reason/department_name 외 수정. FINALIZED: abandoned 0→1 과 department_name 외 수정<br>**스키마 v2에서 완화** — v1 정의(`008-applications.sql:32`)는 학과명 수정도 막았다 (이슈 #32) |
 
 ### 1.3 라운드 열기 (`POST /rounds/open`)
 
@@ -717,6 +717,19 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 | 미선발 처리 / 해제 | **불가** | CLOSED 상태 필수 조건 |
 | 관리자 포기 처리 | **가능** | FINALIZED 상태 전용 |
 | 담임 포기 처리 | **가능** | FINALIZED 상태 전용 |
+| 학과명 수정 (관리자) | **가능** | 라운드 상태 무관. 스키마 v2 (이슈 #32) |
+| 학과명 수정 (담임) | **가능** | CLOSED/FINALIZED 전용 — OPEN은 지원 재저장이 담당 |
+| 계열·모집단위(`track_id`) 변경 | **불가** | 선발 단위 자체. v2에서도 트리거가 계속 막는다 |
+
+학과명만 여는 이유: 점수 산출에 쓰이지 않고 `results` 에 박제되지도 않는다
+(`score_detail` 은 `{area_id: score}` 뿐). 조회·내보내기가 `applications` 를 실시간
+JOIN 하므로 값 하나만 바꾸면 재계산 없이 반영된다.
+
+담임 경로가 OPEN 을 거부하는 이유: OPEN 라운드의 수정은 `teacher_create_application`
+(upsert)이 담당하는데 그쪽은 담임 확정(`round_confirmations`)을 함께 철회한다.
+확정·철회는 OPEN 에서만 가능하므로, 전용 엔드포인트가 OPEN 을 받으면 확정이 남은 채
+값만 바뀌어 관리자가 보는 "확정됨" 이 거짓이 된다. 반대로 마감된 라운드에서는
+확정을 **철회하지 않는다** — 지우면 담임이 다시 확정할 방법이 없다.
 
 ---
 

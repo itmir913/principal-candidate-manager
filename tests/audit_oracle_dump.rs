@@ -197,7 +197,8 @@ async fn seed(pool: &SqlitePool, scn: &Value) {
 /// 시나리오의 excluded / recommended / abandoned 플래그를 **실제 생명주기 순서대로** 적용한다.
 /// 트리거를 우회하지 않으므로, 실패하면 그 상태가 API 로 도달 불가하다는 뜻이다.
 async fn apply_lifecycle_flags(pool: &SqlitePool, scn: &Value) -> Result<(), String> {
-    // ① CLOSED 에서 미선발 처리 (trg_prevent_update_closed_application 이 허용하는 유일한 변경)
+    // ① CLOSED 에서 미선발 처리 (trg_prevent_update_closed_application 이 허용하는 변경 중 하나.
+    //    스키마 v2 부터 department_name 수정도 허용된다 — 이슈 #32)
     for a in scn["applications"].as_array().unwrap() {
         if opt_i64(a, "excluded") == Some(1) {
             sqlx::query(

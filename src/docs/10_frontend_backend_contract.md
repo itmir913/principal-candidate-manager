@@ -97,6 +97,7 @@ AdminView.vue 및 하위 탭 컴포넌트에서 사용.
 | `abandonApplication(sid, tid, rid)` | PUT /applications/:sid/:tid/:rid/abandon | - |
 | `excludeApplication(sid, tid, rid, reason)` | PUT /applications/:sid/:tid/:rid/exclude | - |
 | `clearApplicationExclusion(sid, tid, rid)` | DELETE /applications/:sid/:tid/:rid/exclude | - |
+| `updateApplicationDepartment(sid, tid, rid, departmentName)` | PUT /applications/:sid/:tid/:rid/department | `{department_name}` |
 | `changeAdminPassword(current, new)` | PUT /auth/admin/password | - |
 | `scorePreview(studentId, trackId)` | GET /score-preview | `ScorePreviewResponse` |
 | `adminAreaScorePreview(areaId, trackId, values)` | POST /area-score-preview | `{score, matched_keys, warning, error}` |
@@ -127,6 +128,7 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 | `teacherChangePassword(current, new)` | PUT /teacher/password | - |
 | `teacherGetResults` | GET /teacher/results | `TeacherResultsResponse` |
 | `teacherAbandonApplication(sid, tid, rid)` | PUT /teacher/applications/:sid/:tid/:rid/abandon | - |
+| `teacherUpdateApplicationDepartment(sid, tid, rid, departmentName)` | PUT /teacher/applications/:sid/:tid/:rid/department | `{department_name}` (CLOSED/FINALIZED 전용) |
 | `teacherGetRoundConfirmation(roundId)` | GET /teacher/rounds/:id/confirm | `{confirmed, confirmed_at}` |
 | `teacherConfirmRound(roundId)` | POST /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |
 | `teacherRevokeRoundConfirmation(roundId)` | DELETE /teacher/rounds/:id/confirm | - (OPEN에서만, 그 외 400) |
