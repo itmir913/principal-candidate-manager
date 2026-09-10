@@ -839,6 +839,10 @@ fn build_router(state: AppState) -> Router {
             delete(handlers::applications::clear_application_exclusion),
         )
         .route(
+            "/applications/:sid/:tid/:rid/department",
+            put(handlers::applications::update_application_department),
+        )
+        .route(
             "/results/:sid/:tid/:rid/recommend",
             put(handlers::scoring::recommend_result),
         )
@@ -865,6 +869,10 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/applications/:sid/:tid/:rid/abandon",
             put(handlers::applications::teacher_abandon_application),
+        )
+        .route(
+            "/applications/:sid/:tid/:rid/department",
+            put(handlers::applications::teacher_update_application_department),
         )
         .route("/password", put(handlers::applications::teacher_change_password))
         .route("/area-context", get(handlers::teacher_areas::teacher_area_context))

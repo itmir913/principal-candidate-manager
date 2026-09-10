@@ -434,6 +434,239 @@ pub async fn clear_application_exclusion(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ── 학과명 수정 (이슈 #32) ─────────────────────────────────────────
+//
+// 학과명은 점수 산출에 쓰이지 않으므로 마감된 라운드에서도 고칠 수 있다.
+// 스키마 v2 의 trg_prevent_update_closed_application 이 이 컬럼만 열어 두었다 —
+// track_id(계열·모집단위)는 여전히 DB 가 막는다.
+
+#[derive(Deserialize)]
+pub struct UpdateDepartmentBody {
+    pub department_name: String,
+}
+
+/// 관리자·담임 두 진입점이 함께 통과하는 검증·쓰기 본체.
+/// 반환값은 (이전 학과명, 새 학과명) — 감사 기록에 둘 다 남긴다.
+///
+/// 호출자는 라운드 상태 검증과 권한 검증을 **먼저** 끝내고 들어와야 한다.
+/// 여기서 보는 것은 값의 유효성과 대상의 존재 여부뿐이다.
+async fn update_department_inner(
+    conn: &mut sqlx::SqliteConnection,
+    sid: i64,
+    tid: i64,
+    rid: i64,
+    raw_name: &str,
+) -> Result<(String, String), ApiError> {
+    let name = raw_name.trim().to_string();
+    if name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "학과명은 필수입니다".into()));
+    }
+
+    let previous: Option<String> = sqlx::query_scalar(
+        "SELECT department_name FROM applications
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let previous = previous.ok_or((
+        StatusCode::NOT_FOUND,
+        "지원 내역을 찾을 수 없습니다".to_string(),
+    ))?;
+
+    let affected = sqlx::query(
+        "UPDATE applications SET department_name = ?
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(&name)
+    .bind(sid)
+    .bind(tid)
+    .bind(rid)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+
+    // silent no-op 방지: 위 SELECT 와 이 UPDATE 사이는 같은 트랜잭션이므로
+    // 0행은 논리적으로 나올 수 없다. 나온다면 가정이 깨진 것이라 감춰선 안 된다.
+    if affected == 0 {
+        return Err((StatusCode::NOT_FOUND, "지원 내역을 찾을 수 없습니다".into()));
+    }
+
+    Ok((previous, name))
+}
+
+/// 감사 detail 에 학과명 변경 전후를 얹는다.
+fn with_department_change(
+    mut detail: serde_json::Value,
+    previous: &str,
+    current: &str,
+) -> serde_json::Value {
+    if let serde_json::Value::Object(ref mut map) = detail {
+        map.insert(
+            "previous_department_name".to_string(),
+            serde_json::Value::String(previous.to_string()),
+        );
+        map.insert(
+            "department_name".to_string(),
+            serde_json::Value::String(current.to_string()),
+        );
+    }
+    detail
+}
+
+// URL: /applications/:sid/:tid/:rid/department  (PUT — 관리자)
+//
+// 라운드 상태를 가리지 않는다. OPEN 에서도 관리자가 고칠 수 있어야 하고,
+// 관리자 쓰기는 원래 담임 확정(round_confirmations)을 철회하지 않는다.
+pub async fn update_application_department(
+    State(state): State<AppState>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+    Json(body): Json<UpdateDepartmentBody>,
+) -> Result<StatusCode, ApiError> {
+    // BEGIN IMMEDIATE: 이전 값 조회(SELECT) 후 갱신(UPDATE)까지 원자적으로 처리한다.
+    // DEFERRED 면 그 사이 다른 쓰기가 커밋될 때 첫 쓰기가 BUSY_SNAPSHOT 500 으로 실패하고,
+    // 감사 기록의 "이전 학과명"도 실제 직전 값과 어긋난다.
+    let mut tx = state
+        .db
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let status: Option<RoundStatus> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if status.is_none() {
+        return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into()));
+    }
+
+    let (previous, current) =
+        update_department_inner(&mut tx, sid, tid, rid, &body.department_name).await?;
+
+    // 값이 그대로면 기록할 변경이 없다. 대상 존재는 위에서 이미 확인했으므로
+    // 이 204 는 "조용히 넘어간 것"이 아니라 "바꿀 것이 없었다"는 확정된 결과다.
+    if previous == current {
+        tx.commit()
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Admin,
+            action: AuditAction::ApplicationDepartmentUpdated,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail: with_department_change(detail, &previous, &current),
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// URL: /teacher/applications/:sid/:tid/:rid/department  (PUT — 담임)
+//
+// CLOSED/FINALIZED 전용이다. OPEN 라운드의 수정은 기존 POST 지원 등록(upsert)이
+// 담당한다 — 그쪽은 담임 확정을 함께 철회하는데(확정·철회는 OPEN 에서만 가능),
+// 여기서 OPEN 을 받으면 확정을 철회하지 않아 "확정됨" 표시가 거짓이 된다.
+pub async fn teacher_update_application_department(
+    State(state): State<AppState>,
+    Extension(claims): Extension<TeacherClaims>,
+    Path((sid, tid, rid)): Path<(i64, i64, i64)>,
+    Json(body): Json<UpdateDepartmentBody>,
+) -> Result<StatusCode, ApiError> {
+    let mut tx = state
+        .db
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let status: Option<RoundStatus> = sqlx::query_scalar("SELECT status FROM rounds WHERE id = ?")
+        .bind(rid)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    match status {
+        Some(RoundStatus::Closed) | Some(RoundStatus::Finalized) => {}
+        Some(RoundStatus::Open) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "진행 중인 라운드의 학과명은 지원 수정 화면에서 바꿔 주세요".into(),
+            ))
+        }
+        None => return Err((StatusCode::NOT_FOUND, "라운드를 찾을 수 없습니다".into())),
+    }
+
+    // 소속 검증은 학생의 현재 학급 기준이다 — 지난 라운드라도 지금 담당하는
+    // 담임이 고친다. teacher_abandon_application 과 같은 의미론이다.
+    let in_class: Option<i64> = if is_grad_teacher(&claims) {
+        sqlx::query_scalar("SELECT id FROM students WHERE id = ? AND is_enrolled = 0")
+            .bind(sid)
+            .fetch_optional(&mut *tx)
+            .await
+    } else {
+        sqlx::query_scalar("SELECT id FROM students WHERE id = ? AND grade = ? AND class_no = ?")
+            .bind(sid)
+            .bind(claims.grade)
+            .bind(claims.class_no)
+            .fetch_optional(&mut *tx)
+            .await
+    }
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if in_class.is_none() {
+        return Err((StatusCode::FORBIDDEN, "해당 학생은 담당 학급이 아닙니다".into()));
+    }
+
+    let (previous, current) =
+        update_department_inner(&mut tx, sid, tid, rid, &body.department_name).await?;
+
+    if previous == current {
+        tx.commit()
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let detail = crate::audit::application_detail(&mut *tx, sid, tid).await?;
+    crate::audit::log(
+        &mut *tx,
+        AuditEntry {
+            actor: Actor::Teacher {
+                grade: claims.grade,
+                class_no: claims.class_no,
+            },
+            action: AuditAction::ApplicationDepartmentUpdated,
+            round_id: Some(rid),
+            student_id: Some(sid),
+            detail: with_department_change(detail, &previous, &current),
+        },
+    )
+    .await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn teacher_abandon_application(
     State(state): State<AppState>,
     Extension(claims): Extension<TeacherClaims>,

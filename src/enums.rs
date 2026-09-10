@@ -63,6 +63,7 @@ pub enum AuditAction {
     ApplicationAbandoned,
     ApplicationExcluded,
     ApplicationExclusionCleared,
+    ApplicationDepartmentUpdated,
     // 학급
     ClassesImported,
     ClassSaved,

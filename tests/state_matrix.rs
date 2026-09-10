@@ -14,7 +14,8 @@ use axum::{
 use principal_candidate_manager::handlers::{
     applications::{
         abandon_application, teacher_abandon_application, teacher_create_application,
-        teacher_delete_application, CreateApplicationBody,
+        teacher_delete_application, teacher_update_application_department,
+        update_application_department, CreateApplicationBody, UpdateDepartmentBody,
     },
     rounds::{close_round, finalize_round, open_round, reopen_round},
     scoring::{auto_recommend_results, calculate_scores, recommend_result, unrecommend_result},
@@ -189,6 +190,8 @@ enum Ep {
     TeacherDelete,
     TeacherAbandon,
     AutoRecommend,
+    AdminDepartment,
+    TeacherDepartment,
 }
 
 async fn call(ep: Ep, pool: &SqlitePool, fx: &Fx) -> StatusCode {
@@ -278,6 +281,31 @@ async fn call(ep: Ep, pool: &SqlitePool, fx: &Fx) -> StatusCode {
             Ok(_) => StatusCode::OK,
             Err((s, _)) => s,
         },
+        Ep::AdminDepartment => {
+            match update_application_department(
+                State(st),
+                Path((fx.sid, fx.tid, fx.rid)),
+                Json(UpdateDepartmentBody { department_name: "수정된학과".into() }),
+            )
+            .await
+            {
+                Ok(s) => s,
+                Err((s, _)) => s,
+            }
+        }
+        Ep::TeacherDepartment => {
+            match teacher_update_application_department(
+                State(st),
+                Extension(common::teacher_claims(1, 1)),
+                Path((fx.sid, fx.tid, fx.rid)),
+                Json(UpdateDepartmentBody { department_name: "수정된학과".into() }),
+            )
+            .await
+            {
+                Ok(s) => s,
+                Err((s, _)) => s,
+            }
+        }
     }
 }
 
@@ -420,6 +448,29 @@ async fn matrix_teacher_abandon() {
     assert_matrix_row(
         Ep::TeacherAbandon,
         [S::NOT_FOUND, S::BAD_REQUEST, S::BAD_REQUEST, S::NO_CONTENT],
+    )
+    .await;
+}
+
+// 학과명 수정 (이슈 #32): 관리자는 전 상태, 담임은 마감 후에만.
+// 담임의 OPEN 거부는 의도된 것이다 — OPEN 수정은 기존 지원 등록(upsert)이
+// 담당하고 그쪽만 담임 확정을 함께 철회한다.
+#[tokio::test]
+async fn matrix_admin_department() {
+    use StatusCode as S;
+    assert_matrix_row(
+        Ep::AdminDepartment,
+        [S::NOT_FOUND, S::NO_CONTENT, S::NO_CONTENT, S::NO_CONTENT],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn matrix_teacher_department() {
+    use StatusCode as S;
+    assert_matrix_row(
+        Ep::TeacherDepartment,
+        [S::NOT_FOUND, S::BAD_REQUEST, S::NO_CONTENT, S::NO_CONTENT],
     )
     .await;
 }
