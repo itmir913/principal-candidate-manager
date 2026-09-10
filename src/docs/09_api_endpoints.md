@@ -209,7 +209,7 @@
 | PUT | `/applications/:sid/:tid/:rid/abandon` | 포기. FINALIZED에서만. 지원 없으면 404 |
 | PUT | `/applications/:sid/:tid/:rid/exclude` | 미선발 처리. CLOSED에서만. Body: `{"reason":"..."}` 사유 필수. 이미 추천 확정이면 409. 이미 미선발이면 409 |
 | DELETE | `/applications/:sid/:tid/:rid/exclude` | 미선발 해제. CLOSED에서만. 미선발 상태 아니면 409 |
-| PUT | `/applications/:sid/:tid/:rid/department` | 학과명 수정. **라운드 상태 무관**. Body: `{"department_name":"..."}`. 공백만이면 400, 라운드/지원 없으면 404. 값이 그대로면 감사 기록 없이 204 (이슈 #32) |
+| PUT | `/applications/:sid/:tid/:rid/department` | 학과명 수정. **라운드 상태 무관**. Body: `{"department_name":"..."}`. 공백만이면 400, 라운드/지원 없으면 404. **저장값은 trim 된다**. 값이 그대로면 감사 기록 없이 204 (이슈 #32) |
 
 ---
 

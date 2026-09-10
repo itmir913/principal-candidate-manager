@@ -294,6 +294,74 @@ async fn teacher_cannot_update_other_class_student() {
     assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "기계공학과");
 }
 
+#[tokio::test]
+async fn class_teacher_cannot_touch_graduated_student() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    sqlx::query(
+        "UPDATE students          SET is_enrolled = 0, grade = NULL, class_no = NULL, seq_no = NULL, grad_year = 2024          WHERE id = ?",
+    )
+    .bind(fx.sid)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
+
+    // 일반 담임(1-1)은 grade/class_no 로 찾으므로 졸업생(둘 다 NULL)을 못 잡는다
+    let err = teacher_update_application_department(
+        st(&pool),
+        Extension(common::teacher_claims(1, 1)),
+        Path((fx.sid, fx.tid, rid)),
+        body("전기공학과"),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(err.0, StatusCode::FORBIDDEN);
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "기계공학과");
+}
+
+#[tokio::test]
+async fn grad_teacher_cannot_touch_enrolled_student() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
+
+    // 졸업생 담당(0-0)은 is_enrolled = 0 만 본다. 재학생은 남의 담당이다.
+    let err = teacher_update_application_department(
+        st(&pool),
+        Extension(common::teacher_claims(0, 0)),
+        Path((fx.sid, fx.tid, rid)),
+        body("전기공학과"),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(err.0, StatusCode::FORBIDDEN);
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "기계공학과");
+}
+
+#[tokio::test]
+async fn other_rounds_of_same_application_are_untouched() {
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid1 = apply_then_set_status(&pool, &fx, "1라운드학과", "FINALIZED").await;
+    let rid2 = apply_then_set_status(&pool, &fx, "2라운드학과", "CLOSED").await;
+
+    update_application_department(st(&pool), Path((fx.sid, fx.tid, rid1)), body("고친학과"))
+        .await
+        .unwrap();
+
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid1).await, "고친학과");
+    // WHERE 절이 round_id 까지 좁히지 않으면 같은 (학생, 모집단위)의 다른 라운드까지 덮인다.
+    // 지난 라운드의 명단은 그 라운드의 기록이므로 함께 바뀌면 이력이 오염된다.
+    assert_eq!(
+        department_of(&pool, fx.sid, fx.tid, rid2).await,
+        "2라운드학과",
+        "다른 라운드의 학과명이 함께 바뀌었다"
+    );
+}
+
 // ── 거부 ─────────────────────────────────────────────────────────
 
 #[tokio::test]
@@ -314,6 +382,27 @@ async fn blank_department_is_rejected() {
             "입력 {raw:?} 가 값을 지워선 안 된다"
         );
     }
+}
+
+#[tokio::test]
+async fn teacher_path_also_rejects_blank_department() {
+    // 검증은 공용 헬퍼에 있지만, 담임 진입점에서도 단언해 두어야
+    // 헬퍼를 우회하는 리팩터링이 생겼을 때 잡힌다.
+    let pool = common::create_test_pool().await;
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
+
+    let err = teacher_update_application_department(
+        st(&pool),
+        Extension(common::teacher_claims(1, 1)),
+        Path((fx.sid, fx.tid, rid)),
+        body("   "),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "기계공학과");
 }
 
 #[tokio::test]
@@ -413,9 +502,13 @@ async fn db_still_blocks_abandon_revert_in_finalized_round() {
 
 #[tokio::test]
 async fn results_snapshot_is_untouched() {
+    // CLOSED 와 FINALIZED 둘 다 확인한다. FINALIZED 에는
+    // trg_prevent_update_finalized_result 가 걸려 있어, 학과명 수정이
+    // results 를 건드리려 들면 조용한 무변화가 아니라 오류로 드러난다.
+    for status in ["CLOSED", "FINALIZED"] {
     let pool = common::create_test_pool().await;
     let fx = setup(&pool).await;
-    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "CLOSED").await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", status).await;
     sqlx::query(
         "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, \
                               ranking, recommended, calculated_at) \
@@ -454,7 +547,8 @@ async fn results_snapshot_is_untouched() {
     .await
     .unwrap();
 
-    assert_eq!(before, after, "학과명 수정이 결과 박제를 건드렸다");
+    assert_eq!(before, after, "{status} 라운드에서 학과명 수정이 결과 박제를 건드렸다");
+    }
 }
 
 #[tokio::test]
@@ -599,4 +693,90 @@ async fn export_reflects_updated_department_without_recalculation() {
         row[col], "전기공학과",
         "학과명이 results 재계산 없이 내보내기에 반영돼야 한다"
     );
+}
+
+// ── v1 → v2 승격 (실제 데이터 위에서) ────────────────────────────
+
+/// 현장 DB 는 v1 으로 만들어졌고 CLOSED/FINALIZED 라운드가 실재한다.
+/// 지문 대조(schema_freeze)는 빈 DB 의 sqlite_master 만 비교하므로,
+/// "데이터가 있는 v1 DB 에 v2 조각을 적용한 뒤 실제로 동작이 바뀌는가"는
+/// 별도로 확인해야 한다. 이 테스트가 승격 경로 자체를 검증한다.
+#[tokio::test]
+async fn v1_database_with_data_upgrades_to_v2_and_opens_department_only() {
+    use principal_candidate_manager::db::{migration_sqls, run_migrations_with};
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    let sqls = migration_sqls();
+    assert!(sqls.len() >= 2, "v2 마이그레이션이 등록돼 있어야 한다");
+
+    let opts = SqliteConnectOptions::new()
+        .filename(":memory:")
+        .foreign_keys(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .unwrap();
+
+    // ① v1 만 적용한 DB 를 만든다 (현장 DB 와 같은 상태)
+    run_migrations_with(&pool, &[sqls[0].as_str()]).await.unwrap();
+    let ver: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(ver, 1);
+
+    // ② 데이터를 넣고 라운드를 마감한다
+    let fx = setup(&pool).await;
+    let rid = apply_then_set_status(&pool, &fx, "기계공학과", "FINALIZED").await;
+
+    // v1 에서는 학과명 수정이 막혀 있었다 — 이것이 이슈 #32 의 출발점이다
+    let blocked_on_v1 = sqlx::query(
+        "UPDATE applications SET department_name = '전기공학과' \
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(fx.sid)
+    .bind(fx.tid)
+    .bind(rid)
+    .execute(&pool)
+    .await;
+    assert!(blocked_on_v1.is_err(), "v1 에서는 학과명 수정이 막혀 있어야 한다");
+
+    // ③ v2 로 승격
+    let refs: Vec<&str> = sqls.iter().map(String::as_str).collect();
+    run_migrations_with(&pool, &refs).await.unwrap();
+    let ver: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(ver, 2, "승격 후 user_version 이 2 여야 한다");
+
+    // ④ 이제 학과명은 열리고
+    update_application_department(st(&pool), Path((fx.sid, fx.tid, rid)), body("전기공학과"))
+        .await
+        .expect("v2 승격 후 학과명 수정이 되어야 한다");
+    assert_eq!(department_of(&pool, fx.sid, fx.tid, rid).await, "전기공학과");
+
+    // ⑤ 계열·모집단위는 여전히 닫혀 있다
+    let still_blocked = sqlx::query(
+        "UPDATE applications SET track_id = ? \
+         WHERE student_id = ? AND track_id = ? AND round_id = ?",
+    )
+    .bind(fx.other_tid)
+    .bind(fx.sid)
+    .bind(fx.tid)
+    .bind(rid)
+    .execute(&pool)
+    .await;
+    assert!(
+        still_blocked.is_err(),
+        "승격 후에도 계열·모집단위 변경은 막혀야 한다"
+    );
+
+    // ⑥ 기존 데이터가 승격 과정에서 사라지지 않았다
+    let apps: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM applications")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(apps, 1, "승격이 기존 지원 행을 잃어버렸다");
 }

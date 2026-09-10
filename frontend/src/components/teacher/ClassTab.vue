@@ -237,6 +237,7 @@ function getStudentApps(studentId) {
 
 async function loadAll() {
   loadError.value = ''
+  cancelEdit()
   try {
     const [round, sts, apps] = await Promise.all([
       getCurrentRound(),

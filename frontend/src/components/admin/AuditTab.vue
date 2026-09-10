@@ -266,6 +266,11 @@ function fmtDetail(row) {
     if (d.student_type) parts.push(d.student_type === 'enrolled' ? '재학생' : '졸업생')
     if (d.auto != null) parts.push(d.auto ? '자동 해제 (지원 변경)' : '수동 해제')
     if (d.reason) parts.push(`사유: ${d.reason}`)
+    // 학과명 수정(이슈 #32)은 변경 자체가 행위라, 전후를 보여주지 않으면
+    // 감사 기록이 "무엇이 바뀌었는지"를 못 알려준다.
+    if (d.previous_department_name != null && d.department_name != null) {
+      parts.push(`학과: ${d.previous_department_name || '(없음)'} → ${d.department_name}`)
+    }
   } catch {
     // detail이 JSON이 아니어도 IP는 남긴다
   }

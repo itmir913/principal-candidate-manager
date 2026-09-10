@@ -279,8 +279,8 @@
                           <button
                             v-else
                             class="text-base text-left"
-                            style="border: none; background: none; color: #475569; cursor: pointer; padding: 0;"
-                            title="학과명 수정"
+                            style="border: none; background: none; color: #475569; cursor: pointer; padding: 0; text-decoration: underline dotted #cbd5e1; text-underline-offset: 3px;"
+                            title="학과명 수정 (점수에 영향 없음)"
                             @click="startDeptEdit(app)"
                           >{{ app.department_name || '—' }}</button>
                         </td>
@@ -496,10 +496,10 @@
                               {{ r.is_enrolled ? '재학생' : '졸업생' }}
                             </span>
                           </td>
-                          <td style="padding: 12px 18px; overflow: hidden;" @click.stop>
+                          <td style="padding: 12px 18px; overflow: hidden;">
                             <div v-if="rankView === 'univ'" class="text-base font-medium" style="color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.track_name }}</div>
                             <!-- 학과명 인라인 수정 (이슈 #32). 두 보기 모두 같은 편집기를 쓴다 -->
-                            <div v-if="isEditingDept(r)" class="flex items-center gap-2">
+                            <div v-if="isEditingDept(r)" class="flex items-center gap-2" @click.stop>
                               <input
                                 v-model="editingDeptName"
                                 class="text-base"
@@ -524,9 +524,9 @@
                             <button
                               v-else
                               class="text-base text-left"
-                              :style="{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: rankView === 'univ' ? '#94a3b8' : '#475569' }"
-                              title="학과명 수정"
-                              @click="startDeptEdit(r)"
+                              :style="{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: rankView === 'univ' ? '#94a3b8' : '#475569', textDecoration: 'underline dotted #cbd5e1', textUnderlineOffset: '3px' }"
+                              title="학과명 수정 (점수에 영향 없음)"
+                              @click.stop="startDeptEdit(r)"
                             >{{ r.department_name || '—' }}</button>
                           </td>
                           <td class="text-base text-left font-semibold" style="padding: 12px 18px; color: #1e293b;">
@@ -837,6 +837,7 @@ const helpBox = computed(() => {
         '동점 등으로 자동 확정하지 못한 모집단위는 노란색 "수동 확인 필요" 목록에 표시됩니다. 해당 모집단위에서 학생을 직접 골라 "추천 확정"을 누르세요.',
         '잘못 확정했으면 "추천 취소"로 되돌릴 수 있습니다.',
         { text: '확정이 모두 끝나면 위의 "마감하기"를 누르세요. 마감은 되돌릴 수 없으며, 마감하면 결과가 담임교사에게 공개됩니다.', warn: true },
+        '학과명은 마감 후에도 고칠 수 있습니다 — 점수와 무관한 명단 정보이기 때문입니다. 표에서 학과명을 눌러 수정하세요. 대학·모집단위는 바꿀 수 없습니다.',
       ],
     }
   }
@@ -1099,6 +1100,9 @@ async function saveDept(row) {
 }
 
 async function loadApps() {
+  // 표를 다시 그리기 전에 편집 상태를 접는다 — 남겨 두면 라운드를 바꿨다
+  // 돌아왔을 때 옛 임시값을 든 입력 상자가 다시 열린다
+  cancelDeptEdit()
   if (!selected.value) return
   apps.value = await getApplications(selected.value.id)
 }

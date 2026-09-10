@@ -246,8 +246,8 @@
                       <button
                         v-else
                         class="text-base text-left"
-                        style="border: none; background: none; color: #475569; cursor: pointer; padding: 0;"
-                        title="학과명 수정"
+                        style="border: none; background: none; color: #475569; cursor: pointer; padding: 0; text-decoration: underline dotted #cbd5e1; text-underline-offset: 3px;"
+                        title="학과명 수정 (점수에 영향 없음)"
                         @click="startEdit(r)"
                       >{{ r.department_name || '—' }}</button>
                     </td>
@@ -456,6 +456,7 @@ function downloadAllCsv() {
 }
 
 async function load() {
+  cancelDeptEdit()
   loading.value = true
   loadError.value = ''
   try {
