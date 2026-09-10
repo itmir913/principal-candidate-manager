@@ -81,57 +81,22 @@
                   :key="app.track_id"
                   class="flex items-center gap-2 mb-1.5"
                 >
-                  <!-- 학과명 수정 중 (이슈 #32): 대학·모집단위는 그대로 두고 학과명만 입력받는다 -->
-                  <template v-if="isEditing(app)">
-                    <span class="text-base" style="color: #64748b;">
-                      {{ app.univ_name }} — {{ app.track_name }} —
-                    </span>
-                    <input
-                      v-model="editingName"
-                      class="text-base"
-                      style="padding: 4px 10px; border: 1px solid #93c5fd; border-radius: 6px; min-width: 160px;"
-                      placeholder="학과명"
-                      @keyup.enter="saveDepartment(app)"
-                      @keyup.esc="cancelEdit"
-                    />
-                    <button
-                      class="text-base"
-                      style="padding: 4px 12px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; cursor: pointer;"
-                      :disabled="savingDepartment || !editingName.trim()"
-                      @click="saveDepartment(app)"
-                    >저장</button>
-                    <button
-                      class="text-base"
-                      style="padding: 4px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #64748b; cursor: pointer;"
-                      :disabled="savingDepartment"
-                      @click="cancelEdit"
-                    >취소</button>
-                  </template>
-                  <template v-else>
-                    <span
-                      class="text-base"
-                      :class="{ 'line-through': app.abandoned || (!app.recommended && app.round_status === 'FINALIZED') }"
-                      :style="{ color: (app.abandoned || (!app.recommended && app.round_status === 'FINALIZED')) ? '#94a3b8' : '#1e293b' }"
-                    >
-                      {{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}
-                    </span>
-                    <span v-if="app.abandoned" class="text-base font-semibold" style="color: #ef4444;">(포기됨)</span>
-                    <span v-else-if="app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
-                    <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
-                    <button
-                      v-if="currentRound && app.round_id === currentRound.id && !app.abandoned"
-                      class="text-base"
-                      style="padding: 4px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
-                      @click="removeApplication(app)"
-                    >취소</button>
-                    <!-- 마감된 라운드에서만 나타난다. 진행 중인 라운드는 "지원자 등록" 탭에서 고친다 -->
-                    <button
-                      v-if="app.round_status !== 'OPEN'"
-                      class="text-base"
-                      style="padding: 4px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; color: #475569; cursor: pointer;"
-                      @click="startEdit(app)"
-                    >학과 수정</button>
-                  </template>
+                  <span
+                    class="text-base"
+                    :class="{ 'line-through': app.abandoned || (!app.recommended && app.round_status === 'FINALIZED') }"
+                    :style="{ color: (app.abandoned || (!app.recommended && app.round_status === 'FINALIZED')) ? '#94a3b8' : '#1e293b' }"
+                  >
+                    {{ app.univ_name }} — {{ app.track_name }} — {{ app.department_name }}
+                  </span>
+                  <span v-if="app.abandoned" class="text-base font-semibold" style="color: #ef4444;">(포기됨)</span>
+                  <span v-else-if="app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #16a34a;">추천 확정</span>
+                  <span v-else-if="!app.recommended && app.round_status === 'FINALIZED'" class="text-base font-semibold" style="color: #ef4444;">미선발</span>
+                  <button
+                    v-if="currentRound && app.round_id === currentRound.id && !app.abandoned"
+                    class="text-base"
+                    style="padding: 4px 12px; border: 1px solid #fca5a5; border-radius: 6px; background: white; color: #ef4444; cursor: pointer;"
+                    @click="removeApplication(app)"
+                  >취소</button>
                 </div>
               </td>
             </tr>
@@ -153,7 +118,6 @@ import {
   teacherGetStudents,
   teacherGetApplications,
   teacherDeleteApplication,
-  teacherUpdateApplicationDepartment,
 } from '../../api/teacher.js'
 
 const auth = useAuthStore()
@@ -162,12 +126,6 @@ const currentRound = ref(null)
 const students     = ref([])
 const applications = ref([])
 const loadError    = ref('')
-
-// 학과명 인라인 수정 (이슈 #32). 마감된 라운드에서만 열린다 —
-// 진행 중인 라운드는 "지원자 등록" 탭의 재저장이 담당한다(담임 확정도 함께 철회).
-const editingKey       = ref(null)
-const editingName      = ref('')
-const savingDepartment = ref(false)
 
 // 이 화면은 조회 전용이라 무엇을 할 수 없는지(학생 추가·지원 등록)를 먼저
 // 알려야 담임이 다른 탭을 찾아 헤매지 않는다.
@@ -191,45 +149,10 @@ const helpBox = computed(() => {
       '지원자를 새로 등록하려면 왼쪽 "지원자 등록" 탭으로 이동하세요.',
       '"취소" 버튼은 현재 진행 중인 라운드의 지원에만 나타납니다. 이전 라운드의 지원은 취소할 수 없습니다.',
       '가로줄이 그어진 지원은 학생이 포기했거나 마감 결과 미선발된 것입니다. 오른쪽 라벨에서 "(포기됨)"·"추천 확정"·"미선발"을 구분할 수 있습니다.',
-      '"학과 수정" 버튼은 마감된 라운드의 지원에만 나타납니다. 진행 중인 라운드는 "지원자 등록" 탭에서 지원을 다시 저장하며 고치세요.',
-      '학과명은 점수에 영향을 주지 않아 마감 후에도 고칠 수 있습니다. 대학·모집단위는 마감 후 바꿀 수 없습니다.',
       '학생 추가·삭제와 재학/졸업 구분 변경은 관리자만 할 수 있습니다.',
     ],
   }
 })
-
-function appKey(app) {
-  return `${app.student_id}-${app.track_id}-${app.round_id}`
-}
-
-function isEditing(app) {
-  return editingKey.value === appKey(app)
-}
-
-function startEdit(app) {
-  editingKey.value  = appKey(app)
-  editingName.value = app.department_name || ''
-}
-
-function cancelEdit() {
-  editingKey.value  = null
-  editingName.value = ''
-}
-
-async function saveDepartment(app) {
-  const name = editingName.value.trim()
-  if (!name || savingDepartment.value) return
-  savingDepartment.value = true
-  try {
-    await teacherUpdateApplicationDepartment(app.student_id, app.track_id, app.round_id, name)
-    applications.value = await teacherGetApplications()
-    cancelEdit()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
-  } finally {
-    savingDepartment.value = false
-  }
-}
 
 function getStudentApps(studentId) {
   return applications.value.filter(a => a.student_id === studentId)
@@ -237,7 +160,6 @@ function getStudentApps(studentId) {
 
 async function loadAll() {
   loadError.value = ''
-  cancelEdit()
   try {
     const [round, sts, apps] = await Promise.all([
       getCurrentRound(),
