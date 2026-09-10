@@ -216,7 +216,7 @@ pub async fn get_overview(
          LEFT JOIN univ_tracks t ON t.univ_id = u.id
          LEFT JOIN applications a ON a.track_id = t.id AND a.round_id = ?
          GROUP BY u.id, t.id
-         ORDER BY u.id, t.id",
+         ORDER BY u.univ_name, t.track_name",
     )
     .bind(round_id)
     .fetch_all(&state.db)

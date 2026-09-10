@@ -1322,7 +1322,7 @@ pub async fn base_data_list(
          LEFT JOIN univ_tracks ut ON bd.track_id = ut.id
          LEFT JOIN universities u ON ut.univ_id = u.id
          WHERE bd.area_id = ? AND s.is_enrolled = ?
-         ORDER BY bd.track_id, s.grade, s.class_no, s.seq_no
+         ORDER BY univ_name, track_name, s.grade, s.class_no, s.seq_no, s.student_code
          LIMIT ? OFFSET ?",
     )
     .bind(id)

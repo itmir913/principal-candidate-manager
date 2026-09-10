@@ -801,7 +801,7 @@ pub async fn get_track_recommended_list(
                              AND a.track_id  = r.track_id
                              AND a.round_id  = r.round_id
          WHERE r.track_id = ? AND r.recommended = 1
-         ORDER BY r.round_id, r.ranking NULLS LAST, s.name",
+         ORDER BY r.round_id, r.ranking NULLS LAST, s.name, s.student_code",
     )
     .bind(track_id)
     .fetch_all(&state.db)
@@ -1178,7 +1178,7 @@ async fn compute_settings_changes(
 
                 // 기존 트랙 스냅샷
                 let cur_tracks = sqlx::query_as::<_, CurTrack>(
-                    "SELECT track_name, unit_quota, prioritize_enrolled FROM univ_tracks WHERE univ_id = ?",
+                    "SELECT track_name, unit_quota, prioritize_enrolled FROM univ_tracks WHERE univ_id = ? ORDER BY track_name",
                 )
                 .bind(cu.id)
                 .fetch_all(db)

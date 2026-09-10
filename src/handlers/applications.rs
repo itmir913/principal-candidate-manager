@@ -168,7 +168,7 @@ pub async fn admin_list_applications(
          LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
          WHERE (? IS NULL OR a.round_id = ?)
            AND (? IS NULL OR a.track_id = ?)
-         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no",
+         ORDER BY u.univ_name, ut.track_name, s.grade, s.class_no, s.seq_no, s.student_code",
     )
     .bind(q.round_id)
     .bind(q.round_id)
@@ -817,7 +817,7 @@ pub async fn teacher_list_applications(
              LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
              WHERE s.is_enrolled = 0
                AND (? IS NULL OR a.round_id = ?)
-             ORDER BY s.student_code, u.univ_name",
+             ORDER BY s.student_code, u.univ_name, ut.track_name, a.round_id",
         )
         .bind(q.round_id)
         .bind(q.round_id)
@@ -836,7 +836,7 @@ pub async fn teacher_list_applications(
              LEFT JOIN results r ON r.student_id = a.student_id AND r.track_id = a.track_id AND r.round_id = a.round_id
              WHERE s.grade = ? AND s.class_no = ?
                AND (? IS NULL OR a.round_id = ?)
-             ORDER BY s.seq_no, u.univ_name",
+             ORDER BY s.seq_no, u.univ_name, ut.track_name, a.round_id",
         )
         .bind(claims.grade)
         .bind(claims.class_no)
@@ -922,7 +922,7 @@ pub async fn teacher_create_application(
             max_score: i64,
         }
         sqlx::query_as::<_, Row>(
-            "SELECT id, calc_type, teacher_editable, lookup_scope, category_agg, max_score FROM areas",
+            "SELECT id, calc_type, teacher_editable, lookup_scope, category_agg, max_score FROM areas ORDER BY id",
         )
         .fetch_all(&state.db)
         .await

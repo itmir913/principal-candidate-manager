@@ -175,6 +175,7 @@ pub async fn close_round(
                         THEN bd.track_id = ap.track_id
                         ELSE bd.track_id IS NULL END
            )
+         ORDER BY a.name, u.univ_name, ut.track_name, s.student_code
          LIMIT 5",
     )
     .bind(id)
@@ -392,6 +393,7 @@ pub async fn finalize_round(
            AND ut.unit_quota IS NOT NULL
          GROUP BY ut.id
          HAVING COUNT(*) > ut.unit_quota
+         ORDER BY u.univ_name, ut.track_name
          LIMIT 5",
     )
     .fetch_all(&mut *tx)
@@ -412,6 +414,7 @@ pub async fn finalize_round(
            AND u.total_quota IS NOT NULL
          GROUP BY u.id
          HAVING COUNT(*) > u.total_quota
+         ORDER BY u.univ_name
          LIMIT 5",
     )
     .fetch_all(&mut *tx)

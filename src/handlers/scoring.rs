@@ -285,7 +285,8 @@ pub async fn run_calculate_scores_on_conn(
          JOIN students s ON s.id = a.student_id
          JOIN univ_tracks ut ON ut.id = a.track_id
          JOIN universities u ON u.id = ut.univ_id
-         WHERE a.round_id = ?",
+         WHERE a.round_id = ?
+         ORDER BY u.univ_name, ut.track_name, s.student_code",
     )
     .bind(round_id)
     .fetch_all(&mut *conn)
@@ -486,7 +487,9 @@ pub async fn get_results(
                                   AND a.round_id  = r.round_id
          WHERE r.round_id = ?
            AND (? IS NULL OR r.track_id = ?)
-         ORDER BY r.track_id, r.ranking NULLS LAST, r.total_score DESC"
+         ORDER BY u.univ_name, ut.track_name,
+                  r.ranking NULLS LAST, r.total_score DESC,
+                  s.is_enrolled DESC, s.student_code"
     );
     let rows = sqlx::query_as::<_, ResultRow>(&sql)
     .bind(round_id)
@@ -897,7 +900,7 @@ pub async fn fetch_teacher_results(
          WHERE rnd.status = 'FINALIZED'
            {scope_clause}
            {round_clause}
-         ORDER BY r.round_id, {order_by}, r.track_id"
+         ORDER BY r.round_id, {order_by}, u.univ_name, ut.track_name"
     );
 
     let mut q = sqlx::query_as::<_, ResultRow>(&sql);
@@ -1880,6 +1883,12 @@ async fn run_auto_recommend(
 
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // 처리 순서(univ_tracks 등록순)를 그대로 내보내면 관리자 화면의 결과 목록이 등록순이 된다.
+    // 처리 순서는 건드리지 않고(2단계 병합이 트랙 경계 순서를 전제한다) 표시용으로만 정렬한다.
+    // 대학 단위 manual 항목(track_name = None)은 그 대학의 모집단위 항목보다 앞에 온다.
+    confirmed_items.sort_by(|a, b| a.univ_name.cmp(&b.univ_name).then_with(|| a.track_name.cmp(&b.track_name)));
+    manual_items.sort_by(|a, b| a.univ_name.cmp(&b.univ_name).then_with(|| a.track_name.cmp(&b.track_name)));
 
     Ok(Json(AutoRecommendResponse { confirmed: confirmed_items, manual: manual_items }))
 }

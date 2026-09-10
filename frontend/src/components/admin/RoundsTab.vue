@@ -944,6 +944,16 @@ const resultsByUniv = computed(() => {
     }
     map[key].results.push(r)
   }
+  // 이 보기가 표시하는 순위 숫자는 track_rank 다. ranking(대학 전체 순위) 순서를 그대로 쓰면
+  // 대학과 모집단위의 재학생우선 설정이 다를 때 표시 번호가 3,1,2 로 어긋난다.
+  for (const g of Object.values(map)) {
+    g.results.sort((a, b) => {
+      if (a.track_rank == null && b.track_rank == null) return 0
+      if (a.track_rank == null) return 1
+      if (b.track_rank == null) return -1
+      return a.track_rank - b.track_rank
+    })
+  }
   return map
 })
 
@@ -975,7 +985,17 @@ const resultsByUnivOnly = computed(() => {
   return map
 })
 
-const resultsByView = computed(() => rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value)
+// 대학 가나다 → (모집단위별 보기에서는) 모집단위 가나다. v-for 는 객체 키의 삽입 순서를
+// 그대로 쓰므로, 백엔드 ORDER BY 에 기대지 않고 여기서 키 순서를 확정한다.
+function sortGroups(map) {
+  return Object.fromEntries(
+    Object.entries(map).sort(([a], [b]) => a.localeCompare(b, 'ko'))
+  )
+}
+
+const resultsByView = computed(() => sortGroups(
+  rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value
+))
 
 // 대학별 자동 추천 버튼은 대학 단위 동작이다. 모집단위별 보기에서는 그룹이 모집단위마다
 // 나뉘므로 각 대학의 첫 그룹에만 노출한다 — 같은 버튼이 모집단위 수만큼 반복되어
@@ -1133,6 +1153,9 @@ async function loadResults() {
   allTracksInRound.value = results.value
     .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
     .map(r => ({ id: r.track_id, univ_name: r.univ_name, track_name: r.track_name }))
+    // 카드 순서와 같은 기준으로 세운다 — 드롭다운만 다른 순서면 필터를 찾기 어렵다
+    .sort((a, b) =>
+      a.univ_name.localeCompare(b.univ_name, 'ko') || a.track_name.localeCompare(b.track_name, 'ko'))
   expandedRows.value = {}
 }
 

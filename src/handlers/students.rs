@@ -128,7 +128,7 @@ pub async fn list_students(
     if q.grade.is_some()       { sql += " AND grade = ?"; }
     if q.class_no.is_some()    { sql += " AND class_no = ?"; }
     if q.is_enrolled.is_some() { sql += " AND is_enrolled = ?"; }
-    sql += " ORDER BY is_enrolled DESC, grade, class_no, seq_no LIMIT ? OFFSET ?";
+    sql += " ORDER BY is_enrolled DESC, grade, class_no, seq_no, student_code LIMIT ? OFFSET ?";
 
     let mut query = sqlx::query_as::<_, StudentRow>(&sql);
     if let Some(v) = q.grade       { query = query.bind(v); }
