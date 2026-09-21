@@ -51,7 +51,9 @@
     <!-- 라운드별 결과 카드 -->
     <div v-else class="flex flex-col gap-6">
       <!-- 순위 보기 토글 -->
-      <div v-if="results.length > 0" class="flex gap-2">
+      <!-- flex-wrap 이 없으면 좁은 폭에서 세 버튼이 한 줄을 두고 다퉈 글자가 세로로
+           쌓인다(375px 실측: 버튼 높이 182px, 폭 44px). -->
+      <div v-if="results.length > 0" class="flex flex-wrap gap-2">
         <button
           class="text-base font-medium rounded-lg"
           :style="{
@@ -97,14 +99,18 @@
              TeacherView 의 <main class="overflow-y-auto"> 다.
              높이를 64px 로 고정하는 이유: 아래 thead 가 top: 64px 로 이 줄 바로 밑에 붙는다.
              값이 어긋나면 표 머리글이 제목을 가리거나 사이가 뜬다. -->
-        <div class="flex items-center gap-3 px-6 round-card-head"
+        <!-- 좁은 폭 처리: height 64px 은 아래 thead 의 `top: 64px` 과 묶여 있어 **줄바꿈을
+             허용할 수 없다**(늘리면 표 머리글이 제목을 가린다). 그래서 제목만 줄여 넣고
+             (truncate) 배지·버튼은 줄어들지 않게 한다.
+             375px 실측: 고치기 전 제목이 288px 높이 × 15px 폭으로 한 글자씩 쌓였다. -->
+        <div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 round-card-head min-w-0"
           style="height: 64px; border-bottom: 1px solid #f1f5f9; border-top-left-radius: 12px; border-top-right-radius: 12px;">
-          <h2 class="text-base font-semibold" style="color: #1e293b; margin: 0;">
+          <h2 class="text-base font-semibold truncate min-w-0" style="color: #1e293b; margin: 0;">
             <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
             <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
           </h2>
           <span
-            class="text-base font-semibold"
+            class="text-base font-semibold flex-shrink-0 whitespace-nowrap"
             style="padding: 3px 12px; border-radius: 999px;"
             :style="round.status === 'FINALIZED'
               ? { background: '#f3e8ff', color: '#7c3aed' }
@@ -115,7 +121,7 @@
 
           <button
             v-if="round.status === 'FINALIZED'"
-            class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto"
+            class="text-base font-medium rounded-lg disabled:opacity-40 ml-auto flex-shrink-0 whitespace-nowrap"
             style="padding: 6px 14px; border: none; background: #16a34a; color: white; cursor: pointer;"
             :disabled="downloading"
             @click="downloadRoundCsv(round.id)"
