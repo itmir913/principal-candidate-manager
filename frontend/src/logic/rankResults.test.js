@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   filterByTrack, computeTieSet, groupByTrack, groupByUniv, sortGroups,
-  univAutoButtonKeys, buildResultsView,
+  univAutoButtonKeys, buildResultsView, buildTrackQuotaMap,
 } from './rankResults.js'
 
 // 결과 행 한 건. 필요한 필드만 채운다.
@@ -307,5 +307,65 @@ describe('groupBy* 가 대학 이름을 잃지 않는다', () => {
     expect(g['가대학'].univName).toBe('가대학')
     const t = groupByTrack([row({ univ_name: '가대학', track_name: '가' })], {})
     expect(t['가대학 가'].univName).toBe('가대학')
+  })
+})
+
+describe('buildTrackQuotaMap', () => {
+  // 잔여석 표시 전체가 이 매핑에 달려 있는데, 그룹 함수 테스트는 손으로 만든
+  // quotaMap 을 넣으므로 여기가 비면 아무도 검증하지 않는다(감사 지적).
+  const stats = {
+    univs: [
+      {
+        univ_id: 1, univ_name: '가대학', total_quota: 5, total_used: 3,
+        tracks: [
+          { track_id: 10, track_name: '가', unit_quota: 2, unit_used: 1 },
+          { track_id: 20, track_name: '나', unit_quota: null, unit_used: 0 },
+        ],
+      },
+      {
+        univ_id: 2, univ_name: '나대학', total_quota: null, total_used: 0,
+        tracks: [{ track_id: 30, track_name: '다', unit_quota: 1, unit_used: 1 }],
+      },
+    ],
+  }
+
+  it('track_id 로 바로 찾을 수 있게 펼친다', () => {
+    const m = buildTrackQuotaMap(stats)
+    expect(Object.keys(m).sort()).toEqual(['10', '20', '30'])
+  })
+
+  it('대학 값과 모집단위 값을 섞지 않는다', () => {
+    // 이게 뒤집히면 "남은 자리"가 통째로 틀리는데 화면은 멀쩡해 보인다.
+    const m = buildTrackQuotaMap(stats)
+    expect(m[10]).toEqual({
+      univId: 1, univName: '가대학',
+      unitQuota: 2, unitUsed: 1,      // 모집단위
+      totalQuota: 5, totalUsed: 3,    // 대학
+    })
+  })
+
+  it('같은 대학의 모집단위는 대학 값을 공유한다', () => {
+    const m = buildTrackQuotaMap(stats)
+    expect(m[20].totalQuota).toBe(5)
+    expect(m[20].univId).toBe(1)
+    expect(m[20].unitQuota).toBeNull()   // 모집단위만 무제한
+  })
+
+  it('무제한 정원은 null 그대로 둔다', () => {
+    // 0 으로 바꾸면 "자리 없음"이 된다 — 무제한과 만석은 다르다.
+    expect(buildTrackQuotaMap(stats)[30].totalQuota).toBeNull()
+  })
+
+  it('응답이 아직 없으면 빈 map 이다', () => {
+    expect(buildTrackQuotaMap(null)).toEqual({})
+    expect(buildTrackQuotaMap(undefined)).toEqual({})
+  })
+
+  it('그룹 함수가 이 결과로 잔여석을 낸다', () => {
+    // 매핑 → 그룹까지 이어 붙여, 중간에서 어긋나면 드러나게 한다.
+    const m = buildTrackQuotaMap(stats)
+    const g = groupByTrack([row({ track_id: 10, univ_name: '가대학', track_name: '가' })], m)
+    expect(g['가대학 가'].remaining).toBe(1)       // 모집단위 2 - 1
+    expect(g['가대학 가'].univRemaining).toBe(2)   // 대학 5 - 3
   })
 })

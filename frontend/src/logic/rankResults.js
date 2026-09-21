@@ -151,6 +151,35 @@ export function univAutoButtonKeys(groups) {
 }
 
 /**
+ * `GET /api/universities/quota-stats` 응답을 `groupBy*` 가 쓰는 형태로 바꾼다.
+ *
+ * 응답은 대학 → 모집단위 중첩인데, 그룹 함수는 `track_id` 로 바로 찾는다.
+ * 잔여석 표시 전체가 이 매핑 하나에 달려 있다 — 여기서 대학 정원을 모집단위 정원
+ * 자리에 넣거나 키를 잘못 잡으면 "남은 자리"가 통째로 틀리는데, 화면은 멀쩡해 보인다.
+ *
+ * 응답이 아직 없으면(첫 렌더) 빈 map 을 준다. 그룹 함수는 정원 정보가 없는
+ * 모집단위를 "정원 없음"으로 표시하고 행은 떨어뜨리지 않는다.
+ */
+export function buildTrackQuotaMap(quotaStats) {
+  const map = {}
+  if (!quotaStats) return map
+  for (const u of quotaStats.univs) {
+    for (const t of u.tracks) {
+      map[t.track_id] = {
+        univId: u.univ_id,
+        univName: u.univ_name,
+        unitQuota: t.unit_quota,
+        unitUsed: t.unit_used,
+        // 대학 단위 값 — 모집단위 값과 섞이면 잔여석이 조용히 틀린다.
+        totalQuota: u.total_quota,
+        totalUsed: u.total_used,
+      }
+    }
+  }
+  return map
+}
+
+/**
  * 결과 탭이 화면에 쓰는 값 **전부**를 한 번에 만든다.
  *
  * 왜 하나로 묶었나 — 여기서 잡으려는 회귀는 개별 함수의 버그가 아니라 **배선**이다.

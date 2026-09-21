@@ -748,7 +748,7 @@ import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { formatScore } from '../../utils/scorePreviewShared.js'
-import { buildResultsView, sortGroups } from '../../logic/rankResults.js'
+import { buildResultsView, buildTrackQuotaMap, sortGroups } from '../../logic/rankResults.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
@@ -893,23 +893,7 @@ function appTotalScore(app) {
 
 const tracksInRound = computed(() => allTracksInRound.value)
 
-const trackQuotaMap = computed(() => {
-  const map = {}
-  if (!quotaStats.value) return map
-  for (const u of quotaStats.value.univs) {
-    for (const t of u.tracks) {
-      map[t.track_id] = {
-        univId: u.univ_id,
-        univName: u.univ_name,
-        unitQuota: t.unit_quota,
-        unitUsed: t.unit_used,
-        totalQuota: u.total_quota,
-        totalUsed: u.total_used,
-      }
-    }
-  }
-  return map
-})
+const trackQuotaMap = computed(() => buildTrackQuotaMap(quotaStats.value))
 
 // 기본값은 대학 전체 순위다. 옆의 [지원 현황] 탭이 대학별로 묶어 보여주므로(appsByUniv),
 // 결과 탭만 모집단위 기준으로 열리면 같은 학생의 순위가 탭마다 달라 보인다.
