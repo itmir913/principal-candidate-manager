@@ -84,6 +84,11 @@ pub async fn list_rounds(
 pub async fn get_current_round(
     State(state): State<AppState>,
 ) -> Result<Json<Option<RoundRow>>, ApiError> {
+    // `LIMIT 1` 에 `ORDER BY` 가 없는 것은 의도적이다. OPEN 라운드는 전체에서 최대 1개다
+    // (`idx_one_open_round` 부분 유니크 인덱스, migrations/v1/003-rounds.sql:15).
+    // 고를 행이 하나뿐이라 정렬이 결과를 바꾸지 않는다.
+    // 이 주석이 없으면 "LIMIT 엔 항상 ORDER BY" 규칙 점검에서 반복해서 걸린다 —
+    // 실제로 감사에서 한 번 지적됐다(2026-09-21).
     let row = sqlx::query_as::<_, RoundRow>(&format!(
         "SELECT r.id, r.status, r.opened_at, r.closed_at, r.finalized_at,
                 {} AS needs_recalc
