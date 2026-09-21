@@ -678,6 +678,7 @@ import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import ScoreDemoCard from './ScoreDemoCard.vue'
 import { isKeyMatched, formatScore } from '../../utils/scorePreviewShared.js'
+import { totalMaxScore as sumMaxScore } from '../../logic/areaTotals.js'
 
 // ── 도움말 문구 ────────────────────────────────────────────────
 const HELP_MAIN = {
