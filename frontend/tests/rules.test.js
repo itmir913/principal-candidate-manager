@@ -18,12 +18,16 @@ import { fileURLToPath } from 'node:url'
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src')
 
-/** src 아래의 .vue / .js 를 모은다. 테스트 파일 자신은 뺀다. */
+/**
+ * src 아래의 .vue / .js / .css 를 모은다. 테스트 파일 자신은 뺀다.
+ * `.css` 를 넣은 이유: 규칙 8 을 인라인까지 넓히면서 스타일시트를 빠뜨렸었다 —
+ * `style.css`·`manual.css` 에 작은 폰트를 두면 검사 밖이었다(감사 중-8).
+ */
 function sourceFiles(dir = SRC, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
     if (e.isDirectory()) sourceFiles(p, out)
-    else if (/\.(vue|js)$/.test(e.name) && !/\.test\.js$/.test(e.name)) out.push(p)
+    else if (/\.(vue|js|css)$/.test(e.name) && !/\.test\.js$/.test(e.name)) out.push(p)
   }
   return out
 }
@@ -106,9 +110,13 @@ describe('규칙 8 — 본문 폰트는 text-base 이상', () => {
   // px/pt/rem 이 섞여 있어 단위별로 본다. 기준은 16px = 1rem = 12pt.
   const SMALL_INLINE = new RegExp([
     String.raw`font-size\s*:\s*(?:[0-9]|1[0-5])(?:\.\d+)?\s*px`,
-    String.raw`font-size\s*:\s*(?:0(?:\.\d+)?|1(?:\.0+)?)\s*(?:rem|em)\b`,
+    // `.9rem` 처럼 앞자리 0 을 생략한 표기(= 14.4px)도 잡는다. 처음엔 놓쳤다.
+    String.raw`font-size\s*:\s*(?:0?\.\d+|1(?:\.0+)?)\s*(?:rem|em)\b`,
     String.raw`font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?\s*pt`,
-    String.raw`fontSize\s*:\s*['"\`](?:[0-9]|1[0-5])(?:\.\d+)?px`,
+    String.raw`fontSize\s*(?::|=)\s*['"\`](?:[0-9]|1[0-5])(?:\.\d+)?px`,   // 객체 리터럴 + DOM 대입
+    // Tailwind 임의값: text-[13px] / text-[0.8rem]
+    String.raw`text-\[(?:[0-9]|1[0-5])(?:\.\d+)?px\]`,
+    String.raw`text-\[(?:0?\.\d+|1(?:\.0+)?)(?:rem|em)\]`,
   ].join('|'))
 
   const key = (h) => `${h.at.split(':')[0]}|${h.text}`
@@ -153,7 +161,8 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
   //
   // 지금 위반은 0건이다 — 새로 들어오는 것을 막는 장치다. 첫 판의 그물은
   // 6종 중 1종만 잡았다(감사 S-4). 표기 변형과 상수 경유를 함께 본다.
-  const LITERAL = String.raw`100_?000|1[eE]\+?5|0\.00001|1[eE]-5`
+  // `1e+05` 처럼 지수에 0 을 채운 표기까지 본다 — 앞서 `1e+5` 를 고치면서 이건 놓쳤다.
+  const LITERAL = String.raw`100_?000|1[eE]\+?0*5|0\.00001|1[eE]-0*5`
   const PATTERNS = [
     // 직접 나눗셈·곱셈
     new RegExp(String.raw`[/*]\s*(?:${LITERAL})\b`),
@@ -163,6 +172,9 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
     // 줄 단위로 훑으므로 끝 앵커에 `$` 를 반드시 넣는다(`[;\n]` 만 쓰면 세미콜론
     // 없는 줄을 통째로 놓친다 — 실제로 `const SCALE = 100000` 이 빠져나갔다).
     new RegExp(String.raw`(?:const|let|var)\s+\w+\s*=\s*(?:${LITERAL})\s*(?:[;,)\]}]|$)`),
+    // 객체 속성 / 배열 원소에 숨겨 두는 것도 같은 값이다
+    new RegExp(String.raw`\w+\s*:\s*(?:${LITERAL})\s*(?:[,}]|$)`),
+    new RegExp(String.raw`\[\s*(?:${LITERAL})\s*\]`),
   ]
 
   it('점수 배율을 프론트에서 직접 계산하지 않는다', () => {

@@ -14,7 +14,7 @@ describe('roundStatusLabel', () => {
     //
     // 주의: 이 테스트는 **Rust 를 읽지 않는다.** 여기 적힌 세 값은 손으로 옮긴
     // 것이라, `src/enums.rs` 에 변형이 늘어도 이 단언은 조용히 통과한다.
-    // 백엔드와의 실제 대조는 tests/round_status_labels.rs 가 한다 —
+    // 백엔드와의 실제 대조는 tests/frontend_enum_sync.rs 가 한다 —
     // 그쪽이 `include_str!` 로 두 파일을 함께 읽는다.
     // 여기서 고정하는 것은 "세 키가 사라지지 않았다"까지다.
     expect(Object.keys(ROUND_STATUS_LABELS).sort())

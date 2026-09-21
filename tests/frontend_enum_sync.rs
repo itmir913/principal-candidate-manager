@@ -4,7 +4,9 @@
 //! 계기: 2026-09-21 프론트 테스트 감사에서 두 가지가 드러났다.
 //!
 //! 1. `roundStatus.test.js` 가 "변형이 늘면 여기서 먼저 걸린다"고 적어 두었지만
-//!    그 파일은 Rust 를 읽지 않는다. `RoundStatus::Archived` 를 추가해도 조용히 통과한다.
+//!    그 파일은 Rust 를 읽지 않는다. 변형을 늘려도 그 단언은 통과한다.
+//!    (`RoundStatus` 는 `rounds.rs` 의 `match` 가 비포괄이 되어 rustc 가 먼저 막지만,
+//!     `CalcType` 처럼 `match` 로 전수하지 않는 enum 은 아무도 안 막는다.)
 //! 2. `areaSamples.test.js` 는 calc_type·match_mode·category_agg·lookup_scope 를
 //!    **손으로 복사한 배열 4벌**로 전수 검사한다. 배열이 낡으면 새 조합을 검사하지 않고도
 //!    초록이 뜬다 — "손복사를 걷어낸다"던 작업이 새 파일에서 손복사를 다시 만든 셈이다.
@@ -17,7 +19,7 @@ use std::collections::BTreeSet;
 mod common;
 use common::enum_variants;
 
-/// 프론트 파일에서 대문자 상수 토큰을 뽑는다. 주석 줄은 건너뛴다.
+/// 프론트 파일에서 대문자 상수 토큰을 뽑는다. 주석은 줄 시작·줄 끝 모두 걷어낸다.
 /// `re` 대신 단순 스캐너를 쓰는 이유: 의존성을 늘리지 않으려는 것이고,
 /// 대상이 `'UPPER'` 같은 따옴표 문자열과 `OPEN:` 같은 객체 키뿐이라 충분하다.
 fn upper_tokens(src: &str, block: &str) -> BTreeSet<String> {
@@ -41,10 +43,14 @@ fn upper_tokens(src: &str, block: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     let mut cur = String::new();
     for line in src[body_start..body_end].lines() {
+        // 주석은 **줄 끝에 붙은 것도** 잘라 낸다. 줄 시작만 보면 `CLOSED: '종료',  // TODO`
+        // 의 TODO 가 상수로 잡혀, 규칙과 무관한 편집 하나로 CI 가 빨개지고 오류 메시지는
+        // 엉뚱한 방향("백엔드에서 사라진 값이다")을 가리킨다. 실제로 그렇게 터졌다.
+        let line = match line.find("//") {
+            Some(i) => &line[..i],
+            None => line,
+        };
         let line = line.trim();
-        if line.starts_with("//") {
-            continue;
-        }
         for c in line.chars() {
             if c.is_ascii_uppercase() || c == '_' {
                 cur.push(c);

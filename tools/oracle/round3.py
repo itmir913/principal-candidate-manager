@@ -414,7 +414,7 @@ def _group_d():
     #      "총점이 같으니 동점"으로 되살리면 재계산 전 stale 표시가 된다.
     out.append(_skeleton(
         "r3d02_reopened_was_tied",
-        "동점 2쌍이 있던 라운드를 재오픈. 총점은 같아도 순위가 없으므로 동점 표식은 없다.",
+        "동점 2쌍이 있던 라운드를 재오픈. ranking 은 NULL 이 되어 대학 전체 보기의 동점 표식은 사라지지만, track_rank 는 조회 시점 계산이라 살아 있어 모집단위 보기에서는 남는다.",
         areas=[_area(1, "MANUAL", "SIMPLE", 10_000_000)],
         tracks_spec=[(1, 1, 2, 0), (2, 1, 2, 0)],
         students=[_student(i) for i in range(1, 5)],

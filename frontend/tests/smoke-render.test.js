@@ -53,6 +53,32 @@ const RESULT = {
   ranking: 1, track_rank: 1, recommended: false, excluded: false,
   excluded_reason: null, abandoned: false,
 }
+// 같은 대학의 **다른 모집단위**에서 같은 대학 순위(1위) — 대학 전체 보기에서 동점이다.
+// F-014 의 본질이 여기 있다: 모집단위 필터를 걸어도 이 동점 표식이 남아야 한다.
+const RESULT2 = {
+  ...(() => ({}))(),
+  student_id: 2, track_id: 2, round_id: 1, name: '학생02', student_code: '2026002',
+  grade: 3, class_no: 1, seq_no: 2, is_enrolled: true,
+  univ_name: '가대학', track_name: '나모집단위', department_name: '전자공학과',
+  total_score: 5.31304, score_detail: { 1: 5.31304 },
+  ranking: 1, track_rank: 1, recommended: false, excluded: false,
+  excluded_reason: null, abandoned: false,
+}
+
+/** 담임 화면 엔드포인트. 없으면 전부 flexible() 로 떨어져 빈 껍데기만 렌더된다(감사 치-3). */
+function TEACHER_FIXTURE(u) {
+  // teacherGetResults 는 배열이 아니라 `{ rounds, results }` 를 준다
+  // (ResultsTab.vue:469). 배열로 주면 `rounds.value` 가 undefined 가 되어 렌더가 터진다.
+  if (/results/.test(u))      return { rounds: [ROUND], results: [RESULT, RESULT2] }
+  if (/students/.test(u))     return [{ student_id: 1, name: '학생01', student_code: '2026001',
+                                        grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }]
+  if (/applications/.test(u)) return [RESULT]
+  if (/universities/.test(u)) return [UNIV]
+  if (/area/.test(u))         return [AREA]
+  if (/rounds/.test(u))       return [ROUND]
+  return flexible()
+}
+
 const AREA = {
   id: 1, area_id: 1, name: '요소1', calc_type: 'NUMERIC', match_mode: 'UPPER',
   category_agg: null, lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1,
@@ -65,10 +91,22 @@ const UNIV = {
              prioritize_enrolled: 0, by_round: [] }],
 }
 
-/** URL 로 응답을 고른다. 못 찾으면 위의 느슨한 기본값. */
-function fixtureFor(url = '') {
+/**
+ * URL(+ 쿼리)로 응답을 고른다. 못 찾으면 위의 느슨한 기본값.
+ *
+ * **서버가 거르는 흉내를 낸다.** `track_id` 파라미터가 오면 그 모집단위만 돌려준다 —
+ * 실제 백엔드가 그렇게 동작하기 때문이다. 이걸 빼면 "필터를 서버에 넘기는" 회귀가
+ * 목 단계에서 무력화돼 테스트가 못 잡는다(감사 치-1 의 B-1 이 정확히 그랬다).
+ */
+function fixtureFor(url = '', config) {
   const u = String(url)
-  if (/\/api\/rounds\/\d+\/results/.test(u)) return [RESULT]
+  const trackId = config?.params?.track_id
+  if (/\/api\/teacher\//.test(u))                 return TEACHER_FIXTURE(u)
+  if (/\/api\/rounds\/current/.test(u))          return ROUND
+  if (/\/api\/rounds\/\d+\/results/.test(u)) {
+    const rows = [RESULT, RESULT2]
+    return trackId ? rows.filter(r => r.track_id === Number(trackId)) : rows
+  }
   if (/\/api\/rounds$/.test(u))                  return [ROUND]
   if (/\/api\/rounds\/\d+\/confirmation/.test(u)) return { total: 1, confirmed: 1, pending: [] }
   if (/\/api\/applications/.test(u))             return [RESULT]
@@ -85,7 +123,11 @@ function fixtureFor(url = '') {
 }
 
 vi.mock('axios', () => {
-  const res = (url) => Promise.resolve({ data: fixtureFor(url), headers: {} })
+  const res = (url, a, b) => {
+    // axios 의 config 위치가 메서드마다 다르다: get/delete 는 두 번째, post/put/patch 는 세 번째.
+    const config = (a && (a.params || a.responseType)) ? a : b
+    return Promise.resolve({ data: fixtureFor(url, config), headers: {} })
+  }
   const axios = {
     get: res, post: res, put: res, patch: res, delete: res,
     interceptors: { request: { use: () => {} }, response: { use: () => {} } },
@@ -142,6 +184,12 @@ const FATAL = new RegExp([
   'was accessed during render',                  // 템플릿이 없는 이름을 읽었다
   'Failed to resolve component',                 // 컴포넌트 이름 오타
   'Invalid vnode type',
+  // 렌더 중 TypeError. 템플릿에서 `is not defined` 다음으로 흔한데 처음엔 빠져 있었다 —
+  // `{{ row.nope.teacher_name }}` 변이가 23/23 초록으로 빠져나갔다(감사 치-2).
+  'Cannot read propert',
+  'of undefined',
+  'of null',
+  'Unhandled error during execution',
 ].join('|'))
 
 describe('스모크 렌더', () => {
@@ -183,6 +231,16 @@ describe('스모크 렌더', () => {
 
     const fatal = errors.filter(e => FATAL.test(e))
     expect(fatal, `${path} 렌더 중 치명 오류`).toEqual([])
+
+    // **화면에 렌더된 글자도 본다.** 이 저장소의 로더는 전부
+    // `try { … } catch (e) { error.value = e.message }` 라, 안에서 난
+    // ReferenceError 가 console 로 새지 않고 **오류 문구로 화면에 그려진다.**
+    // 그래서 console 만 보던 판정은 `getClasses` -> `getClassesTypo` 변이를
+    // 통째로 놓쳤다(감사 치-2). 사고가 났던 §4 도 정확히 이 모양이었다.
+    const shown = wrapper.text()
+    expect(FATAL.test(shown), `${path} 화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`)
+      .toBe(false)
+
     expect(wrapper.html()).toBeTruthy()
     wrapper.unmount()
   })
@@ -239,6 +297,49 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     expect(text, '결과 행이 그려지지 않았다').toContain('학생01')            // groupBy*
     expect(text, '잔여석이 그려지지 않았다').toContain('잔여 4석')            // buildTrackQuotaMap
     expect(text, '자동 추천 버튼이 없다').toContain('전체 자동 추천')          // univAutoButtonKeys
+
+    // ③ F-014 — **여기가 방어선이다.**
+    //
+    // 픽스처의 두 학생은 같은 대학의 **다른 모집단위**에서 대학 순위가 똑같이 1위다.
+    // 즉 대학 전체 보기에서 동점이고, 동점 행은 배경색 #fef3c7 로 표시된다.
+    // 모집단위 필터를 걸면 화면에는 한 명만 남지만 **동점 표식은 그대로여야 한다.**
+    //
+    // 이 단언이 없으면 호출부 회귀를 아무도 잡지 못한다. 실제로 그랬다 —
+    // `getResults(id, selectedTrackId)` 로 서버에 필터를 넘기거나
+    // `rows` 에 걸러진 배열을 넘기는 변이가 전 검증을 통과했다(감사 치-1).
+    // computeTieSet 자체는 어떤 배열을 받아도 옳게 동작하므로 순수 함수 테스트로는
+    // 원리적으로 잡을 수 없다.
+    expect(wrapper.html(), '필터 전에 동점 표식이 없다 — 픽스처를 확인하라')
+      .toContain('#fef3c7')
+
+    const select = wrapper.find('select')
+    expect(select.exists(), '모집단위 필터를 찾지 못했다').toBe(true)
+    await select.setValue('1')
+    await new Promise(r => setTimeout(r, 0))
+
+    const filtered = wrapper.text()
+    expect(filtered, '필터가 표시를 좁히지 않았다').not.toContain('학생02')
+    expect(wrapper.html(),
+      '모집단위 필터를 걸자 동점 표식이 사라졌다 — tieSet 에 걸러진 배열이 넘어갔다(F-014)')
+      .toContain('#fef3c7')
+
+    // ④ 필터를 건 채 **재조회**한다. 여기까지 와야 "서버에 필터를 넘기는" 회귀가
+    //    드러난다 — loadResults 는 라운드를 고를 때 한 번 돌고, 그때는 필터가 비어 있어
+    //    잘못된 인자도 무해하게 지나간다. 실제 사용자는 필터를 걸어 둔 채 [새로고침]을
+    //    누르거나 추천을 확정해 재조회를 일으킨다. 그 순간 같은 대학 다른 모집단위의
+    //    동점 상대가 응답에서 빠져 표식이 사라진다.
+    //    (목 axios 도 `track_id` 파라미터가 오면 서버처럼 걸러 준다.)
+    const refresh = wrapper.findAll('button').find(b => b.text() === '새로고침')
+    expect(refresh, '[새로고침] 버튼을 찾지 못했다').toBeTruthy()
+    await refresh.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+    await new Promise(r => setTimeout(r, 0))
+
+    expect(wrapper.html(),
+      '필터를 건 채 재조회하자 동점 표식이 사라졌다 — loadResults 가 서버에 필터를 ' +
+      '넘기고 있다. 라운드 전체를 받아 표시 단계에서만 걸러야 한다(F-014)')
+      .toContain('#fef3c7')
+
     expect(errors.filter(e => FATAL.test(e)), '결과 패널 렌더 중 치명 오류').toEqual([])
     wrapper.unmount()
   })
