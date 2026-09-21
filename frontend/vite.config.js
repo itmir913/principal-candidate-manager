@@ -16,7 +16,7 @@ export default defineConfig({
     },
   },
   // vitest — 기본은 DOM 없는 node 환경(순수 로직·소스 규칙 검사).
-  // 스모크 렌더(tests/smoke-render.test.js)만 파일 첫 줄의
+  // 렌더 테스트(tests/*.render.test.js, tests/smoke-render.test.js)만 파일 첫 줄의
   // `// @vitest-environment jsdom` 으로 jsdom 을 쓴다. 외관은 단언하지 않고
   // "화면이 열리는가"만 본다 — src/docs/13_frontend_pitfalls.md §4.
   test: {

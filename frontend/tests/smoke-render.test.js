@@ -179,8 +179,25 @@ const NEEDS_PROPS = new Set([
   '../src/components/admin/ScoreDemoCard.vue',      // 전형요소 한 건을 받는다
   '../src/components/common/HelpBox.vue',           // 안내 문구를 받는다
   '../src/components/common/ProductInfoCard.vue',   // 버전 정보를 받는다
-  '../src/components/teacher/ApplicationDetailModal.vue', // 지원 한 건을 받는다
+  '../src/components/teacher/ApplicationDetailModal.vue', // 아래에서 props 를 주고 따로 마운트
 ])
+
+/**
+ * props 를 요구해 자동 마운트에서 빠지는 것 중, **혼자 화면을 채우는 것**은 따로 연다.
+ * 상세 모달은 부모의 `v-if="detailApp"` 뒤라 클릭 테스트로도 안 열려, 212줄이 통째로
+ * 검증 밖이었다(4차 감사 중-C).
+ */
+const PROPPED = {
+  '../src/components/teacher/ApplicationDetailModal.vue': {
+    props: {
+      app: { student_id: 1, track_id: 1, round_id: 1, univ_name: '가대학',
+             track_name: '가모집단위', department_name: '컴퓨터공학과',
+             recommended: false, abandoned: false },
+      studentName: '학생01',
+    },
+    evidence: '가대학',
+  },
+}
 
 /** 라우터를 쓰는 화면이 있으므로 최소 스텁을 끼운다. */
 const global = {
@@ -436,12 +453,48 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
   })
 })
 
+describe('스모크 렌더 — props 를 받는 화면', () => {
+  let errors
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    errors = []
+    const collect = (...a) => errors.push(a.map(x => (x && x.message) || String(x)).join(' '))
+    vi.spyOn(console, 'error').mockImplementation(collect)
+    vi.spyOn(console, 'warn').mockImplementation(collect)
+  })
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it.each(Object.keys(PROPPED))('%s 이(가) 열린다', async (path) => {
+    const onRejection = (e) => errors.push(String(e?.reason?.message ?? e?.reason ?? e))
+    process.on('unhandledRejection', onRejection)
+
+    const { props, evidence } = PROPPED[path]
+    const mod = await all[path]()
+    const wrapper = mount(mod.default, { props, global })
+    await new Promise(r => setTimeout(r, 0))
+    await new Promise(r => setTimeout(r, 0))
+    process.off('unhandledRejection', onRejection)
+
+    const shown = wrapper.text()
+    expect(errors.filter(e => FATAL.test(e)), `${path} 렌더 중 치명 오류`).toEqual([])
+    expect(FATAL.test(shown), `${path} 화면에 오류 문구가 그려졌다`).toBe(false)
+    expect(shown, `${path} 가 props 를 그리지 않았다`).toContain(evidence)
+    wrapper.unmount()
+  })
+})
+
 describe('스모크 대상 목록이 낡지 않았다', () => {
   it('모든 .vue 가 스모크 대상이거나 명시적으로 제외되어 있다', () => {
     const uncovered = Object.keys(all)
       .filter(p => !p.endsWith('/App.vue'))
       .filter(p => !targets.includes(p) && !NEEDS_PROPS.has(p))
     expect(uncovered, '새 화면이 검사 밖에 있다').toEqual([])
+  })
+
+  it('PROPPED 에 적힌 파일이 NEEDS_PROPS 안에 있다', () => {
+    // 둘이 어긋나면 어느 쪽도 안 도는 화면이 생긴다.
+    const orphan = Object.keys(PROPPED).filter(p => !NEEDS_PROPS.has(p))
+    expect(orphan, 'PROPPED 에만 있고 NEEDS_PROPS 에 없다').toEqual([])
   })
 
   it('NEEDS_PROPS 에 적힌 파일이 실제로 존재한다', () => {

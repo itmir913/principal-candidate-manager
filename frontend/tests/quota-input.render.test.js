@@ -16,8 +16,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
+// 대학 카드가 하나 있어야 [편집]·[+ 모집단위]·[모집단위 편집] 폼을 열 수 있다.
+const UNIV = {
+  id: 1, univ_name: '가대학', total_quota: 5, unlimited: false, prioritize_enrolled: 1,
+  tracks: [{ id: 10, univ_id: 1, track_name: '가모집단위', unit_quota: 2,
+             unlimited: false, prioritize_enrolled: 0 }],
+}
+const QUOTA_STATS = {
+  all_round_ids: [], univs: [{ univ_id: 1, univ_name: '가대학', total_quota: 5, total_used: 0,
+    tracks: [{ track_id: 10, track_name: '가모집단위', unit_quota: 2, unit_used: 0, by_round: [] }] }],
+}
+
 vi.mock('axios', () => {
-  const res = () => Promise.resolve({ data: [], headers: {} })
+  // 모집단위는 `/api/univ-tracks` 로 **따로** 온다(admin.js:160) — 대학 응답에 넣어도
+  // 표가 그려지지 않는다. 그래서 [모집단위 편집] 폼을 못 열고 있었다.
+  const res = (url = '') => Promise.resolve({
+    data: /quota-stats/.test(String(url)) ? QUOTA_STATS
+        : /univ-tracks/.test(String(url)) ? UNIV.tracks
+        : /universities/.test(String(url)) ? [UNIV]
+        : [],
+    headers: {},
+  })
   const axios = {
     get: res, post: res, put: res, patch: res, delete: res,
     interceptors: { request: { use: () => {} }, response: { use: () => {} } },
@@ -27,24 +46,52 @@ vi.mock('axios', () => {
 
 const load = () => import('../src/components/admin/UniversitiesTab.vue')
 
-/** [+ 대학 추가] 폼을 열고 {정원칸, 저장버튼} 을 돌려준다. */
-async function openAddForm(wrapper) {
-  const add = wrapper.findAll('button').find(b => b.text().includes('대학 추가'))
-  expect(add, '[+ 대학 추가] 버튼을 찾지 못했다').toBeTruthy()
-  await add.trigger('click')
+/**
+ * 정원을 입력할 수 있는 **네 폼**. 하나만 시험하면 나머지 셋은 가드를 빼도 아무도
+ * 모른다 — 실제로 그랬다(4차 감사 치-1, 저장소 규칙 feedback_guard_all_entry_points).
+ * 폼이 늘면 여기에도 추가해야 하고, 아래 "전 진입점" 검사가 누락을 잡는다.
+ */
+const FORMS = [
+  ['대학 추가',      '새 대학 추가'],
+  ['대학 편집',      '대학 정보 수정'],
+  ['모집단위 추가',  '새 모집단위'],
+  ['모집단위 편집',  '모집단위 수정'],
+]
+
+/** 이름표로 폼을 열고 {폼, 정원칸, 저장버튼} 을 돌려준다. */
+async function openForm(wrapper, which) {
+  const click = async (pred, what) => {
+    const b = wrapper.findAll('button').find(pred)
+    expect(b, `${what} 버튼을 찾지 못했다`).toBeTruthy()
+    await b.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+  }
+  if (which === '대학 추가')      await click(b => b.text().includes('대학 추가'), '[+ 대학 추가]')
+  if (which === '대학 편집')      await click(b => b.text() === '편집', '[편집]')
+  if (which === '모집단위 추가')  await click(b => b.text().includes('모집단위'), '[+ 모집단위]')
+  if (which === '모집단위 편집') {
+    // 대학 카드의 [편집]과 모집단위 행의 [편집]이 같은 라벨이다. 표 안(tr/td)에 있는
+    // 쪽이 모집단위 것 — 라벨만 보고 고르면 대학 편집 폼이 열려 조용히 다른 것을
+    // 시험하게 된다.
+    const edits = wrapper.findAll('td button').filter(b => b.text() === '편집')
+    expect(edits.length, '모집단위 [편집] 버튼이 없다 — 모집단위 표가 그려졌는지 확인하라')
+      .toBeGreaterThan(0)
+    await edits[0].trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+  }
 
   // **폼 안으로 범위를 좁힌다.** 화면 위쪽에도 텍스트 입력칸이 있어서, 그냥
   // `find('input[type="text"]')` 하면 엉뚱한 칸을 채우고 폼은 계속 비어 있다.
   // (실제로 그렇게 "정상 입력인데 저장이 잠겼다"가 났다.)
-  const form = wrapper.findAll('div').find(d => d.text().startsWith('새 대학 추가'))
-  expect(form, '[새 대학 추가] 폼이 열리지 않았다').toBeTruthy()
+  const form = wrapper.findAll('div').filter(d => d.find('input[type="checkbox"]').exists())
+    .filter(d => d.findAll('button').some(b => b.text() === '저장'))
+    .at(-1)
+  expect(form, `${which} 폼이 열리지 않았다`).toBeTruthy()
 
   const name = form.find('input[type="text"]')
-  expect(name.exists(), '대학명 입력칸이 없다').toBe(true)
-  await name.setValue('가대학')                    // 이름은 채워 둔다 — 정원만 보기 위해
+  if (name.exists()) await name.setValue('가대학')   // 이름은 채워 둔다 — 정원만 보기 위해
 
-  // 기본값이 `unlimited: true` 라 정원 칸이 아예 렌더되지 않는다(emptyUnivForm).
-  // "무제한"을 꺼야 입력칸이 나온다.
+  // 추가 폼은 기본값이 `unlimited: true` 라 정원 칸이 아예 렌더되지 않는다.
   const unlimited = form.find('input[type="checkbox"]')
   expect(unlimited.exists(), '"무제한" 체크박스를 찾지 못했다').toBe(true)
   await unlimited.setValue(false)
@@ -58,6 +105,17 @@ async function openAddForm(wrapper) {
   return { form, quota, save }
 }
 
+/**
+ * 실제 브라우저에서 **타이핑**이 일으키는 것은 `input` 이다(`change` 는 blur·Enter).
+ * `@vue/test-utils` 의 `setValue` 는 둘 다 쏘므로, 그걸 쓰면 `onInput` 을 `onChange`
+ * 로 바꾸는 회귀가 통과한다(4차 감사 중-B). `input` 만 쏜다.
+ */
+async function type(el, value) {
+  el.element.value = value
+  await el.trigger('input')
+  await new Promise(r => setTimeout(r, 0))
+}
+
 describe('정원 입력 (F-013) — 화면 동작', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -65,48 +123,45 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
   })
   afterEach(() => { vi.restoreAllMocks() })
 
-  it.each([
-    ['0',   '0 은 1 로 바뀌지 않는다'],
-    ['-3',  '음수는 통과하지 않는다'],
-    ['5.7', '소수는 잘려서 저장되지 않는다'],
-    ['',    '빈 칸은 0 으로 확정되지 않는다'],
-    ['abc', '숫자가 아닌 입력'],
-  ])('정원에 %s 를 넣으면 저장이 잠긴다 (%s)', async (typed) => {
-    const wrapper = mount((await load()).default)
-    await new Promise(r => setTimeout(r, 0))
-    const { quota, save } = await openAddForm(wrapper)
+  const BAD = ['0', '-3', '5.7', '', 'abc']
 
-    await quota.setValue(typed)
-    await new Promise(r => setTimeout(r, 0))
+  // **네 폼 전부**를 돈다. 하나만 시험하던 동안, 나머지 셋에서 가드를 빼도
+  // 전 검증이 초록이었다(4차 감사 치-1).
+  for (const [which] of FORMS) {
+    it.each(BAD)(`[${'%s'}] ${which}: 잘못된 정원이면 저장이 잠긴다`, async (typed) => {
+      const wrapper = mount((await load()).default)
+      await new Promise(r => setTimeout(r, 0))
+      const { quota, save } = await openForm(wrapper, which)
 
-    expect(save.attributes('disabled'),
-      `정원 "${typed}" 인데 저장 버튼이 열려 있다 — 값이 조용히 보정됐을 수 있다(F-013)`)
-      .toBeDefined()
-    wrapper.unmount()
-  })
+      await type(quota, typed)
 
-  it('정원 1 이상이면 저장이 열린다', async () => {
-    // 위 단언이 "항상 잠겨 있다"로 통과하면 아무것도 지키지 못한다.
-    const wrapper = mount((await load()).default)
-    await new Promise(r => setTimeout(r, 0))
-    const { quota, save } = await openAddForm(wrapper)
+      expect(save.attributes('disabled'),
+        `${which}: 정원 "${typed}" 인데 저장이 열려 있다 — 값이 조용히 보정됐을 수 있다(F-013)`)
+        .toBeDefined()
+      wrapper.unmount()
+    })
 
-    await quota.setValue('3')
-    await new Promise(r => setTimeout(r, 0))
+    it(`${which}: 정원 1 이상이면 저장이 열린다`, async () => {
+      // 위 단언이 "항상 잠겨 있다"로 통과하면 아무것도 지키지 못한다.
+      const wrapper = mount((await load()).default)
+      await new Promise(r => setTimeout(r, 0))
+      const { quota, save } = await openForm(wrapper, which)
 
-    expect(save.attributes('disabled'), '정상 입력인데 저장이 잠겼다').toBeUndefined()
-    wrapper.unmount()
-  })
+      await type(quota, '3')
+
+      expect(save.attributes('disabled'), `${which}: 정상 입력인데 저장이 잠겼다`).toBeUndefined()
+      wrapper.unmount()
+    })
+  }
 
   it('0 을 넣어도 화면의 값이 1 로 바뀌지 않는다', async () => {
     // 저장이 잠기는 것과 별개로, **입력칸의 값 자체**가 바뀌면 관리자는 자기가 1 을
     // 넣은 줄 안다. F-013 의 증상이 정확히 이것이었다.
     const wrapper = mount((await load()).default)
     await new Promise(r => setTimeout(r, 0))
-    const { quota } = await openAddForm(wrapper)
+    const { quota } = await openForm(wrapper, '대학 추가')
 
-    await quota.setValue('0')
-    await new Promise(r => setTimeout(r, 0))
+    await type(quota, '0')
 
     expect(quota.element.value, '입력칸의 값이 조용히 바뀌었다').not.toBe('1')
     wrapper.unmount()
@@ -115,13 +170,26 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
   it('안내 문구로 이유를 알려 준다', async () => {
     const wrapper = mount((await load()).default)
     await new Promise(r => setTimeout(r, 0))
-    const { form, quota } = await openAddForm(wrapper)
+    const { form, quota } = await openForm(wrapper, '대학 추가')
 
-    await quota.setValue('0')
-    await new Promise(r => setTimeout(r, 0))
+    await type(quota, '0')
 
     expect(form.text(), '왜 저장이 안 되는지 화면이 말해 주지 않는다')
       .toContain('1명 이상')
     wrapper.unmount()
+  })
+
+  it('정원을 다루는 저장 버튼이 전부 가드에 걸려 있다', async () => {
+    // 위 테스트들은 **내가 아는 폼**만 돈다. 폼이 하나 늘었는데 FORMS 에 안 적으면
+    // 그 폼은 조용히 검사 밖이 된다 — 4차 감사에서 정확히 그 상태였다.
+    // 소스에서 세어, 가드 없는 저장 버튼이 남아 있으면 실패한다.
+    const [{ default: fs }, { default: path }, { fileURLToPath }] =
+      await Promise.all([import('node:fs'), import('node:path'), import('node:url')])
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const src = fs.readFileSync(
+      path.join(here, '..', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
+    const guarded = (src.match(/:disabled="saving \|\| !(univ|track)FormValid"/g) ?? []).length
+    expect(guarded, '정원 폼 수와 가드 수가 어긋난다 — FORMS 목록도 함께 고쳐라')
+      .toBe(FORMS.length)
   })
 })

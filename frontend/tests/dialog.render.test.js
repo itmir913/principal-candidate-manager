@@ -104,6 +104,32 @@ describe('확인 대화상자', () => {
     w.unmount()
   })
 
+  it('ESC 는 취소다 — 확인으로 동작하지 않는다', async () => {
+    // 되돌리기 어려운 행위의 확인창에서 ESC 가 "확인"이 되면 한 번의 실수로 실행된다.
+    // 이 단언이 없던 동안 `settleDialog(s.kind === 'alert')` -> `settleDialog(true)`
+    // 변이가 전 검증을 통과했다(4차 감사 중-A).
+    const w = mount(DialogHost, { attachTo: document.body })
+    const answer = dialog.confirm({ title: '삭제할까요?', message: '되돌릴 수 없습니다.' })
+    await tick()
+    // 리스너는 window 에 붙는다(DialogHost.vue:142). document 로 쏘면 닿지 않는다.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await tick()
+    expect(await answer, 'ESC 가 확인으로 동작한다').toBe(false)
+    w.unmount()
+  })
+
+  it('연속으로 열면 앞의 약속이 취소로 끝난다', async () => {
+    // 끝나지 않은 약속이 남으면 `await dialog.confirm()` 뒤의 코드가 영원히 안 돌아
+    // 버튼이 먹통이 된다(dialog.js:22 의 의도).
+    const w = mount(DialogHost, { attachTo: document.body })
+    const first = dialog.confirm({ title: 'A', message: 'A' })
+    dialog.confirm({ title: 'B', message: 'B' })
+    await tick()
+    expect(await first, '앞의 다이얼로그가 끝나지 않는다').toBe(false)
+    settleDialog(false)
+    w.unmount()
+  })
+
   it('alert 는 확인 버튼 하나뿐이다', async () => {
     const w = mount(DialogHost, { attachTo: document.body })
     dialog.alert({ title: '오류', message: '저장하지 못했습니다.', level: 'error' })

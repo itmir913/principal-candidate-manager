@@ -12,11 +12,11 @@
  *   formatScore / isKeyMatched : frontend/src/utils/scorePreviewShared.js
  *   computeTieSet              : frontend/src/logic/rankResults.js
  *   totalMaxScore              : frontend/src/logic/areaTotals.js
- *
- * 아직 이 파일 안에서 재구성하는 것 (`.vue` 안에 있어 import 할 수 없다):
  *   groupByUniv                : frontend/src/logic/rankResults.js (§4 재정렬 대조)
  *
- * 2026-09-21: 손복사는 이제 없다. `.vue` 안에 남아 import 할 수 없는 항목도 없다.
+ * **손복사는 이제 없다.** `.vue` 안에 남아 import 할 수 없는 항목도 없다.
+ * (이 블록에 "아직 재구성하는 것: groupByUniv" 라고 적혀 있었는데, 바로 위에서
+ *  import 하면서 목록만 안 지운 자기모순이었다.)
  *
  * **덤프가 아직 덮지 못하는 축**(정직하게 적어 둔다):
  *   - 라운드는 전 시나리오가 `round_id = 1` 이다. 덤프 하네스(tests/audit_oracle_dump.rs)가
@@ -279,10 +279,15 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   const vue = fs.readFileSync(
     path.join(HERE, '..', '..', 'frontend', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
   const problems = []
-  // 금지 패턴을 `parseInt` 철자로만 정의하면 `Number(s) || 1` 로 같은 짓을 할 수 있다 —
-  // 감사에서 그 변이가 3d 를 그대로 통과했다(중-10). 숫자 변환 뒤의 `||` 를 통째로 본다.
-  // 다만 **실제 방어는 logic/quotaForm.js 의 parseQuotaInput 테스트**가 한다.
-  // 이 소스 검사는 "그 함수를 우회해 컴포넌트에서 직접 변환하는 것"을 막는 보조 장치다.
+  // **이 소스 검사는 우회 가능하다. 정직하게 적어 둔다.**
+  // 아래 정규식은 `\([^)]*\)` 라 중첩 괄호를 넘지 못한다 — `Number(String(v)) || 1` 은
+  // 그대로 통과한다. `??` 로 덮는 것도 못 본다. 두 번 넓혀 봤지만 두 번 다 뚫렸다.
+  // (예전 주석은 "숫자 변환 뒤의 || 를 통째로 본다"고 적었는데 거짓이었다.)
+  //
+  // **F-013 의 실제 방어선은 `frontend/tests/quota-input.render.test.js` 다** —
+  // 정원을 입력하는 네 폼을 마운트해 저장 버튼이 잠기는지 행동으로 본다.
+  // 여기 남긴 이유는 "눈에 띄는 금지 패턴이 다시 나타나면 일찍 알려 준다"까지다.
+  // 이것만 믿지 마라. 3c 를 같은 이유로 폐기했다.
   if (/(?:parseInt|parseFloat|Number)\s*\([^)]*\)\s*\|\|/.test(noComments(vue)))
     problems.push('숫자 변환 뒤 || 기본값 패턴이 남아 있다 — 입력을 조용히 치환한다')
   if (!/parseQuotaInput/.test(noComments(vue)))
