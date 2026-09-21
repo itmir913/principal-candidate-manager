@@ -56,7 +56,6 @@ const RESULT = {
 // 같은 대학의 **다른 모집단위**에서 같은 대학 순위(1위) — 대학 전체 보기에서 동점이다.
 // F-014 의 본질이 여기 있다: 모집단위 필터를 걸어도 이 동점 표식이 남아야 한다.
 const RESULT2 = {
-  ...(() => ({}))(),
   student_id: 2, track_id: 2, round_id: 1, name: '학생02', student_code: '2026002',
   grade: 3, class_no: 1, seq_no: 2, is_enrolled: true,
   univ_name: '가대학', track_name: '나모집단위', department_name: '전자공학과',
@@ -94,8 +93,10 @@ function TEACHER_FIXTURE(u) {
                                         grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }]
   if (/applications/.test(u)) return [RESULT]
   if (/universities/.test(u)) return [UNIV]
-  if (/area/.test(u))         return [AREA]
-  if (/rounds/.test(u))       return [ROUND]
+  // teacher_areas 의 필드는 area_name·table 이다(src/handlers/teacher_areas.rs).
+  if (/area/.test(u))         return [{ ...AREA, area_name: '요소1', table: [] }]
+  if (/confirm/.test(u))      return { confirmed: false, confirmed_at: null }
+  if (/rounds/.test(u))       return [FINAL_ROUND]
   return flexible()
 }
 
@@ -352,8 +353,12 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     // `rows` 에 걸러진 배열을 넘기는 변이가 전 검증을 통과했다(감사 치-1).
     // computeTieSet 자체는 어떤 배열을 받아도 옳게 동작하므로 순수 함수 테스트로는
     // 원리적으로 잡을 수 없다.
-    expect(wrapper.html(), '필터 전에 동점 표식이 없다 — 픽스처를 확인하라')
-      .toContain('#fef3c7')
+    // `#fef3c7` 는 "재계산 필요" 배지 색이기도 하다(RoundsTab.vue:64). 행 배경 변수까지
+    // 붙여 그 배지와 섞이지 않게 한다 — 픽스처를 한 글자 바꾸면 방어선 셋이 전부
+    // 거짓 초록이 될 수 있었다.
+    const TIE = '--row-bg:#fef3c7'
+    const tieMark = () => wrapper.html().replace(/\s/g, '')
+    expect(tieMark(), '필터 전에 동점 표식이 없다 — 픽스처를 확인하라').toContain(TIE)
 
     const select = wrapper.find('select')
     expect(select.exists(), '모집단위 필터를 찾지 못했다').toBe(true)
@@ -362,9 +367,9 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
 
     const filtered = wrapper.text()
     expect(filtered, '필터가 표시를 좁히지 않았다').not.toContain('학생02')
-    expect(wrapper.html(),
+    expect(tieMark(),
       '모집단위 필터를 걸자 동점 표식이 사라졌다 — tieSet 에 걸러진 배열이 넘어갔다(F-014)')
-      .toContain('#fef3c7')
+      .toContain(TIE)
 
     // ④ 필터를 건 채 **재조회**한다. 여기까지 와야 "서버에 필터를 넘기는" 회귀가
     //    드러난다 — loadResults 는 라운드를 고를 때 한 번 돌고, 그때는 필터가 비어 있어
@@ -378,12 +383,14 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     await new Promise(r => setTimeout(r, 0))
     await new Promise(r => setTimeout(r, 0))
 
-    expect(wrapper.html(),
+    expect(tieMark(),
       '필터를 건 채 재조회하자 동점 표식이 사라졌다 — loadResults 가 서버에 필터를 ' +
       '넘기고 있다. 라운드 전체를 받아 표시 단계에서만 걸러야 한다(F-014)')
-      .toContain('#fef3c7')
+      .toContain(TIE)
 
     expect(errors.filter(e => FATAL.test(e)), '결과 패널 렌더 중 치명 오류').toEqual([])
+    // 첫 블록에만 있던 화면 글자 판정을 여기에도 건다 — 가장 복잡한 화면인데 빠져 있었다.
+    expect(FATAL.test(wrapper.text()), '결과 패널에 오류 문구가 그려졌다').toBe(false)
     wrapper.unmount()
   })
 })

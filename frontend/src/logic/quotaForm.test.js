@@ -92,6 +92,14 @@ describe('parseQuotaInput — F-013 의 본체', () => {
     expect(parseQuotaInput(undefined)).toBeNull()
   })
 
+  it('i64 를 넘는 값은 거부한다', () => {
+    // Number.isInteger(1e21) 은 참이다. 그대로 통과시키면 프론트가 "유효"라고 말한
+    // 값을 백엔드 serde 가 거부한다 — 관리자는 이유 없이 저장에 실패한다.
+    expect(parseQuotaInput('1e21')).toBeNull()
+    expect(parseQuotaInput('9007199254740993')).toBeNull()   // 2^53 초과
+    expect(parseQuotaInput('9007199254740991')).toBe(9007199254740991)
+  })
+
   it('숫자가 아닌 것은 null 이다', () => {
     expect(parseQuotaInput('abc')).toBeNull()
     expect(parseQuotaInput('5명')).toBeNull()

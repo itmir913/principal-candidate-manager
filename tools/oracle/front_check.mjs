@@ -69,27 +69,46 @@ const report = (name, bad, total, sample) => {
 }
 
 // ── 동점의 독립 정의 ─────────────────────────────────────────────
-// 명세로부터 직접 쓴다(구현을 베끼지 않는다):
+// 명세로부터 직접 쓴다:
 //   "같은 **라운드**의 같은 **범위**(대학 또는 모집단위) 안에서, **순위가 있는** 행 중
 //    같은 순위를 가진 것이 둘 이상이면 그 행들은 동점이다."
 //
-// 2026-09-21 수정 — 예전 정의는 라운드와 순위 없음(null)을 빠뜨리고 있었다.
-// 데이터에 그런 행이 없어 드러나지 않았을 뿐, 들어오는 순간 **오탐**을 낸다:
-//   - 순위 없는 행 둘(재오픈 직후)을 "같은 순위"로 묶어 동점 표식을 요구한다.
-//     미선발도 아닌데 서로 경합한 것처럼 보이게 된다.
-//   - 라운드가 다른 1위 둘을 같은 경쟁으로 묶는다.
-// 실제로 r3d01/r3d02(재오픈) 시나리오를 넣자마자 7건이 터졌고, 틀린 쪽은 구현이
-// 아니라 이 정의였다.
+// **쌍별(pairwise) 로 쓴다 — 구현과 자료구조·접근을 공유하지 않기 위해서다.**
+// 2026-09-21 3차 감사 지적(중-1): 앞선 판은 구현(`computeTieSet`)과 한 줄씩 대응하는
+// 같은 알고리즘이었다 — 같은 null-skip, 같은 `scope|round|rank` **문자열 키**, 같은
+// `length > 1`. 개별 변이는 잡히지만 **공유된 추론 오류는 잡히지 않는다**, 그리고
+// 이 정의가 실제로 그렇게 틀린 적이 있다(아래).
+//
+// 여기서는 키를 만들지 않고 **모든 쌍에 술어를 직접 적용**한다. 묶기(grouping)가 아니라
+// 관계(relation)로 쓰는 것이라, 한쪽의 실수가 다른 쪽에 같은 모양으로 재현되기 어렵다.
+// 시나리오 전체가 2213행이고 시나리오당 수십 행이라 O(n²) 은 문제되지 않는다.
+//
+// **과장하지 않는다**: 이 저장소의 키 형식(`scope-round-rank`, 뒤 둘이 숫자)에서
+// 실제 문자열 충돌을 만들어 보려 했으나 만들지 못했다 — 구분자 개수가 달라진다.
+// 따라서 "키 충돌을 막는다"가 아니라 **"다른 방식으로 유도해 공유 오류의 여지를
+// 줄인다"** 가 여기서 주장할 수 있는 전부다.
+//
+// 이 정의가 틀렸던 전력도 적어 둔다 — 예전에는 라운드와 순위 없음(null)을 빠뜨려,
+// 재오픈 시나리오(r3d01/r3d02)를 넣자마자 7건 오탐을 냈다. 틀린 쪽은 구현이 아니라
+// 이 정의였다.
 const tiedBy = (rows, scopeOf, rankOf) => {
-  const g = {}
-  for (const r of rows) {
-    const rank = rankOf(r)
-    if (rank == null) continue                       // 순위 없음은 경합 대상이 아니다
-    ;(g[`${scopeOf(r)}|${r.round_id}|${rank}`] ||= []).push(r)
+  /** 두 행이 "같은 경쟁에서 같은 순위"인가 — 명세 문장을 그대로 옮긴 술어. */
+  const tiedPair = (a, b) => {
+    const ra = rankOf(a), rb = rankOf(b)
+    if (ra == null || rb == null) return false     // 순위 없음은 경합 대상이 아니다
+    if (ra !== rb) return false
+    if (a.round_id !== b.round_id) return false    // 라운드가 다르면 다른 경쟁이다
+    return scopeOf(a) === scopeOf(b)               // 값끼리 직접 비교 — 키를 잇지 않는다
   }
+
   const out = new Set()
-  for (const rs of Object.values(g))
-    if (rs.length > 1) for (const r of rs) out.add(`${r.student_id}-${r.track_id}`)
+  for (let i = 0; i < rows.length; i++) {
+    for (let j = i + 1; j < rows.length; j++) {
+      if (!tiedPair(rows[i], rows[j])) continue
+      out.add(`${rows[i].student_id}-${rows[i].track_id}`)
+      out.add(`${rows[j].student_id}-${rows[j].track_id}`)
+    }
+  }
   return out
 }
 
@@ -292,7 +311,11 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
       const sorted = groupByUniv(rows, {})[rows[0].univ_name].results
       checks++
       for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i - 1].ranking > sorted[i].ranking) {
+        // JS 에서 `null > n` 은 null 을 0 으로 취급한다 — 순위 미계산 행이 섞이면
+        // 가짜 "정렬 역전"이 쏟아진다. 지금 데이터에는 혼합 그룹이 없지만
+        // (재오픈 직후 상태가 덤프에 들어오면 생긴다) 비교 자체를 안전하게 둔다.
+        const prevRank = sorted[i - 1].ranking, curRank = sorted[i].ranking
+        if (prevRank != null && curRank != null && prevRank > curRank) {
           bad++; sample ||= `${scn.name} 정렬 역전`
         }
         // 순위가 앞선 행의 총점이 더 낮으면(우선순위 그룹 무시) 표시 모순

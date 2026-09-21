@@ -34,7 +34,11 @@
 export function parseQuotaInput(raw) {
   const s = String(raw ?? '').trim()
   const n = s === '' ? NaN : Number(s)
-  return Number.isInteger(n) ? n : null
+  if (!Number.isInteger(n)) return null
+  // 백엔드 정원은 i64 다. `1e21` 같은 값은 `Number.isInteger` 를 통과하지만 serde 가
+  // 거부하므로, 프론트가 "유효"라고 말해 놓고 저장이 실패한다. 여기서 먼저 막는다.
+  if (!Number.isSafeInteger(n)) return null
+  return n
 }
 
 export function isQuotaValid(form, key) {

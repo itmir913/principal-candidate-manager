@@ -111,12 +111,18 @@ describe('규칙 8 — 본문 폰트는 text-base 이상', () => {
   const SMALL_INLINE = new RegExp([
     String.raw`font-size\s*:\s*(?:[0-9]|1[0-5])(?:\.\d+)?\s*px`,
     // `.9rem` 처럼 앞자리 0 을 생략한 표기(= 14.4px)도 잡는다. 처음엔 놓쳤다.
-    String.raw`font-size\s*:\s*(?:0?\.\d+|1(?:\.0+)?)\s*(?:rem|em)\b`,
+    // **1rem 은 16px 이라 위반이 아니다** — `1(?:\.0+)?rem` 까지 잡아 오탐을 냈었다.
+    String.raw`font-size\s*:\s*0?\.\d+\s*(?:rem|em)\b`,
     String.raw`font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?\s*pt`,
     String.raw`fontSize\s*(?::|=)\s*['"\`](?:[0-9]|1[0-5])(?:\.\d+)?px`,   // 객체 리터럴 + DOM 대입
-    // Tailwind 임의값: text-[13px] / text-[0.8rem]
+    // Tailwind 임의값: text-[13px] / text-[0.8rem] / text-[10pt]
     String.raw`text-\[(?:[0-9]|1[0-5])(?:\.\d+)?px\]`,
-    String.raw`text-\[(?:0?\.\d+|1(?:\.0+)?)(?:rem|em)\]`,
+    String.raw`text-\[0?\.\d+(?:rem|em)\]`,
+    String.raw`text-\[(?:[0-9]|1[01])(?:\.\d+)?pt\]`,
+    // CSS 단축 `font: 12px/1.4 ...` — font-size 없이 크기를 준다
+    String.raw`\bfont\s*:\s*(?:[a-z-]+\s+)*(?:[0-9]|1[0-5])(?:\.\d+)?px\b`,
+    // JS 로 직접 꽂는 경우
+    String.raw`setProperty\(\s*['"\`]font-size['"\`]\s*,\s*['"\`](?:[0-9]|1[0-5])(?:\.\d+)?px`,
   ].join('|'))
 
   const key = (h) => `${h.at.split(':')[0]}|${h.text}`
@@ -164,8 +170,10 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
   // `1e+05` 처럼 지수에 0 을 채운 표기까지 본다 — 앞서 `1e+5` 를 고치면서 이건 놓쳤다.
   const LITERAL = String.raw`100_?000|1[eE]\+?0*5|0\.00001|1[eE]-0*5`
   const PATTERNS = [
-    // 직접 나눗셈·곱셈
-    new RegExp(String.raw`[/*]\s*(?:${LITERAL})\b`),
+    // 직접 나눗셈·곱셈. 괄호로 감싼 것(`v / (100000)`)도 본다.
+    new RegExp(String.raw`[/*]\s*\(?\s*(?:${LITERAL})\b`),
+    // 함수 기본 인자로 숨기는 것 (`function f(scale = 100000)`)
+    new RegExp(String.raw`\w+\s*=\s*(?:${LITERAL})\s*[,)]`),
     // 거듭제곱 표기
     /[/*]\s*(?:Math\.pow\(\s*10\s*,\s*5\s*\)|\(?\s*10\s*\*\*\s*5\s*\)?)/,
     // 상수에 담아 두는 것 — 이름이 무엇이든 이 값을 프론트에 두지 않는다.
