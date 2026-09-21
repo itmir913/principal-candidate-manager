@@ -275,6 +275,16 @@ def evaluate(scn):
         for r in part:
             r["track_rank"] = ranks[(r["student_id"], r["track_id"])]
 
+    # 재오픈 — `reopen_round`(rounds.rs:264)가 `UPDATE results SET recommended=0,
+    # ranking=NULL` 을 한다. 재계산 전까지 대학 순위는 없다.
+    #
+    # track_rank 는 건드리지 않는다. 그 값은 results 에 저장되지 않고 `get_results`
+    # 쿼리가 매번 계산하므로(scoring.rs), 재오픈해도 그대로 나온다. 실제 덤프도
+    # ranking=NULL / track_rank=1,2,3 으로 나온다 — 한 행 안에 둘이 공존한다.
+    if scn.get("round_status") == "REOPENED":
+        for r in rows:
+            r["ranking"] = None
+
     for r in rows:
         r.pop("is_enrolled")
         r.pop("univ_id")

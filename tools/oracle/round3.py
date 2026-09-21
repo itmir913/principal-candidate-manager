@@ -7,6 +7,7 @@
   A. excluded / abandoned 혼재            → 과제 2 (A-2)
   B. 명세가 Err 로 규정한 입력(오류 경로)  → 과제 3
   C. COMPOSITE 점수표 폴백                → 과제 3
+  D. 재오픈(ranking = NULL)               → 2026-09-21 감사 지적
 
 generate.py 의 무작위 시나리오 뒤에 그대로 이어 붙는다. 무작위 스트림을 건드리지
 않으므로 기존 170개(s001~s170)는 바이트 단위로 동일하게 유지된다.
@@ -383,5 +384,49 @@ def _group_c():
     return out
 
 
+def _group_d():
+    """재오픈 — ranking 이 NULL 인 상태를 덤프에 들여놓는다.
+
+    `reopen_round`(rounds.rs:264)가 `UPDATE results SET recommended=0, ranking=NULL`
+    을 하는 유일한 지점이다. 재계산 전까지 결과 행은 순위 없이 남는다.
+
+    이 상태가 없던 동안 오라클 §3 의 "동점" 독립 정의는 순위 NULL 을 고려하지 않은 채
+    통과해 왔다(2026-09-21 감사 지적). 순위 없는 행 둘을 "같은 순위 = 동점"으로 묶으면
+    화면에 동점 표식이 잘못 뜬다 — 미선발도 아닌데 서로 경합한 것처럼 보인다.
+    """
+    out = []
+
+    # D-1. 전원 순위 없음. 동점 표식이 하나도 뜨지 않아야 한다.
+    out.append(_skeleton(
+        "r3d01_reopened_null_rank",
+        "CLOSED 에서 재오픈. 전 행 ranking=NULL — 동점 표식이 뜨면 안 된다.",
+        areas=[_area(1, "MANUAL", "SIMPLE", 10_000_000)],
+        tracks_spec=[(1, 1, 3, 0)],
+        students=[_student(i) for i in range(1, 4)],
+        apps=[_app(i, 1) for i in range(1, 4)],
+        numeric_table=[], category_map=[],
+        base_data=[_base(i, 1, None, v) for i, v in
+                   [(1, 10_000_000), (2, 9_000_000), (3, 8_000_000)]],
+        round_status="REOPENED",
+    ))
+
+    # D-2. 재오픈 직전에 동점이 있던 경우. 순위가 사라졌으므로 동점도 사라져야 한다 —
+    #      "총점이 같으니 동점"으로 되살리면 재계산 전 stale 표시가 된다.
+    out.append(_skeleton(
+        "r3d02_reopened_was_tied",
+        "동점 2쌍이 있던 라운드를 재오픈. 총점은 같아도 순위가 없으므로 동점 표식은 없다.",
+        areas=[_area(1, "MANUAL", "SIMPLE", 10_000_000)],
+        tracks_spec=[(1, 1, 2, 0), (2, 1, 2, 0)],
+        students=[_student(i) for i in range(1, 5)],
+        apps=[_app(1, 1), _app(2, 1), _app(3, 2), _app(4, 2)],
+        numeric_table=[], category_map=[],
+        base_data=[_base(i, 1, None, v) for i, v in
+                   [(1, 9_000_000), (2, 9_000_000), (3, 7_000_000), (4, 7_000_000)]],
+        round_status="REOPENED",
+    ))
+
+    return out
+
+
 def scenarios():
-    return _group_a() + _group_b() + _group_c()
+    return _group_a() + _group_b() + _group_c() + _group_d()

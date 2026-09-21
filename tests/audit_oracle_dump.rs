@@ -9,6 +9,9 @@
 //! 라운드 3 확장: 시나리오가 `excluded`/`abandoned`/`recommended` 플래그와
 //! `round_status` 를 담을 수 있다. 이 플래그들은 **실제 생명주기 순서대로** 적용한다 —
 //! CLOSED 에서 excluded·recommended 를 UPDATE 하고, FINALIZED 로 전이한 뒤 abandoned 를 UPDATE.
+//! `round_status: "REOPENED"` 는 CLOSED 에서 `reopen_round` 핸들러를 실제로 호출한다 —
+//! 그 경로가 `ranking = NULL` 을 만드는 유일한 지점이라(rounds.rs:264), 순위 없는 행을
+//! 프론트가 어떻게 다루는지 대조하려면 이 상태가 덤프에 있어야 한다.
 //! 트리거(`trg_prevent_update_closed_application`, `trg_require_all_decided_before_finalize`,
 //! `trg_prevent_update_finalized_result`)를 우회하지 않으므로, 여기서 만들어지는 상태는
 //! 전부 API 로 도달 가능한 상태다.
@@ -23,6 +26,7 @@ mod common;
 
 use axum::extract::{Path, Query, State};
 use common::{create_test_pool, make_state};
+use principal_candidate_manager::handlers::rounds::reopen_round;
 use principal_candidate_manager::handlers::scoring::{
     get_results, run_calculate_scores_on_conn, ResultQuery,
 };
@@ -229,6 +233,16 @@ async fn apply_lifecycle_flags(pool: &SqlitePool, scn: &Value) -> Result<(), Str
             .await
             .map_err(|e| format!("recommended UPDATE 실패: {e}"))?;
         }
+    }
+
+    // ②' 재오픈 — CLOSED -> OPEN. 재계산 전까지 ranking 이 NULL 이 된다.
+    //    핸들러를 그대로 부른다(직접 UPDATE 하지 않는다) — 이 상태가 API 로 도달
+    //    가능함을 함께 확인하기 위해서다.
+    if opt_str(scn, "round_status") == Some("REOPENED") {
+        reopen_round(State(make_state(pool.clone())), Path(1i64))
+            .await
+            .map_err(|(_, e)| format!("재오픈 실패: {e}"))?;
+        return Ok(());
     }
 
     if opt_str(scn, "round_status") != Some("FINALIZED") {

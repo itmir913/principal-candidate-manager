@@ -17,6 +17,12 @@
  *                                어긋나지 않는가"를 독립 정의로 확인하므로 그대로 둔다
  *   totalMaxScore              : frontend/src/components/admin/AreasTab.vue:902
  *
+ * **덤프가 아직 덮지 못하는 축**(정직하게 적어 둔다):
+ *   - 라운드는 전 시나리오가 `round_id = 1` 이다. 덤프 하네스(tests/audit_oracle_dump.rs)가
+ *     라운드 1 을 하드코딩하기 때문이다. 따라서 "라운드가 다르면 동점이 아니다"는
+ *     **여기서는 검증되지 않는다** — 그쪽은 frontend/src/logic/rankResults.test.js 가 맡는다.
+ *   - 순위 없음(ranking = NULL)은 2026-09-21 에 재오픈 시나리오(r3d01/r3d02)로 덮었다.
+ *
  * 주의: 여기의 `want*` 집합은 **독립 정의**다. 프론트 함수를 import 한다고 해서
  * 이것까지 프론트에서 가져오면 양쪽이 같은 버그를 공유해 대조가 무의미해진다.
  *
@@ -58,6 +64,31 @@ const report = (name, bad, total, sample) => {
   const mark = bad === 0 ? 'OK  ' : 'FAIL'
   console.log(`[${mark}] ${name}: 검사 ${total}건 / 불일치 ${bad}건` + (sample ? `\n        예: ${sample}` : ''))
   if (bad) fails++
+}
+
+// ── 동점의 독립 정의 ─────────────────────────────────────────────
+// 명세로부터 직접 쓴다(구현을 베끼지 않는다):
+//   "같은 **라운드**의 같은 **범위**(대학 또는 모집단위) 안에서, **순위가 있는** 행 중
+//    같은 순위를 가진 것이 둘 이상이면 그 행들은 동점이다."
+//
+// 2026-09-21 수정 — 예전 정의는 라운드와 순위 없음(null)을 빠뜨리고 있었다.
+// 데이터에 그런 행이 없어 드러나지 않았을 뿐, 들어오는 순간 **오탐**을 낸다:
+//   - 순위 없는 행 둘(재오픈 직후)을 "같은 순위"로 묶어 동점 표식을 요구한다.
+//     미선발도 아닌데 서로 경합한 것처럼 보이게 된다.
+//   - 라운드가 다른 1위 둘을 같은 경쟁으로 묶는다.
+// 실제로 r3d01/r3d02(재오픈) 시나리오를 넣자마자 7건이 터졌고, 틀린 쪽은 구현이
+// 아니라 이 정의였다.
+const tiedBy = (rows, scopeOf, rankOf) => {
+  const g = {}
+  for (const r of rows) {
+    const rank = rankOf(r)
+    if (rank == null) continue                       // 순위 없음은 경합 대상이 아니다
+    ;(g[`${scopeOf(r)}|${r.round_id}|${rank}`] ||= []).push(r)
+  }
+  const out = new Set()
+  for (const rs of Object.values(g))
+    if (rs.length > 1) for (const r of rs) out.add(`${r.student_id}-${r.track_id}`)
+  return out
 }
 
 // ── 1. formatScore 무손실성 ──────────────────────────────────────
@@ -151,25 +182,12 @@ function exactDecimal(raw) {
 
     // --- RoundsTab 이 실제로 쓰는 함수 (복사본 아님)
     const setTrack = computeTieSet(results, 'track')
-    // 독립 정의: 같은 트랙 안에서 track_rank 가 같은 행이 2개 이상
-    const wantTrack = new Set()
-    {
-      const g = {}
-      for (const r of results) (g[`${r.track_id}|${r.track_rank}`] ||= []).push(r)
-      for (const rs of Object.values(g))
-        if (rs.length > 1) for (const r of rs) wantTrack.add(`${r.student_id}-${r.track_id}`)
-    }
+    const wantTrack = tiedBy(results, r => r.track_id, r => r.track_rank)
     for (const k of wantTrack) if (!setTrack.has(k)) badTrack++
     for (const k of setTrack) if (!wantTrack.has(k)) badTrack++
 
     const setUniv = computeTieSet(results, 'univ')
-    const wantUniv = new Set()
-    {
-      const g = {}
-      for (const r of results) (g[`${r.univ_name}|${r.ranking}`] ||= []).push(r)
-      for (const rs of Object.values(g))
-        if (rs.length > 1) for (const r of rs) wantUniv.add(`${r.student_id}-${r.track_id}`)
-    }
+    const wantUniv = tiedBy(results, r => r.univ_name, r => r.ranking)
     for (const k of wantUniv) if (!setUniv.has(k)) { badUniv++; sampleU ||= `${scn.name} ${k}` }
     for (const k of setUniv) if (!wantUniv.has(k)) { badUniv++; sampleU ||= `${scn.name} ${k}` }
   }
@@ -198,13 +216,7 @@ function exactDecimal(raw) {
       univ_name: univOf[trackOf[r.track_id].univ_id].univ_name,
     }))
     // 진실값: 대학 전체에서 같은 ranking 을 가진 행이 2개 이상이면 동점이다.
-    const tieAll = new Set()
-    {
-      const g = {}
-      for (const r of all) (g[`${r.univ_name}|${r.ranking}`] ||= []).push(r)
-      for (const rs of Object.values(g))
-        if (rs.length > 1) for (const r of rs) tieAll.add(`${r.student_id}-${r.track_id}`)
-    }
+    const tieAll = tiedBy(all, r => r.univ_name, r => r.ranking)
     // 컴포넌트 모사: tieSet 은 results(전체)로 계산하고 표시만 필터한다.
     const shownAll = computeTieSet(all, 'univ')
     for (const t of src.tracks) {
