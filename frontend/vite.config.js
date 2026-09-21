@@ -15,9 +15,10 @@ export default defineConfig({
       },
     },
   },
-  // vitest — 순수 로직(점수 표기·오류 문자열·라벨) 전용이라 DOM 이 필요 없다.
-  // 컴포넌트 렌더 테스트는 의도적으로 도입하지 않는다(화면 확인은 사람 몫 —
-  // src/docs/13_frontend_pitfalls.md).
+  // vitest — 기본은 DOM 없는 node 환경(순수 로직·소스 규칙 검사).
+  // 스모크 렌더(tests/smoke-render.test.js)만 파일 첫 줄의
+  // `// @vitest-environment jsdom` 으로 jsdom 을 쓴다. 외관은 단언하지 않고
+  // "화면이 열리는가"만 본다 — src/docs/13_frontend_pitfalls.md §4.
   test: {
     environment: 'node',
     include: ['src/**/*.test.js', 'tests/**/*.test.js'],
