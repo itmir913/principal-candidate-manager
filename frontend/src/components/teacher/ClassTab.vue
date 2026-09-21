@@ -86,11 +86,13 @@
               <td class="text-base font-medium" style="padding: 13px 20px; color: #1e293b;">{{ s.name }}</td>
               <td style="padding: 13px 20px;">
                 <div v-if="getStudentApps(s.id).length === 0" class="text-base" style="color: #cbd5e1;">-</div>
+                <!-- 이 목록은 `teacherGetApplications()` 를 인자 없이 불러 **전 라운드**를
+                     담는다. applications 의 PK 는 (student_id, track_id, round_id) 라
+                     같은 모집단위에 1차·2차로 지원하면 track_id 만으로는 키가 중복된다.
+                     주석은 반드시 **여는 태그 밖**에 둔다 — 속성 사이에 넣으면 잘못된
+                     마크업이라 글자가 화면에 그대로 새어 나온다(실제로 그랬다). -->
                 <div
                   v-for="app in getStudentApps(s.id)"
-                  <!-- 이 목록은 `teacherGetApplications()` 를 인자 없이 불러 **전 라운드**를
-                       담는다. applications 의 PK 는 (student_id, track_id, round_id) 라
-                       같은 모집단위에 1차·2차로 지원하면 track_id 만으로는 키가 중복된다. -->
                   :key="`${app.round_id}-${app.track_id}`"
                   class="flex items-center gap-2 mb-1.5"
                 >

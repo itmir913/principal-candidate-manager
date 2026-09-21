@@ -337,6 +337,15 @@ describe('스모크 렌더', () => {
     expect(at, `${path} 화면에 null/undefined/NaN 이 그대로 그려졌다: ` +
       `…${shown.slice(Math.max(0, at - 40), at + 40)}…`).toBe(-1)
 
+    // **템플릿 문법이 글자로 새어 나오는지.** 마크업이 잘못되면 Vue 가 속성을 해석하지
+    // 못하고 그 텍스트를 그대로 그린다. 실제로 HTML 주석을 **여는 태그 안**(속성 사이)에
+    // 넣었다가 `:key="${app.round_id}…"` 가 표 칸에 찍혔는데, 전 스위트가 초록이었다
+    // (2026-09-22). 오류도 아니고 null 도 아니라 위 검사 둘 다 못 본다.
+    const TEMPLATE_LEAK = /(?::key=|v-for=|v-if=|@click=|\{\{)/
+    const tAt = shown.search(TEMPLATE_LEAK)
+    expect(tAt, `${path} 화면에 템플릿 문법이 그대로 그려졌다 — 마크업이 깨졌다: ` +
+      `…${shown.slice(Math.max(0, tAt - 40), tAt + 40)}…`).toBe(-1)
+
     expect(wrapper.html()).toBeTruthy()
 
     // **픽스처가 화면에 닿았다는 증거.** 없으면 픽스처가 조용히 안 맞게 돼도
