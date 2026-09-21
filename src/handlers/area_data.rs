@@ -962,16 +962,27 @@ pub async fn base_data_import(
             };
             // tx 커넥션으로 조회 — pool 조회는 tx 보유 중 별도 커넥션을 점유하고
             // 행마다 다른 스냅샷을 볼 수 있다
-            let sid: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM students WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
+            let sid: Option<(i64, String)> = sqlx::query_as(
+                "SELECT id, name FROM students WHERE grade = ? AND class_no = ? AND seq_no = ? AND is_enrolled = 1",
             )
             .bind(grade).bind(class_no).bind(seq_no)
             .fetch_optional(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             match sid {
-                Some(v) => {
+                Some((v, db_name)) => {
                     student_id = v;
                     student_label = format!("{}학년 {}반 {}번", grade, class_no, seq_no);
+                    // 매칭은 학년·반·번호로 한다. 이름은 **대조만** 하고 매칭에 쓰지 않는다 —
+                    // 행이 한 칸 밀린 파일이 조용히 남의 데이터로 들어가는 것을 알린다.
+                    // error 가 아니라 warning 인 이유: 개명·공백 표기 차이로 전체 거부하면
+                    // 관리자가 매 업로드마다 원본을 손봐야 한다. 외부 석차연명부가 이미
+                    // 같은 판단을 하고 있다(external_import.rs).
+                    if db_name.trim() != name_val.trim() {
+                        warnings.push(format!(
+                            "{}행: {}학년 {}반 {}번 이름 불일치 — 가져오기 완료됨 (파일: '{}', DB: '{}')",
+                            row_num, grade, class_no, seq_no, name_val, db_name
+                        ));
+                    }
                 }
                 None => {
                     errors.push(format!("{}행: {}학년 {}반 {}번 — 등록된 재학생을 찾을 수 없습니다", row_num, grade, class_no, seq_no));
@@ -991,16 +1002,23 @@ pub async fn base_data_import(
             }
             // is_enrolled=0 필터 필수 — 재학생 student_code가 섞인 파일이
             // 재학생 base_data를 조용히 덮어쓰는 것을 차단 (student_type 정책)
-            let sid: Option<i64> = sqlx::query_scalar(
-                "SELECT id FROM students WHERE student_code = ? AND is_enrolled = 0",
+            let sid: Option<(i64, String)> = sqlx::query_as(
+                "SELECT id, name FROM students WHERE student_code = ? AND is_enrolled = 0",
             )
             .bind(student_code)
             .fetch_optional(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             match sid {
-                Some(v) => {
+                Some((v, db_name)) => {
                     student_id = v;
                     student_label = format!("학생코드 '{}'", student_code);
+                    // 매칭은 학생코드로 한다. 이름은 대조만 한다 — 재학생 갈래와 같은 이유.
+                    if db_name.trim() != name_val.trim() {
+                        warnings.push(format!(
+                            "{}행: 학생코드 '{}' 이름 불일치 — 가져오기 완료됨 (파일: '{}', DB: '{}')",
+                            row_num, student_code, name_val, db_name
+                        ));
+                    }
                 }
                 None => {
                     errors.push(format!("{}행: 학생코드 '{}'에 해당하는 졸업생이 없습니다 (졸업생을 먼저 등록하세요)", row_num, student_code));

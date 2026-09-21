@@ -35,6 +35,10 @@ fn graduated_query() -> Query<StudentTypeQuery> {
     Query(StudentTypeQuery { student_type: "graduated".to_string() })
 }
 
+fn enrolled_query() -> Query<StudentTypeQuery> {
+    Query(StudentTypeQuery { student_type: "enrolled".to_string() })
+}
+
 fn default_page_query() -> Query<BaseDataPageQuery> {
     // insert_student은 is_enrolled=0(졸업생)을 삽입하므로 student_type은 "graduated"
     Query(BaseDataPageQuery { page: 1, per_page: 50, student_type: "graduated".to_string() })
@@ -1832,4 +1836,111 @@ async fn base_data_list_gates_univ_track_names_by_composite_scope() {
     assert_eq!(comp_page.rows.len(), 1);
     assert_eq!(comp_page.rows[0].univ_name, Some("마바대".to_string()));
     assert_eq!(comp_page.rows[0].track_name, Some("기계과".to_string()));
+}
+
+// ── 이름 불일치는 warning (매칭은 학년·반·번호 / 학생코드로 한다) ──
+//
+// 기초데이터 파일의 `이름` 열은 사람이 눈으로 확인하라고 있는 것인데, 기계는 비었는지만
+// 보고 버리고 있었다. 그래서 **행이 한 칸 밀린 파일**이 들어오면 각 행의 값이 남의
+// 학생에게 조용히 붙었다. 외부 석차연명부(external_import.rs)는 이미 같은 상황을
+// warning 으로 알리고 있었는데, 기초데이터 경로에만 빠져 있었다.
+//
+// error 가 아니라 warning 인 이유: 개명·공백 표기 차이로 전체 거부하면 관리자가 매
+// 업로드마다 원본을 손봐야 한다. 매칭 기준을 이름으로 바꾸지도 않는다 — 동명이인이 있다.
+
+async fn insert_enrolled(pool: &sqlx::SqlitePool, code: &str, name: &str, g: i64, c: i64, s: i64) {
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES (?, ?, ?, ?, ?, 1)",
+    )
+    .bind(code).bind(name).bind(g).bind(c).bind(s)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn base_data_import_enrolled_name_mismatch_warns_but_imports() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled(&pool, "S001", "홍길동", 3, 1, 5).await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    // 위치는 맞고 이름만 다르다 — 행이 밀린 파일의 전형적인 모습이다.
+    let csv = "학년,반,번호,이름,값\n3,1,5,이순신,4.5\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), enrolled_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "이름 불일치는 error 가 아니다: {:?}", result.errors);
+    assert_eq!(result.rows, 1, "가져오기는 완료돼야 한다");
+    assert_eq!(result.warnings.len(), 1, "warnings: {:?}", result.warnings);
+    let w = &result.warnings[0];
+    assert!(w.contains("이순신") && w.contains("홍길동"),
+            "파일 이름과 DB 이름을 둘 다 보여야 관리자가 판단할 수 있다: {w}");
+    assert!(w.contains("3학년 1반 5번"), "어느 행인지 짚어야 한다: {w}");
+
+    // 값은 **위치로 찾은 학생**에게 붙는다 — 매칭 기준은 바뀌지 않았다.
+    let (sid, value): (i64, String) =
+        sqlx::query_as("SELECT student_id, value FROM base_data WHERE area_id = ?")
+            .bind(aid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let matched: String = sqlx::query_scalar("SELECT name FROM students WHERE id = ?")
+        .bind(sid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!((matched.as_str(), value.as_str()), ("홍길동", "450000"));
+}
+
+#[tokio::test]
+async fn base_data_import_enrolled_matching_name_is_silent() {
+    // 불일치일 때만 알려야 한다 — 매번 경고가 뜨면 아무도 안 읽는다.
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled(&pool, "S001", "홍길동", 3, 1, 5).await;
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학년,반,번호,이름,값\n3,1,5,홍길동,4.5\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), enrolled_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.warnings.is_empty(), "이름이 같은데 경고가 났다: {:?}", result.warnings);
+}
+
+#[tokio::test]
+async fn base_data_import_graduated_name_mismatch_warns_but_imports() {
+    let pool = common::create_test_pool().await;
+    let sid = insert_student(&pool, "G001").await;   // 이름 '테스트'
+    let aid = insert_area(&pool, CalcType::Manual, None, None, 0).await;
+    let state = common::make_state(pool.clone());
+
+    let csv = "학생코드,이름,값\nG001,이순신,4.5\n";
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), graduated_query(), build_multipart(csv).await)
+            .await
+            .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+    assert_eq!(result.rows, 1);
+    assert_eq!(result.warnings.len(), 1, "warnings: {:?}", result.warnings);
+    let w = &result.warnings[0];
+    assert!(w.contains("이순신") && w.contains("테스트") && w.contains("G001"),
+            "파일 이름·DB 이름·학생코드를 보여야 한다: {w}");
+
+    // 매칭은 학생코드로 — 값은 G001 에게 붙는다.
+    let owner: i64 = sqlx::query_scalar("SELECT student_id FROM base_data WHERE area_id = ?")
+        .bind(aid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(owner, sid);
 }
