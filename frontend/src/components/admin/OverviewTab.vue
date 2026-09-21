@@ -302,12 +302,16 @@
             <div class="overflow-x-auto">
             <!-- 위 표와 같은 이유로 최소 너비를 준다. 대학 머리글 행이 colspan=4 라
                  열 너비는 colgroup 으로 고정해야 흐트러지지 않는다. -->
-            <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 560px;">
+            <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 600px;">
               <colgroup>
-                <col style="width: 48px;">    <!-- 정원 표식(∞ 등) -->
+                <!-- 88px = 좌우 padding 48px(20+28) + MiniPie 40px.
+                     `table-layout: fixed` 에서 col 너비는 **border-box** 라 padding 을
+                     빼고 나면 content 폭이 남는다. 48px 로 두면 content 가 0px 이 되어
+                     파이가 셀 밖으로 넘쳐 옆 열 글자에 닿는다(감사 M1). -->
+                <col style="width: 88px;">    <!-- 정원 파이(MiniPie 40px) -->
                 <col>                          <!-- 모집단위명: 남는 폭을 가진다 -->
                 <col style="width: 150px;">   <!-- 지원자 / 정원 -->
-                <col style="width: 120px;">   <!-- 현황 -->
+                <col style="width: 130px;">   <!-- 현황: "105자리 남음" 이 줄바꿈되지 않게 -->
               </colgroup>
               <thead>
                 <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">

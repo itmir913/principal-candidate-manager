@@ -809,7 +809,6 @@ const excludeReasonDraft = ref('')
 const showUndecidedModal = ref(false)
 const undecidedList      = ref([])
 
-function rowKey(r) { return `${r.student_id}-${r.track_id}` }
 
 const subTabs = [
   { key: 'apps',    label: '지원 현황' },

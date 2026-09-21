@@ -52,7 +52,7 @@ UI·문서에서 사용하는 **"미선발"**은 DB 컬럼 `applications.exclude
          └──────────────┘
 ```
 
-FINALIZED는 비가역이다. `trg_prevent_update_finalized_result` 트리거(`migrations/v1/009-results.sql:27`)가  
+FINALIZED는 비가역이다. `trg_prevent_update_finalized_result` 트리거(`migrations/v1/009-results.sql`)가  
 FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들러 우회(직접 SQL)로도 되돌릴 수 없다.
 
 ### 1.2 상태×행위 매트릭스
@@ -91,13 +91,13 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 
 | 방어선 | 위치 | 차단 대상 |
 |---|---|---|
-| `idx_one_active_round` | `003-rounds.sql:19` | 비-FINALIZED 라운드 2개 이상 INSERT |
-| `trg_require_all_decided_before_finalize` | `003-rounds.sql:26` | 미결정 지원 존재 시 CLOSED→FINALIZED 전환 |
-| `trg_prevent_update_finalized_result` | `009-results.sql:27` | FINALIZED 라운드 results UPDATE |
-| `trg_prevent_delete_closed_result` | `009-results.sql:36` | CLOSED/FINALIZED 라운드 results DELETE |
-| `trg_prevent_exclude_recommended` | `008-applications.sql:76` | 추천 확정 행에 excluded=1 설정 |
-| `trg_prevent_delete_closed_application` | `008-applications.sql:23` | CLOSED/FINALIZED 라운드 applications DELETE |
-| `trg_prevent_update_closed_application` | `v2/001-department-editable.sql:18` | CLOSED 라운드: excluded/excluded_reason/department_name 외 수정. FINALIZED: abandoned 0→1 과 department_name 외 수정<br>**스키마 v2에서 완화** — v1 정의(`008-applications.sql:32`)는 학과명 수정도 막았다 (이슈 #32) |
+| `idx_one_active_round` | `003-rounds.sql` | 비-FINALIZED 라운드 2개 이상 INSERT |
+| `trg_require_all_decided_before_finalize` | `003-rounds.sql` | 미결정 지원 존재 시 CLOSED→FINALIZED 전환 |
+| `trg_prevent_update_finalized_result` | `009-results.sql` | FINALIZED 라운드 results UPDATE |
+| `trg_prevent_delete_closed_result` | `009-results.sql` | CLOSED/FINALIZED 라운드 results DELETE |
+| `trg_prevent_exclude_recommended` | `008-applications.sql` | 추천 확정 행에 excluded=1 설정 |
+| `trg_prevent_delete_closed_application` | `008-applications.sql` | CLOSED/FINALIZED 라운드 applications DELETE |
+| `trg_prevent_update_closed_application` | `v2/001-department-editable.sql` | CLOSED 라운드: excluded/excluded_reason/department_name 외 수정. FINALIZED: abandoned 0→1 과 department_name 외 수정<br>**스키마 v2에서 완화** — v1 정의(`008-applications.sql`)는 학과명 수정도 막았다 (이슈 #32) |
 
 ### 1.3 라운드 열기 (`POST /rounds/open`)
 
@@ -105,7 +105,7 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 확인과 삽입을 원자적으로 처리한다 (`src/handlers/rounds.rs::open_round`). RETURNING id가 None이면 409.  
 FINALIZED 라운드만 있으면 허용 — FINALIZED 라운드는 "진행 중"이 아니다.
 
-DB 방어선: `idx_one_active_round`(`003-rounds.sql:19`) — `status != 'FINALIZED'` 조건 부분 유니크 인덱스.  
+DB 방어선: `idx_one_active_round`(`003-rounds.sql`) — `status != 'FINALIZED'` 조건 부분 유니크 인덱스.  
 핸들러 우회 경로에서도 OPEN·CLOSED 라운드 동시 2개를 차단한다.
 
 ### 1.4 라운드 종료 (`PUT /rounds/:id/close`)
@@ -156,7 +156,7 @@ rounds.status를 OPEN으로 먼저 변경한 후 이 UPDATE를 실행하므로 `
 5. 위반 있으면 422 + `{"error":..., "track_violations":[...], "univ_violations":[...]}` JSON.
 6. `UPDATE rounds SET status='FINALIZED', finalized_at=? WHERE id=? AND status='CLOSED'` (`rounds.rs::finalize_round`).
 
-DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —  
+DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql`) —  
 핸들러 우회 직접 SQL에서도 미결정이 있으면 ABORT.
 
 ---
@@ -167,11 +167,11 @@ DB 방어선: `trg_require_all_decided_before_finalize`(`003-rounds.sql:26`) —
 
 모든 점수는 DB에 **×100000 정수**로 저장한다. `Score(i64)` newtype이 이 불변식을 컴파일 타임에 강제한다 (`src/score.rs`):
 
-- **DB 저장**: `sqlx::Encode` → `i64` 그대로 SQLite INTEGER (`score.rs:53`).
-- **DB 조회**: `sqlx::Decode` → `i64`를 `Score(i64)`로 래핑 (`score.rs:45`).
-- **JSON 직렬화**: `self.0 as f64 / 100_000.0` — 예: 내부값 `3050000` → JSON `30.5` (`score.rs:18`).
-- **JSON 역직렬화**: `(f * 100_000.0).round() as i64` — 예: JSON `30.5` → `3050000` (`score.rs:35`).  
-  비유한 값·±10억 초과는 즉시 오류 (`score.rs:29, 33`).
+- **DB 저장**: `sqlx::Encode` → `i64` 그대로 SQLite INTEGER (`score.rs`).
+- **DB 조회**: `sqlx::Decode` → `i64`를 `Score(i64)`로 래핑 (`score.rs`).
+- **JSON 직렬화**: `self.0 as f64 / 100_000.0` — 예: 내부값 `3050000` → JSON `30.5` (`score.rs`).
+- **JSON 역직렬화**: `(f * 100_000.0).round() as i64` — 예: JSON `30.5` → `3050000` (`score.rs`).  
+  비유한 값·±10억 초과는 즉시 오류 (`score.rs`).
 
 **두 진입점의 규칙이 다르다 (S-07)**: ×100000 정수로 들어오는 경로는 둘이고 거부 기준이 같지 않다.
 
@@ -187,8 +187,8 @@ JSON으로 `Score`를 받는 필드는 현재 `CreateAreaBody.max_score` 하나�
 두 경로를 같게 만들지 않은 이유는 없다 — 규칙이 정해지지 않았을 뿐이다.
 합칠 때는 `parse_display_value` 쪽(6자리 거부)을 기준으로 삼는다.
 
-`Score: Ord`가 구현되어 정렬·비교 시 부동소수점 오차 없이 정수 비교한다 (`score.rs:3`).  
-`Score: Add + Sum`은 내부적으로 `checked_add` — overflow 시 panic (Fail-Fast, `score.rs:65, 71`).
+`Score: Ord`가 구현되어 정렬·비교 시 부동소수점 오차 없이 정수 비교한다 (`score.rs`).  
+`Score: Add + Sum`은 내부적으로 `checked_add` — overflow 시 panic (Fail-Fast, `score.rs`).
 
 프론트엔드는 백엔드가 반환한 JSON 값을 그대로 표시한다. ÷100000 직접 계산 금지.
 
@@ -503,7 +503,7 @@ WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
 `exclude_application`도 `BEGIN IMMEDIATE`: `recommended` 상태 조회 후 `excluded=1` 설정까지  
 원자적으로 처리해 `recommend_result`와 race 시 모순 상태(recommended=1 AND excluded=1)를 방지한다.
 
-DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql:76`): 추천 확정 후 동일 지원을  
+DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql`): 추천 확정 후 동일 지원을  
 미선발 처리하는 경로를 DB 수준에서도 차단한다.
 
 ---
@@ -624,7 +624,7 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql:76`): 추천 �
 
 ### 6.2 사유 필수 — DB CHECK 강제
 
-`migrations/v1/008-applications.sql:17`:
+`migrations/v1/008-applications.sql`:
 ```sql
 CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <> ''))
 ```
@@ -636,7 +636,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 
 | 경로 | 앱 레벨 가드 | DB 레벨 가드 |
 |------|-------------|-------------|
-| 추천된 지원을 미선발하려는 경우 | `recommended=1`이면 409 (`applications.rs::exclude_application`) | `trg_prevent_exclude_recommended` (`applications.sql:76`) |
+| 추천된 지원을 미선발하려는 경우 | `recommended=1`이면 409 (`applications.rs::exclude_application`) | `trg_prevent_exclude_recommended` (`applications.sql`) |
 | 미선발된 지원을 추천하려는 경우 | `excluded=1`이면 409 (`scoring.rs::recommend_result`) | — |
 
 ### 6.4 미선발 처리 (`applications.rs::exclude_application`)
@@ -708,7 +708,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 | 레이어 | 구현 위치 | 역할 |
 |--------|----------|------|
 | 앱 레벨 | `finalize_round` handler | 미결정 명단을 JSON으로 반환 — 관리자에게 누가 미결정인지 알림 |
-| DB 레벨 | `trg_require_all_decided_before_finalize` (`003-rounds.sql:26`) | 직접 SQL 등 핸들러 우회 경로 차단 |
+| DB 레벨 | `trg_require_all_decided_before_finalize` (`003-rounds.sql`) | 직접 SQL 등 핸들러 우회 경로 차단 |
 
 트리거만으로는 부족한 이유: 트리거는 `RAISE(ABORT, '문자열')` 만 반환할 수 있어  
 어떤 지원자가 미결정인지 명단을 반환할 수 없다. 앱 레벨에서 명단을 구성해 반환해야 관리자가 조치를 취할 수 있다.
@@ -833,7 +833,7 @@ CLOSED 전용) 전례로 삼을 것이 없어 여기 적어 둔다. 학과명은
 
 ## 확인 필요
 
-1. **`trg_prevent_delete_closed_application` FINALIZED 라운드 포함** (`applications.sql:23`):  
+1. **`trg_prevent_delete_closed_application` FINALIZED 라운드 포함** (`applications.sql`):  
    트리거 조건이 `IN ('CLOSED', 'FINALIZED')`로 FINALIZED 라운드 applications 삭제도 차단한다.  
    현재 FINALIZED 라운드에서 applications를 삭제하는 정상 경로가 없다고 가정한 것으로 보인다.  
    향후 "과거 라운드 데이터 정리" 기능을 추가할 경우 이 트리거가 막는다. 의도하신 것이 맞습니까?

@@ -13,7 +13,7 @@
 
 **결정**: 진행 중(비-FINALIZED) 라운드는 전교에서 최대 1개.
 
-**구현**: `migrations/v1/003-rounds.sql:19-20`
+**구현**: `migrations/v1/003-rounds.sql`
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_round
     ON rounds((1)) WHERE status != 'FINALIZED';

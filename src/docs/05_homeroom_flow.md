@@ -93,7 +93,7 @@
 - `teacher_editable=true` 전형요소는 **모두** 값을 제출해야 한다. 하나라도 누락되면 422 Unprocessable Entity 반환.
 - `values`가 비어 있는 항목은 미제출로 간주해 위 422 검증에 걸린다.
 
-**구현** (`applications.rs:434`): `values`가 1건 이상인 area_id를 `submitted_area_ids`로 수집한 뒤, `teacher_editable=true`인 모든 전형요소가 포함되어 있는지 확인한다. 누락 시 422.
+**구현** (`applications.rs`): `values`가 1건 이상인 area_id를 `submitted_area_ids`로 수집한 뒤, `teacher_editable=true`인 모든 전형요소가 포함되어 있는지 확인한다. 누락 시 422.
 
 ---
 

@@ -123,14 +123,14 @@ audit log가 함께 기록되는 핸들러(쓰기 2건)는 위 "트랜잭션을 
 
 | 트리거 | 파일 | 차단 대상 |
 |--------|------|----------|
-| `idx_one_active_round` (UNIQUE 인덱스) | `003-rounds.sql:19` | 비-FINALIZED 라운드 2개 이상 INSERT |
-| `trg_require_all_decided_before_finalize` | `003-rounds.sql:26` | 미결정 지원(`excluded=0 AND COALESCE(recommended,0)=0`) 존재 시 CLOSED→FINALIZED 전환 |
-| `trg_prevent_update_finalized_result` | `009-results.sql:28` | FINALIZED 라운드 `results` 행 UPDATE |
-| `trg_prevent_delete_closed_result` | `009-results.sql:36` | CLOSED/FINALIZED 라운드 `results` 행 DELETE |
-| `trg_prevent_delete_closed_application` | `008-applications.sql:23` | CLOSED/FINALIZED 라운드 `applications` 행 DELETE |
-| `trg_prevent_update_closed_application` | `v2/001-department-editable.sql:18` | CLOSED 라운드: `excluded`/`excluded_reason`/`department_name` 외 수정. FINALIZED: `abandoned` 0→1 과 `department_name` 외 수정 (스키마 v2, 이슈 #32) |
-| `trg_prevent_exclude_recommended` | `008-applications.sql:76` | `recommended=1`인 지원에 대해 `excluded` 0→1 설정 |
-| `trg_prevent_base_data_delete_for_applied` | `008-applications.sql:60` | CLOSED 라운드 지원자의 `base_data` 삭제 (UPSERT는 허용) |
+| `idx_one_active_round` (UNIQUE 인덱스) | `003-rounds.sql` | 비-FINALIZED 라운드 2개 이상 INSERT |
+| `trg_require_all_decided_before_finalize` | `003-rounds.sql` | 미결정 지원(`excluded=0 AND COALESCE(recommended,0)=0`) 존재 시 CLOSED→FINALIZED 전환 |
+| `trg_prevent_update_finalized_result` | `009-results.sql` | FINALIZED 라운드 `results` 행 UPDATE |
+| `trg_prevent_delete_closed_result` | `009-results.sql` | CLOSED/FINALIZED 라운드 `results` 행 DELETE |
+| `trg_prevent_delete_closed_application` | `008-applications.sql` | CLOSED/FINALIZED 라운드 `applications` 행 DELETE |
+| `trg_prevent_update_closed_application` | `v2/001-department-editable.sql` | CLOSED 라운드: `excluded`/`excluded_reason`/`department_name` 외 수정. FINALIZED: `abandoned` 0→1 과 `department_name` 외 수정 (스키마 v2, 이슈 #32) |
+| `trg_prevent_exclude_recommended` | `008-applications.sql` | `recommended=1`인 지원에 대해 `excluded` 0→1 설정 |
+| `trg_prevent_base_data_delete_for_applied` | `008-applications.sql` | CLOSED 라운드 지원자의 `base_data` 삭제 (UPSERT는 허용) |
 
 **앱 레벨 가드와 이중 방어하는 이유**:  
 앱 레벨에서는 오류 명단(누가 미결정인지, 어느 항목이 충돌인지)을 JSON으로 반환할 수 있다.  

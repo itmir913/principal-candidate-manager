@@ -51,8 +51,8 @@
     <!-- 라운드별 결과 카드 -->
     <div v-else class="flex flex-col gap-6">
       <!-- 순위 보기 토글 -->
-      <!-- flex-wrap 이 없으면 좁은 폭에서 세 버튼이 한 줄을 두고 다퉈 글자가 세로로
-           쌓인다(375px 실측: 버튼 높이 182px, 폭 44px). -->
+      <!-- flex-wrap 이 없으면 좁은 폭에서 버튼들이 한 줄을 두고 다퉈 글자가 세로로
+           쌓인다. (CSV 버튼은 `v-if` 라 항상 셋은 아니다.) -->
       <div v-if="results.length > 0" class="flex flex-wrap gap-2">
         <button
           class="text-base font-medium rounded-lg"
@@ -102,7 +102,8 @@
         <!-- 좁은 폭 처리: height 64px 은 아래 thead 의 `top: 64px` 과 묶여 있어 **줄바꿈을
              허용할 수 없다**(늘리면 표 머리글이 제목을 가린다). 그래서 제목만 줄여 넣고
              (truncate) 배지·버튼은 줄어들지 않게 한다.
-             375px 실측: 고치기 전 제목이 288px 높이 × 15px 폭으로 한 글자씩 쌓였다. -->
+             본문이 아주 좁아지면 제목은 0px 까지 잘린다 — 줄바꿈이 막혀 있으니
+             그 폭에서는 잘리는 쪽이 쌓이는 쪽보다 낫다는 판단이다. -->
         <div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 round-card-head min-w-0"
           style="height: 64px; border-bottom: 1px solid #f1f5f9; border-top-left-radius: 12px; border-top-right-radius: 12px;">
           <h2 class="text-base font-semibold truncate min-w-0" style="color: #1e293b; margin: 0;">

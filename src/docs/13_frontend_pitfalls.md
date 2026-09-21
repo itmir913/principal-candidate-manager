@@ -4,7 +4,9 @@
 드러나는** 종류다. 프론트 자동 검증은 여러 겹이다 — `vitest`(`.vue` 밖의 순수 모듈),
 `tools/oracle/front_check.mjs`(파생 계산 대조·소스 가드),
 **정적 스캔**(`undefined-identifiers.test.js`), **소스 규칙**(`rules.test.js`),
-**렌더 테스트**(`smoke-render`·`quota-input.render`·`dialog.render`·`destructive-confirm`).
+**렌더 테스트**(`frontend/tests/` 의 `*.render.test.js` 와 스모크).
+목록을 여기 옮겨 적지 않는 이유는 CLAUDE.md 규칙 9 다 — 실제로 이 줄이 낡아
+`areas.render.test.js` 가 빠진 채 남아 있었다.
 렌더 테스트는 화면을 실제로 마운트해 "열리기는 하는가"와 "값이 조용히 바뀌지 않는가"만
 본다. **외관·레이아웃·페인트는 여전히 단언하지 않는다** — 여기 적힌 함정 대부분이
 그 종류이고, 그래서 한 번 밟은 것은 문서로 남긴다.

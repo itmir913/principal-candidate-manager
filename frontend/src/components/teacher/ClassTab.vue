@@ -49,17 +49,22 @@
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
     >
       <div class="overflow-x-auto">
-        <!-- min-width 는 **고정 열 합계 + 마지막 열 몫**이어야 한다.
-             460px 은 고정 열(80+180+200)이 전부 먹어 `지원 대학` 에 0px 이 남았고,
-             그 열이 글자 단위로 쪼개졌다. 지원 대학은 "동국대학교(서울) — 자연계열 —
-             의료인공지능공학과" 처럼 길어 최소 320px 을 둔다(460+320=780).
+        <!-- min-width 는 **고정 열 합계보다 커야 한다.** 같으면 가변 열(지원 대학)이
+             0px 이 되고, 그때 그 열은 스크롤 대신 글자 단위로 쪼개진다.
+             단, 그 0px 은 **컨테이너가 min-width 이하로 좁아졌을 때만** 나타난다 —
+             넓은 화면에서는 남는 폭을 가변 열이 가져가므로 보이지 않는다.
+             지원 대학은 "동국대학교(서울) — 자연계열 — 의료인공지능공학과" 처럼 길어
+             최소 320px 을 둔다(고정 360 + 320 = 680).
+             1024×768 학교 PC 에서 가로 스크롤이 나지 않는 것을 기준으로 잡았다 —
+             그 화면의 표 컨테이너는 약 704px 다. 스크롤바는 style.css 가 숨기므로
+             가로 스크롤이 나면 사용자가 손잡이를 볼 수 없다.
              졸업생 담당(grade=0)은 번호 열이 없어 80px 이 더 남는다. -->
-        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 780px;">
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 680px;">
           <colgroup>
             <col v-if="auth.grade !== 0" style="width: 80px;">
-            <col style="width: 180px;">
-            <col style="width: 200px;">
-            <col>   <!-- 지원 대학: 남는 폭을 전부 가진다 -->
+            <col style="width: 140px;">   <!-- 학생코드: "202630601" 9자 + padding 40px -->
+            <col style="width: 140px;">   <!-- 이름 -->
+            <col>   <!-- 지원 대학: 남는 폭을 전부 가진다(최소 320px) -->
           </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
@@ -83,7 +88,10 @@
                 <div v-if="getStudentApps(s.id).length === 0" class="text-base" style="color: #cbd5e1;">-</div>
                 <div
                   v-for="app in getStudentApps(s.id)"
-                  :key="app.track_id"
+                  <!-- 이 목록은 `teacherGetApplications()` 를 인자 없이 불러 **전 라운드**를
+                       담는다. applications 의 PK 는 (student_id, track_id, round_id) 라
+                       같은 모집단위에 1차·2차로 지원하면 track_id 만으로는 키가 중복된다. -->
+                  :key="`${app.round_id}-${app.track_id}`"
                   class="flex items-center gap-2 mb-1.5"
                 >
                   <span
