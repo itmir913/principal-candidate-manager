@@ -184,7 +184,13 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
     // `{ zIndex: 100000 }`, `{ maxWidth: 100000 }`, `{ duration: 100000 }` 은 점수 배율과
     // 아무 상관이 없는데 전부 위반으로 잡혔다(프로브로 확인). 규칙과 무관한 곳에서
     // 빨개지는 검사는 곧 무시된다.
-    new RegExp(String.raw`\b(?:scale|factor|ratio|multiplier|divisor|unit|precision)\w*\s*:\s*(?:${LITERAL})\s*(?:[,}]|$)`, 'i'),
+    // 이름 목록을 좁히면 진짜 위반을 놓친다 — `{ base: 100000 }`·`{ denom: 1e5 }`·
+    // `{ SCORE: 100000 }` 가 그렇게 빠져나갔다(5차 감사 경-1). 반대로 `z-index`·
+    // `maxWidth`·`duration` 은 점수와 무관하다(4차 감사 경-4).
+    // 그래서 **제외 목록으로 뒤집는다** — 새 이름이 생겨도 기본은 "잡는다"가 된다.
+    // `\b` 가 아니라 `(?<![\w-])` 로 연다. `\b` 는 `z-index` 의 **`index` 부터** 다시
+    // 매치돼 제외 목록을 통째로 빠져나간다(하이픈이 단어 경계이기 때문).
+    new RegExp(String.raw`(?<![\w-])(?!(?:z-?index|width|max-?width|min-?width|height|max-?height|min-?height|duration|delay|timeout|zoom|top|left|right|bottom|size|margin|padding|flex|order|opacity)(?![\w-]))[\w-]+\s*:\s*(?:${LITERAL})\s*(?:[,;}]|$)`, 'i'),
     new RegExp(String.raw`\[\s*(?:${LITERAL})\s*\]`),
   ]
 

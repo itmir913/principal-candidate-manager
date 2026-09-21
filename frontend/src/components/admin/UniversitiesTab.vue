@@ -71,7 +71,7 @@
     <p v-if="error" class="text-base mb-4" style="color: #ef4444;">{{ error }}</p>
 
     <!-- 대학 추가 폼 — "+ 추가"는 모달이 아니라 목록 위 inline (저장소 공통 패턴) -->
-    <div v-if="addingUniv" class="rounded-xl mb-4"
+    <div v-if="addingUniv" data-testid="univ-add-form" class="rounded-xl mb-4"
       style="padding: 18px 22px; background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);">
       <h3 class="text-base font-semibold mb-3" style="color: #1e293b;">새 대학 추가</h3>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -172,7 +172,7 @@
         </div>
 
         <!-- 카드 머리: 대학 편집 -->
-        <div v-else style="padding: 18px 22px; background: #fefce8; border-bottom: 1px solid #fde68a;">
+        <div v-else data-testid="univ-edit-form" style="padding: 18px 22px; background: #fefce8; border-bottom: 1px solid #fde68a;">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
               <label class="block text-base font-medium mb-1.5" style="color: #64748b;">대학명</label>
@@ -229,7 +229,7 @@
             </thead>
             <tbody>
               <!-- 추가 행 -->
-              <tr v-if="addingTrackUnivId === u.id" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
+              <tr v-if="addingTrackUnivId === u.id" data-testid="track-add-form" style="background: #eff6ff; border-bottom: 1px solid #bfdbfe;">
                 <td style="padding: 10px 12px;">
                   <input v-model="trackForm.track_name" type="text"
                     class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -297,7 +297,7 @@
                   </td>
                 </tr>
                 <!-- 편집 행 -->
-                <tr v-else style="background: #fefce8; border-bottom: 1px solid #fde68a;">
+                <tr v-else data-testid="track-edit-form" style="background: #fefce8; border-bottom: 1px solid #fde68a;">
                   <td style="padding: 10px 12px;">
                     <input v-model="trackForm.track_name" type="text"
                       class="text-base focus:outline-none focus:ring-2 focus:ring-blue-400"

@@ -52,10 +52,10 @@ const load = () => import('../src/components/admin/UniversitiesTab.vue')
  * 폼이 늘면 여기에도 추가해야 하고, 아래 "전 진입점" 검사가 누락을 잡는다.
  */
 const FORMS = [
-  ['대학 추가',      '새 대학 추가'],
-  ['대학 편집',      '대학 정보 수정'],
-  ['모집단위 추가',  '새 모집단위'],
-  ['모집단위 편집',  '모집단위 수정'],
+  ['대학 추가',      'univ-add-form'],
+  ['대학 편집',      'univ-edit-form'],
+  ['모집단위 추가',  'track-add-form'],
+  ['모집단위 편집',  'track-edit-form'],
 ]
 
 /** 이름표로 폼을 열고 {폼, 정원칸, 저장버튼} 을 돌려준다. */
@@ -80,16 +80,19 @@ async function openForm(wrapper, which) {
     await new Promise(r => setTimeout(r, 0))
   }
 
-  // **폼 안으로 범위를 좁힌다.** 화면 위쪽에도 텍스트 입력칸이 있어서, 그냥
-  // `find('input[type="text"]')` 하면 엉뚱한 칸을 채우고 폼은 계속 비어 있다.
-  // (실제로 그렇게 "정상 입력인데 저장이 잠겼다"가 났다.)
-  const form = wrapper.findAll('div').filter(d => d.find('input[type="checkbox"]').exists())
-    .filter(d => d.findAll('button').some(b => b.text() === '저장'))
-    .at(-1)
-  expect(form, `${which} 폼이 열리지 않았다`).toBeTruthy()
+  // **폼을 신원으로 고른다.** 예전에는 "체크박스와 저장 버튼이 있는 마지막 div" 를
+  // 잡았는데, 어떤 폼인지 확인하지 않아 [모집단위 편집]이 대학 편집 폼을 열어도
+  // 6건이 조용히 대학 폼을 다시 시험했다(5차 감사 중-1).
+  // 편집 폼에는 제목이 없어 텍스트로는 구분할 수 없으므로 `data-testid` 를 쓴다.
+  const testid = FORMS.find(([k]) => k === which)[1]
+  const form = wrapper.find(`[data-testid="${testid}"]`)
+  expect(form.exists(),
+    `${which} 폼(${testid})이 열리지 않았다 — 버튼이 다른 폼을 열었을 수 있다`).toBe(true)
 
+  // 이름은 채워 둔다 — 정원만 보기 위해. 편집 폼은 이미 값이 있으므로 없을 수도 있으나,
+  // **있는데 못 찾는 것**과 구분하려고 폼 안에서만 찾는다.
   const name = form.find('input[type="text"]')
-  if (name.exists()) await name.setValue('가대학')   // 이름은 채워 둔다 — 정원만 보기 위해
+  if (name.exists()) await name.setValue('가대학')
 
   // 추가 폼은 기본값이 `unlimited: true` 라 정원 칸이 아예 렌더되지 않는다.
   const unlimited = form.find('input[type="checkbox"]')
@@ -188,8 +191,17 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
     const here = path.dirname(fileURLToPath(import.meta.url))
     const src = fs.readFileSync(
       path.join(here, '..', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
+    // **세는 방향을 뒤집는다.** 예전에는 *가드가 걸린* 버튼 수만 세어, 가드 없는 폼을
+    // 새로 추가해도 4 == 4 로 통과했다(5차 감사 치-2). 이제 **정원을 다루는 폼**의
+    // 수를 세고, 그 전부가 가드에 걸려 있는지 본다.
+    const quotaForms = (src.match(/<QuotaInput/g) ?? []).length
     const guarded = (src.match(/:disabled="saving \|\| !(univ|track)FormValid"/g) ?? []).length
-    expect(guarded, '정원 폼 수와 가드 수가 어긋난다 — FORMS 목록도 함께 고쳐라')
+    expect(quotaForms, '정원 폼이 늘었는데 FORMS 목록에 없다 — 그 폼은 검사 밖이다')
       .toBe(FORMS.length)
+    expect(guarded, '정원 폼 수와 가드 수가 어긋난다 — 가드 없는 저장 버튼이 있다')
+      .toBe(quotaForms)
+    // 표식도 폼 수만큼 있어야 한다 — 없으면 위 openForm 이 그 폼을 못 연다.
+    expect((src.match(/data-testid="(?:univ|track)-(?:add|edit)-form"/g) ?? []).length,
+      '폼 신원 표식이 빠졌다').toBe(FORMS.length)
   })
 })

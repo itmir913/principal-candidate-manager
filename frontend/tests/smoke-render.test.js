@@ -146,7 +146,7 @@ function fixtureFor(url = '', config) {
     return { rows: [], total: 0, page: 1, per_page: 50 }
   if (/\/api\/areas/.test(u))                    return [AREA]
   if (/\/api\/students/.test(u))                 return { rows: [RESULT], total: 1, page: 1, per_page: 50, by_grade: { 3: [1] } }
-  if (/\/api\/classes/.test(u))                  return [{ grade: 3, class_no: 1, teacher_name: '담임', has_password: true }]
+  if (/\/api\/classes/.test(u))                  return [{ grade: 3, class_no: 1, teacher_name: '홍길동', has_password: true }]
   if (/\/api\/audit-logs/.test(u))               return { rows: [], total: 0, page: 1, per_page: 50 }
   if (/\/api\/app-info/.test(u))                 return { version: '0.2.21', server_addr: '127.0.0.1:8080' }
   return flexible()
@@ -339,7 +339,9 @@ const RENDER_EVIDENCE = {
   // §4 사고가 난 화면. FINALIZED 결과 표가 그려져야 한다.
   '../src/components/teacher/ResultsTab.vue': '학생01',
   '../src/components/teacher/ClassTab.vue': '학생01',
-  '../src/components/admin/ClassesTab.vue': '담임',
+  // '담임' 은 표 **헤더**("담임명")에도 있어 픽스처가 비어도 통과했다(5차 감사 중-5).
+  // 데이터에서만 나오는 값을 쓴다.
+  '../src/components/admin/ClassesTab.vue': '홍길동',
   '../src/components/admin/UniversitiesTab.vue': '가대학',
 }
 
@@ -486,14 +488,20 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
 
     // 지원 입력 폼까지 연다. 여기가 담임이 실제로 점수를 넣는 화면인데,
     // 학생 선택까지만 밟던 동안 통째로 검사 밖이었다(4차 감사 놓친 항목 1).
-    const addBtn = wrapper.findAll('button').find(b => /지원 등록|새 지원|\+/.test(b.text()))
-    if (addBtn) {
-      await addBtn.trigger('click')
-      await new Promise(r => setTimeout(r, 0))
-      const afterForm = wrapper.text()
-      expect(errors.filter(e => FATAL.test(e)), '지원 입력 폼 렌더 중 치명 오류').toEqual([])
-      expect(FATAL.test(afterForm), '지원 입력 폼에 오류 문구가 그려졌다').toBe(false)
-    }
+    //
+    // **`if (addBtn)` 으로 감싸지 않는다.** 그렇게 두었더니 버튼의 `@click` 을 통째로
+    // 지워도(= 담임이 지원을 아무것도 등록할 수 없다) 26/26 초록이었다 —
+    // 자기 자신을 끄는 블록은 초록 발생기다(5차 감사 중-3).
+    const addBtn = wrapper.findAll('button').find(b => b.text().includes('새 지원 추가'))
+    expect(addBtn, '[+ 새 지원 추가] 버튼이 없다').toBeTruthy()
+    await addBtn.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+
+    const afterForm = wrapper.text()
+    expect(afterForm, '[+ 새 지원 추가] 를 눌렀는데 등록 폼이 열리지 않았다')
+      .toContain('새 지원 등록')
+    expect(errors.filter(e => FATAL.test(e)), '지원 입력 폼 렌더 중 치명 오류').toEqual([])
+    expect(FATAL.test(afterForm), '지원 입력 폼에 오류 문구가 그려졌다').toBe(false)
     expect(errors.filter(e => FATAL.test(e)), '지원 패널 렌더 중 치명 오류').toEqual([])
     expect(FATAL.test(shown), `화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`).toBe(false)
     wrapper.unmount()

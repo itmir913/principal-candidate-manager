@@ -118,6 +118,25 @@ describe('확인 대화상자', () => {
     w.unmount()
   })
 
+  it('danger 2단계에서도 ESC 는 취소다', async () => {
+    // DialogHost.vue:133 주석이 "2단계 상태에서도 즉시 취소"라고 보장하는데,
+    // 1단계만 시험하던 동안 `settleDialog(s.kind === 'alert' || s.step === 2)` 변이가
+    // 통과했다 — 마감 확정 화면에서 ESC 가 **실행**이 된다(5차 감사 중-2).
+    const w = mount(DialogHost, { attachTo: document.body })
+    const answer = dialog.confirm({
+      title: '라운드를 마감할까요?', message: '되돌릴 수 없습니다.',
+      level: 'danger', dangerNotice: '추천이 확정됩니다.', finalConfirmText: '마감합니다',
+    })
+    await tick()
+    await click(btn('확인'))            // 1단계 통과 -> step 2
+    expect(btn('마감합니다'), '2단계로 넘어가지 않았다').toBeTruthy()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await tick()
+    expect(await answer, '2단계에서 ESC 가 확인으로 동작한다').toBe(false)
+    w.unmount()
+  })
+
   it('연속으로 열면 앞의 약속이 취소로 끝난다', async () => {
     // 끝나지 않은 약속이 남으면 `await dialog.confirm()` 뒤의 코드가 영원히 안 돌아
     // 버튼이 먹통이 된다(dialog.js:22 의 의도).
