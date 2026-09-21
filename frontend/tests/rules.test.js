@@ -180,8 +180,11 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
     // 줄 단위로 훑으므로 끝 앵커에 `$` 를 반드시 넣는다(`[;\n]` 만 쓰면 세미콜론
     // 없는 줄을 통째로 놓친다 — 실제로 `const SCALE = 100000` 이 빠져나갔다).
     new RegExp(String.raw`(?:const|let|var)\s+\w+\s*=\s*(?:${LITERAL})\s*(?:[;,)\]}]|$)`),
-    // 객체 속성 / 배열 원소에 숨겨 두는 것도 같은 값이다
-    new RegExp(String.raw`\w+\s*:\s*(?:${LITERAL})\s*(?:[,}]|$)`),
+    // 객체 속성에 숨겨 두는 것. **속성 이름을 가린다** — `z-index: 100000`,
+    // `{ zIndex: 100000 }`, `{ maxWidth: 100000 }`, `{ duration: 100000 }` 은 점수 배율과
+    // 아무 상관이 없는데 전부 위반으로 잡혔다(프로브로 확인). 규칙과 무관한 곳에서
+    // 빨개지는 검사는 곧 무시된다.
+    new RegExp(String.raw`\b(?:scale|factor|ratio|multiplier|divisor|unit|precision)\w*\s*:\s*(?:${LITERAL})\s*(?:[,}]|$)`, 'i'),
     new RegExp(String.raw`\[\s*(?:${LITERAL})\s*\]`),
   ]
 

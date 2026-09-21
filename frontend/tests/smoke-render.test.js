@@ -33,7 +33,10 @@ const flexible = () => Object.assign([], {
   total: 0, page: 1, per_page: 50, count: 0,
   // 중첩 응답 — 옵셔널 체이닝 없이 바로 파고드는 곳이 있어 형태를 맞춰 준다.
   // (예: OverviewTab 의 `data.value.all_time.total_rounds`)
-  all_time: { total_rounds: 0, total_students: 0, total_applications: 0 },
+  // OverviewAllTime 의 필드는 total_rounds·total_applicants·confirmed·abandoned 다
+  // (src/handlers/overview.rs:64). 이름을 틀렸더니 화면에 "undefined명" 이 그려졌고,
+  // 새로 넣은 누출 검사가 바로 잡았다.
+  all_time: { total_rounds: 0, total_applicants: 0, confirmed: 0, abandoned: 0 },
   round: null, graduated: null, enrolled: null,
   by_status: {}, by_univ: [], recent: [], summary: {}, by_grade: {}, grades: [],
 })
@@ -82,9 +85,15 @@ const FINAL_ROUND = { ...ROUND, id: 2, status: 'FINALIZED',
 function TEACHER_FIXTURE(u) {
   // teacherGetResults 는 배열이 아니라 `{ rounds, results }` 를 준다
   // (ResultsTab.vue:469). 배열로 주면 `rounds.value` 가 undefined 가 되어 렌더가 터진다.
+  // **한 행은 추천 확정, 한 행은 미선발**로 둔다. 둘 다 미선발이면 "추천 확정"·
+  // "포기됨" 분기와 [추천 포기] 버튼이 영영 렌더되지 않는다 — 되돌리기 어려운 행위의
+  // 버튼이 검사 밖에 있었다(4차 감사 놓친 항목 4).
   if (/results/.test(u)) return {
     rounds: [FINAL_ROUND],
-    results: [{ ...RESULT, round_id: 2 }, { ...RESULT2, round_id: 2 }],
+    results: [
+      { ...RESULT,  round_id: 2, recommended: true },
+      { ...RESULT2, round_id: 2 },
+    ],
   }
   // StudentRow 의 기본키는 `id` 다(src/handlers/students.rs:40). `student_id` 로 주면
   // `v-for :key="s.id"` 와 `selectedStudent?.id` 가 전부 undefined 가 되어,
@@ -208,6 +217,21 @@ const global = {
   },
 }
 
+/**
+ * 로그인 상태를 만든다. 인증 없이 마운트하면 `auth.grade` 가 null 이라
+ * TeacherView 가 **"선생님null학년 null반 담임"** 을 그린다 — 실제 화면에서는
+ * 라우터 가드가 막고 백엔드가 `grade: i64`(non-optional)를 주므로 일어나지 않는
+ * **테스트 인공물**이다. 그 상태로 두면 아래 "null 노출" 검사가 늘 빨개진다.
+ */
+function signIn() {
+  localStorage.clear()
+  localStorage.setItem('pcm_token', 'test-token')
+  localStorage.setItem('pcm_role', 'teacher')
+  localStorage.setItem('pcm_grade', '3')
+  localStorage.setItem('pcm_class_no', '1')
+  localStorage.setItem('pcm_teacher_name', '김담임')
+}
+
 const all = { ...views, ...adminTabs, ...teacherTabs, ...common }
 const targets = Object.keys(all).filter(p => !NEEDS_PROPS.has(p) && !p.endsWith('/App.vue'))
 
@@ -235,7 +259,7 @@ describe('스모크 렌더', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
-    localStorage.clear()
+    signIn()
     errors = []
     // error 와 warn 을 **둘 다** 모은다. 미정의 식별자는 예외가 아니라 경고로 나오는
     // 경우가 많다 — Vue 는 템플릿에서 없는 이름을 읽으면
@@ -278,6 +302,18 @@ describe('스모크 렌더', () => {
     const shown = wrapper.text()
     expect(FATAL.test(shown), `${path} 화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`)
       .toBe(false)
+
+    // **`null`/`undefined`/`NaN` 이 글자로 새어 나오는지.** 오류는 아니지만 사용자에게
+    // 보이는 결함이다(4차 감사 경-7).
+    //
+    // 새는 길은 둘뿐이다 — Vue 의 `{{ }}` 는 null·undefined 를 **빈 문자열**로 그리므로
+    // 보간만으로는 안 샌다(`NaN` 은 예외로 "NaN" 이 찍힌다).
+    //   ① 스크립트의 템플릿 리터럴·문자열 결합: `${auth.grade}학년` → "null학년"
+    //   ② 계산 결과가 NaN: "총점 NaN"
+    const LEAK = /\b(?:null|undefined|NaN)\b/
+    const at = shown.search(LEAK)
+    expect(at, `${path} 화면에 null/undefined/NaN 이 그대로 그려졌다: ` +
+      `…${shown.slice(Math.max(0, at - 40), at + 40)}…`).toBe(-1)
 
     expect(wrapper.html()).toBeTruthy()
 
@@ -447,6 +483,17 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
     const shown = wrapper.text()
     expect(shown, '학생을 골랐는데 패널이 열리지 않았다')
       .not.toContain('좌측에서 학생을 선택하세요')
+
+    // 지원 입력 폼까지 연다. 여기가 담임이 실제로 점수를 넣는 화면인데,
+    // 학생 선택까지만 밟던 동안 통째로 검사 밖이었다(4차 감사 놓친 항목 1).
+    const addBtn = wrapper.findAll('button').find(b => /지원 등록|새 지원|\+/.test(b.text()))
+    if (addBtn) {
+      await addBtn.trigger('click')
+      await new Promise(r => setTimeout(r, 0))
+      const afterForm = wrapper.text()
+      expect(errors.filter(e => FATAL.test(e)), '지원 입력 폼 렌더 중 치명 오류').toEqual([])
+      expect(FATAL.test(afterForm), '지원 입력 폼에 오류 문구가 그려졌다').toBe(false)
+    }
     expect(errors.filter(e => FATAL.test(e)), '지원 패널 렌더 중 치명 오류').toEqual([])
     expect(FATAL.test(shown), `화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`).toBe(false)
     wrapper.unmount()
