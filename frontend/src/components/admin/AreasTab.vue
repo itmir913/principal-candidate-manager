@@ -1304,16 +1304,21 @@ const ImportResultBox = defineComponent({
       const r = props.result
       const hasErrors = r.errors?.length > 0
       const hasWarnings = r.warnings?.length > 0
+      // 경고만 있는 경우(가져오기는 완료)를 초록 성공 상자에 묻지 않는다 —
+      // 이름 불일치는 "행이 한 칸 밀린 파일"의 신호라 관리자가 반드시 봐야 한다.
+      // amber 는 이 화면이 이미 쓰는 주의 색이다(위 '기존 점수 기준이 교체됩니다' 문구).
       const bgStyle = hasErrors
         ? 'padding: 14px 18px; border-radius: 12px; border: 1px solid #fca5a5; background: #fef2f2;'
-        : 'padding: 14px 18px; border-radius: 12px; border: 1px solid #86efac; background: #f0fdf4;'
-      const titleColor = hasErrors ? '#991b1b' : '#15803d'
+        : hasWarnings
+          ? 'padding: 14px 18px; border-radius: 12px; border: 1px solid #fcd34d; background: #fffbeb;'
+          : 'padding: 14px 18px; border-radius: 12px; border: 1px solid #86efac; background: #f0fdf4;'
+      const titleColor = hasErrors ? '#991b1b' : hasWarnings ? '#92400e' : '#15803d'
       const countStr = r.rows != null ? `${r.rows}건` : r.inserted != null ? `신규 ${r.inserted}명, 수정 ${r.updated}명` : ''
       return h('div', { style: bgStyle }, [
         h('p', { style: `font-size: 16px; font-weight: 600; margin: 0 0 4px; color: ${titleColor};` },
           hasErrors ? '오류 발생 — 가져오기 실패' : `완료 — ${countStr} 처리됨`),
         hasWarnings
-          ? h('ul', { style: 'font-size: 16px; color: #15803d; padding-left: 20px; margin: 0;' },
+          ? h('ul', { style: 'font-size: 16px; color: #92400e; padding-left: 20px; margin: 0;' },
               r.warnings.map((w, i) => h('li', { key: i }, w)))
           : null,
         hasErrors
