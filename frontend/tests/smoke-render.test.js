@@ -139,7 +139,8 @@ function fixtureFor(url = '', config) {
   }
   if (/\/api\/rounds$/.test(u))                  return [ROUND]
   if (/\/api\/rounds\/\d+\/confirmation/.test(u)) return { total: 1, confirmed: 1, pending: [] }
-  if (/\/api\/applications/.test(u))             return [RESULT]
+  // 두 건을 준다 — 대학별 묶기(appsByUniv)와 재학생 우선 정렬이 한 건으로는 안 돈다.
+  if (/\/api\/applications/.test(u))             return [RESULT, RESULT2]
   if (/quota-stats/.test(u))                      return { all_round_ids: [1], univs: [UNIV] }
   if (/\/api\/universities/.test(u))             return [UNIV]
   if (/\/api\/areas\/\d+\/(numeric-table|category-map|base-data)\/list/.test(u))
@@ -373,11 +374,19 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     const wrapper = mount(mod.default, { global })
     await new Promise(r => setTimeout(r, 0))
 
+    // ⓪ 먼저 [지원 현황] 탭(기본 탭)이 실제로 그려지는지 본다. 결과 탭만 보던 동안
+    //    이쪽은 "오류 0건"만 통과했다 — 학과명 편집·미선발 처리가 다 여기 있다.
     // ① 라운드를 고른다
     const card = wrapper.find('.cursor-pointer')
     expect(card.exists(), '라운드 카드가 없다 — 픽스처가 비었는지 확인하라').toBe(true)
     await card.trigger('click')
     await new Promise(r => setTimeout(r, 0))
+
+    // 지원 현황 표가 그려졌는지 — 픽스처가 닿았다는 증거.
+    const appsText = wrapper.text()
+    expect(appsText, '지원 현황 표에 학생이 없다').toContain('학생01')
+    expect(appsText, '학과명이 그려지지 않았다').toContain('컴퓨터공학과')
+    expect(appsText, '지원 건수가 안 보인다').toContain('총 2건')
 
     // ② [결과] 서브탭으로 넘어간다. 기본값은 [지원 현황]이라, 여기까지 오지 않으면
     //    결과 표(resultsByView·tieSet·univAutoButtonKeys)는 끝내 렌더되지 않는다.
