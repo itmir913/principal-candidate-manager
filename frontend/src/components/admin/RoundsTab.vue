@@ -237,7 +237,10 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="app in group" :key="app.student_id"
+                      <!-- 키는 학생+모집단위 복합이어야 한다. 한 대학의 두 모집단위에 같은 학생이
+                           지원하면 student_id 만으로는 이 묶음 안에서 중복된다 —
+                           Vue 가 갱신 때 DOM 노드를 잘못 재사용한다(실제 데이터에서 확인). -->
+                      <tr v-for="app in group" :key="`${app.student_id}-${app.track_id}`"
                         class="hover:bg-slate-50"
                         style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;">
                         <td class="text-base" style="padding: 12px 18px; color: #475569;">
@@ -470,7 +473,8 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <template v-for="r in group.results" :key="r.student_id">
+                      <!-- 같은 이유의 복합 키. 바로 아래 toggleRow 도 같은 조합을 쓴다. -->
+                      <template v-for="r in group.results" :key="`${r.student_id}-${r.track_id}`">
                         <tr
                           class="cursor-pointer res-row"
                           :style="{
