@@ -13,6 +13,7 @@
  * 지키려는 시도가 F-014 에서도 같은 이유로 실패했다 — 그래서 행동으로 옮긴다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -64,7 +65,7 @@ async function openForm(wrapper, which) {
     const b = wrapper.findAll('button').find(pred)
     expect(b, `${what} 버튼을 찾지 못했다`).toBeTruthy()
     await b.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
   }
   if (which === '대학 추가')      await click(b => b.text().includes('대학 추가'), '[+ 대학 추가]')
   if (which === '대학 편집')      await click(b => b.text() === '편집', '[편집]')
@@ -77,7 +78,7 @@ async function openForm(wrapper, which) {
     expect(edits.length, '모집단위 [편집] 버튼이 없다 — 모집단위 표가 그려졌는지 확인하라')
       .toBeGreaterThan(0)
     await edits[0].trigger('click')
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
   }
 
   // **폼을 신원으로 고른다.** 예전에는 "체크박스와 저장 버튼이 있는 마지막 div" 를
@@ -98,7 +99,7 @@ async function openForm(wrapper, which) {
   const unlimited = form.find('input[type="checkbox"]')
   expect(unlimited.exists(), '"무제한" 체크박스를 찾지 못했다').toBe(true)
   await unlimited.setValue(false)
-  await new Promise(r => setTimeout(r, 0))
+  await settle()
 
   const quota = form.find('input[type="number"]')
   expect(quota.exists(), '정원 입력칸이 없다 — "무제한"이 꺼졌는지 확인하라').toBe(true)
@@ -116,7 +117,7 @@ async function openForm(wrapper, which) {
 async function type(el, value) {
   el.element.value = value
   await el.trigger('input')
-  await new Promise(r => setTimeout(r, 0))
+  await settle()
 }
 
 describe('정원 입력 (F-013) — 화면 동작', () => {
@@ -133,7 +134,7 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
   for (const [which] of FORMS) {
     it.each(BAD)(`[${'%s'}] ${which}: 잘못된 정원이면 저장이 잠긴다`, async (typed) => {
       const wrapper = mount((await load()).default)
-      await new Promise(r => setTimeout(r, 0))
+      await settle()
       const { quota, save } = await openForm(wrapper, which)
 
       await type(quota, typed)
@@ -147,7 +148,7 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
     it(`${which}: 정원 1 이상이면 저장이 열린다`, async () => {
       // 위 단언이 "항상 잠겨 있다"로 통과하면 아무것도 지키지 못한다.
       const wrapper = mount((await load()).default)
-      await new Promise(r => setTimeout(r, 0))
+      await settle()
       const { quota, save } = await openForm(wrapper, which)
 
       await type(quota, '3')
@@ -161,7 +162,7 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
     // 저장이 잠기는 것과 별개로, **입력칸의 값 자체**가 바뀌면 관리자는 자기가 1 을
     // 넣은 줄 안다. F-013 의 증상이 정확히 이것이었다.
     const wrapper = mount((await load()).default)
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     const { quota } = await openForm(wrapper, '대학 추가')
 
     await type(quota, '0')
@@ -172,7 +173,7 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
 
   it('안내 문구로 이유를 알려 준다', async () => {
     const wrapper = mount((await load()).default)
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     const { form, quota } = await openForm(wrapper, '대학 추가')
 
     await type(quota, '0')
@@ -189,7 +190,7 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
     // 이제 **컴포넌트에 렌더된 number 입력칸 전부**를 훑고, 0 을 넣은 뒤
     // **화면의 어떤 저장 버튼도 열려 있으면 안 된다**고 본다.
     const wrapper = mount((await load()).default)
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     await openForm(wrapper, which)
 
     const boxes = wrapper.findAll('input[type="number"]')

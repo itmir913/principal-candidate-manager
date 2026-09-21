@@ -17,8 +17,11 @@
  * 안의 미정의 식별자는 여전히 잡히지 않는다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { readdirSync, existsSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
 
 // 모든 화면은 axios 로 서버와 말한다. 여기 한 곳만 막으면 api 모듈(admin.js/teacher.js)은
 // **실물이 그대로 실행된다** — 래퍼의 오타도 함께 지나간다.
@@ -48,6 +51,16 @@ const flexible = () => Object.assign([], {
 // 필드는 백엔드 응답에서 가져왔다(results 행은 tools/oracle/actual.json 실측 형태).
 const ROUND = { id: 1, status: 'CLOSED', opened_at: '2026-03-02T00:00:00Z',
                 closed_at: '2026-03-10T00:00:00Z', finalized_at: null, needs_recalc: false }
+/**
+ * `/api/rounds/current` 는 백엔드에서 **`status = 'OPEN'` 인 행만** 돌려준다
+ * (src/handlers/rounds.rs:95). 여기에 CLOSED 를 주면 백엔드가 만들 수 없는 상태라,
+ * `currentRound.status === 'OPEN'` 뒤에 있는 화면 분기가 **한 번도 렌더되지 않는다** —
+ * 커버리지처럼 보이는 공백이었다(6차 감사 미결 항목).
+ * 목록(`/api/rounds`)에는 CLOSED 와 함께 둔다. 실제로 가능한 상태다.
+ */
+const OPEN_ROUND = { id: 3, status: 'OPEN', opened_at: '2026-03-21T00:00:00Z',
+                     closed_at: null, finalized_at: null, needs_recalc: false }
+
 const RESULT = {
   student_id: 1, track_id: 1, round_id: 1, name: '학생01', student_code: '2026001',
   grade: 3, class_no: 1, seq_no: 1, is_enrolled: true,
@@ -132,12 +145,12 @@ function fixtureFor(url = '', config) {
   const u = String(url)
   const trackId = config?.params?.track_id
   if (/\/api\/teacher\//.test(u))                 return TEACHER_FIXTURE(u)
-  if (/\/api\/rounds\/current/.test(u))          return ROUND
+  if (/\/api\/rounds\/current/.test(u))          return OPEN_ROUND
   if (/\/api\/rounds\/\d+\/results/.test(u)) {
     const rows = [RESULT, RESULT2]
     return trackId ? rows.filter(r => r.track_id === Number(trackId)) : rows
   }
-  if (/\/api\/rounds$/.test(u))                  return [ROUND]
+  if (/\/api\/rounds$/.test(u))                  return [ROUND, OPEN_ROUND]
   if (/\/api\/rounds\/\d+\/confirmation/.test(u)) return { total: 1, confirmed: 1, pending: [] }
   // 두 건을 준다 — 대학별 묶기(appsByUniv)와 재학생 우선 정렬이 한 건으로는 안 돈다.
   if (/\/api\/applications/.test(u))             return [RESULT, RESULT2]
@@ -174,10 +187,10 @@ vi.mock('vue-router', async (orig) => ({
 }))
 
 // import 는 vi.mock 이후에 평가된다(vitest 가 호이스팅한다).
-const views = import.meta.glob('../src/views/*.vue')
-const adminTabs = import.meta.glob('../src/components/admin/*.vue')
-const teacherTabs = import.meta.glob('../src/components/teacher/*.vue')
-const common = import.meta.glob('../src/components/common/*.vue')
+// **재귀 글롭**이어야 한다. 디렉터리별로 네 줄을 적어 두면 새 디렉터리에 만든 화면이
+// 목록에도, 아래 `모든 .vue 가 스모크 대상이거나…` 대조에도 **동시에** 안 잡힌다 —
+// 대조가 자기 자신의 글롭 결과를 보고 있으니 순환이라 영원히 초록이다(6차 감사 지적).
+const all = import.meta.glob('../src/**/*.vue')
 
 /**
  * props 를 요구하는 컴포넌트는 부모가 늘 값을 주므로 단독 마운트 대상이 아니다.
@@ -233,7 +246,6 @@ function signIn() {
   localStorage.setItem('pcm_teacher_name', '김담임')
 }
 
-const all = { ...views, ...adminTabs, ...teacherTabs, ...common }
 const targets = Object.keys(all).filter(p => !NEEDS_PROPS.has(p) && !p.endsWith('/App.vue'))
 
 /**
@@ -288,8 +300,7 @@ describe('스모크 렌더', () => {
     const mod = await all[path]()
     const wrapper = mount(mod.default, { global })
     // onMounted 의 비동기 로드까지 흘려보낸다 — 사고가 났던 지점이 거기였다.
-    await new Promise(r => setTimeout(r, 0))
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     process.off('unhandledRejection', onRejection)
 
     const fatal = errors.filter(e => FATAL.test(e))
@@ -372,7 +383,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
 
     const mod = await all['../src/components/admin/RoundsTab.vue']()
     const wrapper = mount(mod.default, { global })
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     // ⓪ 먼저 [지원 현황] 탭(기본 탭)이 실제로 그려지는지 본다. 결과 탭만 보던 동안
     //    이쪽은 "오류 0건"만 통과했다 — 학과명 편집·미선발 처리가 다 여기 있다.
@@ -380,7 +391,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     const card = wrapper.find('.cursor-pointer')
     expect(card.exists(), '라운드 카드가 없다 — 픽스처가 비었는지 확인하라').toBe(true)
     await card.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     // 지원 현황 표가 그려졌는지 — 픽스처가 닿았다는 증거.
     const appsText = wrapper.text()
@@ -393,8 +404,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     const resultsTab = wrapper.findAll('button').find(b => b.text() === '결과')
     expect(resultsTab, '[결과] 서브탭 버튼을 찾지 못했다').toBeTruthy()
     await resultsTab.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     process.off('unhandledRejection', onRejection)
 
     // 결과 표가 **정말로** 그려졌는지 확인한다. 이 단언이 없으면 표가 통째로 빠져도
@@ -427,7 +437,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     const select = wrapper.find('select')
     expect(select.exists(), '모집단위 필터를 찾지 못했다').toBe(true)
     await select.setValue('1')
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     const filtered = wrapper.text()
     expect(filtered, '필터가 표시를 좁히지 않았다').not.toContain('학생02')
@@ -444,8 +454,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     const refresh = wrapper.findAll('button').find(b => b.text() === '새로고침')
     expect(refresh, '[새로고침] 버튼을 찾지 못했다').toBeTruthy()
     await refresh.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     expect(tieMark(),
       '필터를 건 채 재조회하자 동점 표식이 사라졌다 — loadResults 가 서버에 필터를 ' +
@@ -482,13 +491,12 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
 
     const mod = await all['../src/components/teacher/ApplicationTab.vue']()
     const wrapper = mount(mod.default, { global })
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     const row = wrapper.findAll('.cursor-pointer').find(d => d.text().includes('학생01'))
     expect(row, '학생 목록 행을 찾지 못했다 — 픽스처의 id 필드를 확인하라').toBeTruthy()
     await row.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     process.off('unhandledRejection', onRejection)
 
     const shown = wrapper.text()
@@ -504,7 +512,7 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
     const addBtn = wrapper.findAll('button').find(b => b.text().includes('새 지원 추가'))
     expect(addBtn, '[+ 새 지원 추가] 버튼이 없다').toBeTruthy()
     await addBtn.trigger('click')
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
 
     const afterForm = wrapper.text()
     expect(afterForm, '[+ 새 지원 추가] 를 눌렀는데 등록 폼이 열리지 않았다')
@@ -535,8 +543,7 @@ describe('스모크 렌더 — props 를 받는 화면', () => {
     const { props, evidence } = PROPPED[path]
     const mod = await all[path]()
     const wrapper = mount(mod.default, { props, global })
-    await new Promise(r => setTimeout(r, 0))
-    await new Promise(r => setTimeout(r, 0))
+    await settle()
     process.off('unhandledRejection', onRejection)
 
     const shown = wrapper.text()
@@ -548,8 +555,33 @@ describe('스모크 렌더 — props 를 받는 화면', () => {
 })
 
 describe('스모크 대상 목록이 낡지 않았다', () => {
-  it('모든 .vue 가 스모크 대상이거나 명시적으로 제외되어 있다', () => {
-    const uncovered = Object.keys(all)
+  /**
+   * 디스크를 **글롭과 도립적으로** 센다.
+   *
+   * 이전 판은 `targets` 를 `all` 에서 파생시켜 놓고 다시 `all` 과 비교했다 —
+   * 집합으로 쓰면 (all − NEEDS_PROPS − App) 을 all 에서 다시 빼는 꼴이라
+   * 결과가 **항상 빈 집합**이다. 즉 어떤 경우에도 실패하지 않는 항진명제였다.
+   * 글롭 패턴이 파일을 놓치는 상황은 그 글롭 자신으로는 볼 수 없다.
+   */
+  const vueFilesOnDisk = () => {
+    // vitest 가 변환한 모듈에서는 import.meta.url 이 file: 스킴이 아니다.
+    // vite 의 root(= frontend/)가 곧 cwd 이므로 거기서 잡는다.
+    const root = join(process.cwd(), 'src')
+    if (!existsSync(root)) throw new Error(`src 를 찾지 못했다: ${root}`)
+    const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory() ? walk(join(d, e.name))
+        : (e.name.endsWith('.vue') ? [join(d, e.name)] : []))
+    return walk(root)
+      .map(f => '../src/' + relative(root, f).split(sep).join('/'))
+      .sort()
+  }
+
+  it('글롭이 디스크의 .vue 를 하나도 빼뜨리지 않는다', () => {
+    expect(Object.keys(all).sort()).toEqual(vueFilesOnDisk())
+  })
+
+  it('디스크의 모든 .vue 가 스모크 대상이거나 명시적으로 제외되어 있다', () => {
+    const uncovered = vueFilesOnDisk()
       .filter(p => !p.endsWith('/App.vue'))
       .filter(p => !targets.includes(p) && !NEEDS_PROPS.has(p))
     expect(uncovered, '새 화면이 검사 밖에 있다').toEqual([])

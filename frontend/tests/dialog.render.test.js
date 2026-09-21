@@ -14,6 +14,7 @@
  * 취소·확인이 각각 올바른 값으로 약속을 끝내는지. 되돌리기 어려운 행위의 마지막 관문이다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import DialogHost from '../src/components/common/DialogHost.vue'
 import { dialog, dialogState, settleDialog } from '../src/components/common/dialog.js'
@@ -26,7 +27,7 @@ const tick = async () => { await nextTick(); await nextTick() }
 const bodyText = () => document.body.textContent
 const btn = (label) =>
   [...document.body.querySelectorAll('button')].find(b => b.textContent.trim() === label)
-const click = async (el) => { el.click(); await tick() }
+const click = async (el) => { el.click(); await settle() }
 
 describe('확인 대화상자', () => {
   beforeEach(() => { vi.spyOn(console, 'warn').mockImplementation(() => {}) })
@@ -47,7 +48,7 @@ describe('확인 대화상자', () => {
     const w = mount(DialogHost, { attachTo: document.body })
     dialog.confirm({ title: '추천을 취소할까요?', message: '되돌릴 수 없습니다.',
                      confirmText: '취소하기', cancelText: '그만두기' })
-    await tick()
+    await settle()
 
     const t = bodyText()
     expect(t, '제목이 없다').toContain('추천을 취소할까요?')
@@ -61,12 +62,12 @@ describe('확인 대화상자', () => {
     const w = mount(DialogHost, { attachTo: document.body })
 
     const yes = dialog.confirm({ title: 'A', message: 'B' })
-    await tick()
+    await settle()
     await click(btn('확인'))
     expect(await yes, '확인이 true 를 주지 않는다').toBe(true)
 
     const no = dialog.confirm({ title: 'A', message: 'B' })
-    await tick()
+    await settle()
     await click(btn('취소'))
     expect(await no, '취소가 false 를 주지 않는다').toBe(false)
 
@@ -83,7 +84,7 @@ describe('확인 대화상자', () => {
       finalConfirmText: '마감합니다',
     }).then(v => { settled = v })
 
-    await tick()
+    await settle()
     await click(btn('확인'))
 
     expect(settled, '1단계 확인만으로 끝나 버렸다').toBeNull()
@@ -99,7 +100,7 @@ describe('확인 대화상자', () => {
     // 놓치면 안 되는 사실을 중립적인 본문에 섞으면 읽고 지나친다 — dialog.js 의 의도.
     const w = mount(DialogHost, { attachTo: document.body })
     dialog.confirm({ title: 'A', message: '본문입니다.', warnNotice: '미확정 학급이 2개 있습니다.' })
-    await tick()
+    await settle()
     expect(bodyText()).toContain('미확정 학급이 2개 있습니다.')
     w.unmount()
   })
@@ -110,10 +111,10 @@ describe('확인 대화상자', () => {
     // 변이가 전 검증을 통과했다(4차 감사 중-A).
     const w = mount(DialogHost, { attachTo: document.body })
     const answer = dialog.confirm({ title: '삭제할까요?', message: '되돌릴 수 없습니다.' })
-    await tick()
+    await settle()
     // 리스너는 window 에 붙는다(DialogHost.vue:142). document 로 쏘면 닿지 않는다.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await tick()
+    await settle()
     expect(await answer, 'ESC 가 확인으로 동작한다').toBe(false)
     w.unmount()
   })
@@ -127,12 +128,12 @@ describe('확인 대화상자', () => {
       title: '라운드를 마감할까요?', message: '되돌릴 수 없습니다.',
       level: 'danger', dangerNotice: '추천이 확정됩니다.', finalConfirmText: '마감합니다',
     })
-    await tick()
+    await settle()
     await click(btn('확인'))            // 1단계 통과 -> step 2
     expect(btn('마감합니다'), '2단계로 넘어가지 않았다').toBeTruthy()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await tick()
+    await settle()
     expect(await answer, '2단계에서 ESC 가 확인으로 동작한다').toBe(false)
     w.unmount()
   })
@@ -143,7 +144,7 @@ describe('확인 대화상자', () => {
     const w = mount(DialogHost, { attachTo: document.body })
     const first = dialog.confirm({ title: 'A', message: 'A' })
     dialog.confirm({ title: 'B', message: 'B' })
-    await tick()
+    await settle()
     expect(await first, '앞의 다이얼로그가 끝나지 않는다').toBe(false)
     settleDialog(false)
     w.unmount()
@@ -152,7 +153,7 @@ describe('확인 대화상자', () => {
   it('alert 는 확인 버튼 하나뿐이다', async () => {
     const w = mount(DialogHost, { attachTo: document.body })
     dialog.alert({ title: '오류', message: '저장하지 못했습니다.', level: 'error' })
-    await tick()
+    await settle()
     expect(bodyText()).toContain('저장하지 못했습니다.')
     expect(btn('취소'), 'alert 에 취소 버튼이 있다').toBeFalsy()
     await click(btn('확인'))

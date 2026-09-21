@@ -15,6 +15,7 @@
  * 상태로 드러나므로, 주석·변수 추출·객체 스프레드·파일 이동 전부에 면역이다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { dialogState, settleDialog } from '../src/components/common/dialog.js'
@@ -86,7 +87,6 @@ vi.mock('axios', () => {
   return { default: axios, ...axios }
 })
 
-const tick = () => new Promise(r => setTimeout(r, 0))
 
 /**
  * 파괴적 행위 **전부**. `열기` 는 그 버튼이 보이게 만드는 조작(없으면 마운트 직후 보인다),
@@ -111,22 +111,22 @@ const DESTRUCTIVE = [
   {
     이름: '관리자 — 라운드 마감',   파일: 'admin/RoundsTab.vue',        버튼: '마감하기',
     // 마감 버튼은 CLOSED("종료") 라운드에만 있다.
-    열기: async (w, tick) => { await pickRound(w, tick, '종료') },
+    열기: async (w) => { await pickRound(w, '종료') },
   },
   {
     // 화면 버튼은 '포기하기' 다 — '포기 처리' 는 다이얼로그의 confirmText 다.
     이름: '관리자 — 지원 포기 처리', 파일: 'admin/RoundsTab.vue',       버튼: '포기하기',
     // 포기 처리는 FINALIZED("마감") 라운드의 추천 확정된 지원에만 있다.
-    열기: async (w, tick) => { await pickRound(w, tick, '마감') },
+    열기: async (w) => { await pickRound(w, '마감') },
   },
 ]
 
 /** 상태 표기로 라운드 카드를 골라 상세 패널을 연다. */
-async function pickRound(wrapper, tick, 상태) {
+async function pickRound(wrapper, 상태) {
   const card = wrapper.findAll('.cursor-pointer').find(d => d.text().includes(상태))
   expect(card, `[${상태}] 라운드 카드가 없다`).toBeTruthy()
   await card.trigger('click')
-  await tick()
+  await settle()
 }
 
 const load = (p) => import(/* @vite-ignore */ p)
@@ -154,8 +154,8 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
       const wrapper = mount(mod.default, {
         global: { stubs: { RouterLink: true, RouterView: true } },
       })
-      await tick()
-      if (열기) await 열기(wrapper, tick)
+      await settle()
+      if (열기) await 열기(wrapper)
 
       const target = 고르기
         ? 고르기(wrapper)
@@ -165,7 +165,7 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
 
       writes.length = 0
       await target.trigger('click')
-      await tick()
+      await settle()
 
       // ① 확인 없이 바로 실행되지 않는다
       expect(dialogState.open, '확인 없이 바로 실행된다').toBe(true)
@@ -178,7 +178,7 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
 
       // ② **취소하면 실제로 막힌다.** 여기가 게이트다 — ①은 간판일 뿐이다.
       settleDialog(false)
-      await tick()
+      await settle()
       expect(writes,
         '취소를 눌렀는데 실행됐다 — confirm 결과를 보지 않고 있다').toEqual([])
 

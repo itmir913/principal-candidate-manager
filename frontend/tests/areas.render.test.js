@@ -12,6 +12,7 @@
  * **외관은 여전히 보지 않는다** — 그려졌는지와 값이 맞는지만 본다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -50,7 +51,6 @@ vi.mock('axios', () => {
   return { default: axios, ...axios }
 })
 
-const tick = async () => { await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0)) }
 const load = () => import('../src/components/admin/AreasTab.vue')
 
 /** 요소 목록에서 이름으로 하나를 고른다. */
@@ -58,7 +58,7 @@ async function pickArea(wrapper, name) {
   const row = wrapper.findAll('.cursor-pointer').find(d => d.text().includes(name))
   expect(row, `[${name}] 요소가 목록에 없다`).toBeTruthy()
   await row.trigger('click')
-  await tick()
+  await settle()
 }
 
 describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
@@ -70,7 +70,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
 
   it('요소 목록과 만점 합계가 그려진다', async () => {
     const wrapper = mount((await load()).default)
-    await tick()
+    await settle()
 
     const t = wrapper.text()
     for (const a of AREAS) expect(t, `[${a.name}] 이 목록에 없다`).toContain(a.name)
@@ -81,7 +81,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
 
   it('NUMERIC 요소를 고르면 점수표가 열린다', async () => {
     const wrapper = mount((await load()).default)
-    await tick()
+    await settle()
     await pickArea(wrapper, '교과성적')
 
     const t = wrapper.text()
@@ -100,7 +100,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
   it('CATEGORY 요소는 범주 목록을 보여 준다', async () => {
     // 같은 패널이 calc_type 에 따라 다른 표를 그린다. 하나만 보면 나머지가 깨져도 모른다.
     const wrapper = mount((await load()).default)
-    await tick()
+    await settle()
     await pickArea(wrapper, '출결')
 
     const t = wrapper.text()
@@ -115,7 +115,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
     // selectArea 가 calc_type 으로 첫 탭을 고른다(AreasTab.vue:945).
     // 이 분기가 뒤집히면 MANUAL 요소에서 빈 점수표가 열린다.
     const wrapper = mount((await load()).default)
-    await tick()
+    await settle()
     await pickArea(wrapper, '교사추천')
 
     // 부정문 하나만 두면 **오른쪽 패널이 통째로 비어도** 통과한다(6차 감사 중-1).
@@ -130,7 +130,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
   it('요소를 바꾸면 표도 함께 바뀐다', async () => {
     // 선택만 바뀌고 표가 안 따라오면 **이전 요소의 점수표를 보면서 편집**하게 된다.
     const wrapper = mount((await load()).default)
-    await tick()
+    await settle()
 
     await pickArea(wrapper, '교과성적')
     expect(wrapper.text()).toContain('1.5')
