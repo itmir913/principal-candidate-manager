@@ -1,16 +1,20 @@
 /**
  * 프론트엔드 파생 로직 독립 대조 (E4).
  *
- * 프론트엔드에는 테스트 러너가 없다(package.json:10 "test": "cargo test").
- * 감사 지침에 따라 `frontend/` 와 `package.json` 은 건드리지 않고, 문제의 JS 로직을
- * **그대로 복사**해 이 오라클 안에서 돌린 뒤 백엔드 실측값(actual.json)과 대조한다.
+ * 프론트 로직을 백엔드 실측값(actual.json) 및 BigInt 독립 오라클과 대조한다.
  *
- * 복사 출처 (커밋 14bba2d):
- *   formatScore / isKeyMatched : frontend/src/utils/scorePreviewShared.js:6-30
- *   tieSet (RoundsTab)         : frontend/src/components/admin/RoundsTab.vue:894-920
- *   tieSet (ResultsTab)        : frontend/src/components/teacher/ResultsTab.vue:241-267
- *   resultsByUnivOnly 정렬     : frontend/src/components/admin/RoundsTab.vue:866-875
- *   studentsByRound 정렬       : frontend/src/components/teacher/ResultsTab.vue:288-292
+ * **2026-09-21: 손복사를 걷어냈다.** 예전에는 프론트에 테스트 러너가 없어 JS 로직을
+ * 이 파일에 그대로 복사해 돌렸는데, 원본이 바뀌어도 복사본은 초록이라 인용이 낡아
+ * 갔다(실제로 ResultsTab 의 tieSet 은 사라진 지 오래인데 출처 목록에 남아 있었다).
+ * 이제 `frontend/` 에 vitest 가 있으므로 **실물을 import** 한다.
+ *
+ * 실물 import:
+ *   formatScore / isKeyMatched : frontend/src/utils/scorePreviewShared.js
+ *
+ * 아직 복사본인 것 (`.vue` 안에 있어 import 할 수 없다 — 계획상 커밋 2 에서 추출):
+ *   tieSet (RoundsTab)         : frontend/src/components/admin/RoundsTab.vue:1015-1041
+ *   resultsByUnivOnly 정렬     : frontend/src/components/admin/RoundsTab.vue:961-987
+ *   studentsByRound 정렬       : frontend/src/components/teacher/ResultsTab.vue:426-430
  *   totalMaxScore              : frontend/src/components/admin/AreasTab.vue:902
  *
  * 실행: node front_check.mjs
@@ -18,27 +22,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { formatScore, isKeyMatched } from '../../frontend/src/utils/scorePreviewShared.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const scenarios = JSON.parse(fs.readFileSync(path.join(HERE, 'scenarios.json'), 'utf8'))
 const actual = JSON.parse(fs.readFileSync(path.join(HERE, 'actual.json'), 'utf8'))
 
-// ── 프론트 코드 그대로 복사 ───────────────────────────────────────
-function isKeyMatched(calcType, matchedKeys, rowKey) {
-  if (!matchedKeys?.length) return false
-  if (calcType === 'NUMERIC') {
-    return matchedKeys.some(mk => typeof mk === 'number' && Math.abs(mk - rowKey) < 1e-9)
-  }
-  return matchedKeys.includes(rowKey)
-}
-
-function formatScore(v) {
-  if (v === null || v === undefined) return '-'
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '-'
-  return n % 1 === 0 ? String(n) : n.toFixed(5).replace(/\.?0+$/, '')
-}
-// ─────────────────────────────────────────────────────────────────
+// formatScore / isKeyMatched 는 파일 상단에서 프론트 실물을 import 한다.
+// (여기 있던 복사본은 2026-09-21 에 제거했다.)
 
 let fails = 0
 // 알려진 결함 — 아직 고치지 않았고, 고쳐질 때까지 CI 를 빨갛게 만들지 않는다.

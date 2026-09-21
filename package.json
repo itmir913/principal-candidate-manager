@@ -10,7 +10,8 @@
     "test": "cargo test",
     "build": "npm --prefix frontend run build && cargo build --release",
     "test:oracle": "node tools/oracle/run.mjs",
-    "ci": "npm test && npm run test:oracle"
+    "test:front": "npm --prefix frontend test",
+    "ci": "npm run test:front && npm test && npm run test:oracle"
   },
   "devDependencies": {
     "concurrently": "^10.0.0",
