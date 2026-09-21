@@ -14,8 +14,7 @@
  *   totalMaxScore              : frontend/src/logic/areaTotals.js
  *
  * 아직 이 파일 안에서 재구성하는 것 (`.vue` 안에 있어 import 할 수 없다):
- *   resultsByUnivOnly 정렬     : groupByUniv 로 추출했으나, 여기서는 "정렬이 순위와
- *                                어긋나지 않는가"를 독립 정의로 확인하므로 그대로 둔다
+ *   groupByUniv                : frontend/src/logic/rankResults.js (§4 재정렬 대조)
  *
  * 2026-09-21: 손복사는 이제 없다. `.vue` 안에 남아 import 할 수 없는 항목도 없다.
  *
@@ -34,7 +33,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { formatScore, isKeyMatched } from '../../frontend/src/utils/scorePreviewShared.js'
-import { computeTieSet } from '../../frontend/src/logic/rankResults.js'
+import { computeTieSet, groupByUniv } from '../../frontend/src/logic/rankResults.js'
 import { totalMaxScore } from '../../frontend/src/logic/areaTotals.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -261,11 +260,17 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   const vue = fs.readFileSync(
     path.join(HERE, '..', '..', 'frontend', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
   const problems = []
-  if (/parseInt\([^)]*\)\s*\|\|/.test(noComments(vue)))
-    problems.push('parseInt(...) || 기본값 패턴이 남아 있다 — 입력을 조용히 치환한다')
+  // 금지 패턴을 `parseInt` 철자로만 정의하면 `Number(s) || 1` 로 같은 짓을 할 수 있다 —
+  // 감사에서 그 변이가 3d 를 그대로 통과했다(중-10). 숫자 변환 뒤의 `||` 를 통째로 본다.
+  // 다만 **실제 방어는 logic/quotaForm.js 의 parseQuotaInput 테스트**가 한다.
+  // 이 소스 검사는 "그 함수를 우회해 컴포넌트에서 직접 변환하는 것"을 막는 보조 장치다.
+  if (/(?:parseInt|parseFloat|Number)\s*\([^)]*\)\s*\|\|/.test(noComments(vue)))
+    problems.push('숫자 변환 뒤 || 기본값 패턴이 남아 있다 — 입력을 조용히 치환한다')
+  if (!/parseQuotaInput/.test(noComments(vue)))
+    problems.push('정원 입력이 parseQuotaInput 을 거치지 않는다 — 변환 규칙이 테스트 밖에 있다')
   if (!/const univFormValid\s*=\s*computed/.test(vue) || !/const trackFormValid\s*=\s*computed/.test(vue))
     problems.push('정원 유효성을 저장 버튼 잠금 조건에 넣지 않았다')
-  report('UniversitiesTab 소스 가드 (F-013 회귀 방지)', problems.length, 2, problems.join(' / '))
+  report('UniversitiesTab 소스 가드 (F-013 회귀 방지)', problems.length, 3, problems.join(' / '))
 }
 
 // ── 4. resultsByUnivOnly 재정렬 vs 백엔드 ranking 순서 ───────────
@@ -281,12 +286,10 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
       ;(byUniv[un] ||= []).push({ ...r, univ_name: un })
     }
     for (const rows of Object.values(byUniv)) {
-      const sorted = [...rows].sort((a, b) => {
-        if (a.ranking == null && b.ranking == null) return 0
-        if (a.ranking == null) return 1
-        if (b.ranking == null) return -1
-        return a.ranking - b.ranking
-      })
+      // **프론트 실물**로 정렬한다. 예전에는 여기서 로컬 비교자로 정렬한 뒤 그 결과가
+      // 정렬돼 있는지 물었다 — 자기가 정렬한 것을 자기가 검사하는 셈이라, `byRank` 의
+      // 부호를 뒤집어도 이 절은 초록이었다(감사 중-7).
+      const sorted = groupByUniv(rows, {})[rows[0].univ_name].results
       checks++
       for (let i = 1; i < sorted.length; i++) {
         if (sorted[i - 1].ranking > sorted[i].ranking) {

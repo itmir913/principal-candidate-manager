@@ -572,7 +572,7 @@ import {
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
-import { isUnivFormValid, isTrackFormValid } from '../../logic/quotaForm.js'
+import { isUnivFormValid, isTrackFormValid, parseQuotaInput } from '../../logic/quotaForm.js'
 
 const HELP = {
   title: '도움말 — 대학 설정',
@@ -620,14 +620,10 @@ const QuotaInput = defineComponent({
               // 조용히 고치지 않는다. 예전에는 `parseInt(v) || 1` 이라 0 을 입력하면
               // 관리자 모르게 1 로 바뀌었고 음수는 그대로 통과했다.
               // 유효하지 않으면 null 을 올려보내 저장 버튼이 잠기게 한다.
-              onInput: (e) => {
-                // parseInt 는 "5.7" → 5, "2e3" → 2 로 **잘라낸다**. type=number 는 이 둘을
-                // 유효한 입력으로 받으므로 조용한 절단이 된다 — Number 로 통째 해석하고
-                // 정수가 아니면 null 을 올려 저장을 막는다.
-                const s = e.target.value.trim()
-                const n = s === '' ? NaN : Number(s)
-                emit('update:quota', Number.isInteger(n) ? n : null)
-              },
+              // 변환 규칙은 logic/quotaForm.js 의 parseQuotaInput 에 있다.
+              // 컴포넌트 안에 두었을 때는 어떤 테스트도 닿지 않아, F-013 을 되돌리는
+              // 변이가 전 검증을 통과했다.
+              onInput: (e) => emit('update:quota', parseQuotaInput(e.target.value)),
             }),
             h('span', { style: 'font-size: 16px; color: #64748b;' }, '명'),
           ])
