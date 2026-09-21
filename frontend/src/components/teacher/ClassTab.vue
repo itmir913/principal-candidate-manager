@@ -49,12 +49,17 @@
       style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);"
     >
       <div class="overflow-x-auto">
-        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 460px;">
+        <!-- min-width 는 **고정 열 합계 + 마지막 열 몫**이어야 한다.
+             460px 은 고정 열(80+180+200)이 전부 먹어 `지원 대학` 에 0px 이 남았고,
+             그 열이 글자 단위로 쪼개졌다. 지원 대학은 "동국대학교(서울) — 자연계열 —
+             의료인공지능공학과" 처럼 길어 최소 320px 을 둔다(460+320=780).
+             졸업생 담당(grade=0)은 번호 열이 없어 80px 이 더 남는다. -->
+        <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 780px;">
           <colgroup>
             <col v-if="auth.grade !== 0" style="width: 80px;">
             <col style="width: 180px;">
             <col style="width: 200px;">
-            <col>
+            <col>   <!-- 지원 대학: 남는 폭을 전부 가진다 -->
           </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
