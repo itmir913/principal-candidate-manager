@@ -5,41 +5,13 @@
 //! 그 항목을 아예 만들지 않아 **해당 행위로 걸러 볼 수가 없다.** 서버는 정상 동작하므로
 //! 테스트가 없으면 아무도 모른다. 실제로 `APP_INFO_UPDATED`(이슈 #23)가 그렇게 빠졌다.
 //!
-//! enum 을 소스에서 읽는 이유: 런타임에 변형을 열거할 방법이 없다(strum 미사용).
-//! 라벨 파일도 JS 라 Rust 에서 import 할 수 없으므로 양쪽을 텍스트로 읽어 대조한다.
+//! enum 을 소스에서 읽는 이유는 tests/common/mod.rs 의 `enum_variants` 주석에 있다.
+//! 같은 대조를 나머지 enum 에 대해 하는 것은 tests/frontend_enum_sync.rs 다.
 
 use std::collections::BTreeSet;
 
-/// `src/enums.rs` 의 `AuditAction` 블록에서 변형 이름을 뽑아 SCREAMING_SNAKE_CASE 로 바꾼다.
-/// enum 에 `#[serde(rename_all = "SCREAMING_SNAKE_CASE")]` 가 걸려 있어 DB·API 표기가 이것이다.
-fn enum_actions() -> BTreeSet<String> {
-    let src = include_str!("../src/enums.rs");
-    let start = src
-        .find("pub enum AuditAction {")
-        .expect("AuditAction 선언을 찾지 못했다");
-    let body_start = start + src[start..].find('{').unwrap() + 1;
-    let body_end = body_start + src[body_start..].find('}').expect("enum 본문의 끝");
-
-    src[body_start..body_end]
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty() && !l.starts_with("//"))
-        .map(|l| l.trim_end_matches(',').trim())
-        .filter(|l| !l.is_empty())
-        .map(to_screaming_snake)
-        .collect()
-}
-
-fn to_screaming_snake(variant: &str) -> String {
-    let mut out = String::new();
-    for (i, c) in variant.chars().enumerate() {
-        if c.is_uppercase() && i > 0 {
-            out.push('_');
-        }
-        out.extend(c.to_uppercase());
-    }
-    out
-}
+mod common;
+use common::enum_variants;
 
 /// `auditLabels.js` 의 키를 뽑는다. 값(한국어 문구)은 보지 않는다 — 문구 자체는 사람이 정한다.
 fn label_keys() -> BTreeSet<String> {
@@ -55,7 +27,7 @@ fn label_keys() -> BTreeSet<String> {
 
 #[test]
 fn every_audit_action_has_a_korean_label() {
-    let actions = enum_actions();
+    let actions = enum_variants("AuditAction");
     let labels = label_keys();
 
     assert!(actions.len() > 20, "enum 파싱이 깨졌다 (변형 {}개)", actions.len());
@@ -72,7 +44,7 @@ fn every_audit_action_has_a_korean_label() {
 /// 반대 방향 — enum 에서 지운 액션의 라벨이 남아 있으면 필터에 죽은 항목이 뜬다.
 #[test]
 fn no_label_without_a_matching_audit_action() {
-    let actions = enum_actions();
+    let actions = enum_variants("AuditAction");
     let labels = label_keys();
 
     let orphans: Vec<_> = labels.difference(&actions).collect();

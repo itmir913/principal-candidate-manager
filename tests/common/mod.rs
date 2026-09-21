@@ -82,3 +82,43 @@ pub async fn insert_class(pool: &SqlitePool, grade: i64, class_no: i64) {
         .await
         .unwrap();
 }
+
+// ── src/enums.rs 를 소스로 읽어 변형을 열거한다 ──────────────────────────────
+//
+// 런타임에 enum 변형을 열거할 방법이 없다(strum 미사용). 프론트 상수는 JS 라
+// Rust 에서 import 할 수도 없으므로, 양쪽을 텍스트로 읽어 대조한다.
+// audit_labels_coverage.rs 와 frontend_enum_sync.rs 가 함께 쓴다 — 파싱 로직을
+// 두 벌 두면 그것부터 어긋난다.
+
+/// `pub enum <name> { ... }` 블록의 변형 이름을 SCREAMING_SNAKE_CASE 로 뽑는다.
+/// 모든 대상 enum 에 `#[serde(rename_all = "SCREAMING_SNAKE_CASE")]` 가 걸려 있어
+/// DB·API 표기가 이것이다.
+pub fn enum_variants(enum_name: &str) -> std::collections::BTreeSet<String> {
+    let src = include_str!("../../src/enums.rs");
+    let decl = format!("pub enum {enum_name} {{");
+    let start = src
+        .find(&decl)
+        .unwrap_or_else(|| panic!("{enum_name} 선언을 찾지 못했다 (src/enums.rs)"));
+    let body_start = start + src[start..].find('{').unwrap() + 1;
+    let body_end = body_start + src[body_start..].find('}').expect("enum 본문의 끝");
+
+    src[body_start..body_end]
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with("//") && !l.starts_with('#'))
+        .map(|l| l.trim_end_matches(',').trim())
+        .filter(|l| !l.is_empty())
+        .map(to_screaming_snake)
+        .collect()
+}
+
+pub fn to_screaming_snake(variant: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in variant.chars().enumerate() {
+        if c.is_uppercase() && i > 0 {
+            out.push('_');
+        }
+        out.extend(c.to_uppercase());
+    }
+    out
+}
