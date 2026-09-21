@@ -65,12 +65,32 @@ const RESULT2 = {
   excluded_reason: null, abandoned: false,
 }
 
-/** 담임 화면 엔드포인트. 없으면 전부 flexible() 로 떨어져 빈 껍데기만 렌더된다(감사 치-3). */
+/**
+ * 담임 화면 엔드포인트. 없으면 전부 flexible() 로 떨어져 빈 껍데기만 렌더된다(감사 치-3).
+ *
+ * **라운드는 FINALIZED 여야 한다.** 담임 [라운드 결과] 화면은 CLOSED 면
+ * "관리자가 결과를 확정하는 중입니다"만 그리고 결과 표 전체(학과명 편집·포기 버튼 포함)를
+ * 건너뛴다. 엔드포인트만 넣고 status 를 CLOSED 로 두었더니, §4 사고가 난 바로 그 화면의
+ * 결과 표가 여전히 한 번도 안 그려졌다(감사 치-3 재지적).
+ *
+ * 공용 ROUND 를 FINALIZED 로 바꾸면 안 된다 — 관리자 RoundsTab 이 FINALIZED 에서 행
+ * 배경을 추천/미선발 색으로 칠해 F-014 의 동점 표식(#fef3c7) 단언이 무너진다.
+ * 그래서 담임 쪽에만 따로 둔다.
+ */
+const FINAL_ROUND = { ...ROUND, id: 2, status: 'FINALIZED',
+                      finalized_at: '2026-03-20T00:00:00Z' }
+
 function TEACHER_FIXTURE(u) {
   // teacherGetResults 는 배열이 아니라 `{ rounds, results }` 를 준다
   // (ResultsTab.vue:469). 배열로 주면 `rounds.value` 가 undefined 가 되어 렌더가 터진다.
-  if (/results/.test(u))      return { rounds: [ROUND], results: [RESULT, RESULT2] }
-  if (/students/.test(u))     return [{ student_id: 1, name: '학생01', student_code: '2026001',
+  if (/results/.test(u)) return {
+    rounds: [FINAL_ROUND],
+    results: [{ ...RESULT, round_id: 2 }, { ...RESULT2, round_id: 2 }],
+  }
+  // StudentRow 의 기본키는 `id` 다(src/handlers/students.rs:40). `student_id` 로 주면
+  // `v-for :key="s.id"` 와 `selectedStudent?.id` 가 전부 undefined 가 되어,
+  // 목록은 그려지는데 **선택이 되지 않는다.**
+  if (/students/.test(u))     return [{ id: 1, name: '학생01', student_code: '2026001',
                                         grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }]
   if (/applications/.test(u)) return [RESULT]
   if (/universities/.test(u)) return [UNIV]
@@ -242,9 +262,32 @@ describe('스모크 렌더', () => {
       .toBe(false)
 
     expect(wrapper.html()).toBeTruthy()
+
+    // **픽스처가 화면에 닿았다는 증거.** 없으면 픽스처가 조용히 안 맞게 돼도
+    // "오류 0건"으로 초록이 뜬다 — 담임 화면 셋이 실제로 그렇게 빈 껍데기만
+    // 그리면서 통과했다(감사 치-3).
+    const evidence = RENDER_EVIDENCE[path]
+    if (evidence) {
+      expect(shown, `${path} 가 픽스처를 그리지 않았다 (렌더 길이 ${shown.length})`)
+        .toContain(evidence)
+    }
+
     wrapper.unmount()
   })
 })
+
+/**
+ * 화면별 "여기까지 그려졌다"는 증거 한 조각.
+ * 목록에 없는 화면은 마운트만 확인한다 — 전부 채우면 픽스처 유지비가 화면 수만큼 는다.
+ * 대신 **사고가 났거나 위험한 화면**은 반드시 넣는다.
+ */
+const RENDER_EVIDENCE = {
+  // §4 사고가 난 화면. FINALIZED 결과 표가 그려져야 한다.
+  '../src/components/teacher/ResultsTab.vue': '학생01',
+  '../src/components/teacher/ClassTab.vue': '학생01',
+  '../src/components/admin/ClassesTab.vue': '담임',
+  '../src/components/admin/UniversitiesTab.vue': '가대학',
+}
 
 /**
  * 결과 패널은 라운드를 **클릭해야** 열린다. 마운트만으로는 `v-if="!selected"` 뒤에
@@ -341,6 +384,47 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
       .toContain('#fef3c7')
 
     expect(errors.filter(e => FATAL.test(e)), '결과 패널 렌더 중 치명 오류').toEqual([])
+    wrapper.unmount()
+  })
+})
+
+/**
+ * 담임 [지원 등록] — 학생을 골라야 오른쪽 패널이 열린다.
+ * 마운트만으로는 "좌측에서 학생을 선택하세요"만 그려져, 그 패널 안의 결함을 하나도
+ * 잡지 못했다(감사 치-3). RoundsTab 과 같은 이유로 한 단계 더 밟는다.
+ */
+describe('스모크 렌더 — 담임 지원 등록 패널', () => {
+  let errors
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    errors = []
+    const collect = (...a) => errors.push(a.map(x => (x && x.message) || String(x)).join(' '))
+    vi.spyOn(console, 'error').mockImplementation(collect)
+    vi.spyOn(console, 'warn').mockImplementation(collect)
+  })
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it('학생을 고르면 지원 입력 패널이 열린다', async () => {
+    const onRejection = (e) => errors.push(String(e?.reason?.message ?? e?.reason ?? e))
+    process.on('unhandledRejection', onRejection)
+
+    const mod = await all['../src/components/teacher/ApplicationTab.vue']()
+    const wrapper = mount(mod.default, { global })
+    await new Promise(r => setTimeout(r, 0))
+
+    const row = wrapper.findAll('.cursor-pointer').find(d => d.text().includes('학생01'))
+    expect(row, '학생 목록 행을 찾지 못했다 — 픽스처의 id 필드를 확인하라').toBeTruthy()
+    await row.trigger('click')
+    await new Promise(r => setTimeout(r, 0))
+    await new Promise(r => setTimeout(r, 0))
+    process.off('unhandledRejection', onRejection)
+
+    const shown = wrapper.text()
+    expect(shown, '학생을 골랐는데 패널이 열리지 않았다')
+      .not.toContain('좌측에서 학생을 선택하세요')
+    expect(errors.filter(e => FATAL.test(e)), '지원 패널 렌더 중 치명 오류').toEqual([])
+    expect(FATAL.test(shown), `화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`).toBe(false)
     wrapper.unmount()
   })
 })
