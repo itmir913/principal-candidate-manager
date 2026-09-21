@@ -29,11 +29,13 @@ pub struct ExternalPreview {
     pub total: usize,
 }
 
-struct ParsedFile {
-    univ_name: String,
-    value_header: String,
-    header_info: String,
-    records: Vec<(usize, Vec<String>)>, // (엑셀 행 번호 1-based, [학년, 반, 번호, 이름, 값])
+/// 양식 파싱 결과. 열 순서 검증 테스트가 직접 들여다본다.
+#[derive(Debug)]
+pub struct ParsedFile {
+    pub univ_name: String,
+    pub value_header: String,
+    pub header_info: String,
+    pub records: Vec<(usize, Vec<String>)>, // (엑셀 행 번호 1-based, [학년, 반, 번호, 이름, 값])
 }
 
 // ── 파싱 ─────────────────────────────────────────────────────────
@@ -43,6 +45,12 @@ fn parse_daegyo(bytes: &[u8]) -> Result<ParsedFile, String> {
         return Err("대교협 양식은 .xlsx 파일이어야 합니다".into());
     }
     let rows = excel::parse_xlsx_all_rows_raw(bytes).map_err(|e| e.to_string())?;
+    map_daegyo_rows(&rows)
+}
+
+/// 대교협 양식의 **행 → 값 매핑**. 바이트 디코딩과 분리해 두어야 열 순서를 바꾼
+/// 입력으로 규칙 5(헤더 이름 기반)를 검증할 수 있다.
+pub fn map_daegyo_rows(rows: &[Vec<String>]) -> Result<ParsedFile, String> {
 
     // 1행: "지역-대학명(캠퍼스)-전형유형-..."에서 대학명 추출
     let info = rows.first().and_then(|r| r.first()).map(|s| s.as_str()).unwrap_or("");
@@ -95,6 +103,14 @@ fn parse_univ(bytes: &[u8]) -> Result<ParsedFile, String> {
         return Err("유니브 양식은 .xls 파일이어야 합니다".into());
     }
     let rows = excel::parse_xls_all_rows_raw(bytes).map_err(|e| e.to_string())?;
+    map_univ_rows(&rows)
+}
+
+/// 유니브 양식의 **행 → 값 매핑**.
+///
+/// 이 분리가 없으면 유니브 경로는 통째로 검사 밖이다 — .xls 는 OLE2 컨테이너라
+/// 테스트에서 만들 수 없고, 실제로 이 경로의 테스트는 "비 .xls 를 거부한다" 하나뿐이었다.
+pub fn map_univ_rows(rows: &[Vec<String>]) -> Result<ParsedFile, String> {
 
     // 1행 B열(index 1): 대학명
     let univ_name = rows
