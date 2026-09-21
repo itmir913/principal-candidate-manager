@@ -572,6 +572,7 @@ import {
 } from '../../api/admin.js'
 import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
+import { isUnivFormValid, isTrackFormValid } from '../../logic/quotaForm.js'
 
 const HELP = {
   title: '도움말 — 대학 설정',
@@ -657,11 +658,10 @@ const editingTrackId    = ref(null)
 const univForm  = ref(emptyUnivForm())
 const trackForm = ref(emptyTrackForm())
 
-// 저장 가능 조건 — 이름과 정원 둘 다 유효해야 한다.
-// 정원 기준은 백엔드 validate_quota(1 이상 또는 무제한)와 일치시킨다.
-const quotaOk = (f, key) => f.unlimited || (Number.isInteger(f[key]) && f[key] >= 1)
-const univFormValid  = computed(() => univForm.value.univ_name.trim() !== '' && quotaOk(univForm.value, 'total_quota'))
-const trackFormValid = computed(() => trackForm.value.track_name.trim() !== '' && quotaOk(trackForm.value, 'unit_quota'))
+// 저장 가능 조건 — 이름과 정원 둘 다 유효해야 한다(logic/quotaForm.js).
+// 값을 보정하지 않고 저장을 막는다 — F-013 참고.
+const univFormValid  = computed(() => isUnivFormValid(univForm.value))
+const trackFormValid = computed(() => isTrackFormValid(trackForm.value))
 
 const quotaStats = ref(null)
 

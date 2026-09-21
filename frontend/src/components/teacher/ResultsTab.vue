@@ -301,6 +301,7 @@ import { blobErrMsg } from '../../utils/blobError.js'
 import HelpBox from '../common/HelpBox.vue'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
 import { formatScore } from '../../utils/scorePreviewShared.js'
+import { sortStudents } from '../../logic/studentOrder.js'
 
 const auth = useAuthStore()
 
@@ -420,14 +421,11 @@ const studentsByRound = computed(() => {
     }
     studentMap.get(r.student_id).results.push(r)
   }
-  // Map → 정렬된 배열로 변환
+  // Map → 정렬된 배열로 변환. auth.grade 는 여기(computed 안)서 읽어야
+  // 반응성이 유지된다 — 밖에서 캡처해 넘기면 계정이 바뀌어도 순서가 그대로다.
   const out = {}
   for (const [roundId, studentMap] of Object.entries(map)) {
-    out[roundId] = [...studentMap.values()].sort((a, b) =>
-      auth.grade === 0
-        ? a.student_code.localeCompare(b.student_code)
-        : (a.seq_no ?? 999) - (b.seq_no ?? 999)
-    )
+    out[roundId] = sortStudents([...studentMap.values()], auth.grade === 0)
   }
   return out
 })

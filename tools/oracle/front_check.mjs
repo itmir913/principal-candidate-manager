@@ -10,12 +10,15 @@
  *
  * 실물 import:
  *   formatScore / isKeyMatched : frontend/src/utils/scorePreviewShared.js
+ *   computeTieSet              : frontend/src/logic/rankResults.js
  *
- * 아직 복사본인 것 (`.vue` 안에 있어 import 할 수 없다 — 계획상 커밋 2 에서 추출):
- *   tieSet (RoundsTab)         : frontend/src/components/admin/RoundsTab.vue:1015-1041
- *   resultsByUnivOnly 정렬     : frontend/src/components/admin/RoundsTab.vue:961-987
- *   studentsByRound 정렬       : frontend/src/components/teacher/ResultsTab.vue:426-430
+ * 아직 이 파일 안에서 재구성하는 것 (`.vue` 안에 있어 import 할 수 없다):
+ *   resultsByUnivOnly 정렬     : groupByUniv 로 추출했으나, 여기서는 "정렬이 순위와
+ *                                어긋나지 않는가"를 독립 정의로 확인하므로 그대로 둔다
  *   totalMaxScore              : frontend/src/components/admin/AreasTab.vue:902
+ *
+ * 주의: 여기의 `want*` 집합은 **독립 정의**다. 프론트 함수를 import 한다고 해서
+ * 이것까지 프론트에서 가져오면 양쪽이 같은 버그를 공유해 대조가 무의미해진다.
  *
  * 실행: node front_check.mjs
  */
@@ -23,6 +26,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { formatScore, isKeyMatched } from '../../frontend/src/utils/scorePreviewShared.js'
+import { computeTieSet } from '../../frontend/src/logic/rankResults.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const scenarios = JSON.parse(fs.readFileSync(path.join(HERE, 'scenarios.json'), 'utf8'))
@@ -145,18 +149,8 @@ function exactDecimal(raw) {
     }))
     rows += results.length
 
-    // --- RoundsTab tieSet (track 보기) 복사본
-    const setTrack = new Set()
-    {
-      const counts = {}
-      for (const r of results) {
-        if (r.track_rank == null) continue
-        const k = `${r.track_id}-${r.round_id}-${r.track_rank}`
-        ;(counts[k] ||= []).push(r)
-      }
-      for (const rs of Object.values(counts))
-        if (rs.length > 1) for (const r of rs) setTrack.add(`${r.student_id}-${r.track_id}`)
-    }
+    // --- RoundsTab 이 실제로 쓰는 함수 (복사본 아님)
+    const setTrack = computeTieSet(results, 'track')
     // 독립 정의: 같은 트랙 안에서 track_rank 가 같은 행이 2개 이상
     const wantTrack = new Set()
     {
@@ -168,18 +162,7 @@ function exactDecimal(raw) {
     for (const k of wantTrack) if (!setTrack.has(k)) badTrack++
     for (const k of setTrack) if (!wantTrack.has(k)) badTrack++
 
-    // --- RoundsTab tieSet (univ 보기) 복사본
-    const setUniv = new Set()
-    {
-      const counts = {}
-      for (const r of results) {
-        if (r.ranking == null) continue
-        const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
-        ;(counts[k] ||= []).push(r)
-      }
-      for (const rs of Object.values(counts))
-        if (rs.length > 1) for (const r of rs) setUniv.add(`${r.student_id}-${r.track_id}`)
-    }
+    const setUniv = computeTieSet(results, 'univ')
     const wantUniv = new Set()
     {
       const g = {}
@@ -223,17 +206,7 @@ function exactDecimal(raw) {
         if (rs.length > 1) for (const r of rs) tieAll.add(`${r.student_id}-${r.track_id}`)
     }
     // 컴포넌트 모사: tieSet 은 results(전체)로 계산하고 표시만 필터한다.
-    const shownAll = new Set()
-    {
-      const counts = {}
-      for (const r of all) {
-        if (r.ranking == null) continue
-        const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
-        ;(counts[k] ||= []).push(r)
-      }
-      for (const rs of Object.values(counts))
-        if (rs.length > 1) for (const r of rs) shownAll.add(`${r.student_id}-${r.track_id}`)
-    }
+    const shownAll = computeTieSet(all, 'univ')
     for (const t of src.tracks) {
       const visible = all.filter(r => r.track_id === t.id)
       if (!visible.length) continue
@@ -265,10 +238,13 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
     problems.push('loadResults 가 라운드 전체를 받지 않는다(필터를 서버에 넘긴다)')
   if (!/const visibleResults = computed/.test(vue))
     problems.push('visibleResults(표시용 필터)가 없다')
-  const tie = vue.slice(vue.indexOf('const tieSet = computed'))
-  const tieBody = tie.slice(0, tie.indexOf('return set'))
-  if (/visibleResults/.test(noComments(tieBody)))
-    problems.push('tieSet 이 visibleResults 로 계산한다 — 전체(results)로 계산해야 한다')
+  // tieSet 에 무엇을 넘기는지는 **순수 함수 테스트로는 알 수 없다** — computeTieSet
+  // 자체는 어떤 배열을 받아도 옳게 동작하기 때문이다. 잘못된 인자를 넘기는 회귀는
+  // 여기서만 잡힌다. (예전에는 tieSet 본문을 `indexOf('return set')` 으로 잘라
+  // 검사했는데, 추출 후 `return set` 이 사라져 그 방식은 쓸 수 없다.)
+  if (!/const tieSet = computed\(\(\) => computeTieSet\(\s*results\.value/.test(noComments(vue)))
+    problems.push('tieSet 이 computeTieSet(results.value, …) 형태가 아니다 — '
+                + '필터 이전 전체를 넘겨야 한다(visibleResults 금지)')
   report('RoundsTab 소스 가드 (F-014 회귀 방지)', problems.length, 3, problems.join(' / '))
 }
 
@@ -317,10 +293,13 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   report('resultsByUnivOnly 재정렬 (2-92 / U-18)', bad, checks, sample)
 }
 
-// ── 5. studentsByRound 정렬 — seq_no ?? 999 ─────────────────────
+// ── 5. studentsByRound 정렬 — seq_no 누락 입력이 실제로 오는가 ────
 {
   // 재학생 담임(auth.grade !== 0) 경로: 학생은 전원 재학생이라 seq_no NOT NULL
-  // (002-students.sql:15-27 CHECK). ?? 999 가 발동하는 입력이 있는지 확인.
+  // (002-students.sql:15-27 CHECK). 정렬이 null 을 만날 일이 있는지 확인한다.
+  // 2026-09-21: `seq_no ?? 999` 는 logic/studentOrder.js 로 옮기며 없앴다
+  // (번호 없는 학생은 값을 지어내지 않고 뒤로 보낸다). 이 검사는 "애초에 null 이
+  // 오지 않는다"는 전제가 유지되는지 계속 지켜보기 위해 남긴다.
   let nullSeq = 0, negSeq = 0, total = 0
   for (const s of scenarios) for (const st of s.students) {
     if (!st.is_enrolled) continue
@@ -328,7 +307,7 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
     if (st.seq_no == null) nullSeq++
     if (st.seq_no != null && st.seq_no <= 0) negSeq++
   }
-  report('studentsByRound: 재학생 seq_no NULL (?? 999 발동)', nullSeq, total, '')
+  report('studentsByRound: 재학생 seq_no NULL', nullSeq, total, '')
   console.log(`        참고: 시나리오상 seq_no <= 0 재학생 ${negSeq}명 (JSON add_enrolled 는 seq_no >= 1 을 강제한다 — F-012 수정 완료)`)
 }
 

@@ -748,6 +748,9 @@ import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { formatScore } from '../../utils/scorePreviewShared.js'
+import {
+  filterByTrack, computeTieSet, groupByTrack, groupByUniv, sortGroups,
+} from '../../logic/rankResults.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
@@ -916,83 +919,13 @@ const rankView = ref('univ')
 
 // 표시용 필터. results 는 항상 라운드 전체이고, 여기서만 모집단위를 좁힌다.
 // 동점 표식(tieSet)은 results 전체를 쓰므로 필터와 무관하게 유지된다.
-const visibleResults = computed(() => {
-  if (!selectedTrackId.value) return results.value
-  const tid = Number(selectedTrackId.value)
-  return results.value.filter(r => r.track_id === tid)
-})
+const visibleResults = computed(() => filterByTrack(results.value, selectedTrackId.value))
 
 // 필터를 바꾸면 펼쳐 둔 행은 접는다(예전에는 재조회가 대신 해 주던 일).
 watch(selectedTrackId, () => { expandedRows.value = {} })
 
-const resultsByUniv = computed(() => {
-  const map = {}
-  for (const r of visibleResults.value) {
-    const key = `${r.univ_name} ${r.track_name}`
-    if (!map[key]) {
-      const q = trackQuotaMap.value[r.track_id]
-      const unitQuota = q?.unitQuota ?? null
-      const totalQuota = q?.totalQuota ?? null
-      map[key] = {
-        univId: q?.univId ?? null,
-        univName: r.univ_name,
-        unitQuota,
-        totalQuota,
-        remaining: unitQuota != null ? Math.max(0, unitQuota - (q?.unitUsed ?? 0)) : null,
-        univRemaining: totalQuota != null ? Math.max(0, totalQuota - (q?.totalUsed ?? 0)) : null,
-        results: [],
-      }
-    }
-    map[key].results.push(r)
-  }
-  // 이 보기가 표시하는 순위 숫자는 track_rank 다. ranking(대학 전체 순위) 순서를 그대로 쓰면
-  // 대학과 모집단위의 재학생우선 설정이 다를 때 표시 번호가 3,1,2 로 어긋난다.
-  for (const g of Object.values(map)) {
-    g.results.sort((a, b) => {
-      if (a.track_rank == null && b.track_rank == null) return 0
-      if (a.track_rank == null) return 1
-      if (b.track_rank == null) return -1
-      return a.track_rank - b.track_rank
-    })
-  }
-  return map
-})
-
-const resultsByUnivOnly = computed(() => {
-  const map = {}
-  for (const r of visibleResults.value) {
-    const key = r.univ_name
-    if (!map[key]) {
-      const q = trackQuotaMap.value[r.track_id]
-      const totalQuota = q?.totalQuota ?? null
-      map[key] = {
-        univId: q?.univId ?? null,
-        univName: r.univ_name,
-        totalQuota,
-        univRemaining: totalQuota != null ? Math.max(0, totalQuota - (q?.totalUsed ?? 0)) : null,
-        results: [],
-      }
-    }
-    map[key].results.push(r)
-  }
-  for (const g of Object.values(map)) {
-    g.results.sort((a, b) => {
-      if (a.ranking == null && b.ranking == null) return 0
-      if (a.ranking == null) return 1
-      if (b.ranking == null) return -1
-      return a.ranking - b.ranking
-    })
-  }
-  return map
-})
-
-// 대학 가나다 → (모집단위별 보기에서는) 모집단위 가나다. v-for 는 객체 키의 삽입 순서를
-// 그대로 쓰므로, 백엔드 ORDER BY 에 기대지 않고 여기서 키 순서를 확정한다.
-function sortGroups(map) {
-  return Object.fromEntries(
-    Object.entries(map).sort(([a], [b]) => a.localeCompare(b, 'ko'))
-  )
-}
+const resultsByUniv     = computed(() => groupByTrack(visibleResults.value, trackQuotaMap.value))
+const resultsByUnivOnly = computed(() => groupByUniv(visibleResults.value, trackQuotaMap.value))
 
 const resultsByView = computed(() => sortGroups(
   rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value
@@ -1012,33 +945,9 @@ const univAutoButtonKeys = computed(() => {
   return keys
 })
 
-const tieSet = computed(() => {
-  const set = new Set()
-  if (rankView.value === 'track') {
-    const counts = {}
-    for (const r of results.value) {
-      if (r.track_rank == null) continue
-      const k = `${r.track_id}-${r.round_id}-${r.track_rank}`
-      if (!counts[k]) counts[k] = []
-      counts[k].push(r)
-    }
-    for (const rows of Object.values(counts)) {
-      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}`)
-    }
-  } else {
-    const counts = {}
-    for (const r of results.value) {
-      if (r.ranking == null) continue
-      const k = `${r.univ_name}-${r.round_id}-${r.ranking}`
-      if (!counts[k]) counts[k] = []
-      counts[k].push(r)
-    }
-    for (const rows of Object.values(counts)) {
-      if (rows.length > 1) for (const r of rows) set.add(`${r.student_id}-${r.track_id}`)
-    }
-  }
-  return set
-})
+// 동점 표식은 **필터 이전 전체(results)** 로 계산한다 — visibleResults 를 넘기면
+// 같은 대학 다른 모집단위의 동점 상대가 사라진다(F-014).
+const tieSet = computed(() => computeTieSet(results.value, rankView.value))
 
 function getAreaScore(r, areaId) {
   try {

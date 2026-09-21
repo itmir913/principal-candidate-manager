@@ -466,6 +466,7 @@ import {
 import HelpBox from '../common/HelpBox.vue'
 import ApplicationDetailModal from './ApplicationDetailModal.vue'
 import { isKeyMatched, formatScore } from '../../utils/scorePreviewShared.js'
+import { canSaveApplication } from '../../logic/teacherApplication.js'
 
 const auth = useAuthStore()
 
@@ -552,21 +553,15 @@ function getStudentAppCount(sid) {
   return applications.value.filter(a => a.student_id === sid).length
 }
 
-const canSave = computed(() => {
-  if (!selectedStudent.value || !form.trackId || !currentRound.value || !form.departmentName.trim()) return false
-  if (areaContext.value.length === 0) return false
-  return areaContext.value.every(area => {
-    if (area.teacher_editable) {
-      if (area.multi_value) {
-        return (areaMultiValues.value[area.area_id] || []).length > 0
-      }
-      const v = areaValues.value[area.area_id]
-      return v !== undefined && v !== ''
-    }
-    // 관리자 입력 고정: 서버에서 받은 current_values가 있어야 함
-    return area.current_values.some(v => v !== '')
-  })
-})
+const canSave = computed(() => canSaveApplication({
+  hasStudent:      !!selectedStudent.value,
+  trackId:         form.trackId,
+  hasRound:        !!currentRound.value,
+  departmentName:  form.departmentName,
+  areaContext:     areaContext.value,
+  areaValues:      areaValues.value,
+  areaMultiValues: areaMultiValues.value,
+}))
 
 // 폼이 열려 있고 사용자가 값을 하나라도 입력한 상태
 const isDirty = computed(() => {
