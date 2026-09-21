@@ -899,7 +899,7 @@ function matchModeLabel(v)   { return v ? (MATCH_MODE_LABELS[v]   ?? v) : '—' 
 function categoryAggLabel(v) { return v ? (CATEGORY_AGG_LABELS[v] ?? v) : '—' }
 const displayScore = formatScore  // 공유 포맷터로 통일 (두 곳이 갈라지지 않도록)
 
-const totalMaxScore = computed(() => areas.value.reduce((sum, a) => sum + a.max_score, 0))
+const totalMaxScore = computed(() => sumMaxScore(areas.value))
 
 const baseStudentType = ref('enrolled')
 watch(baseStudentType, () => loadBaseRows(1))

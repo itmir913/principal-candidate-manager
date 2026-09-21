@@ -11,11 +11,13 @@
  * 실물 import:
  *   formatScore / isKeyMatched : frontend/src/utils/scorePreviewShared.js
  *   computeTieSet              : frontend/src/logic/rankResults.js
+ *   totalMaxScore              : frontend/src/logic/areaTotals.js
  *
  * 아직 이 파일 안에서 재구성하는 것 (`.vue` 안에 있어 import 할 수 없다):
  *   resultsByUnivOnly 정렬     : groupByUniv 로 추출했으나, 여기서는 "정렬이 순위와
  *                                어긋나지 않는가"를 독립 정의로 확인하므로 그대로 둔다
- *   totalMaxScore              : frontend/src/components/admin/AreasTab.vue:902
+ *
+ * 2026-09-21: 손복사는 이제 없다. `.vue` 안에 남아 import 할 수 없는 항목도 없다.
  *
  * **덤프가 아직 덮지 못하는 축**(정직하게 적어 둔다):
  *   - 라운드는 전 시나리오가 `round_id = 1` 이다. 덤프 하네스(tests/audit_oracle_dump.rs)가
@@ -33,6 +35,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { formatScore, isKeyMatched } from '../../frontend/src/utils/scorePreviewShared.js'
 import { computeTieSet } from '../../frontend/src/logic/rankResults.js'
+import { totalMaxScore } from '../../frontend/src/logic/areaTotals.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const scenarios = JSON.parse(fs.readFileSync(path.join(HERE, 'scenarios.json'), 'utf8'))
@@ -319,7 +322,8 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   let bad = 0, checks = 0, sample = ''
   for (const s of scenarios) {
     const exact = s.areas.reduce((acc, a) => acc + BigInt(a.max_score), 0n)
-    const front = s.areas.reduce((sum, a) => sum + a.max_score / 100000, 0)   // 백엔드 Score 직렬화 후 f64 합
+    // 백엔드 Score 직렬화(÷100000)를 흉내 낸 뒤 **프론트 실물 함수**에 넘긴다.
+    const front = totalMaxScore(s.areas.map(a => ({ max_score: a.max_score / 100000 })))
     checks++
     if (formatScore(front) !== exactDecimal(exact)) {
       bad++; sample ||= `${s.name}: front=${formatScore(front)} exact=${exactDecimal(exact)}`
@@ -329,7 +333,7 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   for (const n of [10, 50, 100, 500]) {
     const areas = Array.from({ length: n }, () => ({ max_score: 12345600 })) // 123.456
     const exact = areas.reduce((a, x) => a + BigInt(x.max_score), 0n)
-    const front = areas.reduce((s, x) => s + x.max_score / 100000, 0)
+    const front = totalMaxScore(areas.map(x => ({ max_score: x.max_score / 100000 })))
     checks++
     if (formatScore(front) !== exactDecimal(exact)) {
       bad++; sample ||= `n=${n}: front=${formatScore(front)} exact=${exactDecimal(exact)}`
