@@ -1,5 +1,8 @@
 <template>
-  <div style="padding: 2rem 2.5rem;">
+  <!-- 좌우 여백은 다른 탭과 같은 반응형 스케일을 쓴다. 인라인 `padding: 2rem 2.5rem` 은
+       모든 폭에서 40px 고정이라 모바일에서 이 화면만 더 안쪽으로 들어가 있었다.
+       `py-8 px-4 sm:px-10` = 세로 32px, 좌우 16px(모바일)/40px(sm 이상). -->
+  <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
     <div class="mb-6">
@@ -199,7 +202,16 @@
             <!-- 테이블 -->
             <div class="flex-1 rounded-xl overflow-hidden" style="border: 1px solid #e2e8f0;">
               <div class="overflow-x-auto">
-              <table class="w-full" style="border-collapse: collapse;">
+              <!-- 좁은 폭에서는 줄이지 말고 **가로로 스크롤**한다. min-width 가 없으면 표가
+                   칸에 맞춰 찌그러져 "3학 년 1 반" 처럼 글자 단위로 쪼개진다.
+                   (src/docs/13_frontend_pitfalls — overflow-x-auto + min-width + 열너비 고정) -->
+              <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 520px;">
+                <colgroup>
+                  <col style="width: 140px;">   <!-- 학급: "3학년 10반" -->
+                  <col style="width: 120px;">   <!-- 담임 -->
+                  <col style="width: 130px;">   <!-- 지원자 수: 경고 아이콘 + "0명" -->
+                  <col style="width: 130px;">   <!-- 입력 확정: pill 배지 -->
+                </colgroup>
                 <thead>
                   <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                     <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">학급</th>
@@ -288,10 +300,18 @@
 
           <div v-else class="rounded-xl overflow-hidden" style="margin: 0 24px 20px; border: 1px solid #e2e8f0;">
             <div class="overflow-x-auto">
-            <table class="w-full" style="border-collapse: collapse;">
+            <!-- 위 표와 같은 이유로 최소 너비를 준다. 대학 머리글 행이 colspan=4 라
+                 열 너비는 colgroup 으로 고정해야 흐트러지지 않는다. -->
+            <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 560px;">
+              <colgroup>
+                <col style="width: 48px;">    <!-- 정원 표식(∞ 등) -->
+                <col>                          <!-- 모집단위명: 남는 폭을 가진다 -->
+                <col style="width: 150px;">   <!-- 지원자 / 정원 -->
+                <col style="width: 120px;">   <!-- 현황 -->
+              </colgroup>
               <thead>
                 <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                  <th style="width: 48px; padding: 14px 20px;"></th>
+                  <th style="padding: 14px 20px;"></th>
                   <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">모집단위</th>
                   <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">지원자 / 정원</th>
                   <th class="text-base font-semibold text-right" style="padding: 14px 20px; color: #475569;">현황</th>

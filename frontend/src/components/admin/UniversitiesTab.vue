@@ -2,7 +2,10 @@
   <div class="py-8 px-4 sm:px-10">
 
     <!-- 페이지 헤더 -->
-    <div class="flex items-start justify-between mb-5">
+    <!-- `flex-wrap gap-3` 이 빠지면 좁은 폭에서 제목 칸과 버튼 묶음이 한 줄을 두고 다툰다.
+         이 화면은 버튼이 넷이라 제목이 글자 단위로 쪼개졌다("대 학 설 정").
+         다른 탭(StudentsTab·ClassesTab·AuditTab)과 같은 조합으로 맞춘다. -->
+    <div class="flex items-end justify-between flex-wrap gap-3 mb-5">
       <div>
         <p class="text-base mb-1" style="color: #94a3b8;">관리자</p>
         <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">대학 설정</h1>
