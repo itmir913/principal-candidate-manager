@@ -23,10 +23,10 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -37,7 +37,7 @@ jobs:
 
       # 오라클 대조(tools/oracle/*.py)용. 러너 기본 파이썬에 기대지 않고 고정한다.
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
