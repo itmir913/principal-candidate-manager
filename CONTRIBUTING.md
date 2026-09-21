@@ -49,8 +49,9 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 | `npm run dev` | 백엔드 + 프론트엔드 동시 실행 |
 | `npm run dev:watch` | 백엔드 소스 변경 시 자동 재시작 |
 | `npm test` | `cargo test` — 러스트 테스트 전체 |
+| `npm run test:front` | `vitest` — 프론트 순수 로직 테스트 |
 | `npm run test:oracle` | 독립 오라클 대조 + 프론트 파생값 대조 (Python 3 필요) |
-| `npm run ci` | 위 둘을 순서대로 — **CI 가 돌리는 것과 같다** |
+| `npm run ci` | 위 셋을 순서대로 — **CI 가 돌리는 것과 같다** |
 | `npm run build` | 릴리스 빌드 (`target/release/principal-candidate-manager.exe`) |
 
 ---
@@ -63,11 +64,12 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 4. 무엇을 왜 바꿨는지 설명을 담아 PR을 보냅니다
 
 > PR을 올리면 `.github/workflows/CI.yml`이 위와 **동일한 `npm run ci`**를
-> windows-latest에서 실행합니다. 프론트엔드에는 테스트 러너가 없지만 완전히
-> 무방비는 아닙니다 — `tools/oracle/front_check.mjs`가 백엔드 실측값으로 프론트
-> 파생 로직(점수 표기·동점 표식·재정렬)을 대조하고, `.vue` 소스를 직접 읽는
-> **소스 가드**로 특정 회귀(F-013·F-014)를 잡습니다. 다만 컴포넌트를 실제로
-> 렌더링하지는 않으므로, 화면 동작 자체는 여전히 사람이 확인해야 합니다.
+> windows-latest에서 실행합니다. 프론트엔드 검증은 세 겹입니다 — `vitest`가
+> `.vue` 밖의 순수 모듈(점수 표기·오류 문자열·라벨)을 직접 호출해 검사하고,
+> `tools/oracle/front_check.mjs`가 백엔드 실측값으로 파생 로직(점수 표기·동점
+> 표식·재정렬)을 대조하며, `.vue` 소스를 직접 읽는 **소스 가드**로 특정
+> 회귀(F-013·F-014)를 잡습니다. 다만 컴포넌트를 실제로 렌더링하지는 않으므로,
+> 화면 동작 자체는 여전히 사람이 확인해야 합니다.
 
 ### 릴리스
 
