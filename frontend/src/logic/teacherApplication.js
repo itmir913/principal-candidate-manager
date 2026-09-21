@@ -22,6 +22,12 @@ export function canSaveApplication({
   hasStudent, trackId, hasRound, departmentName,
   areaContext, areaValues, areaMultiValues,
 }) {
+  // `?.` 는 원본(`form.departmentName.trim()`)에 없던 것이다 — 엄밀히 말해 이동이
+  // 아니라 동작 변경이다(undefined 에서 throw → false). 호출부의 `form` 이
+  // `reactive({ departmentName: '' })` 라 도달할 수 없는 경로지만, 저장 버튼 잠금
+  // 조건이 예외로 터지면 화면이 통째로 멈추므로 여기서는 막는 쪽을 택했다.
+  // 값을 지어내는 폴백이 아니라 "조건 미충족"으로 떨어뜨리는 것이라 규칙 2 와 어긋나지
+  // 않는다. (감사 지적 — 커밋 f1ae466 의 "로직 변경 없이 옮겼다" 는 이 한 곳에서 부정확했다.)
   if (!hasStudent || !trackId || !hasRound || !departmentName?.trim()) return false
   // 전형요소가 하나도 없으면 점수를 낼 수 없다 — 저장할 것이 없다.
   if (areaContext.length === 0) return false
