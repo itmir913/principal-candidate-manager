@@ -89,8 +89,11 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
     // 점수표 행이 실제로 그려져야 한다 — "등록된 점수 기준 없음" 이면 안 된다.
     expect(t, '점수 기준이 비어 있다고 나온다 — 픽스처가 닿지 않았다')
       .not.toContain('등록된 점수 기준 없음')
-    expect(t, '점수표 값이 안 보인다').toContain('1.5')
-    expect(t, '점수표 값이 안 보인다').toContain('40')
+    // **'40' 은 쓰지 않는다** — 만점 표기·양식 예시·설명문에도 있어 점수 열을 비워도
+    // 통과했다(6차 감사 중-1). 점수표에만 나오는 값으로 고른다.
+    expect(t, '점수표 기준값이 안 보인다').toContain('1.5')
+    expect(t, '점수표 두 번째 행이 안 보인다').toContain('2')
+    expect(t, '점수 열이 비어 있다').toContain('35')
     wrapper.unmount()
   })
 
@@ -102,7 +105,9 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
 
     const t = wrapper.text()
     expect(t, '범주 값이 안 보인다').toContain('무단결석 0회')
-    expect(t, '범주 집계 표기가 없다').toMatch(/최대|MAX/)
+    // `/최대|MAX/` 는 점수 기준 탭의 고정 안내문 "소수점 최대 5자리" 에 항상 걸린다 —
+    // 범주 집계 span 을 통째로 지워도 통과했다. 라벨과 값을 함께 본다.
+    expect(t, '범주 집계 라벨이 없다').toContain('범주 집계')
     wrapper.unmount()
   })
 
@@ -113,8 +118,12 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
     await tick()
     await pickArea(wrapper, '교사추천')
 
-    expect(wrapper.text(), 'MANUAL 인데 점수 기준 화면이 열렸다')
-      .not.toContain('등록된 점수 기준 없음')
+    // 부정문 하나만 두면 **오른쪽 패널이 통째로 비어도** 통과한다(6차 감사 중-1).
+    // 무엇이 열렸는지 긍정으로 단언한다.
+    const t = wrapper.text()
+    expect(t, 'MANUAL 인데 점수 기준 화면이 열렸다').not.toContain('등록된 점수 기준 없음')
+    expect(t, '오른쪽 패널이 비었다 — 기초 데이터 탭이 열려야 한다').toContain('교사추천')
+    expect(t, '기초 데이터 탭이 아니다').toContain('기초 데이터')
     wrapper.unmount()
   })
 

@@ -190,7 +190,14 @@ describe('규칙 1 — 프론트에서 점수를 ÷100000 하지 않는다', () 
     // 그래서 **제외 목록으로 뒤집는다** — 새 이름이 생겨도 기본은 "잡는다"가 된다.
     // `\b` 가 아니라 `(?<![\w-])` 로 연다. `\b` 는 `z-index` 의 **`index` 부터** 다시
     // 매치돼 제외 목록을 통째로 빠져나간다(하이픈이 단어 경계이기 때문).
-    new RegExp(String.raw`(?<![\w-])(?!(?:z-?index|width|max-?width|min-?width|height|max-?height|min-?height|duration|delay|timeout|zoom|top|left|right|bottom|size|margin|padding|flex|order|opacity)(?![\w-]))[\w-]+\s*:\s*(?:${LITERAL})\s*(?:[,;}]|$)`, 'i'),
+    //
+    // 이름은 따옴표로 감쌀 수 있다(`{ 'scale': 1e5 }`, `{ "SCORE": 100000 }`) — 그것도 본다.
+    // 제외 목록은 **CSS 길이·순서 속성만** 남겼다. 6차 감사 중-2: `size|order|opacity|
+    // flex|margin|padding|top|left|right|bottom|zoom` 까지 넓혔는데 대응하는 실제 오탐이
+    // 0건이었다 — 근거 없이 넓힌 제외는 구멍일 뿐이다.
+    new RegExp(String.raw`(?<![\w-])['"]?(?!(?:z-?index|width|max-?width|min-?width|height|max-?height|min-?height|duration|delay|timeout)(?![\w-]))[\w-]+['"]?\s*:\s*(?:${LITERAL})\s*(?:[,;}]|$)`, 'i'),
+    // 리터럴이 앞에 오는 곱셈(`100000 * v`)도 배율 계산이다.
+    new RegExp(String.raw`(?<![\w.])(?:${LITERAL})\s*[*/]`),
     new RegExp(String.raw`\[\s*(?:${LITERAL})\s*\]`),
   ]
 

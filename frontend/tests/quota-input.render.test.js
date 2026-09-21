@@ -182,26 +182,41 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
     wrapper.unmount()
   })
 
-  it('정원을 다루는 저장 버튼이 전부 가드에 걸려 있다', async () => {
-    // 위 테스트들은 **내가 아는 폼**만 돈다. 폼이 하나 늘었는데 FORMS 에 안 적으면
-    // 그 폼은 조용히 검사 밖이 된다 — 4차 감사에서 정확히 그 상태였다.
-    // 소스에서 세어, 가드 없는 저장 버튼이 남아 있으면 실패한다.
+  it.each(FORMS)('%s: 화면의 모든 정원 칸이 0 을 거부한다', async (which) => {
+    // **소스를 세지 않고, 표식에 기대지도 않는다.** 앞 판은 `<QuotaInput>` 개수를 세어
+    // 그 컴포넌트를 쓰지 않고 손으로 만든 정원 칸(F-013 의 실제 재발 경로)을 놓쳤고,
+    // 그다음 판은 `[data-testid]` 안만 훑어 표식 없는 폼을 놓쳤다(6차 감사 치-3).
+    // 이제 **컴포넌트에 렌더된 number 입력칸 전부**를 훑고, 0 을 넣은 뒤
+    // **화면의 어떤 저장 버튼도 열려 있으면 안 된다**고 본다.
+    const wrapper = mount((await load()).default)
+    await new Promise(r => setTimeout(r, 0))
+    await openForm(wrapper, which)
+
+    const boxes = wrapper.findAll('input[type="number"]')
+    expect(boxes.length, `${which}: 정원 입력칸이 하나도 없다`).toBeGreaterThan(0)
+
+    for (const box of boxes) {
+      await type(box, '0')
+      const open = wrapper.findAll('button')
+        .filter(b => b.text() === '저장' && b.attributes('disabled') === undefined)
+      expect(open.length,
+        `${which}: 정원 칸에 0 이 들어 있는데 저장 버튼 ${open.length}개가 열려 있다 — ` +
+        '값이 조용히 보정됐거나 가드가 없는 폼이다(F-013)').toBe(0)
+      await type(box, '2')
+    }
+    wrapper.unmount()
+  })
+
+  it('정원 칸을 가진 폼이 FORMS 목록과 같은 수다', async () => {
+    // 위 테스트는 **내가 여는 폼**만 본다. 새 폼이 생겼는데 FORMS 에 없으면 못 연다.
+    // 그래서 `data-testid` 개수와 목록 길이를 맞춰 둔다 — 표식을 안 붙이면 여기서 걸린다.
     const [{ default: fs }, { default: path }, { fileURLToPath }] =
       await Promise.all([import('node:fs'), import('node:path'), import('node:url')])
     const here = path.dirname(fileURLToPath(import.meta.url))
     const src = fs.readFileSync(
       path.join(here, '..', 'src', 'components', 'admin', 'UniversitiesTab.vue'), 'utf8')
-    // **세는 방향을 뒤집는다.** 예전에는 *가드가 걸린* 버튼 수만 세어, 가드 없는 폼을
-    // 새로 추가해도 4 == 4 로 통과했다(5차 감사 치-2). 이제 **정원을 다루는 폼**의
-    // 수를 세고, 그 전부가 가드에 걸려 있는지 본다.
-    const quotaForms = (src.match(/<QuotaInput/g) ?? []).length
-    const guarded = (src.match(/:disabled="saving \|\| !(univ|track)FormValid"/g) ?? []).length
-    expect(quotaForms, '정원 폼이 늘었는데 FORMS 목록에 없다 — 그 폼은 검사 밖이다')
-      .toBe(FORMS.length)
-    expect(guarded, '정원 폼 수와 가드 수가 어긋난다 — 가드 없는 저장 버튼이 있다')
-      .toBe(quotaForms)
-    // 표식도 폼 수만큼 있어야 한다 — 없으면 위 openForm 이 그 폼을 못 연다.
+    // 보조 장치다 — 표식을 안 붙인 새 폼은 못 본다. 본체는 위 행동 테스트다.
     expect((src.match(/data-testid="(?:univ|track)-(?:add|edit)-form"/g) ?? []).length,
-      '폼 신원 표식이 빠졌다').toBe(FORMS.length)
+      '폼 신원 표식 수와 FORMS 목록이 어긋난다').toBe(FORMS.length)
   })
 })

@@ -19,11 +19,18 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { dialogState, settleDialog } from '../src/components/common/dialog.js'
 
-const ROUND = { id: 1, status: 'FINALIZED', opened_at: '2026-03-02T00:00:00Z',
+// [마감하기] 는 CLOSED 에서만, [포기 처리] 는 FINALIZED 에서만 보인다.
+// 하나로는 둘 다 못 누르므로 두 라운드를 준다.
+const ROUND_CLOSED = { id: 1, status: 'CLOSED', opened_at: '2026-03-02T00:00:00Z',
+                       closed_at: '2026-03-10T00:00:00Z', finalized_at: null,
+                       needs_recalc: false }
+const ROUND = { id: 2, status: 'FINALIZED', opened_at: '2026-03-02T00:00:00Z',
                 closed_at: '2026-03-10T00:00:00Z', finalized_at: '2026-03-20T00:00:00Z',
                 needs_recalc: false }
+const ROUNDS = [ROUND_CLOSED, ROUND]
 const ROW = {
-  student_id: 1, track_id: 1, round_id: 1, name: '학생01', student_code: '2026001',
+  // round_id 는 FINALIZED 라운드(2)에 맞춘다 — 담임 결과표와 [포기 처리] 가 거기 있다.
+  student_id: 1, track_id: 1, round_id: 2, name: '학생01', student_code: '2026001',
   grade: 3, class_no: 1, seq_no: 1, is_enrolled: true,
   univ_name: '가대학', track_name: '가모집단위', department_name: '컴퓨터공학과',
   total_score: 5.31304, score_detail: { 1: 5.31304 },
@@ -42,50 +49,85 @@ const AREA = { id: 1, area_id: 1, name: '요소1', calc_type: 'NUMERIC', match_m
 const STUDENT = { id: 1, name: '학생01', student_code: '2026001',
                   grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }
 
+// 쓰기 호출을 기록한다. **"취소를 눌렀는데 실행됐는가"** 를 보기 위해서다.
+// 6차 감사 치-2: 다이얼로그가 떴는지만 보던 동안, `if (!(await confirm(...))) return` 에서
+// `if` 만 걷어내는 변이(= 취소해도 삭제됨)가 전 검증을 통과했다. 간판만 보고 게이트를
+// 안 본 것이다.
+export const writes = []
+
 vi.mock('axios', () => {
-  const res = (url = '') => {
+  const read = (url = '') => {
     const u = String(url)
     const data =
       /teacher\/results/.test(u) ? { rounds: [ROUND], results: [ROW] }
       : /quota-stats/.test(u)    ? { all_round_ids: [1], univs: [UNIV] }
       : /univ-tracks/.test(u)    ? UNIV.tracks
       : /universities/.test(u)   ? [UNIV]
+      : /numeric-table\/list|category-map\/list|base-data\/list/.test(u)
+                                 ? { rows: [], total: 0, page: 1, per_page: 50 }
       : /\/api\/areas/.test(u)   ? [AREA]
       : /\/api\/students/.test(u)? { rows: [STUDENT], total: 1, page: 1, per_page: 50, by_grade: { 3: [1] } }
       : /\/api\/classes/.test(u) ? [{ grade: 3, class_no: 1, teacher_name: '홍길동', has_password: true }]
-      : /\/api\/rounds/.test(u)  ? [ROUND]
+      : /\/api\/applications/.test(u) ? [ROW]
+      : /\/api\/rounds\/\d+\/results/.test(u) ? [ROW]
+      : /\/api\/rounds/.test(u)  ? ROUNDS
       : []
     return Promise.resolve({ data, headers: {} })
   }
-  const axios = { get: res, post: res, put: res, patch: res, delete: res,
-    interceptors: { request: { use: () => {} }, response: { use: () => {} } } }
+  const write = (method) => (url = '') => {
+    writes.push(`${method} ${url}`)
+    return read(url)
+  }
+  const axios = {
+    get: read,
+    post: write('POST'), put: write('PUT'), patch: write('PATCH'), delete: write('DELETE'),
+    interceptors: { request: { use: () => {} }, response: { use: () => {} } },
+  }
   return { default: axios, ...axios }
 })
 
 const tick = () => new Promise(r => setTimeout(r, 0))
 
 /**
- * 파괴적 행위 버튼. `열기` 가 화면을 눌러 그 버튼이 보이게 만들고, `버튼` 이 그것을 고른다.
- * 새 파괴적 행위가 생기면 여기에 한 줄을 더해야 한다 — 빠뜨리면 아래
- * "danger 를 쓰는 곳이 목록과 같다" 검사가 실패한다.
+ * 파괴적 행위 **전부**. `열기` 는 그 버튼이 보이게 만드는 조작(없으면 마운트 직후 보인다),
+ * `버튼` 은 누를 라벨, `호출` 은 확인을 **취소**했을 때 불리면 안 되는 axios 메서드다.
+ *
+ * 6차 감사 치-1: 앞 판은 8곳 중 **3곳만** 눌러 봤고, 나머지 5곳은 `level: 'danger',` 를
+ * 주석 처리하면 그대로 통과했다. "목록이 낡으면 잡힌다"고 적어 둔 장치는 이 목록이
+ * 아니라 **별도 하드코딩 객체**와 비교하고 있어서 3 vs 8 로 어긋난 채 아무 말도 없었다.
+ * 이제 아래 `DANGER_SITES` 하나만 두고, 소스 개수와 **이 목록의 길이**를 대조한다.
  */
 const DESTRUCTIVE = [
+  { 이름: '담임 — 추천 포기',      파일: 'teacher/ResultsTab.vue',     버튼: '추천 포기' },
+  { 이름: '관리자 — 학급 삭제',     파일: 'admin/ClassesTab.vue',       버튼: '삭제' },
+  { 이름: '관리자 — 대학 삭제',     파일: 'admin/UniversitiesTab.vue',  버튼: '삭제' },
+  { 이름: '관리자 — 전형요소 삭제',  파일: 'admin/AreasTab.vue',         버튼: '삭제' },
+  { 이름: '관리자 — 학생 삭제',     파일: 'admin/StudentsTab.vue',      버튼: '삭제' },
   {
-    이름: '담임 — 추천 포기',
-    파일: '../src/components/teacher/ResultsTab.vue',
-    버튼: '추천 포기',
+    이름: '관리자 — 모집단위 삭제', 파일: 'admin/UniversitiesTab.vue', 버튼: '삭제',
+    // 대학 카드의 [삭제]와 라벨이 같다. 표 안(td)에 있는 쪽이 모집단위 것이다.
+    고르기: (w) => w.findAll('td button').filter(b => b.text() === '삭제')[0],
   },
   {
-    이름: '관리자 — 학급 삭제',
-    파일: '../src/components/admin/ClassesTab.vue',
-    버튼: '삭제',
+    이름: '관리자 — 라운드 마감',   파일: 'admin/RoundsTab.vue',        버튼: '마감하기',
+    // 마감 버튼은 CLOSED("종료") 라운드에만 있다.
+    열기: async (w, tick) => { await pickRound(w, tick, '종료') },
   },
   {
-    이름: '관리자 — 대학 삭제',
-    파일: '../src/components/admin/UniversitiesTab.vue',
-    버튼: '삭제',
+    // 화면 버튼은 '포기하기' 다 — '포기 처리' 는 다이얼로그의 confirmText 다.
+    이름: '관리자 — 지원 포기 처리', 파일: 'admin/RoundsTab.vue',       버튼: '포기하기',
+    // 포기 처리는 FINALIZED("마감") 라운드의 추천 확정된 지원에만 있다.
+    열기: async (w, tick) => { await pickRound(w, tick, '마감') },
   },
 ]
+
+/** 상태 표기로 라운드 카드를 골라 상세 패널을 연다. */
+async function pickRound(wrapper, tick, 상태) {
+  const card = wrapper.findAll('.cursor-pointer').find(d => d.text().includes(상태))
+  expect(card, `[${상태}] 라운드 카드가 없다`).toBeTruthy()
+  await card.trigger('click')
+  await tick()
+}
 
 const load = (p) => import(/* @vite-ignore */ p)
 
@@ -94,9 +136,10 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
     setActivePinia(createPinia())
     localStorage.clear()
     localStorage.setItem('pcm_token', 't')
-    localStorage.setItem('pcm_role', 'teacher')
+    localStorage.setItem('pcm_role', 'admin')
     localStorage.setItem('pcm_grade', '3')
     localStorage.setItem('pcm_class_no', '1')
+    writes.length = 0
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -105,31 +148,42 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
     vi.restoreAllMocks()
   })
 
-  it.each(DESTRUCTIVE)('$이름 — 누르면 danger 확인이 뜬다', async ({ 파일, 버튼 }) => {
-    const mod = await load(파일)
-    const wrapper = mount(mod.default, {
-      global: { stubs: { RouterLink: true, RouterView: true } },
+  it.each(DESTRUCTIVE)('$이름 — 확인을 거치고, 취소하면 실행되지 않는다',
+    async ({ 파일, 버튼, 열기, 고르기 }) => {
+      const mod = await load(`../src/components/${파일}`)
+      const wrapper = mount(mod.default, {
+        global: { stubs: { RouterLink: true, RouterView: true } },
+      })
+      await tick()
+      if (열기) await 열기(wrapper, tick)
+
+      const target = 고르기
+        ? 고르기(wrapper)
+        : wrapper.findAll('button').find(b => b.text() === 버튼)
+      expect(target, `[${버튼}] 버튼이 화면에 없다 — 픽스처나 열기 단계를 확인하라`)
+        .toBeTruthy()
+
+      writes.length = 0
+      await target.trigger('click')
+      await tick()
+
+      // ① 확인 없이 바로 실행되지 않는다
+      expect(dialogState.open, '확인 없이 바로 실행된다').toBe(true)
+      expect(dialogState.level,
+        '되돌리기 어려운 행위인데 danger 가 아니다 — 한 번 누르면 실행된다').toBe('danger')
+      expect(dialogState.dangerNotice,
+        '2단계 화면에 보여 줄 문구가 없다').toBeTruthy()
+      expect(dialogState.step, '처음부터 2단계로 열렸다').toBe(1)
+      expect(writes, '다이얼로그가 뜨기도 전에 서버를 불렀다').toEqual([])
+
+      // ② **취소하면 실제로 막힌다.** 여기가 게이트다 — ①은 간판일 뿐이다.
+      settleDialog(false)
+      await tick()
+      expect(writes,
+        '취소를 눌렀는데 실행됐다 — confirm 결과를 보지 않고 있다').toEqual([])
+
+      wrapper.unmount()
     })
-    await tick(); await tick()
-
-    const target = wrapper.findAll('button').find(b => b.text() === 버튼)
-    expect(target, `[${버튼}] 버튼이 화면에 없다 — 픽스처가 그 상태를 만들었는지 확인하라`)
-      .toBeTruthy()
-    await target.trigger('click')
-    await tick()
-
-    // **상태로 본다.** 소스에 'danger' 라는 글자가 있는지가 아니라,
-    // 실제로 danger 다이얼로그가 떴는지.
-    expect(dialogState.open, '확인 없이 바로 실행된다').toBe(true)
-    expect(dialogState.level,
-      `되돌리기 어려운 행위인데 danger 가 아니다 — 한 번 누르면 실행된다`).toBe('danger')
-    expect(dialogState.dangerNotice,
-      '2단계 화면에 보여 줄 문구가 없다 — 관리자는 무엇을 확인하는지 모른다').toBeTruthy()
-    expect(dialogState.step, '처음부터 2단계로 열렸다').toBe(1)
-
-    settleDialog(false)
-    wrapper.unmount()
-  })
 })
 
 /**
