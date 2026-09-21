@@ -748,9 +748,7 @@ import HelpBox from '../common/HelpBox.vue'
 import { dialog } from '../common/dialog.js'
 import { roundStatusLabel } from '../../data/roundStatus.js'
 import { formatScore } from '../../utils/scorePreviewShared.js'
-import {
-  filterByTrack, computeTieSet, groupByTrack, groupByUniv, sortGroups,
-} from '../../logic/rankResults.js'
+import { buildResultsView, sortGroups } from '../../logic/rankResults.js'
 
 const HELP_EMPTY = {
   title: '도움말 — 첫 라운드 열기 전 확인하세요',
@@ -917,37 +915,24 @@ const trackQuotaMap = computed(() => {
 // 결과 탭만 모집단위 기준으로 열리면 같은 학생의 순위가 탭마다 달라 보인다.
 const rankView = ref('univ')
 
-// 표시용 필터. results 는 항상 라운드 전체이고, 여기서만 모집단위를 좁힌다.
-// 동점 표식(tieSet)은 results 전체를 쓰므로 필터와 무관하게 유지된다.
-const visibleResults = computed(() => filterByTrack(results.value, selectedTrackId.value))
+// 결과 탭이 쓰는 파생값은 전부 buildResultsView 한 곳에서 나온다.
+// **rows 에는 라운드 전체를 넘긴다** — 여기서 걸러 넘기면 같은 대학 다른 모집단위의
+// 동점 상대가 사라져 표식이 빠진다(F-014). 표시용 필터는 함수 안에서 한다.
+// 배선을 함수 안에 넣어 두었으므로 이 규약은 logic/rankResults.test.js 가 행동으로
+// 검사한다 — 예전의 소스 정규식 가드보다 확실하다.
+const resultsView = computed(() => buildResultsView({
+  rows:     results.value,
+  trackId:  selectedTrackId.value,
+  view:     rankView.value,
+  quotaMap: trackQuotaMap.value,
+}))
+
+const resultsByView      = computed(() => resultsView.value.groups)
+const tieSet             = computed(() => resultsView.value.tieSet)
+const univAutoButtonKeys = computed(() => resultsView.value.autoButtonKeys)
 
 // 필터를 바꾸면 펼쳐 둔 행은 접는다(예전에는 재조회가 대신 해 주던 일).
 watch(selectedTrackId, () => { expandedRows.value = {} })
-
-const resultsByUniv     = computed(() => groupByTrack(visibleResults.value, trackQuotaMap.value))
-const resultsByUnivOnly = computed(() => groupByUniv(visibleResults.value, trackQuotaMap.value))
-
-const resultsByView = computed(() => sortGroups(
-  rankView.value === 'track' ? resultsByUniv.value : resultsByUnivOnly.value
-))
-
-// 대학별 자동 추천 버튼은 대학 단위 동작이다. 모집단위별 보기에서는 그룹이 모집단위마다
-// 나뉘므로 각 대학의 첫 그룹에만 노출한다 — 같은 버튼이 모집단위 수만큼 반복되어
-// "이 모집단위만 처리"로 오해되는 것을 막는다.
-const univAutoButtonKeys = computed(() => {
-  const seen = new Set()
-  const keys = new Set()
-  for (const [key, g] of Object.entries(resultsByView.value)) {
-    if (g.univId == null || seen.has(g.univId)) continue
-    seen.add(g.univId)
-    keys.add(key)
-  }
-  return keys
-})
-
-// 동점 표식은 **필터 이전 전체(results)** 로 계산한다 — visibleResults 를 넘기면
-// 같은 대학 다른 모집단위의 동점 상대가 사라진다(F-014).
-const tieSet = computed(() => computeTieSet(results.value, rankView.value))
 
 function getAreaScore(r, areaId) {
   try {
@@ -1054,7 +1039,7 @@ async function loadResults() {
   if (!selected.value) return
   // 모집단위 필터를 서버에 넘기지 않는다. 대학 순위 보기의 동점 판정은 같은 대학의
   // **다른 모집단위 지원자**까지 봐야 하는데, 서버에서 걸러 받으면 그 상대가 배열에
-  // 없어 동점 표식이 사라진다. 전체를 받아 표시 단계에서만 거른다(visibleResults).
+  // 없어 동점 표식이 사라진다. 전체를 받아 표시 단계에서만 거른다(buildResultsView).
   ;[results.value, quotaStats.value] = await Promise.all([
     getResults(selected.value.id, null),
     getQuotaStats(),

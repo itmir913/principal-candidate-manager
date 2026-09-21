@@ -130,3 +130,56 @@ export function sortGroups(map) {
     Object.entries(map).sort(([a], [b]) => a.localeCompare(b, 'ko'))
   )
 }
+
+/**
+ * 대학별 자동 추천 버튼을 띄울 그룹 키.
+ *
+ * 자동 추천은 **대학 단위** 동작이다. 모집단위별 보기에서는 그룹이 모집단위마다 나뉘므로
+ * 각 대학의 첫 그룹에만 노출한다 — 같은 버튼이 모집단위 수만큼 반복되면
+ * "이 모집단위만 처리"로 오해된다. 정원 정보가 없어 `univId` 를 모르는 그룹은 제외한다
+ * (어느 대학인지 모르는 채로 대학 전체를 확정할 수는 없다).
+ */
+export function univAutoButtonKeys(groups) {
+  const seen = new Set()
+  const keys = new Set()
+  for (const [key, g] of Object.entries(groups)) {
+    if (g.univId == null || seen.has(g.univId)) continue
+    seen.add(g.univId)
+    keys.add(key)
+  }
+  return keys
+}
+
+/**
+ * 결과 탭이 화면에 쓰는 값 **전부**를 한 번에 만든다.
+ *
+ * 왜 하나로 묶었나 — 여기서 잡으려는 회귀는 개별 함수의 버그가 아니라 **배선**이다.
+ * `computeTieSet` 은 어떤 배열을 받아도 옳게 동작하므로, "걸러진 배열을 넘겼다"는
+ * 잘못은 그 함수의 테스트로는 영원히 잡히지 않는다. 예전에는 `.vue` 본문을 정규식으로
+ * 훑는 소스 가드로 막으려 했으나(F-014 대응), 감사에서 `.filter()` 체이닝과
+ * `loadResults` 안에서의 필터링을 둘 다 놓치고 줄바꿈 하나에는 오탐으로 터지는 것이
+ * 드러났다. 배선을 함수 안으로 넣으면 **행동으로** 단언할 수 있다:
+ * "trackId 를 줘도 tieSet 은 줄지 않는다."
+ *
+ * @param {object} p
+ * @param {Array}  p.rows      라운드 **전체** 결과. 여기서 걸러 넣지 마라.
+ * @param {*}      p.trackId   표시용 모집단위 필터 (없으면 전체)
+ * @param {'track'|'univ'} p.view
+ * @param {object} p.quotaMap  track_id → 정원 정보
+ * @returns {{ groups: object, tieSet: Set<string>, autoButtonKeys: Set<string> }}
+ */
+export function buildResultsView({ rows, trackId, view, quotaMap }) {
+  const visible = filterByTrack(rows, trackId)
+  const grouped = view === 'track'
+    ? groupByTrack(visible, quotaMap)
+    : groupByUniv(visible, quotaMap)
+  const groups = sortGroups(grouped)
+
+  return {
+    groups,
+    // 동점 판정만 rows(필터 이전)를 쓴다 — 같은 대학 다른 모집단위의 동점 상대가
+    // 걸러지면 표식이 사라진다(F-014).
+    tieSet: computeTieSet(rows, view),
+    autoButtonKeys: univAutoButtonKeys(groups),
+  }
+}

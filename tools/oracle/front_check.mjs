@@ -177,15 +177,15 @@ function exactDecimal(raw) {
   report('tieSet univ 보기 (2-90 / U-16)', badUniv, rows, sampleU)
 }
 
-// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 (문서용 모사 — 회귀 방어는 3c) ──
-// 주의: F-014 수정 이후 이 검사는 **구조적으로 실패할 수 없다.** tieAll·shownAll 이 둘 다
-// 라운드 전체에서 파생되고 필터 루프는 카운터에만 쓰이기 때문이다(변이 M5 로 실증됐다 —
-// 컴포넌트를 되돌려도 여기는 0건이고 3c 만 FAIL). 남겨 두는 이유는 "고친 뒤의 올바른
-// 동작이 무엇인가"를 실행 가능한 형태로 기록하기 위해서다. **회귀 방어는 3c 가 한다.**
+// ── 3b. tieSet univ 보기 + 모집단위 필터 조합 (문서용 모사) ──
+// 주의: 이 검사는 **구조적으로 실패할 수 없다.** tieAll·shownAll 이 둘 다 라운드 전체에서
+// 파생되고 필터 루프는 카운터에만 쓰이기 때문이다. 남겨 두는 이유는 "올바른 동작이
+// 무엇인가"를 실행 가능한 형태로 기록하기 위해서다.
+// **회귀 방어는 여기가 아니라 frontend/src/logic/rankResults.test.js 의
+// `buildResultsView` 절이 한다**(2026-09-21, 3c 폐기와 함께 옮겼다).
 // F-014 수정(2026-08-18): RoundsTab.loadResults 가 모집단위 필터를 **서버에 넘기지 않는다.**
-// 라운드 전체를 받아 tieSet 은 전체로 계산하고, 표시만 visibleResults 로 좁힌다.
+// 라운드 전체를 받아 tieSet 은 전체로 계산하고, 표시만 buildResultsView 안에서 좁힌다.
 // 이 검사는 그 동작을 모사해 "필터를 걸어도 대학 전체 동점 표식이 유지되는가"를 본다.
-// 모사이므로 컴포넌트가 예전 방식으로 되돌아가는 것은 잡지 못한다 — 그건 3c 가 맡는다.
 {
   let missed = 0, cases = 0, sample = ''
   for (const scn of actual) {
@@ -227,26 +227,17 @@ function exactDecimal(raw) {
 // 걸리면 안 되기 때문이다(실제로 F-013 주석이 걸렸다).
 const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
 
-// ── 3c. 소스 가드 — 컴포넌트가 필터를 서버로 다시 넘기면 실패한다 ──
-// 3b 는 모사라 되돌림을 못 잡는다. 여기서는 RoundsTab.vue 본문을 직접 읽어
-// F-014 수정의 두 축(전체 조회 / tieSet 은 전체 기준)이 살아 있는지 확인한다.
-{
-  const vue = fs.readFileSync(
-    path.join(HERE, '..', '..', 'frontend', 'src', 'components', 'admin', 'RoundsTab.vue'), 'utf8')
-  const problems = []
-  if (!/getResults\(selected\.value\.id,\s*null\)/.test(vue))
-    problems.push('loadResults 가 라운드 전체를 받지 않는다(필터를 서버에 넘긴다)')
-  if (!/const visibleResults = computed/.test(vue))
-    problems.push('visibleResults(표시용 필터)가 없다')
-  // tieSet 에 무엇을 넘기는지는 **순수 함수 테스트로는 알 수 없다** — computeTieSet
-  // 자체는 어떤 배열을 받아도 옳게 동작하기 때문이다. 잘못된 인자를 넘기는 회귀는
-  // 여기서만 잡힌다. (예전에는 tieSet 본문을 `indexOf('return set')` 으로 잘라
-  // 검사했는데, 추출 후 `return set` 이 사라져 그 방식은 쓸 수 없다.)
-  if (!/const tieSet = computed\(\(\) => computeTieSet\(\s*results\.value/.test(noComments(vue)))
-    problems.push('tieSet 이 computeTieSet(results.value, …) 형태가 아니다 — '
-                + '필터 이전 전체를 넘겨야 한다(visibleResults 금지)')
-  report('RoundsTab 소스 가드 (F-014 회귀 방지)', problems.length, 3, problems.join(' / '))
-}
+// ── 3c. 폐기 (2026-09-21) ───────────────────────────────────────
+// 여기에는 F-014 회귀를 막는 소스 정규식 가드가 있었다. 감사에서 **두 방향 모두**
+// 실패하는 것이 드러나 걷어낸다:
+//   - 놓친 회귀: `computeTieSet(results.value.filter(...))` 체이닝,
+//     `loadResults` 안에서 `results.value` 자체를 걸러 담기, 옛 형태를 주석으로 남기기
+//   - 오탐: `computed(() =>` 뒤에 줄바꿈 하나만 넣어도 FAIL (동작은 동일)
+// 문자열 모양으로 배선을 지키려던 것이 애초에 틀렸다. 배선을 순수 함수
+// `buildResultsView` 안으로 넣었고, 이제 `frontend/src/logic/rankResults.test.js` 가
+// "trackId 를 줘도 tieSet 은 줄지 않는다"를 **행동으로** 단언한다.
+// (3d 는 다르다 — 그쪽은 `parseInt(...) ||` 라는 **금지 패턴의 부재**를 보는 것이라
+//  소스 검사가 제 일을 한다. 그대로 둔다.)
 
 // ── 3d. 소스 가드 — 정원 입력이 값을 조용히 바꾸지 않는가 (F-013) ──
 // 예전 UniversitiesTab 은 `parseInt(v) || 1` 이라 0 을 1 로 치환하고 음수는 통과시켰다.
