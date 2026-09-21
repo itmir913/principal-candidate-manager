@@ -35,25 +35,31 @@ fn allowed_files() -> Vec<String> {
 
 /// `src/` 를 훑어 파일별 `unwrap_or*` 개수를 센다.
 fn fallbacks_in_src() -> BTreeMap<String, usize> {
-    fn walk(dir: &std::path::Path, out: &mut BTreeMap<String, usize>) {
+    // 경로는 **저장소 루트를 떼어** 만든다. 앞서 `split_once("src/")` 를 썼는데,
+    // 저장소가 경로에 `src/` 를 이미 포함한 곳에 있으면(예: `~/src/pcm/`) 첫 번째
+    // `src/` 에서 잘려 키가 어긋난다. 이식성 문제이자 silent fallback 이었다.
+    fn walk(root: &std::path::Path, dir: &std::path::Path, out: &mut BTreeMap<String, usize>) {
         for e in std::fs::read_dir(dir).expect("src 를 읽지 못했다") {
             let p = e.expect("디렉터리 항목").path();
             if p.is_dir() {
-                walk(&p, out);
+                walk(root, &p, out);
             } else if p.extension().is_some_and(|x| x == "rs") {
                 let src = std::fs::read_to_string(&p).expect("소스를 읽지 못했다");
                 let n = count_unwrap_or(&src);
                 if n > 0 {
-                    let rel = p.to_string_lossy().replace('\\', "/");
-                    let rel = rel.split_once("src/").map(|(_, r)| format!("src/{r}"))
-                        .unwrap_or(rel);
+                    let rel = p
+                        .strip_prefix(root)
+                        .expect("탐색 결과가 저장소 루트 밖이다")
+                        .to_string_lossy()
+                        .replace(char::from(92), "/");
                     out.insert(rel, n);
                 }
             }
         }
     }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut out = BTreeMap::new();
-    walk(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").as_path(), &mut out);
+    walk(root, root.join("src").as_path(), &mut out);
     out
 }
 

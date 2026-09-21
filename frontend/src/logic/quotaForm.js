@@ -1,7 +1,9 @@
 /**
  * 대학·모집단위 폼의 정원 유효성 — 순수 함수.
  *
- * UniversitiesTab.vue 에 있던 것을 로직 변경 없이 옮겼다.
+ * UniversitiesTab.vue 에 있던 것을 옮겼다. **한 곳이 달라졌다** — `parseQuotaInput` 에
+ * `Number.isSafeInteger` 상한을 더했다(아래 그 함수 주석에 이유를 적었다).
+ * 나머지(`isQuotaValid`·`isUnivFormValid`·`isTrackFormValid`)는 원본과 동치다.
  *
  * **F-013 의 교훈**: 예전 입력 처리는 `parseInt(v) || 1` 이라 0 을 조용히 1 로
  * 바꾸고 음수는 그대로 통과시켰다. UI 는 값을 고쳐 주는 대신 **저장을 막아야 한다**

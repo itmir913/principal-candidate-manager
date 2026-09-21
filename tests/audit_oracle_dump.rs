@@ -10,7 +10,7 @@
 //! `round_status` 를 담을 수 있다. 이 플래그들은 **실제 생명주기 순서대로** 적용한다 —
 //! CLOSED 에서 excluded·recommended 를 UPDATE 하고, FINALIZED 로 전이한 뒤 abandoned 를 UPDATE.
 //! `round_status: "REOPENED"` 는 CLOSED 에서 `reopen_round` 핸들러를 실제로 호출한다 —
-//! 그 경로가 `ranking = NULL` 을 만드는 유일한 지점이라(rounds.rs:264), 순위 없는 행을
+//! 그 경로가 `ranking = NULL` 을 만드는 유일한 지점이라(`rounds.rs` 의 `reopen_round`), 순위 없는 행을
 //! 프론트가 어떻게 다루는지 대조하려면 이 상태가 덤프에 있어야 한다.
 //! 트리거(`trg_prevent_update_closed_application`, `trg_require_all_decided_before_finalize`,
 //! `trg_prevent_update_finalized_result`)를 우회하지 않으므로, 여기서 만들어지는 상태는

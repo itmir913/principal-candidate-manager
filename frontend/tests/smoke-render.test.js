@@ -249,6 +249,15 @@ function signIn() {
 const targets = Object.keys(all).filter(p => !NEEDS_PROPS.has(p) && !p.endsWith('/App.vue'))
 
 /**
+ * `it.each` 가 **실제로 마운트한** 경로. 아래 커버리지 대조가 이걸 본다.
+ *
+ * `targets` 와 대조하면 의미가 없다 — `targets` 자체가 `all` 에서 파생되므로
+ * (all − NEEDS_PROPS − App) 을 all 에서 다시 빼는 꼴이고, 결과는 **항상 빈 집합**이다.
+ * 실행 기록만이 글롭·목록과 독립된 증거다.
+ */
+const MOUNTED = new Set()
+
+/**
  * 치명으로 볼 신호. **없는 이름을 쓴 것**만 고른다 —
  * prop 형태 경고나 개발 편의 경고까지 잡으면 잡음에 묻혀 아무도 안 본다.
  */
@@ -299,6 +308,7 @@ describe('스모크 렌더', () => {
 
     const mod = await all[path]()
     const wrapper = mount(mod.default, { global })
+    MOUNTED.add(path)
     // onMounted 의 비동기 로드까지 흘려보낸다 — 사고가 났던 지점이 거기였다.
     await settle()
     process.off('unhandledRejection', onRejection)
@@ -580,10 +590,14 @@ describe('스모크 대상 목록이 낡지 않았다', () => {
     expect(Object.keys(all).sort()).toEqual(vueFilesOnDisk())
   })
 
-  it('디스크의 모든 .vue 가 스모크 대상이거나 명시적으로 제외되어 있다', () => {
+  it('디스크의 모든 .vue 가 실제로 마운트됐거나 명시적으로 제외되어 있다', () => {
+    // 이 검사는 위 `it.each` 가 전부 돈 뒤에만 의미가 있다. `-t` 로 걸러 돌리면
+    // 기록이 비므로, 조용히 통과하는 대신 여기서 먼저 멈춘다.
+    expect(MOUNTED.size, '마운트 기록이 비었다 — 이 검사는 파일 전체를 돌려야 한다').toBeGreaterThan(0)
+
     const uncovered = vueFilesOnDisk()
       .filter(p => !p.endsWith('/App.vue'))
-      .filter(p => !targets.includes(p) && !NEEDS_PROPS.has(p))
+      .filter(p => !MOUNTED.has(p) && !NEEDS_PROPS.has(p))
     expect(uncovered, '새 화면이 검사 밖에 있다').toEqual([])
   })
 

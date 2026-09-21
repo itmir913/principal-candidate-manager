@@ -16,6 +16,9 @@
 //! **문제는 그 등가성이 스키마 CHECK 에 달려 있다는 것이다.** `schema_freeze.rs` 가 v1·v2
 //! 지문을 동결하지만, 새 버전(v3…)에서 CHECK 를 완화하면 새 스냅샷이 정당하게 만들어지고
 //! 세 쿼리의 전제는 **조용히** 무너진다. 그 순간을 여기서 잡는다.
+//!
+//! **판별력이 있는 것은 첫 테스트 하나다.** 나머지 둘은 전제를 SQL 로 적어 둔 기록이고,
+//! 지워도 스위트는 초록이다 — 각 테스트 주석에 그렇게 적었다.
 
 mod common;
 use common::create_test_pool;
@@ -69,7 +72,9 @@ async fn graduate_cannot_hold_a_class_position() {
 
 #[tokio::test]
 async fn position_lookup_never_finds_a_graduate() {
-    // 위 CHECK 를 행동으로 다시 확인한다. 세 쿼리가 실제로 쓰는 형태 그대로 물어본다.
+    // **이 테스트는 CHECK 를 지키지 않는다.** 픽스처가 위치를 NULL 로 넣으므로 CHECK 가
+    // 있든 없든 조회는 못 찾는다 — 확인하는 것은 SQL 의 `NULL = ?` 의미론뿐이다.
+    // 그 의미론이 ②·③ 등가성의 나머지 절반이라 남겨 두지만, 판별력은 위 테스트에 있다.
     let pool = create_test_pool().await;
     insert_graduate(&pool, "G001").await;
 
@@ -91,11 +96,14 @@ async fn position_lookup_never_finds_a_graduate() {
 
 #[tokio::test]
 async fn student_code_is_shared_across_types_so_the_graduate_filter_is_load_bearing() {
-    // ① 의 `is_enrolled = 0` 은 **이중 방어가 아니다.** `student_code` 는 재학생·졸업생을
-    // 가리지 않고 UNIQUE 한 하나의 공간이라, 필터가 없으면 졸업생 파일의 코드가
-    // 재학생 행을 집어 그 학생의 기초데이터를 덮어쓴다.
-    // 그래서 ①에는 전용 테스트가 있다(handler_area_data 쪽). 여기서는 **왜 필요한지**를
-    // 남긴다 — 다음 사람이 "②·③ 처럼 이중 방어겠지" 하고 지우지 않도록.
+    // **이 테스트는 핸들러를 부르지 않는다.** `area_data.rs` 의 `is_enrolled = 0` 을 지워도
+    // 초록이다 — 그 방어선은 `handler_area_data.rs` 의
+    // `base_data_import_graduated_rejects_enrolled_student_code` 가 지킨다(변이로 확인).
+    //
+    // 여기 있는 이유는 **왜 필요한지를 SQL 로 보여 주기 위해서**다. `student_code` 는
+    // 재학생·졸업생을 가리지 않는 하나의 UNIQUE 공간이라, 필터가 없으면 졸업생 파일의
+    // 코드가 재학생 행을 집는다. 다음 사람이 "②·③ 처럼 이중 방어겠지" 하고 지우지
+    // 않도록 남긴다. 기록이지 방어선이 아니다.
     let pool = create_test_pool().await;
 
     sqlx::query(

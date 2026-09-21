@@ -95,7 +95,9 @@ vi.mock('axios', () => {
  * 6차 감사 치-1: 앞 판은 8곳 중 **3곳만** 눌러 봤고, 나머지 5곳은 `level: 'danger',` 를
  * 주석 처리하면 그대로 통과했다. "목록이 낡으면 잡힌다"고 적어 둔 장치는 이 목록이
  * 아니라 **별도 하드코딩 객체**와 비교하고 있어서 3 vs 8 로 어긋난 채 아무 말도 없었다.
- * 이제 아래 `DANGER_SITES` 하나만 두고, 소스 개수와 **이 목록의 길이**를 대조한다.
+ * 이제 아래 `DESTRUCTIVE` 하나만 두고, 소스에서 센 `level: 'danger'` 분포를
+ * **그 목록에서 파생시킨 기대값**과 대조한다. 별도 하드코딩 표를 두지 않는다 —
+ * 둘을 따로 두면 또 어긋난 채 아무 말도 하지 않는다.
  */
 const DESTRUCTIVE = [
   { 이름: '담임 — 추천 포기',      파일: 'teacher/ResultsTab.vue',     버튼: '추천 포기' },
@@ -187,11 +189,12 @@ describe('파괴적 행위는 2단계로 확인한다 — 버튼을 실제로 �
 })
 
 /**
- * 위 행동 테스트는 **내가 아는 버튼**만 누른다. 새 파괴적 행위가 생겼는데 목록에
- * 안 적으면 조용히 검사 밖이 된다. 소스에서 `danger` 를 쓰는 곳을 세어 목록과 대조한다.
+ * 위 행동 테스트는 **`DESTRUCTIVE` 에 적힌 버튼**만 누른다. 새 파괴적 행위가 생겼는데
+ * 목록에 안 적으면 조용히 검사 밖이 된다. 그래서 소스에서 `level: 'danger'` 를 세고,
+ * 기대값을 **`DESTRUCTIVE` 에서 파생시켜** 대조한다.
  *
- * **이것은 보조 장치다.** 주석 처리·변수 추출로 우회된다 — 그래서 위 행동 테스트가
- * 본체이고, 여기는 "목록이 낡았는지"만 본다.
+ * **이것은 보조 장치다.** 주석 처리·변수 추출로 우회되므로 위 행동 테스트가 본체이고,
+ * 여기는 "목록이 낡았는지"만 본다.
  */
 describe('danger 를 쓰는 곳이 목록과 어긋나지 않는다 (보조)', () => {
   it('소스의 danger 개수가 알려진 수와 같다', async () => {
@@ -212,14 +215,15 @@ describe('danger 를 쓰는 곳이 목록과 어긋나지 않는다 (보조)', (
     }
     walk(SRC)
 
-    // 되돌리기 어려운 행위 8곳. 늘거나 줄면 목록과 위 DESTRUCTIVE 를 함께 고쳐라.
-    expect(Object.fromEntries(hits)).toEqual({
-      'components/admin/AreasTab.vue': 1,          // 전형요소 삭제
-      'components/admin/ClassesTab.vue': 1,        // 학급 삭제
-      'components/admin/RoundsTab.vue': 2,         // 라운드 마감 / 지원 포기 처리
-      'components/admin/StudentsTab.vue': 1,       // 학생 삭제
-      'components/admin/UniversitiesTab.vue': 2,   // 대학 삭제 / 모집단위 삭제
-      'components/teacher/ResultsTab.vue': 1,      // 추천 포기
-    })
+    // 기대값을 **DESTRUCTIVE 에서 만든다.** 따로 적어 두면 둘이 어긋나도 조용하다 —
+    // 실제로 앞 판이 3 vs 8 로 어긋난 채 통과했다.
+    const expected = {}
+    for (const d of DESTRUCTIVE) {
+      const key = `components/${d.파일}`
+      expected[key] = (expected[key] ?? 0) + 1
+    }
+
+    expect(Object.fromEntries(hits), '소스의 danger 지점과 DESTRUCTIVE 목록이 어긋난다 — ' +
+      '새 파괴적 버튼을 추가했다면 목록에도 넣어 실제로 눌러 보게 하라').toEqual(expected)
   })
 })

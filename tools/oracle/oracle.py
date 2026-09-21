@@ -275,7 +275,7 @@ def evaluate(scn):
         for r in part:
             r["track_rank"] = ranks[(r["student_id"], r["track_id"])]
 
-    # 재오픈 — `reopen_round`(rounds.rs:264)가 `UPDATE results SET recommended=0,
+    # 재오픈 — `reopen_round`(rounds.rs)가 `UPDATE results SET recommended=0,
     # ranking=NULL` 을 한다. 재계산 전까지 대학 순위는 없다.
     #
     # track_rank 는 건드리지 않는다. 그 값은 results 에 저장되지 않고 `get_results`

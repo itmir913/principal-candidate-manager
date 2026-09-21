@@ -1,7 +1,8 @@
 /**
  * 담임 지원 등록 폼의 저장 가능 조건 — 순수 함수.
  *
- * ApplicationTab.vue 의 `canSave` computed 를 로직 변경 없이 옮겼다.
+ * ApplicationTab.vue 의 `canSave` computed 를 옮겼다. **한 곳이 달라졌다** —
+ * `departmentName` 의 옵셔널 체이닝(아래 해당 줄 주석). 나머지는 원본과 동치다.
  * 저장 버튼의 잠금 조건이므로, 조건이 느슨해지면 **미완성 지원이 서버로 간다.**
  * `every` 를 `some` 으로 바꾸는 종류의 실수를 테스트로 막는다.
  *

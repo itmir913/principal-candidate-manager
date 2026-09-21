@@ -387,7 +387,7 @@ def _group_c():
 def _group_d():
     """재오픈 — ranking 이 NULL 인 상태를 덤프에 들여놓는다.
 
-    `reopen_round`(rounds.rs:264)가 `UPDATE results SET recommended=0, ranking=NULL`
+    `reopen_round`(rounds.rs)가 `UPDATE results SET recommended=0, ranking=NULL`
     을 하는 유일한 지점이다. 재계산 전까지 결과 행은 순위 없이 남는다.
 
     이 상태가 없던 동안 오라클 §3 의 "동점" 독립 정의는 순위 NULL 을 고려하지 않은 채
