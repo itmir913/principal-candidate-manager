@@ -26,6 +26,14 @@
  * 쓰는 대가다. 반대로 두 이름을 모두 포함한 계산식이면 내용과 무관하게 통과한다.
  * (13_frontend_pitfalls "소스 텍스트로 배선을 지키려 하지 마라" 의 보조 계층.)
  *
+ * **더 아픈 한계가 하나 있었다.** 이 검사는 "키가 소스에 적혀 있는가"만 보고
+ * "키가 실제로 **바인딩되는가**"는 못 본다. 실제로 `v-for` 와 `:key` 사이에 HTML
+ * 주석이 끼어 태그가 깨졌을 때 — 그래서 `:key` 가 바인딩조차 안 되던 상태에서 —
+ * 이 검사는 **초록이었다**(감사 지적). 간격 패턴이 `[\s\S]` 라 주석을 그냥 건너뛴 탓이다.
+ * 지금은 `[^<]` 로 바꿔 사이에 태그·주석이 끼면 매치가 끊기고 실패한다.
+ * 그래도 이건 우회 가능한 보조 계층이다 — 바인딩 여부의 진짜 방어선은
+ * `smoke-render.test.js` 의 `expectNoMarkupLeak` 이다.
+ *
  * ## 고침은 브라우저에서 전/후로 확인했다
  *
  * 같은 데이터(6차 라운드, 같은 학생이 경기대 두 모집단위에 지원)로 **라운드 카드 →
@@ -53,11 +61,11 @@ const 읽기 = (rel) => readFileSync(join(process.cwd(), rel), 'utf8')
  */
 const 행_VFOR = [
   { 이름: 'RoundsTab 지원 현황 표', 파일: 'src/components/admin/RoundsTab.vue',
-    패턴: /v-for="app in group"[\s\S]{0,400}?:key="([^"]+)"/s, 필요: ['student_id', 'track_id'] },
+    패턴: /v-for="app in group"[^<]{0,400}?:key="([^"]+)"/s, 필요: ['student_id', 'track_id'] },
   { 이름: 'RoundsTab 결과 표', 파일: 'src/components/admin/RoundsTab.vue',
-    패턴: /v-for="r in group\.results"[\s\S]{0,400}?:key="([^"]+)"/s, 필요: ['student_id', 'track_id'] },
+    패턴: /v-for="r in group\.results"[^<]{0,400}?:key="([^"]+)"/s, 필요: ['student_id', 'track_id'] },
   { 이름: 'ClassTab 학생별 지원 목록', 파일: 'src/components/teacher/ClassTab.vue',
-    패턴: /v-for="app in getStudentApps\(s\.id\)"[\s\S]{0,400}?:key="([^"]+)"/s, 필요: ['round_id', 'track_id'] },
+    패턴: /v-for="app in getStudentApps\(s\.id\)"[^<]{0,400}?:key="([^"]+)"/s, 필요: ['round_id', 'track_id'] },
 ]
 
 describe('같은 학생이 두 번 나올 수 있는 목록의 행 키는 복합이어야 한다 (보조)', () => {

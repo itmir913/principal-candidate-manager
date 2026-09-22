@@ -276,6 +276,33 @@ const FATAL = new RegExp([
   'Unhandled error during execution',
 ].join('|'))
 
+/**
+ * **마크업이 깨져 속성이 글자로 새어 나왔는지.**
+ *
+ * Vue 는 여는 태그가 잘못 닫히면 그 뒤의 속성들을 통째로 텍스트로 만든다. 글자가
+ * 보기 흉한 것은 증상일 뿐이고, **본질은 그 속성들이 바인딩되지 않는다는 것**이다.
+ * 실제 사고(2026-09-22): HTML 주석을 여는 태그 안에 넣자 주석의 `-->` 안에 있는 `>` 가
+ * 태그를 닫아버려, 그 뒤의 `:key` 와 `class` 가 **둘 다 조용히 사라지고** 글자로 찍혔다.
+ *
+ * **허용목록이 아니라 모양으로 본다.** 처음에는 `:key=`·`v-for=`·`{{` 같은 목록으로
+ * 봤는데, 무엇이 새는지는 **주석 뒤에 어떤 속성이 있었느냐**로 정해진다 — `:style`,
+ * `:class`, `v-model`, `@change` 가 뒤에 있었다면 하나도 못 잡는다(감사에서 8개 변형을
+ * 실제로 마운트해 확인: 2/8 만 잡혔다). 그래서 "속성처럼 생긴 것이 글자로 찍혔는가"를 본다.
+ *
+ * **한계(정직하게)**: 화면 문구에 `이름="값"` 꼴이 정말로 들어가면 오탐이다. 지금은
+ * 전 `.vue` 의 정적 텍스트·보간식과 `src/**` 의 문자열 리터럴에 일치가 없다(감사 확인).
+ * 위험한 자리는 `ManualTab`(사용법 산문·`{{ }}` 예시)과 `UpdateTab` 의 `v-html` 릴리스
+ * 노트다 — 거기에 코드 예시를 넣으면 **마크업은 멀쩡한데 이 검사가 빨개진다.**
+ * 그때는 검사가 틀린 것이니 이 주석을 읽고 예외를 주거나 문구를 바꿔라.
+ */
+const MARKUP_LEAK = /[\w:@.\-\[\]]+="[^"]*"|\{\{/
+
+function expectNoMarkupLeak(shown, label) {
+  const at = shown.search(MARKUP_LEAK)
+  expect(at, `${label} 화면에 속성이 글자로 그려졌다 — 마크업이 깨져 그 속성들이 ` +
+    `바인딩되지 않은 상태다: …${shown.slice(Math.max(0, at - 40), at + 60)}…`).toBe(-1)
+}
+
 describe('스모크 렌더', () => {
   let errors
 
@@ -337,14 +364,7 @@ describe('스모크 렌더', () => {
     expect(at, `${path} 화면에 null/undefined/NaN 이 그대로 그려졌다: ` +
       `…${shown.slice(Math.max(0, at - 40), at + 40)}…`).toBe(-1)
 
-    // **템플릿 문법이 글자로 새어 나오는지.** 마크업이 잘못되면 Vue 가 속성을 해석하지
-    // 못하고 그 텍스트를 그대로 그린다. 실제로 HTML 주석을 **여는 태그 안**(속성 사이)에
-    // 넣었다가 `:key="${app.round_id}…"` 가 표 칸에 찍혔는데, 전 스위트가 초록이었다
-    // (2026-09-22). 오류도 아니고 null 도 아니라 위 검사 둘 다 못 본다.
-    const TEMPLATE_LEAK = /(?::key=|v-for=|v-if=|@click=|\{\{)/
-    const tAt = shown.search(TEMPLATE_LEAK)
-    expect(tAt, `${path} 화면에 템플릿 문법이 그대로 그려졌다 — 마크업이 깨졌다: ` +
-      `…${shown.slice(Math.max(0, tAt - 40), tAt + 40)}…`).toBe(-1)
+    expectNoMarkupLeak(shown, path)
 
     expect(wrapper.html()).toBeTruthy()
 
@@ -483,6 +503,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     expect(errors.filter(e => FATAL.test(e)), '결과 패널 렌더 중 치명 오류').toEqual([])
     // 첫 블록에만 있던 화면 글자 판정을 여기에도 건다 — 가장 복잡한 화면인데 빠져 있었다.
     expect(FATAL.test(wrapper.text()), '결과 패널에 오류 문구가 그려졌다').toBe(false)
+    expectNoMarkupLeak(wrapper.text(), '결과 패널')
     wrapper.unmount()
   })
 })
@@ -538,8 +559,10 @@ describe('스모크 렌더 — 담임 지원 등록 패널', () => {
       .toContain('새 지원 등록')
     expect(errors.filter(e => FATAL.test(e)), '지원 입력 폼 렌더 중 치명 오류').toEqual([])
     expect(FATAL.test(afterForm), '지원 입력 폼에 오류 문구가 그려졌다').toBe(false)
+    expectNoMarkupLeak(afterForm, '지원 입력 폼')
     expect(errors.filter(e => FATAL.test(e)), '지원 패널 렌더 중 치명 오류').toEqual([])
     expect(FATAL.test(shown), `화면에 오류 문구가 그려졌다: ${shown.slice(0, 160)}`).toBe(false)
+    expectNoMarkupLeak(shown, '지원 등록 패널')
     wrapper.unmount()
   })
 })
@@ -568,6 +591,9 @@ describe('스모크 렌더 — props 를 받는 화면', () => {
     const shown = wrapper.text()
     expect(errors.filter(e => FATAL.test(e)), `${path} 렌더 중 치명 오류`).toEqual([])
     expect(FATAL.test(shown), `${path} 화면에 오류 문구가 그려졌다`).toBe(false)
+    // 이 블록이 ApplicationDetailModal 을 마운트하는 **유일한** 자리다 — 첫 블록의
+    // targets 에서는 NEEDS_PROPS 로 빠지고, 부모에서도 `v-if="detailApp"` 뒤에 있다.
+    expectNoMarkupLeak(shown, path)
     expect(shown, `${path} 가 props 를 그리지 않았다`).toContain(evidence)
     wrapper.unmount()
   })
