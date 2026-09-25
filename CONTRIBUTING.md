@@ -10,8 +10,14 @@ PR을 보내기 전에 반드시 읽어 주세요.
 
 ## Contribution License
 
-> 이 절은 법적 효력을 가지는 원문입니다. 번역본은 참고용이며 해석이 갈릴 경우
-> 아래 영문이 우선합니다.
+> 영문이 법적 효력을 가지는 원문입니다. 아래 한국어 번역은 참고용이며 해석이 갈릴 경우
+> 영문이 우선합니다.
+
+### Why copyright is assigned
+
+PCM computes students' scores and rankings and determines who is recommended for university admission. Because an error can directly harm a student's admission, the project is deliberately maintained under a single, concentrated point of responsibility rather than a structure in which ownership and maintenance duties are distributed among contributors. To carry that responsibility, the project owner must be able to freely modify, rewrite, relicense, or remove any code in the project — including code received through pull requests — without needing the consent of each contributor. For this reason contributions are accepted by assignment of copyright, and the rights to use the contribution are licensed back to the contributor (Section 7).
+
+### Terms
 
 By submitting a contribution, you agree that:
 
@@ -30,9 +36,50 @@ By submitting a contribution, you agree that:
 
 6. The project owner reserves the right to accept, reject, modify, or remove contributions at their sole discretion.
 
-**요약(참고용)**: 기여물의 저작권은 프로젝트 소유자에게 양도되며, 소유자는 현재
-라이선스와 다른 조건으로도 재라이선스할 수 있습니다. 본인이 단독 저작자여야 하고,
-프로젝트 라이선스(PolyForm Noncommercial 1.0.0)와 충돌하는 의존성을 들여오면 안 됩니다.
+7. **License back.** Upon the assignment in Section 1, the project owner grants you a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, display, and distribute your own contribution, including for the purpose of presenting it in your personal portfolio, résumé, or similar showcase of your work, without restriction as to time or place. This license-back does not grant any rights to the rest of the project, which remains governed by the project license.
+
+### 한국어 번역 (참고용)
+
+> 해석이 갈릴 경우 위 영문이 우선합니다.
+
+#### 저작권을 양도받는 이유
+
+PCM은 학생의 점수와 순위를 계산하고 대학 추천 대상자를 결정합니다. 오류 하나가 학생의
+대입에 직접 피해를 줄 수 있으므로, 이 프로젝트는 소유권과 유지보수 책임을 기여자들에게
+분산시키는 구조가 아니라 **한 곳에 집중된 책임 체계**로 관리합니다. 그 책임을 지려면
+프로젝트 소유자가 풀 리퀘스트로 받은 코드를 포함해 프로젝트의 모든 코드를 각 기여자의
+동의 없이 자유롭게 수정·재작성·재라이선스·삭제할 수 있어야 합니다. 이 때문에 기여는
+저작권 양도 방식으로 받으며, 기여물의 이용 권리는 기여자에게 되돌려 드립니다(7항).
+
+#### 조항
+
+기여물을 제출함으로써 귀하는 다음에 동의합니다.
+
+1. 귀하는 기여물에 대한 모든 저작권 및 관련 권리를 전 세계적으로, 영구히 프로젝트
+   소유자(itmir913, luminousky.com)에게 양도합니다. 이 양도는 기여물을 제출한 때에
+   효력이 발생합니다.
+
+2. 이 양도에 따라 프로젝트 소유자는 자신의 단독 재량으로, 현재 프로젝트 라이선스와 다른
+   조건을 포함한 어떠한 조건으로도 기여물을 이용·수정·배포·재허락·재라이선스할 수 있습니다.
+
+3. 귀하는 다음을 진술합니다.
+    - 귀하가 기여물의 단독 저작자이며 이 권리들을 양도할 법적 권한이 있다는 것,
+    - 기여물이 제3자의 권리를 침해하지 않는다는 것,
+    - 기여물이 프로젝트 라이선스와 충돌하는 라이선스 조건이나 의존성을 들여오지 않는다는 것.
+
+4. 귀하는 기여물을 프로젝트의 일부로 이용·수정·배포·재허락하는 데 필요한 모든 특허권을
+   양도합니다.
+
+5. 기여물은 어떠한 종류의 보증도 없이 "있는 그대로" 제공됩니다.
+
+6. 프로젝트 소유자는 자신의 단독 재량으로 기여물을 수락·거절·수정·삭제할 권리를 가집니다.
+
+7. **이용 권리의 반환(license-back).** 1항의 양도와 함께, 프로젝트 소유자는 귀하에게
+   **귀하 자신의 기여물**을 이용·복제·수정·전시·배포할 수 있는 영구적·전 세계적·비독점적·
+   무상·취소 불가능한 이용 허락을 부여합니다. 여기에는 개인 포트폴리오, 이력서 또는 이와
+   유사한 작업물 소개에 사용하는 것이 포함되며, 시간이나 장소의 제약을 받지 않습니다.
+   이 이용 허락은 프로젝트의 나머지 부분에 대한 권리를 부여하지 않으며, 나머지 부분은
+   프로젝트 라이선스(PolyForm Noncommercial 1.0.0)를 따릅니다.
 
 ---
 
@@ -48,10 +95,7 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 |---|---|
 | `npm run dev` | 백엔드 + 프론트엔드 동시 실행 |
 | `npm run dev:watch` | 백엔드 소스 변경 시 자동 재시작 |
-| `npm test` | `cargo test` — 러스트 테스트 전체 |
-| `npm run test:front` | `vitest` — 프론트 순수 로직 테스트 |
-| `npm run test:oracle` | 독립 오라클 대조 + 프론트 파생값 대조 (Python 3 필요) |
-| `npm run ci` | 위 셋을 순서대로 — **CI 가 돌리는 것과 같다** |
+| `npm run ci` | 테스트 전체 — 프론트(vitest)·러스트·독립 오라클 대조를 순서대로. **CI 가 돌리는 것과 같다** (Python 3 필요) |
 | `npm run build` | 릴리스 빌드 (`target/release/principal-candidate-manager.exe`) |
 
 ---

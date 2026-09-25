@@ -123,10 +123,10 @@ npm run build
 ### 테스트
 
 ```bash
-npm run test
+npm run ci
 ```
 
-> PR이 올라오면 `.github/workflows/CI.yml`이 `npm run ci`를 자동 실행합니다.
+> PR이 올라오면 `.github/workflows/CI.yml`이 같은 `npm run ci`를 자동 실행합니다.
 > `npm run ci`는 프론트 테스트·러스트 테스트·오라클 대조를 순서대로 돌립니다.
 > 프론트엔드는 순수 로직에 더해 **화면이 열리는지**·되돌리기 어려운 행위의 확인
 > 절차·정원 입력까지 자동 검증됩니다. 다만 외관(레이아웃·색·여백)은 단언하지
@@ -139,7 +139,9 @@ npm run test
 이 프로젝트는 실제 고등학교의 입시 자료를 다루므로, 점수·순위 계산에 관한 규칙이
 엄격합니다. PR을 보내기 전에 [기여 안내(CONTRIBUTING.md)](CONTRIBUTING.md)를 읽어 주세요.
 
-- **기여 라이선스**: 기여물의 저작권은 프로젝트 소유자에게 양도됩니다 (CONTRIBUTING.md 참조)
+- **기여 라이선스**: 기여물의 저작권은 프로젝트 소유자에게 양도되고, 기여자에게는 포트폴리오 등
+  자유 이용 권리가 되돌려집니다. 학생의 성적·대입을 다루는 프로그램이라 관리 책임을 한 곳에
+  모으기 위함입니다 (CONTRIBUTING.md 참조)
 - **절대 규칙**: Float-Free(점수 ×100000 정수), Fail-Fast(silent fallback 금지),
   점수 계산 백엔드 전담, Import All-or-Nothing 등 8개
 - **커밋**: GPG 서명 필수, Conventional Commits
