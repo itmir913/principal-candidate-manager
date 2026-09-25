@@ -10,6 +10,8 @@
 
 - [ ] `npm run ci` 전부 통과 (CI가 돌리는 것과 같은 명령입니다)
 - [ ] 모든 커밋 GPG 서명
+- [ ] `CONTRIBUTING.md`의 기여 라이선스(Contribution License)에 동의한다 — 기여물의 저작권은
+      프로젝트 소유자에게 양도되고, 내 기여물의 이용 권리(포트폴리오 등)는 license-back으로 돌려받는다
 - [ ] 새 검증 로직에 유효·경계·거부 테스트 추가
 - [ ] 거부 경로 테스트에 ①상태코드 ②DB 행 불변 ③오류 메시지 행번호·원인 단언
 
@@ -21,8 +23,9 @@
 - [ ] **Import 변경**: 오류 시 전체 rollback + 422이며 부분 저장이 없다
 - [ ] **다중 쓰기 추가**: 트랜잭션으로 묶었다
 - [ ] **`base_data` 삭제 경로**: `student_type` 필터가 있다
-- [ ] **스키마 변경**: `migrations/v1/*.sql`을 직접 수정했고, 새 조각이면
-      `src/db.rs::V1_FRAGMENTS`에 등록했다
+- [ ] **스키마 변경**: 배포된 버전의 `migrations/v*/` 조각은 수정하지 않았다. 새 버전
+      디렉터리에 조각을 만들어 `src/db.rs`의 `V{N}_FRAGMENTS`·`MIGRATION_FRAGMENTS`에
+      등록하고 `SCHEMA_VERSION`을 올렸다 (`tests/schema_freeze.rs` 통과)
 - [ ] **프론트 변경**: `text-sm`/`text-xs`를 쓰지 않았다 (배지·pill 예외는 주석 표기)
 
 ## 관련 이슈
