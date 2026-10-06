@@ -106,7 +106,10 @@
                     <span
                       v-else-if="scorePreviews[area.area_id]?.score !== null && scorePreviews[area.area_id]?.score !== undefined"
                       style="color: #2563eb; font-weight: 500;"
-                    >{{ formatScore(scorePreviews[area.area_id].score) }}점</span>
+                    >{{ formatScore(scorePreviews[area.area_id].score) }}점<span
+                      v-if="scorePreviews[area.area_id].warning"
+                      style="color: #d97706;"
+                    > ⚠ {{ scorePreviews[area.area_id].warning }}</span></span>
                     <span v-else style="color: #94a3b8;">—</span>
                   </td>
                 </tr>
@@ -171,8 +174,11 @@ onMounted(async () => {
         try {
           const result = await teacherAreaScorePreview(area.area_id, props.app.track_id, vals)
           scorePreviews.value = { ...scorePreviews.value, [area.area_id]: result }
-        } catch {
-          scorePreviews.value = { ...scorePreviews.value, [area.area_id]: { score: null, error: '계산 실패' } }
+        } catch (e) {
+          scorePreviews.value = {
+            ...scorePreviews.value,
+            [area.area_id]: { score: null, error: `계산 실패: ${e.response?.data || e.message}` },
+          }
         }
       }
     }

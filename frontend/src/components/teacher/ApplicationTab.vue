@@ -276,7 +276,7 @@
                           style="color: #2563eb;"
                         >
                           예상 {{ formatScore(scorePreview[area.area_id].score) }}점
-                          <span v-if="scorePreview[area.area_id].warning" style="color: #d97706;"> ⚠</span>
+                          <span v-if="scorePreview[area.area_id].warning" style="color: #d97706;"> ⚠ {{ scorePreview[area.area_id].warning }}</span>
                         </span>
                       </template>
                     </div>
@@ -718,6 +718,7 @@ function closeForm() {
 
 // ── 대학 선택 → 모집단위 로드 ─────────────────────────────────────
 async function onUnivChange() {
+  saveError.value     = ''
   form.trackId        = ''
   form.tracks         = []
   areaContext.value   = []
@@ -729,6 +730,9 @@ async function onUnivChange() {
   tracksLoading.value = true
   try {
     form.tracks = await teacherGetUnivTracks(form.univId)
+  } catch (e) {
+    // 조용히 넘기면 모집단위 목록이 빈 채로 남아 "모집단위가 없는 대학"으로 읽힌다
+    saveError.value = `모집단위를 불러오지 못했습니다: ${e.response?.data || e.message}`
   } finally {
     tracksLoading.value = false
   }
@@ -737,6 +741,7 @@ async function onUnivChange() {
 // ── 모집단위 선택 → area-context 로드 ────────────────────────────
 async function onTrackChange() {
   const seq = ++_trackCtxSeq
+  saveError.value     = ''
   areaContext.value   = []
   areaValues.value    = {}
   areaMultiValues.value = {}
@@ -752,6 +757,10 @@ async function onTrackChange() {
     contextLoading.value = false
     // 기저장 값이 있는 항목에 대해 즉시 점수 계산 (테이블 렌더링 후 실행)
     await triggerInitialPreviews(ctx)
+  } catch (e) {
+    if (seq === _trackCtxSeq) {
+      saveError.value = `전형요소 정보를 불러오지 못했습니다: ${e.response?.data || e.message}`
+    }
   } finally {
     if (seq === _trackCtxSeq) contextLoading.value = false
   }
@@ -829,10 +838,15 @@ function getAreaInputValues(area) {
 }
 
 async function fetchScorePreview(area, values) {
+  // 모집단위가 바뀐 뒤 늦게 도착한 이전 모집단위의 미리보기는 버린다 —
+  // area_id 는 모집단위 사이에 공유되므로 그대로 쓰면 새 모집단위 칸에 옛 점수가 뜬다.
+  const seq = _trackCtxSeq
   try {
     const result = await teacherAreaScorePreview(area.area_id, Number(form.trackId), values)
+    if (seq !== _trackCtxSeq) return
     scorePreview.value = { ...scorePreview.value, [area.area_id]: result }
   } catch (e) {
+    if (seq !== _trackCtxSeq) return
     scorePreview.value = {
       ...scorePreview.value,
       [area.area_id]: { score: null, matched_keys: [], warning: null, error: e.response?.data || e.message },
@@ -893,8 +907,17 @@ function openDetail(app) {
 
 async function onModalDeleted() {
   detailApp.value = null
-  applications.value = await teacherGetApplications(currentRound.value.id)
-  await loadConfirmation()
+  try {
+    applications.value = await teacherGetApplications(currentRound.value.id)
+    await loadConfirmation()
+  } catch (e) {
+    // 삭제는 이미 끝났다 — 목록만 낡았다는 것을 알린다
+    await dialog.alert({
+      title: '목록 새로고침 실패',
+      message: `삭제는 완료됐지만 목록을 다시 불러오지 못했습니다. 화면을 새로 고쳐 주세요.
+${e.response?.data || e.message}`,
+    })
+  }
 }
 
 async function onModalEdit(app) {
@@ -940,6 +963,8 @@ async function onModalEdit(app) {
     } finally {
       if (seq === _trackCtxSeq) contextLoading.value = false
     }
+  } catch (e) {
+    saveError.value = `수정할 지원 정보를 불러오지 못했습니다: ${e.response?.data || e.message}`
   } finally {
     tracksLoading.value = false
   }
