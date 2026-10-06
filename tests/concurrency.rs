@@ -31,6 +31,9 @@ struct TempDb {
     path: std::path::PathBuf,
 }
 
+/// 임시 파일 DB. 정상 경로는 `close` 가 지운다. **단언이 실패해 패닉하면 파일이 남는다**
+/// — 풀이 열린 채라 Windows 에서는 Drop 에서 지울 수도 없다. 이름에 pid·회차가 들어가고
+/// `new` 가 같은 이름을 먼저 지우므로 다음 실행을 방해하지는 않는다(%TEMP% 의 `pcm_conc_*`).
 impl TempDb {
     async fn new(tag: &str, i: usize) -> Self {
         let path = std::env::temp_dir().join(format!(

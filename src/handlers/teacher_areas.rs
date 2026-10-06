@@ -338,7 +338,7 @@ pub async fn teacher_area_score_preview(
 
     // MANUAL 은 입력값이 곧 점수이고, 제출(`teacher_create_application`)은 만점 초과를
     // 400 으로 거부한다. 미리보기가 "만점으로 처리"라고 안내하면 저장 단계에서 뒤집히므로
-    // 제출과 같은 문장의 오류로 돌려준다.
+    // 오류로 돌려준다. 문장은 제출 오류와 같고, 제출 쪽의 "전형요소 id=N: " 접두어만 없다.
     if area.calc_type == CalcType::Manual && outcome.raw > area.max_score {
         return Ok(Json(preview_error(format!(
             "값({})이 만점({})을 초과합니다",
