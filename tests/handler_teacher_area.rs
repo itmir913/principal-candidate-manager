@@ -556,8 +556,11 @@ async fn score_preview_manual_returns_score_directly() {
     assert!(resp.matched_keys.is_empty());
 }
 
+/// MANUAL 은 제출이 만점 초과를 400 으로 거부한다(`teacher_create_application`).
+/// 미리보기가 예전처럼 "만점으로 처리"라고 캡핑해 보여 주면 저장에서 뒤집힌다 —
+/// 미리보기도 같은 문장의 오류를 내야 한다.
 #[tokio::test]
-async fn score_preview_manual_exceeds_max_score_returns_warning() {
+async fn score_preview_manual_exceeds_max_score_returns_error_like_submit() {
     let pool = common::create_test_pool_shared().await;
     setup_base(&pool).await;
     let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
@@ -566,7 +569,7 @@ async fn score_preview_manual_exceeds_max_score_returns_warning() {
         .unwrap();
     let area_id = get_area_id(&pool, "면접점수").await;
 
-    // 만점 10점 초과 → 만점으로 캡핑 + 경고
+    // 만점 10점 초과
     let resp = teacher_area_score_preview(
         State(common::make_state(pool)),
         Json(AreaScorePreviewBody {
@@ -579,9 +582,34 @@ async fn score_preview_manual_exceeds_max_score_returns_warning() {
     .unwrap()
     .0;
 
-    assert!(resp.error.is_none());
-    assert!(resp.warning.is_some());
-    assert_eq!(resp.score.unwrap().raw(), 1000000); // 만점 캡핑
+    let err = resp.error.expect("만점 초과는 오류여야 한다");
+    assert!(err.contains("만점(10)을 초과"), "제출과 같은 문장: {err}");
+    assert!(resp.score.is_none(), "캡핑한 점수를 보여 주면 안 된다");
+    assert!(resp.warning.is_none());
+}
+
+/// 경계: 만점과 같은 값은 정상 — 위 오류 갈래가 `>=` 로 바뀌면 여기서 잡힌다.
+#[tokio::test]
+async fn score_preview_manual_equal_to_max_score_is_accepted() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let area_id = get_area_id(&pool, "면접점수").await;
+
+    let resp = teacher_area_score_preview(
+        State(common::make_state(pool)),
+        Json(AreaScorePreviewBody { area_id, track_id: tid, values: vec!["10".into()] }),
+    )
+    .await
+    .unwrap()
+    .0;
+
+    assert_eq!(resp.error, None);
+    assert_eq!(resp.warning, None);
+    assert_eq!(resp.score.unwrap().raw(), 1_000_000);
 }
 
 // ── matched_keys: LOWER / EXACT 분기 ──────────────────────────────
@@ -725,8 +753,8 @@ async fn score_preview_numeric_exact_miss_returns_error_and_no_key() {
 }
 
 /// NUMERIC 은 구간표 점수가 만점을 넘을 수 있다(표가 잘못 올라온 경우).
-/// 이때 캡핑 + 경고 문구가 MANUAL 과 **다른 문장**이어야 한다 —
-/// 지금까지 MANUAL 갈래만 단언돼 있어 두 문구를 뒤바꿔도 통과했다.
+/// 이때는 캡핑 + "계산된 점수" 경고다. (MANUAL 은 2026-10 부터 경고가 아니라 오류 —
+/// 위 `score_preview_manual_exceeds_max_score_returns_error_like_submit`.)
 #[tokio::test]
 async fn score_preview_numeric_over_max_score_caps_and_warns_with_calculated_wording() {
     let pool = common::create_test_pool_shared().await;

@@ -336,6 +336,17 @@ pub async fn teacher_area_score_preview(
         Err(e) => return Ok(Json(preview_error(e.to_string()))),
     };
 
+    // MANUAL 은 입력값이 곧 점수이고, 제출(`teacher_create_application`)은 만점 초과를
+    // 400 으로 거부한다. 미리보기가 "만점으로 처리"라고 안내하면 저장 단계에서 뒤집히므로
+    // 제출과 같은 문장의 오류로 돌려준다.
+    if area.calc_type == CalcType::Manual && outcome.raw > area.max_score {
+        return Ok(Json(preview_error(format!(
+            "값({})이 만점({})을 초과합니다",
+            crate::handlers::area_data::fmt_score(outcome.raw),
+            crate::handlers::area_data::fmt_score(area.max_score),
+        ))));
+    }
+
     let capped = outcome.raw.min(area.max_score);
     let matched_keys: Vec<serde_json::Value> = if !outcome.matched_categories.is_empty() {
         outcome.matched_categories.iter()
@@ -348,11 +359,7 @@ pub async fn teacher_area_score_preview(
     };
 
     let warning = if outcome.raw > area.max_score {
-        let msg = match area.calc_type {
-            CalcType::Manual => "입력값이 만점을 초과하여 만점으로 처리됩니다",
-            _ => "계산된 점수가 만점을 초과하여 만점으로 처리됩니다",
-        };
-        Some(msg.to_string())
+        Some("계산된 점수가 만점을 초과하여 만점으로 처리됩니다".to_string())
     } else {
         None
     };
