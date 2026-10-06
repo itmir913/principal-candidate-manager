@@ -89,6 +89,7 @@
                   <button
                     class="text-base font-semibold rounded-lg"
                     style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                    :disabled="savingArea"
                     @click="saveEdit">저장</button>
                   <button
                     class="text-base rounded-lg"
@@ -217,6 +218,7 @@
               <button
                   class="text-base font-semibold rounded-lg"
                   style="padding: 8px 18px; border: none; background: #2563eb; color: white; cursor: pointer;"
+                  :disabled="savingArea"
                   @click="addArea">저장</button>
               <button
                   class="text-base rounded-lg"
@@ -363,7 +365,10 @@
             <!-- 점수 기준 목록 -->
             <div class="mt-5 rounded-xl overflow-hidden"
               style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-x: auto; overflow-y: auto;">
-              <p v-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
+              <p v-if="scoreLoadError" class="text-base text-center" style="padding: 32px; color: #ef4444;">
+                점수 기준을 불러오지 못했습니다: {{ scoreLoadError }}
+              </p>
+              <p v-else-if="scorePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 점수 기준 없음
               </p>
               <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;" :style="selected.lookup_scope === 'COMPOSITE' ? 'min-width: 660px' : 'min-width: 300px'">
@@ -506,7 +511,10 @@
             <!-- 기초 데이터 목록 -->
             <div class="mt-5 rounded-xl overflow-hidden"
               style="background: white; box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); max-height: 400px; overflow-x: auto; overflow-y: auto;">
-              <p v-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
+              <p v-if="baseLoadError" class="text-base text-center" style="padding: 32px; color: #ef4444;">
+                기초 데이터를 불러오지 못했습니다: {{ baseLoadError }}
+              </p>
+              <p v-else-if="basePage.rows.length === 0" class="text-base text-center" style="padding: 32px; color: #94a3b8;">
                 등록된 기초 데이터 없음
               </p>
               <table v-else class="w-full" style="border-collapse: collapse; table-layout: fixed;" :style="selected.lookup_scope === 'COMPOSITE' ? 'min-width: 680px' : 'min-width: 360px'">
@@ -874,6 +882,12 @@ const scoreResult = ref(null)
 const baseResult  = ref(null)
 const scorePage   = ref({ rows: [], total: 0, page: 1, per_page: 50 })
 const basePage    = ref({ rows: [], total: 0, page: 1, per_page: 50 })
+// 목록 조회 실패를 "등록된 … 없음" 빈 상태로 위장하지 않는다 — 관리자가 비어 있다고 믿고
+// 다시 가져오면 기존 데이터가 교체된다.
+const scoreLoadError = ref('')
+const baseLoadError  = ref('')
+// 추가·수정 요청이 나가 있는 동안 저장 버튼을 잠근다(중복 클릭 방지)
+const savingArea     = ref(false)
 
 const showAddForm = ref(false)
 const newArea = ref(defaultNewArea())
@@ -956,27 +970,41 @@ function selectArea(area) {
 async function loadScoreRows(page = 1) {
   const area = selected.value
   const empty = { rows: [], total: 0, page: 1, per_page: 50 }
+  scoreLoadError.value = ''
   if (!area || area.calc_type === 'MANUAL') { scorePage.value = empty; return }
   try {
     const data = area.calc_type === 'CATEGORY'
       ? await getCategoryMapList(area.id, page, scorePage.value.per_page)
       : await getNumericTableList(area.id, page, scorePage.value.per_page)
+    if (selected.value?.id !== area.id) return  // 그 사이 다른 전형요소를 골랐다
     scorePage.value = data
-  } catch { scorePage.value = empty }
+  } catch (e) {
+    if (selected.value?.id !== area.id) return
+    scorePage.value = empty
+    scoreLoadError.value = e.response?.data ?? e.message
+  }
 }
 
 async function loadBaseRows(page = 1) {
-  if (!selected.value) { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }; return }
+  baseLoadError.value = ''
+  const area = selected.value
+  if (!area) { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }; return }
   try {
-    const data = await getBaseDataList(selected.value.id, page, basePage.value.per_page, baseStudentType.value)
+    const data = await getBaseDataList(area.id, page, basePage.value.per_page, baseStudentType.value)
+    if (selected.value?.id !== area.id) return  // 그 사이 다른 전형요소를 골랐다
     basePage.value = data
-  } catch { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 } }
+  } catch (e) {
+    if (selected.value?.id !== area.id) return
+    basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }
+    baseLoadError.value = e.response?.data ?? e.message
+  }
 }
 
 function onScoreResult(evt) { scoreResult.value = evt; loadScoreRows(1) }
 function onBaseResult(evt)  { baseResult.value = evt;  loadBaseRows(1)  }
 
 async function addArea() {
+  if (savingArea.value) return
   addError.value = ''
   const maxScore = parseFloat(String(newArea.value.max_score_display).trim())
   if (isNaN(maxScore) || maxScore < 0) {
@@ -993,12 +1021,14 @@ async function addArea() {
     category_agg: newArea.value.category_agg || null,
     unit: newArea.value.calc_type === 'NUMERIC' ? (newArea.value.unit || null) : null,
   }
+  savingArea.value = true
   try {
     await createArea(body)
     showAddForm.value = false
     selected.value = null
     await load()
   } catch (e) { addError.value = e.response?.data ?? e.message }
+  finally { savingArea.value = false }
 }
 
 async function removeArea(id) {
@@ -1028,6 +1058,7 @@ function cancelEdit() {
 }
 
 async function saveEdit() {
+  if (savingArea.value) return
   editError.value = ''
   const area = areas.value.find(a => a.id === editingAreaId.value)
   const body = {
@@ -1036,6 +1067,7 @@ async function saveEdit() {
     // MANUAL은 단위 '점' 강제(프론트 표시 전용)라 unit을 보내지 않는다
     unit: area?.calc_type === 'NUMERIC' ? (editArea.value.unit ?? null) : undefined,
   }
+  savingArea.value = true
   try {
     await updateArea(editingAreaId.value, body)
     const prevId = selected.value?.id
@@ -1044,6 +1076,8 @@ async function saveEdit() {
     editingAreaId.value = null
   } catch (e) {
     editError.value = e.response?.data ?? e.message
+  } finally {
+    savingArea.value = false
   }
 }
 
@@ -1209,6 +1243,9 @@ const ExcelPanel = defineComponent({
     }
 
     async function onFile(evt) {
+      // 가져오기는 기존 데이터를 교체한다 — 두 파일이 겹쳐 나가면 결과 상자가 실제로
+      // 반영된 파일과 다른 쪽의 결과를 보일 수 있다
+      if (uploading.value) { evt.target.value = ''; return }
       const file = evt.target.files?.[0]
       if (!file) return
       err.value = ''
@@ -1281,7 +1318,7 @@ const ExcelPanel = defineComponent({
                       ? '재학생 가져오기'
                       : '졸업생 가져오기')
                   : '가져오기',
-          h('input', { type: 'file', accept: '.xlsx,.csv', style: 'display: none;', onChange: onFile }),
+          h('input', { type: 'file', accept: '.xlsx,.csv', style: 'display: none;', disabled: uploading.value, onChange: onFile }),
         ]),
 
         h('span', { style: 'color: #cbd5e1; user-select: none;' }, '|'),

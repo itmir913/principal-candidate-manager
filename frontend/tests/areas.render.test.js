@@ -41,9 +41,20 @@ const IMPORT_WITH_WARNING = {
   warnings: ["2행: 3학년 1반 5번 이름 불일치 — 가져오기 완료됨 (파일: '이순신', DB: '홍길동')"],
 }
 
+/**
+ * 테스트마다 갈아 끼우는 응답. 키에 맞는 URL 이면 기본 응답 대신 이 함수를 부른다.
+ * 실패 경로(목록 조회 실패)와 응답이 늦는 경우(중복 클릭)를 만들려고 둔다.
+ */
+let override = {}
+/** POST 기록 — 같은 요청이 두 번 나갔는지 센다. */
+let posts = []
+
 vi.mock('axios', () => {
   const res = (url = '') => {
     const u = String(url)
+    for (const [pat, fn] of Object.entries(override)) {
+      if (new RegExp(pat).test(u)) return fn(u)
+    }
     const data =
       /numeric-table\/list/.test(u) ? NUMERIC_ROWS
       : /category-map\/list/.test(u) ? { rows: [{ id: 21, area_id: 2, track_id: null, category: '무단결석 0회', score: 10 }], total: 1, page: 1, per_page: 50 }
@@ -53,10 +64,12 @@ vi.mock('axios', () => {
       : []
     return Promise.resolve({ data, headers: {} })
   }
-  const post = (url = '') =>
-    /base-data\/import/.test(String(url))
+  const post = (url = '') => {
+    posts.push(String(url))
+    return /base-data\/import/.test(String(url)) && !Object.keys(override).some(p => new RegExp(p).test(String(url)))
       ? Promise.resolve({ data: IMPORT_WITH_WARNING, headers: {} })
       : res(url)
+  }
   const axios = { get: res, post, put: res, patch: res, delete: res,
     interceptors: { request: { use: () => {} }, response: { use: () => {} } } }
   return { default: axios, ...axios }
@@ -204,6 +217,94 @@ describe('가져오기 결과 — 경고만 있는 경우', () => {
     expect(style, `경고만 있는데 성공 초록(#f0fdf4)으로 그려졌다: ${style}`)
       .not.toContain('rgb(240, 253, 244)')
     expect(style, `주의 색(#fffbeb)이 아니다: ${style}`).toContain('rgb(255, 251, 235)')
+    wrapper.unmount()
+  })
+})
+
+/**
+ * 실패와 중복 — 2026-10-06 프론트 감사 F-3·F-5.
+ *
+ * 목록 조회 실패가 "등록된 … 없음"으로 그려지면 관리자는 비어 있다고 믿고 다시
+ * 가져오기를 한다 — 가져오기는 기존 데이터를 **교체**한다.
+ * 저장·업로드 중복은 요청을 붙잡아 둔 채(풀리지 않는 Promise) 두 번 눌러 센다.
+ *
+ * 판별력의 소재: 중복 방지는 **두 겹**이다 — 버튼·입력칸의 `disabled` 와 함수 첫 줄의
+ * 조기 반환. `@vue/test-utils` 는 disabled 요소에 이벤트를 보내지 않으므로, 둘 중
+ * 하나만 지우는 변이는 여기서 살아남는다. 둘 다 지워야 잡힌다(2026-10-06 확인).
+ */
+describe('전형요소 화면 — 실패를 빈 상태로 위장하지 않고, 두 번 보내지 않는다', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    override = {}
+    posts = []
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => { override = {}; vi.restoreAllMocks() })
+
+  const fail = (msg) => () => Promise.reject(Object.assign(new Error(msg), { response: { data: msg } }))
+  const never = () => new Promise(() => {})
+
+  it('점수 기준 목록 조회가 실패하면 "없음"이 아니라 오류를 보인다', async () => {
+    override = { 'numeric-table/list': fail('DB 잠김') }
+    const wrapper = mount((await load()).default)
+    await settle()
+    await pickArea(wrapper, '교과성적')
+
+    const t = wrapper.text()
+    expect(t).not.toContain('등록된 점수 기준 없음')
+    expect(t).toContain('점수 기준을 불러오지 못했습니다')
+    expect(t).toContain('DB 잠김')
+    wrapper.unmount()
+  })
+
+  it('기초 데이터 목록 조회가 실패하면 "없음"이 아니라 오류를 보인다', async () => {
+    override = { 'base-data/list': fail('DB 잠김') }
+    const wrapper = mount((await load()).default)
+    await settle()
+    await pickArea(wrapper, '교사추천')
+
+    const t = wrapper.text()
+    expect(t).not.toContain('등록된 기초 데이터 없음')
+    expect(t).toContain('기초 데이터를 불러오지 못했습니다')
+    wrapper.unmount()
+  })
+
+  it('전형요소 추가 저장을 두 번 눌러도 요청은 하나다', async () => {
+    const wrapper = mount((await load()).default)
+    await settle()
+    override = { '/api/areas$': never }   // 목록을 다 받은 뒤 붙잡는다 — 생성 POST 가 안 끝난다
+    await wrapper.findAll('button').find(b => b.text().includes('전형요소 추가')).trigger('click')
+    await settle()
+    const texts = wrapper.findAll('input[type="text"]')
+    await texts[texts.length - 1].setValue('새요소')
+    await wrapper.find('input[type="number"][step="0.00001"]').setValue('10')
+
+    const save = () => wrapper.findAll('button').filter(b => b.text() === '저장').at(-1)
+    await save().trigger('click')
+    await save().trigger('click')
+    await settle()
+
+    expect(posts.filter(u => /\/api\/areas$/.test(u))).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('파일을 올리는 동안 다른 파일을 또 올릴 수 없다', async () => {
+    const wrapper = mount((await load()).default)
+    await settle()
+    await pickArea(wrapper, '교사추천')
+    override = { 'base-data/import': never }
+
+    const input = wrapper.findAll('input[type="file"]')
+      .find(i => (i.attributes('accept') ?? '').includes('.csv'))
+    const file = new File(['x'], 'base.csv', { type: 'text/csv' })
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await settle()
+    await input.trigger('change')
+    await settle()
+
+    expect(posts.filter(u => /base-data\/import/.test(u))).toHaveLength(1)
     wrapper.unmount()
   })
 })
