@@ -457,6 +457,28 @@ async fn held_stop_with_seats_left_explains_itself() {
     assert!(resp.manual.is_empty());
 }
 
+/// 4차 수정 감사 B-1: 아직 **선두가 아닌** 보류 덩어리가 일반 동점과 같은 대학 순위에 있을 때,
+/// 사유가 "모집단위 동점이 정리되지 않아"로 잘못 나왔다. 트랙(재학생 우선)과 대학(점수만)의
+/// 플래그가 다를 때 생긴다 — 트랙 0 은 재학생 c0(70)이 선두라 졸업생 동점(90, 대학 1위)은
+/// 그 뒤에 보류되고, 트랙 1 의 c3·c4(90, 대학 1위)가 대학 1석을 두고 경합한다.
+/// 진짜 원인은 c3·c4 의 대학 단위 동점이다.
+#[tokio::test]
+async fn ordinary_univ_tie_is_not_reported_as_held_stop() {
+    let cfg = Cfg {
+        total: Some(1), univ_prio: false,
+        tracks: vec![t(Some(2), true), t(Some(2), false)],
+        cands: vec![c(0, 70, true), c(0, 90, false), c(0, 90, false), c(1, 90, true), c(1, 90, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    let univ_reason = resp.manual.iter().find(|m| m.track_id.is_none())
+        .map(|m| m.reason.clone()).expect("대학 단위 동점 사유가 있어야 한다");
+    assert!(univ_reason.contains("1석에 2명 경합"), "일반 동점 문장이어야 한다: {univ_reason}");
+    assert!(!univ_reason.contains("정리되지 않아"), "보류 정지로 잘못 적었다: {univ_reason}");
+}
+
 /// 대학 순위가 다른 보류 덩어리 둘 — 더 좋은 쪽에서 멈춘다. 그 사이 순위의 Y1 도, 아래
 /// 덩어리의 후보도 자동 확정되지 않고, 수동도 둘 다 막는다.
 #[tokio::test]
@@ -547,9 +569,9 @@ fn gen_cfg(rng: &mut Rng) -> Cfg {
 #[tokio::test]
 async fn auto_and_manual_agree_on_generated_configs() {
     const CASES: u64 = 400;
-    // 생성기가 새 갈래(대학 둘·이전 라운드·보류 동점)를 실제로 만드는지 센다 — 0 이면 그 갈래는
-    // 검사 밖이다(생성기 수정이 조용히 그 갈래를 끄는 것을 막는다).
-    let (mut n_univ2, mut n_prior, mut n_manual) = (0, 0, 0);
+    // 생성기가 갈래(대학 둘·이전 라운드·수동 항목·보류 덩어리에서 멈춘 대학 컷)를 실제로
+    // 만드는지 센다 — 0 이면 그 갈래는 검사 밖이다(생성기 수정이 조용히 그 갈래를 끄는 것을 막는다).
+    let (mut n_univ2, mut n_prior, mut n_manual, mut n_held_stop) = (0, 0, 0, 0);
     for seed in 1..=CASES {
         let mut rng = Rng(0x9E37_79B9_7F4A_7C15 ^ seed.wrapping_mul(0x2545_F491_4F6C_DD1D));
         let cfg = gen_cfg(&mut rng);
@@ -563,6 +585,7 @@ async fn auto_and_manual_agree_on_generated_configs() {
         let auto_set = recommended(&pool_a, ba.rid).await;
         let auto_idx = names(&ba, &auto_set);
         n_manual += (!resp.manual.is_empty()) as u32;
+        n_held_stop += resp.manual.iter().any(|m| m.reason.contains("정리되지 않아")) as u32;
 
         // (c) 정원 — 이전 라운드 추천자까지 합쳐 센다. 이전 인원이 이미 정원 이상이면
         //     이번 라운드 확정은 0 이어야 한다(정원 하향 등으로 생길 수 있는 상태).
@@ -625,6 +648,6 @@ async fn auto_and_manual_agree_on_generated_configs() {
             }
         }
     }
-    assert!(n_univ2 > 0 && n_prior > 0 && n_manual > 0,
-        "생성 구성이 갈래를 덮지 못한다: 대학 둘 {n_univ2}, 이전 라운드 {n_prior}, 수동 항목 {n_manual}");
+    assert!(n_univ2 > 0 && n_prior > 0 && n_manual > 0 && n_held_stop > 0,
+        "생성 구성이 갈래를 덮지 못한다: 대학 둘 {n_univ2}, 이전 라운드 {n_prior}, 수동 항목 {n_manual},          보류 정지 {n_held_stop}");
 }

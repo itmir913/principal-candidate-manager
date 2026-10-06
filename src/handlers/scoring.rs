@@ -1503,7 +1503,7 @@ pub struct MergeCand {
 /// 이 병합 결과는 **기존 전체 정렬(`fill_by_rank_groups`) 결과와 동일**하다.
 pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> FillOutcome<MergeCand> {
     let held: Vec<Option<HeldBlock>> = vec![None; tracks.len()];
-    merge_univ_cut_held(tracks, &held, remaining)
+    merge_univ_cut_held(tracks, &held, remaining).0
 }
 
 /// 1단계에서 **보류된** 모집단위 동점 그룹 — 2단계 대학 컷을 그 대학 순위에서 멈춘다.
@@ -1537,18 +1537,26 @@ pub struct HeldBlock {
 
 /// `merge_univ_cut` 에 1단계 보류 덩어리(`held[i]` = 트랙 i 의 덩어리)를 더한 것.
 /// `held` 가 전부 `None` 이면 `merge_univ_cut` 과 같다.
+///
+/// 두 번째 값은 **보류 덩어리에서 멈췄을 때** 멈춘 순위에 선두로 선 덩어리들의 잔여석 합이고,
+/// 그 밖의 경우(일반 동점·깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
+/// 안다 — 호출부가 `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
+/// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
 pub fn merge_univ_cut_held(
     tracks: &[Vec<MergeCand>],
     held: &[Option<HeldBlock>],
     remaining: Option<i64>,
-) -> FillOutcome<MergeCand> {
+) -> (FillOutcome<MergeCand>, i64) {
     assert_eq!(tracks.len(), held.len(), "트랙 수와 보류 덩어리 수가 다르다");
     let Some(rem) = remaining else {
         // 대학 정원 무제한 — 컷 자체가 없으므로 1단계 결과가 그대로 최종
-        return FillOutcome {
-            confirmed: tracks.iter().flatten().cloned().collect(),
-            tie: None,
-        };
+        return (
+            FillOutcome {
+                confirmed: tracks.iter().flatten().cloned().collect(),
+                tie: None,
+            },
+            0,
+        );
     };
 
     // pos[i] = 트랙 i 에서 다음에 볼 후보의 인덱스 (그 앞은 모두 선택됨)
@@ -1576,19 +1584,21 @@ pub fn merge_univ_cut_held(
         }
         // 선두 집합이 비면 종료
         let Some(r) = best else {
-            return FillOutcome { confirmed, tie: None };
+            return (FillOutcome { confirmed, tie: None }, 0);
         };
 
         // 동점 그룹 G — 선두들끼리만 판정
         let mut group: Vec<(usize, usize)> = Vec::new(); // (트랙 인덱스, 인원)
         let mut group_size: i64 = 0;
-        // 같은 대학 순위에 선 보류 덩어리 — 있으면 여기서 멈춘다
+        // 같은 대학 순위에 **선두로** 선 보류 덩어리 — 있으면 여기서 멈춘다
         let mut held_contenders: i64 = 0;
+        let mut held_seats: i64 = 0;
         for (ti, list) in tracks.iter().enumerate() {
             let Some(head) = list.get(pos[ti]) else {
                 if let Some(h) = held_head(ti) {
                     if h.univ_rank == r {
                         held_contenders += h.contenders;
+                        held_seats += h.seats;
                     }
                 }
                 continue;
@@ -1612,17 +1622,20 @@ pub fn merge_univ_cut_held(
         let used = confirmed.len() as i64;
         // 보류 덩어리가 선두 경쟁에 나섰다 — 남은 자리가 있으면 관리자 판단, 없으면 깨끗한 끝.
         // 이때의 TieBoundary 는 "free < contenders" 를 보장하지 않는다(자리가 남아도 멈추므로).
-        // 사유 문장은 호출부가 보류 덩어리 유무로 따로 쓴다.
+        // 호출부는 두 번째 반환값(held_seats > 0)으로 이 경우를 알아보고 사유를 따로 쓴다.
         if held_contenders > 0 {
             let free = rem - used;
-            return FillOutcome {
-                confirmed,
-                tie: (free > 0).then(|| TieBoundary {
-                    rank: r,
-                    free,
-                    contenders: group_size + held_contenders,
-                }),
-            };
+            return (
+                FillOutcome {
+                    confirmed,
+                    tie: (free > 0).then(|| TieBoundary {
+                        rank: r,
+                        free,
+                        contenders: group_size + held_contenders,
+                    }),
+                },
+                held_seats,
+            );
         }
         // 여기 오면 선두 r 에 실제 후보가 있다(보류 덩어리만 있으면 위에서 돌아갔다).
         // 0 이면 아무것도 소비하지 못해 루프가 영원히 돈다 — 조용히 돌지 않게 멈춘다.
@@ -1634,12 +1647,15 @@ pub fn merge_univ_cut_held(
                     pos[ti] += n;
                 }
             }
-            GroupStep::StopClean => return FillOutcome { confirmed, tie: None },
+            GroupStep::StopClean => return (FillOutcome { confirmed, tie: None }, 0),
             GroupStep::StopTie { free } => {
-                return FillOutcome {
-                    confirmed,
-                    tie: Some(TieBoundary { rank: r, free, contenders: group_size }),
-                }
+                return (
+                    FillOutcome {
+                        confirmed,
+                        tie: Some(TieBoundary { rank: r, free, contenders: group_size }),
+                    },
+                    0,
+                )
             }
         }
     }
@@ -1943,17 +1959,13 @@ async fn run_auto_recommend(
 
         // 트랙 내부 순서를 보존한 채 대학 순위로 병합 컷.
         // (전체 재정렬 금지 — 같은 트랙의 track_rank 상위자를 건너뛰면 안 된다.)
-        let outcome = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
+        let (outcome, held_stop_seats) = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
 
         if let Some(tie) = &outcome.tie {
             // 대학 컷이 1단계 보류 동점 그룹에서 멈췄는가 — 그 경우 남은 자리가 경합 인원보다
             // 많을 수도 있어 "N석에 M명 경합" 문장은 맞지 않는다. 멈춘 이유를 따로 적는다.
-            let held_seats: i64 = held
-                .iter()
-                .flatten()
-                .filter(|h| h.univ_rank == tie.rank)
-                .map(|h| h.seats)
-                .sum();
+            // 판정은 병합 함수가 돌려준 값으로만 한다(held 를 다시 훑어 추측하지 않는다).
+            let held_seats = held_stop_seats;
             let reason = if held_seats > 0 {
                 format!(
                     "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
