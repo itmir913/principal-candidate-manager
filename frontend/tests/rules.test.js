@@ -121,6 +121,10 @@ describe('규칙 8 — 본문 폰트는 text-base 이상', () => {
     String.raw`text-\[(?:[0-9]|1[01])(?:\.\d+)?pt\]`,
     // CSS 단축 `font: 12px/1.4 ...` — font-size 없이 크기를 준다
     String.raw`\bfont\s*:\s*(?:[a-z-]+\s+)*(?:[0-9]|1[0-5])(?:\.\d+)?px\b`,
+    // 키워드 크기: small(13px)·x-small·xx-small·smaller — 숫자가 없어 위 패턴들이 못 봤다
+    // (2026-10-06 감사 F-10, 당시 위반은 없었다). `fontSize: 'small'` 객체 표기도 함께.
+    String.raw`font-size\s*:\s*(?:x{0,2}-?small|smaller)\b`,
+    String.raw`fontSize\s*(?::|=)\s*['"\`](?:x{0,2}-?small|smaller)['"\`]`,
     // JS 로 직접 꽂는 경우
     String.raw`setProperty\(\s*['"\`]font-size['"\`]\s*,\s*['"\`](?:[0-9]|1[0-5])(?:\.\d+)?px`,
   ].join('|'))

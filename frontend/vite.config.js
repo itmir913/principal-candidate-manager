@@ -22,6 +22,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.js', 'tests/**/*.test.js'],
+    // 렌더 테스트는 파일마다 큰 SFC 를 처음 import 하며 변환한다. 메모리가 적은 PC 에서
+    // 전체를 돌리면 이 첫 import 가 기본 5초를 넘겨, 결함 없이 시간 초과로 빨개졌다
+    // (2026-10-06 감사 F-9 — 같은 파일을 단독으로 돌리면 통과했다). 넉넉히 둔다.
+    testTimeout: 30000,
   },
   server: {
     port: 5173,

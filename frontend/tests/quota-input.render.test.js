@@ -29,7 +29,7 @@ const QUOTA_STATS = {
 }
 
 vi.mock('axios', () => {
-  // 모집단위는 `/api/univ-tracks` 로 **따로** 온다(admin.js:160) — 대학 응답에 넣어도
+  // 모집단위는 `/api/univ-tracks` 로 **따로** 온다(`admin.js` 의 `getAllTracks`) — 대학 응답에 넣어도
   // 표가 그려지지 않는다. 그래서 [모집단위 편집] 폼을 못 열고 있었다.
   const res = (url = '') => Promise.resolve({
     data: /quota-stats/.test(String(url)) ? QUOTA_STATS
@@ -50,7 +50,8 @@ const load = () => import('../src/components/admin/UniversitiesTab.vue')
 /**
  * 정원을 입력할 수 있는 **네 폼**. 하나만 시험하면 나머지 셋은 가드를 빼도 아무도
  * 모른다 — 실제로 그랬다(4차 감사 치-1, 저장소 규칙 feedback_guard_all_entry_points).
- * 폼이 늘면 여기에도 추가해야 하고, 아래 "전 진입점" 검사가 누락을 잡는다.
+ * 폼이 늘면 여기에도 추가해야 한다. 아래 개수 검사는 `data-testid` 를 붙인 폼만 센다 —
+ * 표식 없이 새 폼을 만들면 이 목록도 그 검사도 못 본다.
  */
 const FORMS = [
   ['대학 추가',      'univ-add-form'],
@@ -210,7 +211,8 @@ describe('정원 입력 (F-013) — 화면 동작', () => {
 
   it('정원 칸을 가진 폼이 FORMS 목록과 같은 수다', async () => {
     // 위 테스트는 **내가 여는 폼**만 본다. 새 폼이 생겼는데 FORMS 에 없으면 못 연다.
-    // 그래서 `data-testid` 개수와 목록 길이를 맞춰 둔다 — 표식을 안 붙이면 여기서 걸린다.
+    // 그래서 `data-testid` 개수와 목록 길이를 맞춰 둔다 — 표식을 붙인 폼이 목록에서
+    // 빠지면 여기서 걸린다(표식이 없는 새 폼은 못 본다 — 아래).
     const [{ default: fs }, { default: path }, { fileURLToPath }] =
       await Promise.all([import('node:fs'), import('node:path'), import('node:url')])
     const here = path.dirname(fileURLToPath(import.meta.url))

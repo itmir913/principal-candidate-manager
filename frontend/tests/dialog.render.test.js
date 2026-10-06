@@ -112,7 +112,7 @@ describe('확인 대화상자', () => {
     const w = mount(DialogHost, { attachTo: document.body })
     const answer = dialog.confirm({ title: '삭제할까요?', message: '되돌릴 수 없습니다.' })
     await settle()
-    // 리스너는 window 에 붙는다(DialogHost.vue:142). document 로 쏘면 닿지 않는다.
+    // 리스너는 window 에 붙는다(`DialogHost.vue` 의 keydown 리스너 등록). document 로 쏘면 닿지 않는다.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await settle()
     expect(await answer, 'ESC 가 확인으로 동작한다').toBe(false)
@@ -120,7 +120,7 @@ describe('확인 대화상자', () => {
   })
 
   it('danger 2단계에서도 ESC 는 취소다', async () => {
-    // DialogHost.vue:133 주석이 "2단계 상태에서도 즉시 취소"라고 보장하는데,
+    // `DialogHost.vue` 의 ESC 처리 주석이 "2단계 상태에서도 즉시 취소"라고 보장하는데,
     // 1단계만 시험하던 동안 `settleDialog(s.kind === 'alert' || s.step === 2)` 변이가
     // 통과했다 — 마감 확정 화면에서 ESC 가 **실행**이 된다(5차 감사 중-2).
     const w = mount(DialogHost, { attachTo: document.body })
@@ -140,7 +140,7 @@ describe('확인 대화상자', () => {
 
   it('연속으로 열면 앞의 약속이 취소로 끝난다', async () => {
     // 끝나지 않은 약속이 남으면 `await dialog.confirm()` 뒤의 코드가 영원히 안 돌아
-    // 버튼이 먹통이 된다(dialog.js:22 의 의도).
+    // 버튼이 먹통이 된다(`dialog.js` 가 새 대화상자를 열 때 앞 약속을 정리하는 의도).
     const w = mount(DialogHost, { attachTo: document.body })
     const first = dialog.confirm({ title: 'A', message: 'A' })
     dialog.confirm({ title: 'B', message: 'B' })

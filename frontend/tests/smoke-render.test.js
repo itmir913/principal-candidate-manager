@@ -37,7 +37,7 @@ const flexible = () => Object.assign([], {
   // 중첩 응답 — 옵셔널 체이닝 없이 바로 파고드는 곳이 있어 형태를 맞춰 준다.
   // (예: OverviewTab 의 `data.value.all_time.total_rounds`)
   // OverviewAllTime 의 필드는 total_rounds·total_applicants·confirmed·abandoned 다
-  // (src/handlers/overview.rs:64). 이름을 틀렸더니 화면에 "undefined명" 이 그려졌고,
+  // (`src/handlers/overview.rs` 의 `OverviewAllTime`). 이름을 틀렸더니 화면에 "undefined명" 이 그려졌고,
   // 새로 넣은 누출 검사가 바로 잡았다.
   all_time: { total_rounds: 0, total_applicants: 0, confirmed: 0, abandoned: 0 },
   round: null, graduated: null, enrolled: null,
@@ -53,7 +53,7 @@ const ROUND = { id: 1, status: 'CLOSED', opened_at: '2026-03-02T00:00:00Z',
                 closed_at: '2026-03-10T00:00:00Z', finalized_at: null, needs_recalc: false }
 /**
  * `/api/rounds/current` 는 백엔드에서 **`status = 'OPEN'` 인 행만** 돌려준다
- * (src/handlers/rounds.rs:95). 여기에 CLOSED 를 주면 백엔드가 만들 수 없는 상태라,
+ * (`src/handlers/rounds.rs` 의 `get_current_round`). 여기에 CLOSED 를 주면 백엔드가 만들 수 없는 상태라,
  * `currentRound.status === 'OPEN'` 뒤에 있는 화면 분기가 **한 번도 렌더되지 않는다** —
  * 커버리지처럼 보이는 공백이었다(6차 감사 미결 항목).
  * 목록(`/api/rounds`)에는 CLOSED 와 함께 둔다. 실제로 가능한 상태다.
@@ -97,7 +97,7 @@ const FINAL_ROUND = { ...ROUND, id: 2, status: 'FINALIZED',
 
 function TEACHER_FIXTURE(u) {
   // teacherGetResults 는 배열이 아니라 `{ rounds, results }` 를 준다
-  // (ResultsTab.vue:469). 배열로 주면 `rounds.value` 가 undefined 가 되어 렌더가 터진다.
+  // (`ResultsTab.vue` 의 `teacherGetResults` 호출부). 배열로 주면 `rounds.value` 가 undefined 가 되어 렌더가 터진다.
   // **한 행은 추천 확정, 한 행은 미선발**로 둔다. 둘 다 미선발이면 "추천 확정"·
   // "포기됨" 분기와 [추천 포기] 버튼이 영영 렌더되지 않는다 — 되돌리기 어려운 행위의
   // 버튼이 검사 밖에 있었다(4차 감사 놓친 항목 4).
@@ -108,7 +108,7 @@ function TEACHER_FIXTURE(u) {
       { ...RESULT2, round_id: 2 },
     ],
   }
-  // StudentRow 의 기본키는 `id` 다(src/handlers/students.rs:40). `student_id` 로 주면
+  // StudentRow 의 기본키는 `id` 다(`src/handlers/students.rs` 의 `StudentRow`). `student_id` 로 주면
   // `v-for :key="s.id"` 와 `selectedStudent?.id` 가 전부 undefined 가 되어,
   // 목록은 그려지는데 **선택이 되지 않는다.**
   if (/students/.test(u))     return [{ id: 1, name: '학생01', student_code: '2026001',
@@ -466,7 +466,7 @@ describe('스모크 렌더 — 라운드 결과 패널', () => {
     // `rows` 에 걸러진 배열을 넘기는 변이가 전 검증을 통과했다(감사 치-1).
     // computeTieSet 자체는 어떤 배열을 받아도 옳게 동작하므로 순수 함수 테스트로는
     // 원리적으로 잡을 수 없다.
-    // `#fef3c7` 는 "재계산 필요" 배지 색이기도 하다(RoundsTab.vue:64). 행 배경 변수까지
+    // `#fef3c7` 는 "재계산 필요" 배지 색이기도 하다(`RoundsTab.vue` 의 "재계산 필요" 배지). 행 배경 변수까지
     // 붙여 그 배지와 섞이지 않게 한다 — 픽스처를 한 글자 바꾸면 방어선 셋이 전부
     // 거짓 초록이 될 수 있었다.
     const TIE = '--row-bg:#fef3c7'
@@ -601,7 +601,7 @@ describe('스모크 렌더 — props 를 받는 화면', () => {
 
 describe('스모크 대상 목록이 낡지 않았다', () => {
   /**
-   * 디스크를 **글롭과 도립적으로** 센다.
+   * 디스크를 **글롭과 독립적으로** 센다.
    *
    * 이전 판은 `targets` 를 `all` 에서 파생시켜 놓고 다시 `all` 과 비교했다 —
    * 집합으로 쓰면 (all − NEEDS_PROPS − App) 을 all 에서 다시 빼는 꼴이라

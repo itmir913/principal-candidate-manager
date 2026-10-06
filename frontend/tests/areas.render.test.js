@@ -136,7 +136,7 @@ describe('전형요소 화면 — 요소를 골라 점수표까지', () => {
   })
 
   it('MANUAL 요소는 점수표 대신 기초데이터 탭으로 연다', async () => {
-    // selectArea 가 calc_type 으로 첫 탭을 고른다(AreasTab.vue:945).
+    // selectArea 가 calc_type 으로 첫 탭을 고른다(`AreasTab.vue` 의 `selectArea`).
     // 이 분기가 뒤집히면 MANUAL 요소에서 빈 점수표가 열린다.
     const wrapper = mount((await load()).default)
     await settle()
