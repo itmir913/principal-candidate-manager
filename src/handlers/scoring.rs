@@ -1538,8 +1538,9 @@ pub struct HeldBlock {
 /// `merge_univ_cut` 에 1단계 보류 덩어리(`held[i]` = 트랙 i 의 덩어리)를 더한 것.
 /// `held` 가 전부 `None` 이면 `merge_univ_cut` 과 같다.
 ///
-/// 두 번째 값은 **보류 덩어리에서 멈췄을 때** 멈춘 순위에 선두로 선 덩어리들의 잔여석 합이고,
-/// 그 밖의 경우(일반 동점·깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
+/// 두 번째 값은 **보류 덩어리가 선두로 서서 멈췄을 때** 그 순위에 선 덩어리들의 잔여석 합이다
+/// — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다. 그 밖의 경우(일반 동점·
+/// 덩어리 없는 깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
 /// 안다 — 호출부가 `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
 /// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
 pub fn merge_univ_cut_held(
@@ -1966,21 +1967,25 @@ async fn run_auto_recommend(
             // 많을 수도 있어 "N석에 M명 경합" 문장은 맞지 않는다. 멈춘 이유를 따로 적는다.
             // 판정은 병합 함수가 돌려준 값으로만 한다(held 를 다시 훑어 추측하지 않는다).
             let held_seats = held_stop_seats;
+            // 사유 끝의 정원 숫자는 **이번 실행의 확정분까지 반영한** 값이다. 실행 전 값을 쓰면
+            // 일부를 확정한 뒤 멈춘 경우 "확정 0명, 잔여 2석" 처럼 실제와 다르게 보인다.
+            let used_after = univ_used + outcome.confirmed.len() as i64;
+            let remaining_after = tq - used_after;
             let reason = if held_seats > 0 {
                 format!(
                     "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
                      그 순위부터 대학 정원 컷을 멈췄습니다. 모집단위 동점을 먼저 정리한 뒤 \
                      자동 추천을 다시 실행하세요 \
-                     (대학 정원 {}명, 확정 {}명, 잔여 {}석)",
-                    tie.rank, held_seats, tq, univ_used, remaining_univ,
+                     (대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석)",
+                    tie.rank, held_seats, tq, used_after, remaining_after,
                 )
             } else {
                 format!(
                     "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 \
                      (경합 대상은 각 모집단위의 다음 차례 지원자에 한함 — \
                      같은 모집단위 상위 지원자에게 막힌 동순위자는 제외 / \
-                     대학 정원 {}명, 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
-                    tie.rank, tie.free, tie.contenders, tq, univ_used, remaining_univ,
+                     대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
+                    tie.rank, tie.free, tie.contenders, tq, used_after, remaining_after,
                 )
             };
             manual_items.push(AutoRecommendManualItem {

@@ -479,6 +479,25 @@ async fn ordinary_univ_tie_is_not_reported_as_held_stop() {
     assert!(!univ_reason.contains("정리되지 않아"), "보류 정지로 잘못 적었다: {univ_reason}");
 }
 
+/// 대학 단위 사유 끝의 정원 숫자는 이번 실행에서 확정한 인원까지 반영한다(5차 수정 감사 C-2).
+/// X1 을 확정한 뒤 X 동점에서 멈춘 경우 — 실행 전 값("확정 0명, 잔여 2석")이 아니어야 한다.
+#[tokio::test]
+async fn univ_reason_counts_include_this_run() {
+    let cfg = Cfg {
+        total: Some(2), univ_prio: false,
+        tracks: vec![t(Some(2), false), t(Some(1), false)],
+        cands: vec![c(0, 95, true), c(0, 90, true), c(0, 90, true), c(1, 80, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), vec![0]);
+    let univ_reason = resp.manual.iter().find(|m| m.track_id.is_none())
+        .map(|m| m.reason.clone()).expect("대학 단위 사유");
+    assert!(univ_reason.contains("이번 실행 포함 확정 1명, 잔여 1석"), "{univ_reason}");
+}
+
 /// 대학 순위가 다른 보류 덩어리 둘 — 더 좋은 쪽에서 멈춘다. 그 사이 순위의 Y1 도, 아래
 /// 덩어리의 후보도 자동 확정되지 않고, 수동도 둘 다 막는다.
 #[tokio::test]
