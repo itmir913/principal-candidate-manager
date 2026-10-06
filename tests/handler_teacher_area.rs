@@ -1039,3 +1039,59 @@ async fn create_application_manual_at_max_score_is_accepted() {
     ).await;
     assert_eq!(res.unwrap(), StatusCode::CREATED);
 }
+
+// ── CATEGORY COMPOSITE 폴백 단위 — 소유자 결정(11_release_decisions §10) ──────────
+//
+// 모집단위별 표에 **그 범주가 없으면 그 범주만** 공통(track_id IS NULL) 표에서 찾는다.
+// 모집단위별 표에 있는 범주는 모집단위 점수가 이긴다. NUMERIC 의 "모집단위 표가 비어 있을
+// 때만 공통 표" 와 다른 규칙이다. 오라클(tools/oracle)도 같은 규칙이라 독립 검증이 못 되므로
+// 여기서 고정한다. 판별력: 표 단위 폴백(모집단위 표가 있으면 공통 표를 안 봄)으로 바꾸면
+// '반장' 조회가 오류가 되고, 공통 우선으로 바꾸면 '회장' 이 8 이 된다.
+#[tokio::test]
+async fn score_preview_composite_category_falls_back_per_category() {
+    let pool = common::create_test_pool_shared().await;
+    setup_base(&pool).await;
+    let tid: i64 = sqlx::query_scalar("SELECT id FROM univ_tracks LIMIT 1")
+        .fetch_one(&pool).await.unwrap();
+    let area_id: i64 = sqlx::query_scalar(
+        "INSERT INTO areas (name, calc_type, max_score, lookup_scope, category_agg, multi_value) \
+         VALUES ('임원경력', 'CATEGORY', 10000000, 'COMPOSITE', 'SUM', 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    for (track, cat, score) in [
+        (Some(tid), "회장", 1_000_000i64),
+        (Some(tid), "부회장", 500_000),
+        (Some(tid), "해당 없음", 0),
+        (None, "회장", 800_000),
+        (None, "부회장", 400_000),
+        (None, "반장", 200_000),
+        (None, "해당 없음", 0),
+    ] {
+        sqlx::query("INSERT INTO category_map (area_id, track_id, category, score) VALUES (?, ?, ?, ?)")
+            .bind(area_id).bind(track).bind(cat).bind(score)
+            .execute(&pool).await.unwrap();
+    }
+
+    let preview = |values: Vec<&str>| {
+        let pool = pool.clone();
+        let values: Vec<String> = values.into_iter().map(String::from).collect();
+        async move {
+            teacher_area_score_preview(
+                State(common::make_state(pool)),
+                Json(AreaScorePreviewBody { area_id, track_id: tid, values }),
+            )
+            .await
+            .unwrap()
+            .0
+        }
+    };
+
+    // 회장(모집단위 표 10) + 반장(모집단위 표에 없음 → 공통 2) = 12
+    let r = preview(vec!["회장", "반장"]).await;
+    assert_eq!(r.error, None);
+    assert_eq!(r.score.unwrap().raw(), 1_200_000, "범주별 폴백: 10 + 2");
+
+    // 모집단위 표에 있는 범주는 공통 값(8)이 아니라 모집단위 값(10)
+    let r = preview(vec!["회장"]).await;
+    assert_eq!(r.score.unwrap().raw(), 1_000_000, "모집단위 표가 공통 표보다 우선");
+}

@@ -228,7 +228,10 @@ JSON으로 `Score`를 받는 필드는 현재 `CreateAreaBody.max_score` 하나�
 
 1. `base_data`에서 범주 문자열 복수 행 조회. 0건이면 오류.
 2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지, `scoring.rs::calc_area_score`).  
-   COMPOSITE 폴백: 모집단위별 없으면 공통 테이블 (`scoring.rs::calc_area_score`).
+   COMPOSITE 폴백은 **범주 단위**다: 모집단위별 표에 **그 범주가 없으면 그 범주만** 공통 표(`track_id IS NULL`)에서
+   찾는다. 모집단위별 표에 있는 범주는 모집단위 점수가 이긴다 (`scoring.rs::compute_area_score`).
+   NUMERIC 의 "모집단위별 구간표가 **비어 있을 때만** 공통 표"(표 단위)와 다르다 — 소유자 결정
+   (`11_release_decisions.md` §10).
 3. `category_agg`에 따라 집계:
    - **SUM**: `try_fold + checked_add` — overflow 시 Fail-Fast (`scoring.rs::calc_area_score`).
    - **MAX**: `scores.iter().max()`. 비어있지 않음이 1번에서 보장 (`scoring.rs::calc_area_score`).
@@ -241,7 +244,7 @@ JSON으로 `Score`를 받는 필드는 현재 `CreateAreaBody.max_score` 하나�
 
 | 무엇 | COMPOSITE area 에서 트랙별 행이 없을 때 |
 |------|----------------------------------------|
-| 점수표(`numeric_table` / `category_map`) | 공통(`track_id IS NULL`) 표로 **폴백한다** |
+| 점수표(`numeric_table` / `category_map`) | 공통(`track_id IS NULL`) 표로 **폴백한다** — NUMERIC 은 표 단위, CATEGORY 는 범주 단위 |
 | 기초데이터(`base_data`) | **폴백하지 않는다 → "base_data 없음" 오류** |
 
 의도된 비대칭이다. 점수표는 "모든 모집단위가 같은 기준을 쓴다"가 흔한 구성이지만,
