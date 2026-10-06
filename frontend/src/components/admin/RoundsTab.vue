@@ -139,6 +139,13 @@
             </div>
           </div>
 
+          <!-- 라운드 상세 조회 실패 — 빈 표를 "지원자 없음"으로 읽지 않게 위에 띄운다 -->
+          <div
+            v-if="detailLoadError"
+            class="rounded-xl mb-5 text-base"
+            style="padding: 14px 18px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;"
+          >이 라운드의 지원·결과를 불러오지 못했습니다: {{ detailLoadError }}</div>
+
           <!-- OPEN 라운드 담임 확정 현황 -->
           <div
             v-if="selected.status === 'OPEN' && confirmationStatus"
@@ -783,6 +790,7 @@ const results = ref([])
 const areas   = ref([])
 
 const roundsLoadError    = ref('')
+const detailLoadError    = ref('')
 const roundActing        = ref(false)
 // 결과 행 단위 조작(추천 확정/취소, 미선발 처리/해제) 공용 진행 플래그.
 // 정원 마지막 한 자리에서 두 번 클릭하면 첫 요청은 성공하는데 두 번째가
@@ -969,7 +977,17 @@ async function selectRound(r) {
   confirmationStatus.value = null
   selectedTrackId.value = ''
   allTracksInRound.value = []
-  await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
+  // 이전 라운드의 표를 새 라운드 머리글 아래 남기지 않는다 — 조회가 실패하면
+  // 옛 행의 버튼이 옛 라운드에 대해 동작한다
+  apps.value = []
+  results.value = []
+  detailLoadError.value = ''
+  try {
+    await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
+  } catch (e) {
+    if (selected.value?.id !== r.id) return
+    detailLoadError.value = e.response?.data || e.message
+  }
 }
 
 // ── 학과명 인라인 수정 (이슈 #32) ───────────────────────────────
@@ -1019,7 +1037,11 @@ async function loadApps() {
   // 돌아왔을 때 옛 임시값을 든 입력 상자가 다시 열린다
   cancelDeptEdit()
   if (!selected.value) return
-  apps.value = await getApplications(selected.value.id)
+  const rid = selected.value.id
+  const data = await getApplications(rid)
+  // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
+  if (selected.value?.id !== rid) return
+  apps.value = data
 }
 
 async function loadResults() {
@@ -1027,10 +1049,15 @@ async function loadResults() {
   // 모집단위 필터를 서버에 넘기지 않는다. 대학 순위 보기의 동점 판정은 같은 대학의
   // **다른 모집단위 지원자**까지 봐야 하는데, 서버에서 걸러 받으면 그 상대가 배열에
   // 없어 동점 표식이 사라진다. 전체를 받아 표시 단계에서만 거른다(buildResultsView).
-  ;[results.value, quotaStats.value] = await Promise.all([
-    getResults(selected.value.id, null),
+  const rid = selected.value.id
+  const [data, stats] = await Promise.all([
+    getResults(rid, null),
     getQuotaStats(),
   ])
+  // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
+  if (selected.value?.id !== rid) return
+  results.value = data
+  quotaStats.value = stats
   const seen = new Set()
   allTracksInRound.value = results.value
     .filter(r => { if (seen.has(r.track_id)) return false; seen.add(r.track_id); return true })
