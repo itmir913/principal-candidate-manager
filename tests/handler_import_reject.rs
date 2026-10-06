@@ -24,7 +24,9 @@ async fn import_classes_error_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result["inserted"], 0);
-    assert!(!result["errors"].as_array().unwrap().is_empty());
+    // 오류 행은 데이터 둘째 줄 = 파일 3행(헤더가 1행)
+    let errors = result["errors"].as_array().unwrap();
+    assert!(errors.iter().any(|e| e.as_str().unwrap().starts_with("3행")), "행 번호: {errors:?}");
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
         .fetch_one(&pool)
@@ -73,7 +75,8 @@ async fn import_students_error_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.inserted, 0);
-    assert!(!result.errors.is_empty());
+    // 오류 행은 데이터 둘째 줄 = 파일 3행(헤더가 1행)
+    assert!(result.errors.iter().any(|e| e.starts_with("3행")), "행 번호: {:?}", result.errors);
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
         .fetch_one(&pool)
@@ -256,7 +259,7 @@ async fn import_enrolled_error_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.inserted, 0);
-    assert!(!result.errors.is_empty());
+    assert!(result.errors.iter().any(|e| e.starts_with("3행")), "행 번호: {:?}", result.errors);
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
         .fetch_one(&pool)
@@ -316,7 +319,8 @@ async fn import_classes_empty_teacher_name_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result["inserted"], 0);
-    assert!(!result["errors"].as_array().unwrap().is_empty());
+    let errors = result["errors"].as_array().unwrap();
+    assert!(errors.iter().any(|e| e.as_str().unwrap().starts_with("3행")), "행 번호: {errors:?}");
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM classes")
         .fetch_one(&pool)
@@ -463,7 +467,7 @@ async fn import_graduated_error_rejects_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(result.inserted, 0);
-    assert!(!result.errors.is_empty());
+    assert!(result.errors.iter().any(|e| e.starts_with("3행")), "행 번호: {:?}", result.errors);
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM students")
         .fetch_one(&pool)
