@@ -11,7 +11,7 @@
  * 판별력의 소재: 해당 조회만 실패시킨다. catch 가 다시 null/빈 상태로만 돌아가면
  * 오류 문구가 없고 "진행 중인 라운드 없음"이 그려진다.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -20,7 +20,18 @@ import { createPinia, setActivePinia } from 'pinia'
 let failing = /$^/
 
 vi.mock('axios', () => {
-  const empty = Object.assign([], { rows: [], total: 0, page: 1, per_page: 50, rounds: [], results: [], univs: [] })
+  // 빈 응답이면서 흔한 속성도 가진 값 — smoke-render 의 flexible() 과 같은 형태.
+  // AdminView 는 기본 탭(OverviewTab)을 띄우고, 그 탭은 `all_time.total_rounds` 로 바로
+  // 파고든다. 이 키가 없으면 비동기 탭 로드 타이밍에 따라 미처리 오류가 난다
+  // (로컬은 통과, GitHub CI 는 실패 — 2026-10-07).
+  const empty = Object.assign([], {
+    univs: [], rows: [], items: [], tracks: [], areas: [], students: [], classes: [],
+    logs: [], results: [], applications: [], rounds: [], all_round_ids: [], entries: [],
+    total: 0, page: 1, per_page: 50, count: 0,
+    all_time: { total_rounds: 0, total_applicants: 0, confirmed: 0, abandoned: 0 },
+    round: null, graduated: null, enrolled: null,
+    by_status: {}, by_univ: [], recent: [], summary: {}, by_grade: {}, grades: [],
+  })
   const get = (url = '') => {
     const u = String(url)
     if (failing.test(u)) {
@@ -52,13 +63,38 @@ function signInAs(role) {
 }
 
 describe('화면 틀 — 조회 실패를 빈 상태로 위장하지 않는다', () => {
+  // AdminView·TeacherView 는 탭을 defineAsyncComponent 로 띄운다. 모듈을 미리 받아 두지
+  // 않으면 탭 로드가 테스트가 끝난 뒤에 끝나, 탭 안의 오류가 다른 파일 실행 중에 터지거나
+  // (GitHub CI) 아예 안 보인다(로컬). 미리 받아 두면 마운트 직후 settle 안에서 드러난다.
+  // 판별력 확인(2026-10-07): 아래 mock 에서 all_time 을 빼면 이 파일이 실패한다.
+  beforeAll(async () => {
+    await Promise.all([
+      import('../src/components/admin/OverviewTab.vue'),
+      import('../src/components/teacher/ApplicationTab.vue'),
+      import('../src/components/teacher/ClassTab.vue'),
+      import('../src/components/teacher/ResultsTab.vue'),
+    ])
+  })
+
+  let unhandled
+  const onUnhandled = (e) => unhandled.push(String(e?.reason?.message ?? e?.reason ?? e?.message ?? e))
   beforeEach(() => {
     setActivePinia(createPinia())
+    unhandled = []
+    process.on('unhandledRejection', onUnhandled)
+    process.on('uncaughtException', onUnhandled)
     failing = /$^/
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
-  afterEach(() => { vi.restoreAllMocks() })
+  afterEach(async () => {
+    // 비동기 탭 로드가 끝날 시간을 준 뒤, 그 사이 난 미처리 오류도 실패로 본다
+    await settle()
+    process.off('unhandledRejection', onUnhandled)
+    process.off('uncaughtException', onUnhandled)
+    vi.restoreAllMocks()
+    expect(unhandled, '화면 틀 마운트 중 미처리 오류').toEqual([])
+  })
 
   it.each([
     ['TeacherView', 'teacher'],
