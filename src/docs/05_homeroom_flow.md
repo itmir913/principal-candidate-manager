@@ -108,6 +108,7 @@
 **처리**: `UPDATE applications SET abandoned = 1`
 
 **포기 후 재지원 가능 여부**: FINALIZED 라운드에서는 지원 등록(`teacher_create_application`)이 라운드 상태 검증에서 400을 반환하므로 재지원 불가.
+**다음 라운드에서는** 포기한 학생도, 추천 확정된 학생도 다시 지원할 수 있다 — 앱이 막지 않는 것이 소유자 결정이다(`11_release_decisions.md` §8).
 
 ⚠️ [teacher_delete_application] 담임이 지원을 완전히 삭제하는 API(`DELETE /api/teacher/applications/:sid/:tid/:rid`)는 OPEN 상태에서만 가능하며, `results` 테이블도 함께 삭제한다. 이는 포기(abandoned=1)와 구별된다. 포기는 결과는 남기되 추천 대상에서 제외하는 것이고, 삭제는 지원 자체를 없애는 것이다.
 

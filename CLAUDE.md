@@ -16,6 +16,8 @@
 **2. Fail-Fast**: 점수 계산 오류는 즉시 `Err` 반환. `unwrap_or(0)` / `unwrap_or_default()` 등 silent fallback 전면 금지. 허용 예외는 `src/docs/silent_fallback_allowed.md`에 명시된 위치만.
 
 **3. 점수 계산은 백엔드 전담**: 프론트엔드는 표시만. 점수 미리보기도 API 호출.
+유일한 예외는 전형요소 **만점 합계** 표시(`frontend/src/logic/areaTotals.js`) — 소유자 결정,
+근거와 뒤집는 조건은 `src/docs/11_release_decisions.md` §9.
 
 **4. Import는 All-or-Nothing**: 오류 하나라도 rollback + 422. 부분 저장 없음. 중복 행은 error (warning 아님). 유일한 예외: 외부 석차연명부의 **석차 값** 누락·변환 실패는 행 skip + warning (`src/docs/08_excel_import.md` §7-1).
 
