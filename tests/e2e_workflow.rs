@@ -342,4 +342,28 @@ async fn full_two_round_lifecycle() {
             "'{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, hong,
         );
     }
+
+    // ── 10. 결과 export xlsx 검증 (라운드 2) ──────────────────────
+    // 라운드 경계: 라운드 2 export 에는 라운드 2 지원(이순신 1건)만 실려야 한다.
+    // 라운드 1 의 행(홍길동·김졸업, 라운드 1 의 이순신)이 섞이면 행 수와 값이 어긋난다.
+    let resp = export_results(st(&pool), Path(r2)).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let rows = excel::parse_xlsx_all_rows_raw(&bytes).unwrap();
+    assert_eq!(rows.len(), 2, "헤더 + 라운드 2 지원자 1행: {:?}", rows);
+    let header2 = &rows[0];
+    let col_of2 = |h: &str| header2.iter().position(|c| c == h)
+        .unwrap_or_else(|| panic!("export 헤더에 '{}' 없음: {:?}", h, header2));
+    let lee = &rows[1];
+    assert_eq!(lee.get(col_of2("학생명")).map(String::as_str), Some("이순신"), "{:?}", lee);
+    for (h, want) in [("내신", "80"), ("면접", "40"), ("총점", "120"), ("추천", "추천")] {
+        let c = col_of2(h);
+        assert_eq!(
+            lee.get(c).map(String::as_str), Some(want),
+            "라운드 2 '{}' 열({})의 값이 '{}'이어야 함: {:?}", h, c, want, lee,
+        );
+    }
+    assert_ne!(
+        lee.get(col_of2("포기")).map(String::as_str), Some("포기"),
+        "라운드 2 이순신은 포기하지 않았다: {:?}", lee,
+    );
 }
