@@ -97,7 +97,7 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     await clickRound(wrapper, 2)
     const t = wrapper.text()
     expect(t, '실패한 라운드 아래 이전 라운드의 행이 남았다').not.toContain('김갑돌')
-    expect(t).toContain('이 라운드의 지원·결과를 불러오지 못했습니다')
+    expect(t).toContain('이 라운드의 일부 정보를 불러오지 못했습니다')
     expect(t).toContain('조회 실패 Z')
     expect(rejections).toEqual([])
     wrapper.unmount()
@@ -138,8 +138,8 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     wrapper.unmount()
   })
 
-  // 판별력: selectRound 가 Promise.all 이면, 지원 조회가 먼저 실패해 오류를 띄운 뒤
-  // 늦게 성공한 결과 조회(loadResults 는 성공하면 오류 상자를 지운다)가 상자를 지운다.
+  // 판별력: 오류 상자를 출처 구분 없이 하나로 두고 성공한 로더가 지우게 하면, 지원 조회가
+  // 먼저 실패한 뒤 늦게 성공한 결과 조회가 상자를 지운다(2026-10-07 수정 감사 B-1').
   it('한 조회가 먼저 실패하고 다른 조회가 늦게 성공해도 오류 상자가 남는다', async () => {
     let release
     const late = new Promise(r => { release = r })
@@ -153,17 +153,19 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     await clickRound(wrapper, 2)
     release()
     await settle()
-    expect(wrapper.text()).toContain('이 라운드의 지원·결과를 불러오지 못했습니다')
+    expect(wrapper.text()).toContain('지원 목록: 지원 조회 실패')
     expect(rejections).toEqual([])
     wrapper.unmount()
   })
 
-  // 판별력: loadResults 가 성공해도 오류 상자를 지우지 않으면, [새로고침] 으로 결과를
+  // 판별력: loadResults 가 성공해도 자기 칸을 지우지 않으면, [새로고침] 으로 결과를
   // 다시 받은 뒤에도 "불러오지 못했습니다" 가 표 위에 남는다(수정 감사 B-1).
-  it('실패 뒤 [새로고침] 이 성공하면 오류 상자가 사라진다', async () => {
+  // **결과만** 실패시킨다 — 지원까지 실패시키면 결과 새로고침만으로 상자가 사라지는 것이
+  // 오히려 결함이다(아래 테스트, 수정 감사 B-1').
+  it('결과만 실패한 뒤 [새로고침] 이 성공하면 오류 상자가 사라진다', async () => {
     let failing = true
-    appsByRound = {
-      1: () => [ROW(1, 1, '김갑돌')],
+    appsByRound = { 1: () => [ROW(1, 1, '김갑돌')], 2: () => [ROW(2, 2, '이을순')] }
+    resultsByRound = {
       2: () => failing
         ? Promise.reject(Object.assign(new Error('일시 오류'), { response: { data: '일시 오류' } }))
         : [ROW(2, 2, '이을순')],
@@ -186,6 +188,31 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     const t = wrapper.text()
     expect(t).not.toContain('불러오지 못했습니다')
     expect(t).toContain('이을순')
+    expect(rejections).toEqual([])
+    wrapper.unmount()
+  })
+
+  // 판별력: 한 로더의 성공이 다른 로더의 실패까지 지우면(공유 상자), 지원 목록이 실패해
+  // 빈 채인데 결과 새로고침 뒤 상자가 사라져 "지원자가 없습니다"로 읽힌다(수정 감사 B-1').
+  it('지원 목록이 실패한 채면 결과 [새로고침] 이 성공해도 오류 상자가 남는다', async () => {
+    appsByRound = {
+      1: () => [ROW(1, 1, '김갑돌')],
+      2: () => Promise.reject(Object.assign(new Error('지원 조회 실패'), { response: { data: '지원 조회 실패' } })),
+    }
+    resultsByRound = { 2: () => [ROW(2, 2, '이을순')] }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 2)
+    await wrapper.findAll('button').find(b => b.text() === '결과').trigger('click')
+    await settle()
+    await wrapper.findAll('button').find(b => b.text() === '새로고침').trigger('click')
+    await settle()
+
+    const t = wrapper.text()
+    expect(t, '결과 새로고침이 지원 목록 실패를 지웠다').toContain('지원 목록: 지원 조회 실패')
+    expect(t).not.toContain('결과: ')
     expect(rejections).toEqual([])
     wrapper.unmount()
   })

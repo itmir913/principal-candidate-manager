@@ -144,7 +144,7 @@
             v-if="detailLoadError"
             class="rounded-xl mb-5 text-base"
             style="padding: 14px 18px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;"
-          >이 라운드의 지원·결과를 불러오지 못했습니다: {{ detailLoadError }}</div>
+          >이 라운드의 일부 정보를 불러오지 못했습니다 — {{ detailLoadError }}</div>
 
           <!-- OPEN 라운드 담임 확정 현황 -->
           <div
@@ -790,7 +790,18 @@ const results = ref([])
 const areas   = ref([])
 
 const roundsLoadError    = ref('')
-const detailLoadError    = ref('')
+// 라운드 상세의 조회 실패 — **출처별로** 둔다. 하나를 공유하면 한 로더의 성공이 다른
+// 로더의 실패를 지워, 빈 표가 "지원자 없음"으로 읽힌다(2026-10-07 수정 감사 B-1').
+// 각 로더가 자기 칸만 채우고 지운다.
+const loadErrors = ref({ apps: '', results: '', areas: '' })
+const LOAD_ERROR_LABEL = { apps: '지원 목록', results: '결과', areas: '전형요소' }
+const detailLoadError = computed(() => Object.entries(loadErrors.value)
+  .filter(([, msg]) => msg)
+  .map(([k, msg]) => `${LOAD_ERROR_LABEL[k]}: ${msg}`)
+  .join(' / '))
+function setLoadError(key, e) {
+  loadErrors.value = { ...loadErrors.value, [key]: e ? (e.response?.data || e.message || String(e)) : '' }
+}
 const roundActing        = ref(false)
 // 결과 행 단위 조작(추천 확정/취소, 미선발 처리/해제) 공용 진행 플래그.
 // 정원 마지막 한 자리에서 두 번 클릭하면 첫 요청은 성공하는데 두 번째가
@@ -981,16 +992,9 @@ async function selectRound(r) {
   // 옛 행의 버튼이 옛 라운드에 대해 동작한다
   apps.value = []
   results.value = []
-  detailLoadError.value = ''
-  // allSettled: 하나가 실패해도 나머지가 끝날 때까지 기다린 뒤 판정한다. Promise.all 로
-  // 두면 먼저 실패한 쪽의 오류를 띄운 뒤, 늦게 성공한 로더가 오류 상자를 지워 버린다
-  // (로더는 성공하면 오류 상자를 지운다 — 아래 loadApps·loadResults).
-  const settled = await Promise.allSettled([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
-  const failed = settled.find(x => x.status === 'rejected')
-  if (failed && selected.value?.id === r.id) {
-    const e = failed.reason
-    detailLoadError.value = e?.response?.data || e?.message || String(e)
-  }
+  loadErrors.value = { apps: '', results: '', areas: '' }
+  // 실패는 각 로더가 자기 칸에 적는다. allSettled 는 거부를 미처리로 흘리지 않으려는 것이다.
+  await Promise.allSettled([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
 }
 
 // ── 학과명 인라인 수정 (이슈 #32) ───────────────────────────────
@@ -1041,11 +1045,17 @@ async function loadApps() {
   cancelDeptEdit()
   if (!selected.value) return
   const rid = selected.value.id
-  const data = await getApplications(rid)
+  let data
+  try {
+    data = await getApplications(rid)
+  } catch (e) {
+    if (selected.value?.id === rid) setLoadError('apps', e)
+    throw e
+  }
   // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
   if (selected.value?.id !== rid) return
   apps.value = data
-  detailLoadError.value = ''
+  setLoadError('apps', null)
 }
 
 async function loadResults() {
@@ -1054,14 +1064,20 @@ async function loadResults() {
   // **다른 모집단위 지원자**까지 봐야 하는데, 서버에서 걸러 받으면 그 상대가 배열에
   // 없어 동점 표식이 사라진다. 전체를 받아 표시 단계에서만 거른다(buildResultsView).
   const rid = selected.value.id
-  const [data, stats] = await Promise.all([
-    getResults(rid, null),
-    getQuotaStats(),
-  ])
+  let data, stats
+  try {
+    ;[data, stats] = await Promise.all([
+      getResults(rid, null),
+      getQuotaStats(),
+    ])
+  } catch (e) {
+    if (selected.value?.id === rid) setLoadError('results', e)
+    throw e
+  }
   // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
   if (selected.value?.id !== rid) return
   results.value = data
-  detailLoadError.value = ''
+  setLoadError('results', null)
   quotaStats.value = stats
   const seen = new Set()
   allTracksInRound.value = results.value
@@ -1073,15 +1089,13 @@ async function loadResults() {
   expandedRows.value = {}
 }
 
-// [새로고침] — 실패를 미처리 거부로 흘리지 않고 패널 위 오류 상자에 보인다.
-// 성공하면 loadResults 가 오류 상자를 지운다.
+// [새로고침] — 실패는 loadResults 가 오류 상자의 '결과' 칸에 적는다.
+// 여기서는 거부가 미처리로 새지 않게만 받는다.
 async function refreshResults() {
-  const rid = selected.value?.id
   try {
     await loadResults()
-  } catch (e) {
-    if (selected.value?.id !== rid) return
-    detailLoadError.value = e.response?.data || e.message
+  } catch {
+    // loadResults 가 이미 loadErrors.results 에 기록했다
   }
 }
 
@@ -1093,7 +1107,13 @@ function toggleRow(key) {
 }
 
 async function loadAreas() {
-  areas.value = await getAreas()
+  try {
+    areas.value = await getAreas()
+    setLoadError('areas', null)
+  } catch (e) {
+    setLoadError('areas', e)
+    throw e
+  }
 }
 
 async function handleOpenRound() {
