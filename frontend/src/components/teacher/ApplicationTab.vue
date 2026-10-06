@@ -513,6 +513,10 @@ const areaContext     = ref([])
 
 // 입력 디바운스 타이머
 const previewTimers = {}
+// 전형요소별 미리보기 요청 순번 — 같은 요소의 요청이 겹치면 마지막 요청의 응답만 쓴다.
+// 복수 선택 체크박스를 빠르게 두 개 누르면 첫 요청(값 1개)의 응답이 늦게 도착해 두 번째
+// (값 2개) 응답을 덮어써, 실제와 다른 예상 점수가 남았다(2026-10-07 브라우저 실측).
+const previewSeqs = {}
 
 const pageTopRef = ref(null)
 
@@ -801,7 +805,7 @@ function onNumericInput(area, value) {
 function onCategoryChange(area, value) {
   areaValues.value = { ...areaValues.value, [area.area_id]: value }
   if (value) fetchScorePreview(area, [value])
-  else scorePreview.value = { ...scorePreview.value, [area.area_id]: null }
+  else clearPreview(area)
 }
 
 function onMultiValueChange(area, key, checked) {
@@ -814,7 +818,7 @@ function onMultiValueChange(area, key, checked) {
   }
   areaMultiValues.value = { ...areaMultiValues.value, [area.area_id]: current }
   if (current.length > 0) fetchScorePreview(area, current)
-  else scorePreview.value = { ...scorePreview.value, [area.area_id]: null }
+  else clearPreview(area)
 }
 
 function schedulePreview(area, delay = 400) {
@@ -824,7 +828,7 @@ function schedulePreview(area, delay = 400) {
     if (vals.length > 0 && vals[0] !== '') {
       fetchScorePreview(area, vals)
     } else {
-      scorePreview.value = { ...scorePreview.value, [area.area_id]: null }
+      clearPreview(area)
     }
   }, delay)
 }
@@ -837,16 +841,25 @@ function getAreaInputValues(area) {
   return v !== undefined && v !== '' ? [String(v)] : []
 }
 
+// 미리보기를 지운다 — 순번도 올려, 아직 오는 중인 이전 요청의 응답이 지운 칸을 되살리지 못하게 한다
+function clearPreview(area) {
+  previewSeqs[area.area_id] = (previewSeqs[area.area_id] ?? 0) + 1
+  scorePreview.value = { ...scorePreview.value, [area.area_id]: null }
+}
+
 async function fetchScorePreview(area, values) {
   // 모집단위가 바뀐 뒤 늦게 도착한 이전 모집단위의 미리보기는 버린다 —
   // area_id 는 모집단위 사이에 공유되므로 그대로 쓰면 새 모집단위 칸에 옛 점수가 뜬다.
   const seq = _trackCtxSeq
+  const areaSeq = (previewSeqs[area.area_id] ?? 0) + 1
+  previewSeqs[area.area_id] = areaSeq
+  const stale = () => seq !== _trackCtxSeq || areaSeq !== previewSeqs[area.area_id]
   try {
     const result = await teacherAreaScorePreview(area.area_id, Number(form.trackId), values)
-    if (seq !== _trackCtxSeq) return
+    if (stale()) return
     scorePreview.value = { ...scorePreview.value, [area.area_id]: result }
   } catch (e) {
-    if (seq !== _trackCtxSeq) return
+    if (stale()) return
     scorePreview.value = {
       ...scorePreview.value,
       [area.area_id]: { score: null, matched_keys: [], warning: null, error: e.response?.data || e.message },

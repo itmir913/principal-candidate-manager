@@ -215,4 +215,62 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
     expect(w.text()).not.toContain('예상 77')
     w.unmount()
   })
+
+  // 판별력: fetchScorePreview 의 전형요소별 순번 비교를 지우면, 체크박스를 빠르게 두 개
+  // 눌렀을 때 늦게 온 첫 요청(값 1개, 6점)의 응답이 두 번째(값 2개, 10점) 응답을 덮어쓴다.
+  // 2026-10-07 브라우저 실측에서 실제로 "예상 6점" 이 남았다(백엔드는 10점을 돌려줬다).
+  it('같은 전형요소의 미리보기가 겹치면 마지막 요청의 응답만 남는다', async () => {
+    const CAT = { area_id: 2, area_name: '수상실적', calc_type: 'CATEGORY', match_mode: null,
+                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, max_score: 10,
+                  current_values: [],
+                  table: [{ key: '교내 대상', score: 6 }, { key: '교외 우수상', score: 7 }] }
+    routes.context = () => [CAT]
+    let releaseFirst
+    const firstHeld = new Promise(r => { releaseFirst = r })
+    routes.preview = (_u, body) => body.values.length === 1
+      ? firstHeld.then(() => ({ score: 6, matched_keys: ['교내 대상'], warning: null, error: null }))
+      : { score: 10, matched_keys: body.values, warning: '계산된 점수가 만점을 초과하여 만점으로 처리됩니다', error: null }
+
+    const w = await openForm()
+    await pickUniv(w)
+    await pickTrack(w)
+    const boxes = w.findAll('input[type="checkbox"]')
+    expect(boxes.length).toBe(2)
+    await boxes[0].setValue(true)   // 요청 1 (값 1개) — 붙잡힌다
+    await boxes[1].setValue(true)   // 요청 2 (값 2개) — 바로 온다
+    await settle()
+    expect(w.text()).toContain('예상 10점')
+
+    releaseFirst()                  // 요청 1 의 응답이 이제서야 도착한다
+    await settle()
+    const t = w.text()
+    expect(t, '늦게 온 이전 요청의 응답이 예상 점수를 덮어썼다').toContain('예상 10점')
+    expect(t).not.toContain('예상 6점')
+    w.unmount()
+  })
+
+  // 판별력: clearPreview 가 순번을 올리지 않으면, 체크를 모두 푼 뒤 도착한 이전 응답이
+  // 지운 미리보기를 되살린다.
+  it('선택을 모두 풀면 늦게 온 응답이 미리보기를 되살리지 못한다', async () => {
+    const CAT = { area_id: 2, area_name: '수상실적', calc_type: 'CATEGORY', match_mode: null,
+                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, max_score: 10,
+                  current_values: [],
+                  table: [{ key: '교내 대상', score: 6 }, { key: '교외 우수상', score: 7 }] }
+    routes.context = () => [CAT]
+    let release
+    const held = new Promise(r => { release = r })
+    routes.preview = () => held.then(() => ({ score: 6, matched_keys: ['교내 대상'], warning: null, error: null }))
+
+    const w = await openForm()
+    await pickUniv(w)
+    await pickTrack(w)
+    const box = w.findAll('input[type="checkbox"]')[0]
+    await box.setValue(true)    // 요청 — 붙잡힌다
+    await box.setValue(false)   // 선택을 모두 푼다 → 미리보기 지움
+    await settle()
+    release()
+    await settle()
+    expect(w.text(), '지운 미리보기가 늦은 응답으로 되살아났다').not.toContain('예상 6점')
+    w.unmount()
+  })
 })
