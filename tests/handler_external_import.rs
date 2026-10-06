@@ -149,6 +149,68 @@ async fn daegyo_import_success_commits() {
     assert_eq!(count, 2);
 }
 
+/// 위치(학년·반·번호)로 찾은 학생의 이름이 파일과 다르면 경고만 남기고 가져온다.
+/// 기초데이터 import 의 같은 안내는 `handler_area_data.rs` 가 고정하는데, 이쪽은
+/// 단언이 없었다 — 경고 블록을 지워도 통과했다.
+#[tokio::test]
+async fn daegyo_import_name_mismatch_warns_and_still_imports_by_position() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, "이순신", "1.5")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::OK, "이름 불일치는 거부 사유가 아니다: {:?}", result.errors);
+    assert_eq!(result.rows, 1);
+    let mismatches: Vec<&String> = result.warnings.iter().filter(|w| w.contains("이름 불일치")).collect();
+    assert_eq!(mismatches.len(), 1, "경고: {:?}", result.warnings);
+    let w = mismatches[0];
+    assert!(w.starts_with("3행"), "행 번호(제목 1행 + 헤더 2행 뒤 첫 데이터): {w}");
+    assert!(w.contains("'이순신'") && w.contains("'홍길동'"), "양쪽 이름: {w}");
+
+    let owner: String = sqlx::query_scalar(
+        "SELECT s.student_code FROM base_data bd JOIN students s ON s.id = bd.student_id WHERE bd.area_id = ?",
+    )
+    .bind(aid).fetch_one(&pool).await.unwrap();
+    assert_eq!(owner, "E001", "학생은 이름이 아니라 위치로 찾는다");
+}
+
+/// 앞뒤 공백만 다른 이름은 같은 이름이다. 공백은 셀을 읽는 `excel::get_col` 이 이미
+/// 지우므로, 이 테스트가 지키는 것은 그 읽기 경로를 포함한 전체 동작이다 — 핸들러의
+/// `.trim()` 을 빼는 변이는 살아남는다(동등 변이, 2026-10-06 확인).
+#[tokio::test]
+async fn daegyo_import_matching_name_with_spaces_is_silent() {
+    let pool = common::create_test_pool_shared().await;
+    common::insert_class(&pool, 3, 1).await;
+    insert_enrolled_student(&pool, "E001", 3, 1, 1, "홍길동").await;
+    let aid = insert_composite_area(&pool, "NUMERIC", 0).await;
+    let state = common::make_state(pool.clone());
+
+    let xlsx = build_daegyo_xlsx(&[(3, 1, 1, " 홍길동 ", "1.5")]);
+    let (status, axum::Json(result)) = daegyo_import(
+        State(state),
+        Path(aid),
+        import_multipart(&xlsx, "테스트대", "컴퓨터공학부").await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        !result.warnings.iter().any(|w| w.contains("이름 불일치")),
+        "경고: {:?}", result.warnings
+    );
+}
+
 #[tokio::test]
 async fn daegyo_import_duplicate_student_rejects_all() {
     // 파일 내 같은 학생 두 행 → 마지막 행이 조용히 이기면 안 됨 (중복=error)
