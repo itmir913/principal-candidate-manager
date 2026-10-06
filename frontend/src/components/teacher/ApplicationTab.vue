@@ -264,7 +264,7 @@
                         style="padding: 2px 8px; border-radius: 6px; background: #fffbeb; color: #92400e;"
                       >관리자 입력 고정</span>
                     </div>
-                    <div class="flex items-center justify-between mt-1">
+                    <div class="flex items-center justify-between flex-wrap gap-x-3 mt-1">
                       <span class="text-base" style="color: #94a3b8;">만점 {{ area.max_score }}점</span>
                       <template v-if="scorePreview[area.area_id]">
                         <span v-if="scorePreview[area.area_id].error" class="text-base" style="color: #ef4444;">

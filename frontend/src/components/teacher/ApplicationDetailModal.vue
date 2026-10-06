@@ -108,8 +108,9 @@
                       style="color: #2563eb; font-weight: 500;"
                     >{{ formatScore(scorePreviews[area.area_id].score) }}점<span
                       v-if="scorePreviews[area.area_id].warning"
-                      style="color: #d97706;"
-                    > ⚠ {{ scorePreviews[area.area_id].warning }}</span></span>
+                      class="text-base"
+                      style="display: block; white-space: normal; color: #d97706;"
+                    >⚠ {{ scorePreviews[area.area_id].warning }}</span></span>
                     <span v-else style="color: #94a3b8;">—</span>
                   </td>
                 </tr>
