@@ -988,13 +988,16 @@ async function loadScoreRows(page = 1) {
 async function loadBaseRows(page = 1) {
   baseLoadError.value = ''
   const area = selected.value
+  const studentType = baseStudentType.value
   if (!area) { basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }; return }
+  // 그 사이 다른 전형요소나 재학생/졸업생 구분을 골랐으면 늦게 온 응답을 버린다
+  const stale = () => selected.value?.id !== area.id || baseStudentType.value !== studentType
   try {
-    const data = await getBaseDataList(area.id, page, basePage.value.per_page, baseStudentType.value)
-    if (selected.value?.id !== area.id) return  // 그 사이 다른 전형요소를 골랐다
+    const data = await getBaseDataList(area.id, page, basePage.value.per_page, studentType)
+    if (stale()) return
     basePage.value = data
   } catch (e) {
-    if (selected.value?.id !== area.id) return
+    if (stale()) return
     basePage.value = { rows: [], total: 0, page: 1, per_page: 50 }
     baseLoadError.value = e.response?.data ?? e.message
   }

@@ -50,10 +50,10 @@ let override = {}
 let posts = []
 
 vi.mock('axios', () => {
-  const res = (url = '') => {
+  const res = (url = '', config = {}) => {
     const u = String(url)
     for (const [pat, fn] of Object.entries(override)) {
-      if (new RegExp(pat).test(u)) return fn(u)
+      if (new RegExp(pat).test(u)) return fn(u, config)
     }
     const data =
       /numeric-table\/list/.test(u) ? NUMERIC_ROWS
@@ -305,6 +305,52 @@ describe('전형요소 화면 — 실패를 빈 상태로 위장하지 않고, �
     await settle()
 
     expect(posts.filter(u => /base-data\/import/.test(u))).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
+
+/**
+ * 재학생/졸업생 구분을 바꾼 뒤 늦게 온 이전 구분의 기초 데이터 목록이 덮어쓰지 않는다
+ * (2026-10-07 수정 감사 C-1). 같은 전형요소 안에서 바뀌므로 전형요소 id 비교만으로는
+ * 막지 못했다.
+ *
+ * 판별력의 소재: 재학생 목록 응답을 붙잡아 둔 채 졸업생으로 바꾸고, 그 뒤에 풀어 준다.
+ * `loadBaseRows` 의 구분 비교를 지우면 화면의 총 행 수가 재학생 쪽(7)으로 바뀐다.
+ */
+describe('기초 데이터 — 재학생/졸업생 전환 중 늦은 응답', () => {
+  beforeEach(() => { setActivePinia(createPinia()); localStorage.clear(); override = {}; posts = [] })
+  afterEach(() => { override = {}; vi.restoreAllMocks() })
+
+  it('졸업생으로 바꾼 뒤 도착한 재학생 목록은 버린다', async () => {
+    let release
+    const late = new Promise(r => { release = r })
+    let held = false
+    override = {
+      'base-data/list': (_u, config) => {
+        const type = config?.params?.student_type
+        const page = (total) => ({ data: { rows: [], total, page: 1, per_page: 50 }, headers: {} })
+        // 첫 재학생 조회(요소 선택 시)는 바로 주고, 두 번째부터 붙잡는다
+        if (type === 'enrolled' && held) return late.then(() => page(7))
+        if (type === 'enrolled') { held = true; return Promise.resolve(page(0)) }
+        return Promise.resolve(page(3))
+      },
+    }
+    const wrapper = mount((await load()).default)
+    await settle()
+    await pickArea(wrapper, '교사추천')
+
+    const radios = () => wrapper.findAll('input[type="radio"]')
+    // 졸업생 → 재학생(붙잡힘) → 졸업생 순으로 바꾼다
+    await radios()[1].trigger('change'); await settle()
+    await radios()[0].trigger('change'); await settle()
+    await radios()[1].trigger('change'); await settle()
+    expect(wrapper.text()).toContain('(총 3행)')
+
+    release()
+    await settle()
+    const t = wrapper.text()
+    expect(t, '늦게 온 재학생 목록이 졸업생 목록을 덮어썼다').not.toContain('(총 7행)')
+    expect(t).toContain('(총 3행)')
     wrapper.unmount()
   })
 })

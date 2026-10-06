@@ -27,6 +27,8 @@ const ROW = (rid, sid, name) => ({
 
 /** 라운드 id → 지원 목록 응답(값 또는 Promise). 테스트마다 갈아 끼운다. */
 let appsByRound
+/** 결과 응답을 지원 응답과 다르게 줄 때만 채운다(없으면 appsByRound 를 쓴다). */
+let resultsByRound = {}
 
 vi.mock('axios', () => {
   const ok = (data) => Promise.resolve({ data, headers: {} })
@@ -37,7 +39,7 @@ vi.mock('axios', () => {
       return Promise.resolve(appsByRound[config.params.round_id]()).then(ok)
     }
     const m = u.match(/\/api\/rounds\/(\d+)\/results/)
-    if (m) return Promise.resolve(appsByRound[Number(m[1])]()).then(ok)
+    if (m) return Promise.resolve((resultsByRound[Number(m[1])] ?? appsByRound[Number(m[1])])()).then(ok)
     if (/quota-stats/.test(u)) return ok({ all_round_ids: [1, 2], univs: [] })
     if (/\/api\/areas/.test(u)) return ok([])
     return ok([])
@@ -68,6 +70,7 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    resultsByRound = {}
     rejections = []
     process.on('unhandledRejection', onRejection)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -132,6 +135,84 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     const r = wrapper.text()
     expect(r, '늦게 온 1차 라운드 결과가 2차 라운드 결과 표를 덮어썼다').not.toContain('김갑돌')
     expect(r, '결과 표가 그려지지 않았다').toContain('이을순')
+    wrapper.unmount()
+  })
+
+  // 판별력: selectRound 가 Promise.all 이면, 지원 조회가 먼저 실패해 오류를 띄운 뒤
+  // 늦게 성공한 결과 조회(loadResults 는 성공하면 오류 상자를 지운다)가 상자를 지운다.
+  it('한 조회가 먼저 실패하고 다른 조회가 늦게 성공해도 오류 상자가 남는다', async () => {
+    let release
+    const late = new Promise(r => { release = r })
+    const fail = () => Promise.reject(Object.assign(new Error('지원 조회 실패'), { response: { data: '지원 조회 실패' } }))
+    appsByRound = { 1: () => [ROW(1, 1, '김갑돌')], 2: fail }
+    resultsByRound = { 2: () => late.then(() => [ROW(2, 2, '이을순')]) }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 2)
+    release()
+    await settle()
+    expect(wrapper.text()).toContain('이 라운드의 지원·결과를 불러오지 못했습니다')
+    expect(rejections).toEqual([])
+    wrapper.unmount()
+  })
+
+  // 판별력: loadResults 가 성공해도 오류 상자를 지우지 않으면, [새로고침] 으로 결과를
+  // 다시 받은 뒤에도 "불러오지 못했습니다" 가 표 위에 남는다(수정 감사 B-1).
+  it('실패 뒤 [새로고침] 이 성공하면 오류 상자가 사라진다', async () => {
+    let failing = true
+    appsByRound = {
+      1: () => [ROW(1, 1, '김갑돌')],
+      2: () => failing
+        ? Promise.reject(Object.assign(new Error('일시 오류'), { response: { data: '일시 오류' } }))
+        : [ROW(2, 2, '이을순')],
+    }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 2)
+    expect(wrapper.text()).toContain('불러오지 못했습니다')
+
+    failing = false
+    await wrapper.findAll('button').find(b => b.text() === '결과').trigger('click')
+    await settle()
+    const refresh = wrapper.findAll('button').find(b => b.text() === '새로고침')
+    expect(refresh, '[새로고침] 버튼이 없다').toBeTruthy()
+    await refresh.trigger('click')
+    await settle()
+
+    const t = wrapper.text()
+    expect(t).not.toContain('불러오지 못했습니다')
+    expect(t).toContain('이을순')
+    expect(rejections).toEqual([])
+    wrapper.unmount()
+  })
+
+  // 판별력: [새로고침] 이 loadResults 를 그대로 부르면 실패가 미처리 거부로 새고
+  // 화면엔 아무 안내가 없다.
+  it('[새로고침] 이 실패하면 미처리 거부 없이 오류 상자에 보인다', async () => {
+    let failing = false
+    appsByRound = {
+      1: () => [ROW(1, 1, '김갑돌')],
+      2: () => failing
+        ? Promise.reject(Object.assign(new Error('새로고침 실패'), { response: { data: '새로고침 실패' } }))
+        : [ROW(2, 2, '이을순')],
+    }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 2)
+    await wrapper.findAll('button').find(b => b.text() === '결과').trigger('click')
+    await settle()
+    failing = true
+    await wrapper.findAll('button').find(b => b.text() === '새로고침').trigger('click')
+    await settle()
+
+    expect(wrapper.text()).toContain('새로고침 실패')
+    expect(rejections).toEqual([])
     wrapper.unmount()
   })
 })

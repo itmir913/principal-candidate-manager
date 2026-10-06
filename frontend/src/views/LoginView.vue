@@ -73,6 +73,9 @@
             </select>
           </div>
         </div>
+        <p v-if="classesError" class="text-base" style="color: #ef4444; margin: 0;">
+          학급 목록을 불러오지 못했습니다. 서버 연결을 확인한 뒤 화면을 새로 고쳐 주세요. ({{ classesError }})
+        </p>
 
         <div>
           <label class="block text-base font-medium mb-1.5" style="color: #64748b;">
@@ -150,6 +153,8 @@ const teacherPassword = ref('')
 
 const classes = ref([])
 const classesLoading = ref(false)
+// 학급 목록 조회 실패 — 빈 학년 목록만 보이면 담임은 왜 로그인할 수 없는지 모른다
+const classesError = ref('')
 
 const availableGrades = computed(() =>
   [...new Set(classes.value.map(c => c.grade))].sort((a, b) => a - b)
@@ -175,6 +180,7 @@ function onGradeChange() {
 
 async function fetchClasses() {
   classesLoading.value = true
+  classesError.value = ''
   try {
     const res = await axios.get('/api/classes')
     classes.value = res.data
@@ -185,8 +191,8 @@ async function fetchClasses() {
     } else if (teacherClassNo.value !== '' && !availableClassNos.value.includes(Number(teacherClassNo.value))) {
       teacherClassNo.value = ''
     }
-  } catch {
-    // 반 목록 조회 실패 시 빈 상태로 진행
+  } catch (e) {
+    classesError.value = String(e.response?.data || e.message || '오류')
   } finally {
     classesLoading.value = false
   }

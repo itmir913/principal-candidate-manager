@@ -352,7 +352,7 @@
                 <button
                   class="text-base font-medium rounded-lg whitespace-nowrap"
                   style="padding: 9px 16px; border: 1px solid #e2e8f0; background: white; color: #475569; cursor: pointer;"
-                  @click="loadResults"
+                  @click="refreshResults"
                 >새로고침</button>
                 <span style="color: #cbd5e1; user-select: none;">|</span>
                 <button
@@ -982,11 +982,14 @@ async function selectRound(r) {
   apps.value = []
   results.value = []
   detailLoadError.value = ''
-  try {
-    await Promise.all([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
-  } catch (e) {
-    if (selected.value?.id !== r.id) return
-    detailLoadError.value = e.response?.data || e.message
+  // allSettled: 하나가 실패해도 나머지가 끝날 때까지 기다린 뒤 판정한다. Promise.all 로
+  // 두면 먼저 실패한 쪽의 오류를 띄운 뒤, 늦게 성공한 로더가 오류 상자를 지워 버린다
+  // (로더는 성공하면 오류 상자를 지운다 — 아래 loadApps·loadResults).
+  const settled = await Promise.allSettled([loadApps(), loadResults(), loadAreas(), loadConfirmationStatus()])
+  const failed = settled.find(x => x.status === 'rejected')
+  if (failed && selected.value?.id === r.id) {
+    const e = failed.reason
+    detailLoadError.value = e?.response?.data || e?.message || String(e)
   }
 }
 
@@ -1042,6 +1045,7 @@ async function loadApps() {
   // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
   if (selected.value?.id !== rid) return
   apps.value = data
+  detailLoadError.value = ''
 }
 
 async function loadResults() {
@@ -1057,6 +1061,7 @@ async function loadResults() {
   // 그 사이 다른 라운드를 골랐으면 늦게 온 응답으로 덮어쓰지 않는다
   if (selected.value?.id !== rid) return
   results.value = data
+  detailLoadError.value = ''
   quotaStats.value = stats
   const seen = new Set()
   allTracksInRound.value = results.value
@@ -1066,6 +1071,18 @@ async function loadResults() {
     .sort((a, b) =>
       a.univ_name.localeCompare(b.univ_name, 'ko') || a.track_name.localeCompare(b.track_name, 'ko'))
   expandedRows.value = {}
+}
+
+// [새로고침] — 실패를 미처리 거부로 흘리지 않고 패널 위 오류 상자에 보인다.
+// 성공하면 loadResults 가 오류 상자를 지운다.
+async function refreshResults() {
+  const rid = selected.value?.id
+  try {
+    await loadResults()
+  } catch (e) {
+    if (selected.value?.id !== rid) return
+    detailLoadError.value = e.response?.data || e.message
+  }
 }
 
 function toggleRow(key) {

@@ -122,13 +122,14 @@
           <div class="flex items-center gap-2 pb-2" style="border-bottom: 1px solid #e8e5e2;">
             <div
               class="rounded-full flex-shrink-0"
-              :style="{ width: '8px', height: '8px', background: currentRound ? '#22c55e' : '#94a3b8' }"
+              :style="{ width: '8px', height: '8px', background: roundLoadError ? '#ef4444' : currentRound ? '#22c55e' : '#94a3b8' }"
             />
             <span
               class="text-base font-medium whitespace-nowrap"
-              :style="{ color: currentRound ? '#15803d' : '#64748b' }"
+              :style="{ color: roundLoadError ? '#b91c1c' : currentRound ? '#15803d' : '#64748b' }"
+              :title="roundLoadError || undefined"
             >
-              {{ currentRound ? `${currentRound.id}차 라운드 진행 중` : '진행 중인 라운드 없음' }}
+              {{ roundLoadError ? '라운드 확인 실패' : currentRound ? `${currentRound.id}차 라운드 진행 중` : '진행 중인 라운드 없음' }}
             </span>
           </div>
           <!-- 사용자 정보 -->
@@ -280,13 +281,16 @@ const roleLabel = computed(() => {
 
 // ── 현재 라운드 ───────────────────────────────────────────────
 const currentRound = ref(null)
-// AdminView.vue::refreshRound 와 같은 가드 — 조회 실패를 사이드바의
-// "진행 중인 라운드 없음" 표시로 위장하지 않도록 명시적으로 폴백한다.
+// 조회 실패를 사이드바의 "진행 중인 라운드 없음"으로 위장하지 않는다 —
+// 실패면 "라운드 확인 실패"를 보이고 원인은 title 로 남긴다(AdminView.vue 의 refreshRound 와 같다).
+const roundLoadError = ref('')
 onMounted(async () => {
   try {
     currentRound.value = await getCurrentRound()
-  } catch {
+    roundLoadError.value = ''
+  } catch (e) {
     currentRound.value = null
+    roundLoadError.value = String(e.response?.data || e.message || '오류')
   }
 })
 
