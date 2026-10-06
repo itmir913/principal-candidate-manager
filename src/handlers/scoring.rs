@@ -1177,22 +1177,45 @@ pub async fn recommend_result(
     //     모집단위에 빈자리가 남아 있으면 차단한다. 상위자의 트랙이 만석이면 추천
     //     자체가 불가하므로 블로커에서 제외한다.
     //     대학 정원이 무제한이면 squeeze-out이 불가능하므로 검사를 건너뛴다.
+    //
+    //     블로커는 **자기 모집단위에서 지금 추천될 수 있는 후보**(선두)여야 한다 — 같은
+    //     모집단위에 track_rank 가 더 좋은 미결정자가 있으면 5b 가 그 후보의 추천을 막으므로,
+    //     그는 대학 컷에서 경쟁하지 않는다. 자동 추천 2단계(merge_univ_cut)가 "각 트랙의
+    //     선두만 경쟁"하는 것과 같은 규칙이다. 선두 조건 없이 세면, 재학생 우선 트랙의
+    //     졸업생처럼 자기 트랙에 막힌 후보가 다른 모집단위 추천까지 막아 수동으로는 아무도
+    //     추천할 수 없는 교착이 생겼다(2026-10-07 감사 F-2).
     if total_quota.is_some() {
-        let cross_blocker: Blocker = sqlx::query_as(
-            "SELECT COUNT(*) AS blockers, MIN(r.ranking) AS top_rank
-             FROM results r
-             JOIN applications a ON a.student_id = r.student_id
-                                 AND a.track_id  = r.track_id
-                                 AND a.round_id  = r.round_id
-             JOIN univ_tracks ut ON ut.id = r.track_id
-             WHERE r.round_id = ?
-               AND ut.univ_id = ?
-               AND r.track_id != ?
-               AND r.recommended = 0
-               AND a.abandoned = 0
-               AND a.excluded = 0
-               AND r.ranking < (SELECT ranking FROM results
+        let cross_rank = track_rank_window("r", "ut", "s", false);
+        let cross_sql = format!(
+            "WITH ranked AS (
+                 SELECT r.student_id, r.track_id, r.ranking, r.recommended,
+                        a.abandoned, a.excluded,
+                        {cross_rank}
+                 FROM results r
+                 JOIN students s ON s.id = r.student_id
+                 JOIN univ_tracks ut ON ut.id = r.track_id
+                 JOIN applications a ON a.student_id = r.student_id
+                                     AND a.track_id  = r.track_id
+                                     AND a.round_id  = r.round_id
+                 WHERE r.round_id = ? AND ut.univ_id = ?
+             )
+             SELECT COUNT(*) AS blockers, MIN(k.ranking) AS top_rank
+             FROM ranked k
+             JOIN univ_tracks ut ON ut.id = k.track_id
+             WHERE k.track_id != ?
+               AND k.recommended = 0
+               AND k.abandoned = 0
+               AND k.excluded = 0
+               AND k.ranking < (SELECT ranking FROM results
                                 WHERE student_id = ? AND track_id = ? AND round_id = ?)
+               AND NOT EXISTS (
+                   SELECT 1 FROM ranked h
+                   WHERE h.track_id = k.track_id
+                     AND h.recommended = 0
+                     AND h.abandoned = 0
+                     AND h.excluded = 0
+                     AND h.track_rank < k.track_rank
+               )
                AND (
                    ut.unit_quota IS NULL
                    OR (
@@ -1200,12 +1223,13 @@ pub async fn recommend_result(
                        JOIN applications a2 ON a2.student_id = r2.student_id
                                             AND a2.track_id  = r2.track_id
                                             AND a2.round_id  = r2.round_id
-                       WHERE r2.track_id = r.track_id
+                       WHERE r2.track_id = k.track_id
                          AND r2.recommended = 1
                          AND a2.abandoned = 0
                    ) < ut.unit_quota
-               )",
-        )
+               )"
+        );
+        let cross_blocker: Blocker = sqlx::query_as(&cross_sql)
         .bind(rid).bind(track_info.univ_id).bind(tid)
         .bind(sid).bind(tid).bind(rid)
         .fetch_one(&mut *tx)
@@ -1476,6 +1500,46 @@ pub struct MergeCand {
 /// 대학 플래그와 모든 트랙 플래그가 일치하는 구성에서는 대학 순위와 트랙 순서가 같으므로
 /// 이 병합 결과는 **기존 전체 정렬(`fill_by_rank_groups`) 결과와 동일**하다.
 pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> FillOutcome<MergeCand> {
+    let held: Vec<Option<HeldBlock>> = vec![None; tracks.len()];
+    merge_univ_cut_held(tracks, &held, remaining)
+}
+
+/// 1단계에서 **보류된** 모집단위 동점 그룹 — 2단계 대학 컷을 그 대학 순위에서 멈춘다.
+///
+/// 1단계가 동점으로 멈춘 그룹(잔여 `seats` 석에 `contenders` 명 경합)은 자동으로 확정되지
+/// 않지만, 관리자가 고르면 **대학 정원도 쓴다**. 이 그룹을 2단계에서 없는 것으로 치면,
+/// 대학 순위가 더 나쁜 다른 모집단위 후보가 그 자리를 먼저 가져간다 — 수동 크로스트랙
+/// 가드(5c)가 거부하는 결정이다(2026-10-07 감사 F-1).
+///
+/// 그래서 그룹을 그 트랙 확정 후보 **뒤**(track_rank 가 더 나쁘다)에 두고 대학 순위
+/// `univ_rank` 에서 선두로 경쟁시킨다. 그룹이 선두 경쟁에 나서는 순간 2단계는 **멈추고**
+/// 관리자 판단으로 넘긴다 — 그 대학 순위 이상(같거나 나쁜) 후보는 자동으로 확정하지 않는다.
+///
+/// 자리가 남아도 멈춘다. 처음엔 그룹 몫(`seats`)을 예약하고 계속 병합했으나, 그러면
+/// 수동 5c 가 거부하는 추천(상위 대학 순위 미결정자가 빈자리 있는 트랙에 남아 있는데
+/// 하위자를 확정)을 자동이 하게 된다 — `tests/auto_vs_manual.rs` 의 생성 구성 불변식이
+/// 잡았다. 5c 는 좌석 수를 세지 않고 "상위 선두가 미결정이면 막는다"이므로, 자동도 같은
+/// 지점에서 멈춰야 둘이 같은 결정을 한다. 관리자가 동점을 정리한 뒤 자동 추천을 다시
+/// 돌리면 나머지가 확정된다.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeldBlock {
+    pub track_rank: i64,
+    /// 동점 그룹의 대학 순위 (그룹 안 최선값)
+    pub univ_rank: i64,
+    /// 1단계 잔여석 — 관리자가 이 그룹에서 고를 최대 인원 (사유 표시용)
+    pub seats: i64,
+    /// 경합 인원 — 수동 사유 표시용
+    pub contenders: i64,
+}
+
+/// `merge_univ_cut` 에 1단계 보류 덩어리(`held[i]` = 트랙 i 의 덩어리)를 더한 것.
+/// `held` 가 전부 `None` 이면 `merge_univ_cut` 과 같다.
+pub fn merge_univ_cut_held(
+    tracks: &[Vec<MergeCand>],
+    held: &[Option<HeldBlock>],
+    remaining: Option<i64>,
+) -> FillOutcome<MergeCand> {
+    assert_eq!(tracks.len(), held.len(), "트랙 수와 보류 덩어리 수가 다르다");
     let Some(rem) = remaining else {
         // 대학 정원 무제한 — 컷 자체가 없으므로 1단계 결과가 그대로 최종
         return FillOutcome {
@@ -1489,12 +1553,21 @@ pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> Fill
     let mut confirmed: Vec<MergeCand> = Vec::new();
 
     loop {
-        // 선두들 중 대학 순위가 가장 좋은 값 r
+        // 트랙 i 의 보류 덩어리가 지금 선두인가 (그 트랙 확정 후보를 다 지나왔다)
+        let held_head = |ti: usize| -> Option<&HeldBlock> {
+            if pos[ti] >= tracks[ti].len() { held[ti].as_ref() } else { None }
+        };
+
+        // 선두들 중 대학 순위가 가장 좋은 값 r — 보류 덩어리도 선두로 경쟁한다
         let mut best: Option<i64> = None;
         for (ti, list) in tracks.iter().enumerate() {
-            if let Some(head) = list.get(pos[ti]) {
-                if best.map_or(true, |b| head.univ_rank < b) {
-                    best = Some(head.univ_rank);
+            let head_rank = match list.get(pos[ti]) {
+                Some(head) => Some(head.univ_rank),
+                None => held_head(ti).map(|h| h.univ_rank),
+            };
+            if let Some(ur) = head_rank {
+                if best.map_or(true, |b| ur < b) {
+                    best = Some(ur);
                 }
             }
         }
@@ -1506,8 +1579,17 @@ pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> Fill
         // 동점 그룹 G — 선두들끼리만 판정
         let mut group: Vec<(usize, usize)> = Vec::new(); // (트랙 인덱스, 인원)
         let mut group_size: i64 = 0;
+        // 같은 대학 순위에 선 보류 덩어리 — 있으면 여기서 멈춘다
+        let mut held_contenders: i64 = 0;
         for (ti, list) in tracks.iter().enumerate() {
-            let Some(head) = list.get(pos[ti]) else { continue };
+            let Some(head) = list.get(pos[ti]) else {
+                if let Some(h) = held_head(ti) {
+                    if h.univ_rank == r {
+                        held_contenders += h.contenders;
+                    }
+                }
+                continue;
+            };
             if head.univ_rank != r {
                 continue;
             }
@@ -1524,7 +1606,23 @@ pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> Fill
             group_size += n as i64;
         }
 
-        match decide_group(confirmed.len() as i64, group_size, rem) {
+        let used = confirmed.len() as i64;
+        // 보류 덩어리가 선두 경쟁에 나섰다 — 남은 자리가 있으면 관리자 판단, 없으면 깨끗한 끝
+        if held_contenders > 0 {
+            let free = rem - used;
+            return FillOutcome {
+                confirmed,
+                tie: (free > 0).then(|| TieBoundary {
+                    rank: r,
+                    free,
+                    contenders: group_size + held_contenders,
+                }),
+            };
+        }
+        // 여기 오면 선두 r 에 실제 후보가 있다(보류 덩어리만 있으면 위에서 돌아갔다).
+        // 0 이면 아무것도 소비하지 못해 루프가 영원히 돈다 — 조용히 돌지 않게 멈춘다.
+        assert!(group_size > 0, "대학 컷 병합: 선두 대학 순위 {r} 에 후보가 없다");
+        match decide_group(used, group_size, rem) {
             GroupStep::Take => {
                 for (ti, n) in group {
                     confirmed.extend(tracks[ti][pos[ti]..pos[ti] + n].iter().cloned());
@@ -1653,6 +1751,8 @@ async fn run_auto_recommend(
     // univ_id → 트랙별 1단계 확정 후보 리스트 (각 리스트는 트랙 내부 순서 = (track_rank, univ_rank) 오름차순).
     // 2단계 병합이 트랙 내부 순서를 보존해야 하므로 **트랙 경계를 유지한 채** 넘긴다(평탄화 금지).
     let mut univ_pool: HashMap<i64, Vec<Vec<MergeCand>>> = HashMap::new();
+    // univ_pool 과 같은 순서로, 트랙별 1단계 보류 덩어리(없으면 None) — 2단계가 자리를 센다
+    let mut univ_held: HashMap<i64, Vec<Option<HeldBlock>>> = HashMap::new();
     // track_id → (univ_id, univ_name, track_name)
     let mut track_meta: HashMap<i64, (i64, String, String)> = HashMap::new();
 
@@ -1768,10 +1868,33 @@ async fn run_auto_recommend(
             });
         }
 
-        // 1단계에서 동점으로 확정되지 않은 후보는 2단계 풀에 들어가지 않는다.
+        // 1단계에서 동점으로 확정되지 않은 후보는 개별로는 2단계 풀에 들어가지 않는다.
+        // 대신 그 그룹을 **보류 덩어리**로 넘겨 대학 정원에서 자리를 차지하게 한다
+        // (HeldBlock 설명 — 빼고 병합하면 대학 순위가 나쁜 타 트랙 후보가 그 자리를 가져간다).
         // outcome.confirmed 는 items 순서 = (track_rank, univ_rank) 오름차순을 그대로 보존한다.
-        if !outcome.confirmed.is_empty() {
+        let held = match &outcome.tie {
+            Some(tie) => {
+                let univ_rank = items
+                    .iter()
+                    .filter(|(tr, _)| *tr == tie.rank)
+                    .map(|(_, c)| c.univ_rank)
+                    .min()
+                    .ok_or_else(|| (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "보류 동점 그룹의 대학 순위를 찾을 수 없습니다".to_string(),
+                    ))?;
+                Some(HeldBlock {
+                    track_rank: tie.rank,
+                    univ_rank,
+                    seats: tie.free,
+                    contenders: tie.contenders,
+                })
+            }
+            None => None,
+        };
+        if !outcome.confirmed.is_empty() || held.is_some() {
             univ_pool.entry(track.univ_id).or_default().push(outcome.confirmed);
+            univ_held.entry(track.univ_id).or_default().push(held);
         }
     }
 
@@ -1783,6 +1906,10 @@ async fn run_auto_recommend(
 
     for univ_id in univ_ids {
         let pool = univ_pool.remove(&univ_id).unwrap_or_default();
+        let held = univ_held.remove(&univ_id).ok_or_else(|| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "보류 덩어리 목록 누락".to_string(),
+        ))?;
         let (univ_name, total_quota) = univ_meta
             .get(&univ_id)
             .cloned()
@@ -1811,7 +1938,7 @@ async fn run_auto_recommend(
 
         // 트랙 내부 순서를 보존한 채 대학 순위로 병합 컷.
         // (전체 재정렬 금지 — 같은 트랙의 track_rank 상위자를 건너뛰면 안 된다.)
-        let outcome = merge_univ_cut(&pool, Some(remaining_univ));
+        let outcome = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
 
         if let Some(tie) = &outcome.tie {
             manual_items.push(AutoRecommendManualItem {

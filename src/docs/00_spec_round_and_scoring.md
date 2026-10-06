@@ -80,7 +80,7 @@ FINALIZED 라운드의 `results` 행 수정을 DB 수준에서 차단해, 핸들
 ⁵ 담임은 FINALIZED 에서만 고칠 수 있다. OPEN 은 `POST /teacher/applications`(upsert)가 담당하고 — 그쪽만 담임 확정을 함께 철회한다 — CLOSED 는 담임이 그 라운드를 보는 화면이 없어 관리자 몫이다. §7.5 참고.
 
 ¹ 전건 결정 완료(미결정 없음) + 정원 이내일 때 204. 미결정 있으면 422 + 전원 명단. 정원 초과 있으면 422 + 위반 목록. 미결정 검증이 정원 검증보다 먼저다.  
-² 정원 찼으면 409. 미선발 처리됐으면 409. 같은 모집단위 상위 미결정자 있으면 409. results 없으면 404.  
+² 정원 찼으면 409. 미선발 처리됐으면 409. 같은 모집단위 상위 미결정자 있으면 409. 대학 정원이 유한할 때 같은 대학 다른 모집단위에 대학 순위가 더 좋은 미결정 **선두**가 있고 그 모집단위에 빈자리가 있으면 409(§4.1 의 4b). results 없으면 404.  
 ³ 지원 내역 없으면 404. 담임은 담당 학급 아니면 403.  
 ⁴ 이미 추천 확정된 지원이면 409. 이미 미선발 상태이면 409. 사유 없으면 400.
 
@@ -463,7 +463,8 @@ OR(`u.prioritize_enrolled=1 OR ut.prioritize_enrolled=1`) 사용 금지.
 | 1b. 미선발 체크 | `excluded != 1` | 409 "미선발 처리된 지원" (`scoring.rs::recommend_result`) |
 | 2. 모집단위 정원 | 전 라운드 `recommended=1 AND abandoned=0` 합산 < `unit_quota` | 409 "정원 찼음" (`scoring.rs::recommend_result`) |
 | 3. 대학 정원 | 전 라운드 동일 집계 < `total_quota` | 409 "대학 전체 정원 찼음" (`scoring.rs::recommend_result`) |
-| 4. 트랙 순서 가드 | 같은 모집단위 내 `track_rank` 상위이면서 미결정(미추천·미포기·미선발)인 학생 없음 | 409 "상위 순위 지원자 미결정" (`scoring.rs::recommend_result`) |
+| 4. 트랙 순서 가드 (코드 주석의 5b) | 같은 모집단위 내 `track_rank` 상위이면서 미결정(미추천·미포기·미선발)인 학생 없음 | 409 "상위 순위 지원자 미결정" (`scoring.rs::recommend_result`) |
+| 4b. 크로스트랙 순서 가드 (코드 주석의 5c) | `total_quota` 가 유한할 때만. 같은 대학 **다른** 모집단위에 대학 순위(`ranking`)가 더 좋은 미결정 지원자가 있고, 그가 **자기 모집단위의 선두**(같은 모집단위에 `track_rank` 가 더 좋은 미결정자 없음)이며, 그 모집단위에 빈자리가 있으면 거부 | 409 "다른 모집단위 상위 대학 순위 지원자 미결정" (`scoring.rs::recommend_result`) |
 | 5. results 갱신 | `UPDATE results SET recommended=1` | rows_affected=0이면 404 (결과 행 없음) |
 
 **정원 집계 기준**: `recommended=1 AND abandoned=0`, 전 라운드 누적 (`scoring.rs::recommend_result`).  
@@ -482,6 +483,12 @@ WHERE k.recommended = 0 AND a.abandoned = 0 AND a.excluded = 0
 - **`<` 조건**: 동점자(track_rank 동일)는 서로 막지 않는다.  
   관리자가 동점자 중 먼저 추천할 대상을 선택할 여지를 남긴다.
 - abandoned=0, excluded=0: 포기·미선발은 "상위자"로 세지 않는다.
+
+**크로스트랙 가드(4b)의 "선두" 조건** (2026-10-07 감사 F-2): 다른 모집단위의 상위 대학
+순위자라도 자기 모집단위에서 track_rank 가 더 좋은 미결정자에게 막혀 있으면 블로커가
+아니다 — 그는 4 단계 가드 때문에 지금 추천될 수 없고, 자동 추천 2단계(§5.4)도 각 트랙의
+선두만 경쟁시킨다. 이 조건이 없을 때는 재학생 우선 모집단위의 졸업생처럼 자기 트랙에
+막힌 후보가 다른 모집단위 추천까지 막아, 수동으로는 아무도 추천할 수 없는 교착이 생겼다.
 
 ### 4.3 추천 취소 (`unrecommend_result`)
 
@@ -524,12 +531,12 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql`): 추천 확�
 ### 5.2 동점 그룹 원자적 채움 — `fill_by_rank_groups` / `decide_group`
 
 `fill_by_rank_groups(items: &[(rank, T)], remaining: Option<i64>)` (`scoring.rs::fill_by_rank_groups`).  
-`decide_group(confirmed_len, group_size, rem)` (`scoring.rs::decide_group`) — 4갈래 판정:
+`decide_group(confirmed_len, group_size, rem)` (`scoring.rs::decide_group`) — 3갈래 판정:
 
 | 조건 | 판정 | 의미 |
 |------|------|------|
 | `confirmed_len + group_size ≤ rem` | `Take` | 그룹 전원 확정 후 다음 그룹 |
-| `rem - confirmed_len == 0` (free=0) | `StopClean` | 정원이 그룹 사이에 딱 떨어짐. 수동 불필요 |
+| `rem - confirmed_len ≤ 0` (free≤0) | `StopClean` | 정원이 그룹 사이에 딱 떨어짐(또는 이미 초과 상태). 수동 불필요 |
 | `0 < rem - confirmed_len < group_size` | `StopTie{free}` | 동점이 정원을 가름. 그룹 전원 보류, manual |
 
 같은 함수를 1단계(`fill_by_rank_groups`)와 2단계(`merge_univ_cut`)가 공유 (`scoring.rs::decide_group`) —  
@@ -556,6 +563,25 @@ DB 방어선 `trg_prevent_exclude_recommended`(`applications.sql`): 추천 확�
 `merge_univ_cut`은 트랙별 1단계 결과를 평탄화하지 않고 유지한다.  
 각 반복에서 **각 트랙의 선두(아직 미선택인 첫 후보)들만** 대학 순위로 경쟁한다.  
 자기 트랙의 상위자에게 막힌 후보는 선두가 될 수 없어 경쟁 대상에서 제외된다.
+
+**1단계에서 보류된 동점 그룹** (`scoring.rs::HeldBlock`, `merge_univ_cut_held`, 2026-10-07 감사 F-1):
+1단계가 동점으로 멈춘 모집단위의 그룹은 자동 확정되지 않지만 2단계에서 **없는 것으로
+치지 않는다**. 그 트랙의 확정 후보 뒤에 "보류 덩어리"로 서서, 그룹의 대학 순위로 선두
+경쟁에 나선다. 덩어리가 선두 경쟁에 나서는 순간 그 대학의 2단계는 **멈춘다** — 그보다
+대학 순위가 **좋은** 후보까지만 확정하고, 같거나 나쁜 후보는 관리자 판단(남은 자리가
+있으면 수동 항목)으로 넘긴다. 대학 정원에 자리가 남아 있어도 멈춘다.
+
+- 이전 동작: 보류 그룹을 빼고 병합해, 대학 순위가 더 나쁜 다른 모집단위 후보가 그 자리를
+  가져갔다. 같은 결정을 관리자가 수동으로 하면 4b 가드가 거부한다.
+- 자리가 남을 때도 멈추는 이유: 4b 는 좌석 수를 세지 않고 "상위 대학 순위 선두가 미결정이고
+  그 모집단위에 빈자리가 있으면" 하위자를 막는다. 자동이 그룹 몫을 예약하고 계속 병합하면
+  4b 가 거부하는 추천을 자동이 하게 된다(`tests/auto_vs_manual.rs` 의 생성 구성 불변식이 잡았다).
+- 관리자가 동점을 정리한 뒤 자동 추천을 다시 돌리면 나머지가 확정된다.
+
+**자동 ≡ 수동**: 자동 추천이 확정하는 집합은 관리자가 수동 가드(§4.1)를 따라 같은 결과를
+낼 수 있는 집합이어야 하고, 자동이 수동 판단 항목 없이 끝났다면 수동으로 더 추천할 후보가
+없어야 한다. `tests/auto_vs_manual.rs` 가 이 둘과 정원 불초과를 결정적 의사난수로 만든 작은
+구성들에서 확인한다(무작위 표본이지 전수 증명은 아니다).
 
 ### 5.5 숫자 예시
 
