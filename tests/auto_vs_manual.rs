@@ -45,6 +45,8 @@ struct Cand {
 struct Track {
     quota: Option<i64>,
     prio: bool,
+    /// 0 = 첫 대학(`total`·`univ_prio`), 1 = 둘째 대학(`univ2`)
+    univ: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +55,11 @@ struct Cfg {
     univ_prio: bool,
     tracks: Vec<Track>,
     cands: Vec<Cand>,
+    /// 둘째 대학 (total_quota, prioritize_enrolled). 트랙의 `univ == 1` 이 여기 속한다.
+    univ2: Option<(Option<i64>, bool)>,
+    /// 이전(FINALIZED) 라운드에서 이미 추천된 인원 — 트랙 인덱스 목록. 같은 트랙이 여러 번
+    /// 나오면 그만큼. 이번 라운드 후보와는 다른 학생이다. 정원 집계(전 라운드 누적)를 태운다.
+    prior: Vec<usize>,
 }
 
 struct Built {
@@ -74,14 +81,21 @@ async fn build(pool: &SqlitePool, cfg: &Cfg) -> Built {
         sqlx::query("INSERT INTO classes (grade, class_no, password_hash) VALUES (?, ?, ?)")
             .bind(g).bind(c).bind(&hash).execute(pool).await.unwrap();
     }
-    let uid: i64 = sqlx::query_scalar(
-        "INSERT INTO universities (univ_name, total_quota, prioritize_enrolled) VALUES ('한국대', ?, ?) RETURNING id",
-    )
-    .bind(cfg.total).bind(cfg.univ_prio as i64).fetch_one(pool).await.unwrap();
+    let mut univs: Vec<(i64, bool)> = Vec::new();
+    let univ_specs: Vec<(Option<i64>, bool)> =
+        std::iter::once((cfg.total, cfg.univ_prio)).chain(cfg.univ2).collect();
+    for (ui, (total, uprio)) in univ_specs.iter().enumerate() {
+        let uid: i64 = sqlx::query_scalar(
+            "INSERT INTO universities (univ_name, total_quota, prioritize_enrolled) VALUES (?, ?, ?) RETURNING id",
+        )
+        .bind(format!("대학{ui}")).bind(*total).bind(*uprio as i64).fetch_one(pool).await.unwrap();
+        univs.push((uid, *uprio));
+    }
     let mut track_ids = Vec::new();
     for (i, t) in cfg.tracks.iter().enumerate() {
+        let (uid, uprio) = univs[t.univ];
         // 불변식: 대학이 재학생 우선이면 모든 트랙도 재학생 우선(스키마 주석 005)
-        let prio = t.prio || cfg.univ_prio;
+        let prio = t.prio || uprio;
         let tid: i64 = sqlx::query_scalar(
             "INSERT INTO univ_tracks (univ_id, track_name, unit_quota, prioritize_enrolled) \
              VALUES (?, ?, ?, ?) RETURNING id",
@@ -90,6 +104,36 @@ async fn build(pool: &SqlitePool, cfg: &Cfg) -> Built {
         .fetch_one(pool).await.unwrap();
         track_ids.push(tid);
     }
+
+    // 이전 라운드: 다른 학생들이 이미 추천돼 정원 일부를 쓰고 있다
+    if !cfg.prior.is_empty() {
+        let prid: i64 = sqlx::query_scalar(
+            "INSERT INTO rounds (status, opened_at, closed_at) \
+             VALUES ('CLOSED', '2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z') RETURNING id",
+        )
+        .fetch_one(pool).await.unwrap();
+        for (k, &ti) in cfg.prior.iter().enumerate() {
+            let code = format!("P{k:02}");
+            let sid: i64 = sqlx::query_scalar(
+                "INSERT INTO students (student_code, name, grad_year, is_enrolled) \
+                 VALUES (?, ?, 2023, 0) RETURNING id",
+            )
+            .bind(&code).bind(&code).fetch_one(pool).await.unwrap();
+            sqlx::query(
+                "INSERT INTO applications (student_id, track_id, round_id, department_name) VALUES (?, ?, ?, '학과')",
+            )
+            .bind(sid).bind(track_ids[ti]).bind(prid).execute(pool).await.unwrap();
+            sqlx::query(
+                "INSERT INTO results \
+                 (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+                 VALUES (?, ?, ?, '{}', 9900000, 1, 1, '2024-01-02T00:00:00Z')",
+            )
+            .bind(sid).bind(track_ids[ti]).bind(prid).execute(pool).await.unwrap();
+        }
+        sqlx::query("UPDATE rounds SET status = 'FINALIZED', finalized_at = '2024-01-03T00:00:00Z' WHERE id = ?")
+            .bind(prid).execute(pool).await.unwrap();
+    }
+
     let rid: i64 = sqlx::query_scalar(
         "INSERT INTO rounds (status, opened_at) VALUES ('OPEN', '2025-01-01T00:00:00Z') RETURNING id",
     )
@@ -169,7 +213,7 @@ fn c(track: usize, score: i64, enrolled: bool) -> Cand {
 }
 
 fn t(quota: Option<i64>, prio: bool) -> Track {
-    Track { quota, prio }
+    Track { quota, prio, univ: 0 }
 }
 
 /// 자동 추천을 돌려 (확정 cands 인덱스, 수동 항목 수) 를 돌려준다.
@@ -189,7 +233,7 @@ async fn held_track_tie_keeps_its_university_seat() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true)], univ2: None, prior: vec![],
     };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, Vec::<usize>::new(), "보류된 동점 그룹 대신 대학 순위가 나쁜 후보가 확정됐다");
@@ -203,7 +247,7 @@ async fn held_tie_after_partial_fill_still_reserves_seat() {
     let cfg = Cfg {
         total: Some(2), univ_prio: false,
         tracks: vec![t(Some(2), false), t(Some(1), false)],
-        cands: vec![c(0, 95, true), c(0, 90, true), c(0, 90, true), c(1, 80, true)],
+        cands: vec![c(0, 95, true), c(0, 90, true), c(0, 90, true), c(1, 80, true)], univ2: None, prior: vec![],
     };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, vec![0], "X1 만 확정돼야 한다");
@@ -216,7 +260,7 @@ async fn held_tie_equal_to_other_track_leader_is_manual() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 90, true)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 90, true)], univ2: None, prior: vec![],
     };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, Vec::<usize>::new());
@@ -232,7 +276,7 @@ async fn held_tie_stops_university_cut_until_resolved() {
     let cfg = Cfg {
         total: Some(2), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true)], univ2: None, prior: vec![],
     };
     let pool = common::create_test_pool().await;
     let b = build(&pool, &cfg).await;
@@ -255,7 +299,7 @@ async fn held_tie_does_not_block_better_ranked_other_track() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 80, true), c(0, 80, true), c(1, 95, true)],
+        cands: vec![c(0, 80, true), c(0, 80, true), c(1, 95, true)], univ2: None, prior: vec![],
     };
     let (picked, _) = auto(&cfg).await;
     assert_eq!(picked, vec![2]);
@@ -269,7 +313,7 @@ async fn cross_track_guard_ignores_candidates_blocked_in_their_own_track() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), true), t(Some(1), false)],
-        cands: vec![c(0, 80, true), c(0, 90, false), c(1, 88, true)],
+        cands: vec![c(0, 80, true), c(0, 90, false), c(1, 88, true)], univ2: None, prior: vec![],
     };
     let (picked, _) = auto(&cfg).await;
     assert_eq!(picked, vec![2], "자동은 Y1");
@@ -286,7 +330,7 @@ async fn cross_track_guard_still_blocks_on_leader() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 95, true), c(1, 88, true)],
+        cands: vec![c(0, 95, true), c(1, 88, true)], univ2: None, prior: vec![],
     };
     let pool = common::create_test_pool().await;
     let b = build(&pool, &cfg).await;
@@ -299,7 +343,7 @@ async fn cross_track_guard_still_blocks_on_leader() {
 async fn excluded_member_leaves_tie_group() {
     let mut cands = vec![c(0, 90, true), c(0, 90, true), c(0, 90, true)];
     cands[1].excluded = true;
-    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands };
+    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands, univ2: None, prior: vec![] };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, Vec::<usize>::new());
     assert_eq!(manual, 1);
@@ -307,7 +351,7 @@ async fn excluded_member_leaves_tie_group() {
     let mut cands = vec![c(0, 90, true), c(0, 90, true), c(0, 90, true)];
     cands[1].excluded = true;
     cands[2].excluded = true;
-    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands };
+    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands, univ2: None, prior: vec![] };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, vec![0], "남은 1명은 확정");
     assert_eq!(manual, 0);
@@ -318,7 +362,7 @@ async fn excluded_member_leaves_tie_group() {
 async fn excluded_top_then_tie_is_manual() {
     let mut cands = vec![c(0, 95, true), c(0, 90, true), c(0, 90, true)];
     cands[0].excluded = true;
-    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands };
+    let cfg = Cfg { total: None, univ_prio: false, tracks: vec![t(Some(1), false)], cands, univ2: None, prior: vec![] };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, Vec::<usize>::new());
     assert_eq!(manual, 1);
@@ -330,7 +374,7 @@ async fn university_priority_breaks_track_tie() {
     let cfg = Cfg {
         total: Some(2), univ_prio: true,
         tracks: vec![t(None, true), t(None, true)],
-        cands: vec![c(0, 90, true), c(0, 90, false), c(1, 85, true)],
+        cands: vec![c(0, 90, true), c(0, 90, false), c(1, 85, true)], univ2: None, prior: vec![],
     };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, vec![0, 2]);
@@ -343,7 +387,7 @@ async fn zero_total_quota_confirms_nobody() {
     let cfg = Cfg {
         total: Some(0), univ_prio: false,
         tracks: vec![t(None, false)],
-        cands: vec![c(0, 90, true), c(0, 80, true)],
+        cands: vec![c(0, 90, true), c(0, 80, true)], univ2: None, prior: vec![],
     };
     let (picked, manual) = auto(&cfg).await;
     assert_eq!(picked, Vec::<usize>::new());
@@ -360,7 +404,7 @@ async fn same_student_two_tracks_counts_rows() {
     let cfg = Cfg {
         total: Some(1), univ_prio: false,
         tracks: vec![t(Some(1), false), t(Some(1), false)],
-        cands: vec![c(0, 90, true), c(1, 80, true)],
+        cands: vec![c(0, 90, true), c(1, 80, true)], univ2: None, prior: vec![],
     };
     // build 는 후보마다 학생을 만든다 — 같은 학생 두 지원은 직접 만든다
     let pool = common::create_test_pool().await;
@@ -382,6 +426,69 @@ async fn same_student_two_tracks_counts_rows() {
     recommend_result(st(&pool), Path((b.keys[0].0, b.track_ids[1], rid))).await
         .expect("관리자는 어느 한쪽을 고를 수 있다");
     assert!(recommend_result(st(&pool), Path((b.keys[0].0, b.track_ids[0], rid))).await.is_err());
+}
+
+/// 보류 덩어리에서 멈췄는데 대학 자리는 남은 경우 — 대학 단위 사유가 "N석에 M명 경합"
+/// 처럼 모순된 숫자를 쓰지 않고 멈춘 이유를 말해야 한다(2026-10-07 수정 감사 C-2).
+/// 그리고 자동이 보수적일 뿐 틀리지 않음을 확인한다: 관리자는 Y1(같은 1위)을 고를 수 있고
+/// Z1(80)은 아직 막히며, 동점을 정리한 뒤 다시 돌리면 Z1 이 확정된다.
+#[tokio::test]
+async fn held_stop_with_seats_left_explains_itself() {
+    let cfg = Cfg {
+        total: Some(3), univ_prio: false,
+        tracks: vec![t(Some(1), false), t(Some(1), false), t(Some(1), false)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 90, true), c(2, 80, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
+    let univ_reason = resp.manual.iter().find(|m| m.track_id.is_none())
+        .map(|m| m.reason.clone()).expect("대학 단위 사유가 있어야 한다");
+    assert!(univ_reason.contains("정리되지 않아"), "멈춘 이유를 말해야 한다: {univ_reason}");
+    assert!(!univ_reason.contains("명 경합"), "남은 자리보다 적은 경합 인원을 적으면 모순: {univ_reason}");
+
+    rec_manual(&pool, &b, 2).await.expect("Y1 은 대학 1위 동순위 — 관리자가 고를 수 있다");
+    assert!(rec_manual(&pool, &b, 3).await.is_err(), "Z1 은 X 동점이 미결정인 동안 막힌다");
+    rec_manual(&pool, &b, 0).await.expect("X 동점 중 하나를 고른다");
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), vec![0, 2, 3]);
+    assert!(resp.manual.is_empty());
+}
+
+/// 대학 순위가 다른 보류 덩어리 둘 — 더 좋은 쪽에서 멈춘다. 그 사이 순위의 Y1 도, 아래
+/// 덩어리의 후보도 자동 확정되지 않고, 수동도 둘 다 막는다.
+#[tokio::test]
+async fn two_held_blocks_stop_at_the_better_one() {
+    let cfg = Cfg {
+        total: Some(4), univ_prio: false,
+        tracks: vec![t(Some(1), false), t(Some(1), false), t(Some(1), false)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true), c(1, 80, true), c(2, 85, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
+    assert!(resp.manual.len() >= 2, "두 트랙 동점 + 대학 단위");
+    assert!(rec_manual(&pool, &b, 4).await.is_err(), "Y1(85)은 X 동점(90) 미결정으로 막힌다");
+    assert!(rec_manual(&pool, &b, 2).await.is_err(), "Z(80)도 막힌다");
+}
+
+/// 이전 라운드 추천자가 트랙 정원을 다 쓴 경우 — 그 트랙의 동점은 경합할 자리가 없으므로
+/// 보류 덩어리도 아니고, 다른 트랙을 막지도 않는다.
+#[tokio::test]
+async fn prior_round_fills_track_so_its_tie_blocks_nobody() {
+    let cfg = Cfg {
+        total: Some(3), univ_prio: false,
+        tracks: vec![t(Some(1), false), t(Some(1), false)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 80, true)],
+        univ2: None, prior: vec![0],
+    };
+    let (picked, manual) = auto(&cfg).await;
+    assert_eq!(picked, vec![2], "X 는 이전 라운드로 만석 — Y1 확정");
+    assert_eq!(manual, 0);
 }
 
 // ── 2. 불변식 ─────────────────────────────────────────────────────
@@ -406,7 +513,24 @@ fn gen_cfg(rng: &mut Rng) -> Cfg {
     let n_tracks = 1 + rng.pick(3) as usize;
     let univ_prio = rng.chance(30);
     let total = match rng.pick(5) { 0 => None, 1 => Some(1), 2 => Some(2), 3 => Some(3), _ => Some(4) };
-    let tracks = (0..n_tracks).map(|_| t(quota(rng), rng.chance(40))).collect();
+    // 30% 는 대학 둘 — 트랙을 두 대학에 나눠 대학 단위 계산이 섞이지 않는지 본다
+    let univ2 = rng.chance(30).then(|| {
+        let total2 = match rng.pick(4) { 0 => None, 1 => Some(1), 2 => Some(2), _ => Some(3) };
+        (total2, rng.chance(30))
+    });
+    let tracks: Vec<Track> = (0..n_tracks)
+        .map(|_| Track {
+            quota: quota(rng),
+            prio: rng.chance(40),
+            univ: if univ2.is_some() { rng.pick(2) as usize } else { 0 },
+        })
+        .collect();
+    // 30% 는 이전 라운드 추천자 1~2명 — 정원 집계가 라운드를 넘어 누적되는 경로를 태운다
+    let prior: Vec<usize> = if rng.chance(30) {
+        (0..1 + rng.pick(2)).map(|_| rng.pick(n_tracks as u64) as usize).collect()
+    } else {
+        vec![]
+    };
     let n_cands = 1 + rng.pick(7) as usize;
     let cands = (0..n_cands)
         .map(|_| Cand {
@@ -417,15 +541,20 @@ fn gen_cfg(rng: &mut Rng) -> Cfg {
             excluded: rng.chance(10),
         })
         .collect();
-    Cfg { total, univ_prio, tracks, cands }
+    Cfg { total, univ_prio, tracks, cands, univ2, prior }
 }
 
 #[tokio::test]
 async fn auto_and_manual_agree_on_generated_configs() {
     const CASES: u64 = 400;
+    // 생성기가 새 갈래(대학 둘·이전 라운드·보류 동점)를 실제로 만드는지 센다 — 0 이면 그 갈래는
+    // 검사 밖이다(생성기 수정이 조용히 그 갈래를 끄는 것을 막는다).
+    let (mut n_univ2, mut n_prior, mut n_manual) = (0, 0, 0);
     for seed in 1..=CASES {
         let mut rng = Rng(0x9E37_79B9_7F4A_7C15 ^ seed.wrapping_mul(0x2545_F491_4F6C_DD1D));
         let cfg = gen_cfg(&mut rng);
+        n_univ2 += cfg.univ2.is_some() as u32;
+        n_prior += (!cfg.prior.is_empty()) as u32;
 
         // 자동
         let pool_a = common::create_test_pool().await;
@@ -433,16 +562,26 @@ async fn auto_and_manual_agree_on_generated_configs() {
         let resp = auto_recommend_results(st(&pool_a), Path(ba.rid)).await.unwrap().0;
         let auto_set = recommended(&pool_a, ba.rid).await;
         let auto_idx = names(&ba, &auto_set);
+        n_manual += (!resp.manual.is_empty()) as u32;
 
-        // (c) 정원
+        // (c) 정원 — 이전 라운드 추천자까지 합쳐 센다. 이전 인원이 이미 정원 이상이면
+        //     이번 라운드 확정은 0 이어야 한다(정원 하향 등으로 생길 수 있는 상태).
         for (ti, tr) in cfg.tracks.iter().enumerate() {
             if let Some(q) = tr.quota {
+                let prior = cfg.prior.iter().filter(|&&p| p == ti).count() as i64;
                 let n = auto_idx.iter().filter(|&&i| cfg.cands[i].track == ti).count() as i64;
-                assert!(n <= q, "seed {seed}: 트랙{ti} 정원 {q} 초과 {n} — {cfg:?}");
+                assert!(n <= (q - prior).max(0), "seed {seed}: 트랙{ti} 정원 {q}(이전 {prior}) 초과 {n} — {cfg:?}");
             }
         }
-        if let Some(q) = cfg.total {
-            assert!(auto_idx.len() as i64 <= q, "seed {seed}: 대학 정원 {q} 초과 — {cfg:?}");
+        let univ_totals: Vec<Option<i64>> =
+            std::iter::once(cfg.total).chain(cfg.univ2.map(|u| u.0)).collect();
+        for (ui, total) in univ_totals.iter().enumerate() {
+            if let Some(q) = total {
+                let in_univ = |ti: usize| cfg.tracks[ti].univ == ui;
+                let prior = cfg.prior.iter().filter(|&&p| in_univ(p)).count() as i64;
+                let n = auto_idx.iter().filter(|&&i| in_univ(cfg.cands[i].track)).count() as i64;
+                assert!(n <= (q - prior).max(0), "seed {seed}: 대학{ui} 정원 {q}(이전 {prior}) 초과 {n} — {cfg:?}");
+            }
         }
         for &i in &auto_idx {
             assert!(!cfg.cands[i].excluded, "seed {seed}: 미선발 {i} 확정 — {cfg:?}");
@@ -486,4 +625,6 @@ async fn auto_and_manual_agree_on_generated_configs() {
             }
         }
     }
+    assert!(n_univ2 > 0 && n_prior > 0 && n_manual > 0,
+        "생성 구성이 갈래를 덮지 못한다: 대학 둘 {n_univ2}, 이전 라운드 {n_prior}, 수동 항목 {n_manual}");
 }

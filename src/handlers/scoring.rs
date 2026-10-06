@@ -1374,7 +1374,9 @@ pub struct TieBoundary {
     pub rank: i64,
     /// 그 시점의 잔여 정원 (항상 > 0. 0이면 깨끗한 경계이므로 TieBoundary 가 아님)
     pub free: i64,
-    /// 그 잔여석을 두고 경합하는 동점 인원 수 (free < contenders)
+    /// 그 잔여석을 두고 경합하는 동점 인원 수. 보통 free < contenders 이지만, 대학 컷이
+    /// 1단계 보류 덩어리에서 멈춘 경우(`merge_univ_cut_held`)에는 자리가 남아도 멈추므로
+    /// 그렇지 않을 수 있다.
     pub contenders: i64,
 }
 
@@ -1526,7 +1528,8 @@ pub struct HeldBlock {
     pub track_rank: i64,
     /// 동점 그룹의 대학 순위 (그룹 안 최선값)
     pub univ_rank: i64,
-    /// 1단계 잔여석 — 관리자가 이 그룹에서 고를 최대 인원 (사유 표시용)
+    /// 1단계 잔여석 — 관리자가 이 그룹에서 고를 최대 인원. 대학 단위 수동 사유에 쓴다
+    /// (`run_auto_recommend` 4단계).
     pub seats: i64,
     /// 경합 인원 — 수동 사유 표시용
     pub contenders: i64,
@@ -1607,7 +1610,9 @@ pub fn merge_univ_cut_held(
         }
 
         let used = confirmed.len() as i64;
-        // 보류 덩어리가 선두 경쟁에 나섰다 — 남은 자리가 있으면 관리자 판단, 없으면 깨끗한 끝
+        // 보류 덩어리가 선두 경쟁에 나섰다 — 남은 자리가 있으면 관리자 판단, 없으면 깨끗한 끝.
+        // 이때의 TieBoundary 는 "free < contenders" 를 보장하지 않는다(자리가 남아도 멈추므로).
+        // 사유 문장은 호출부가 보류 덩어리 유무로 따로 쓴다.
         if held_contenders > 0 {
             let free = rem - used;
             return FillOutcome {
@@ -1941,17 +1946,36 @@ async fn run_auto_recommend(
         let outcome = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
 
         if let Some(tie) = &outcome.tie {
-            manual_items.push(AutoRecommendManualItem {
-                track_id: None,
-                univ_name: univ_name.clone(),
-                track_name: None,
-                reason: format!(
+            // 대학 컷이 1단계 보류 동점 그룹에서 멈췄는가 — 그 경우 남은 자리가 경합 인원보다
+            // 많을 수도 있어 "N석에 M명 경합" 문장은 맞지 않는다. 멈춘 이유를 따로 적는다.
+            let held_seats: i64 = held
+                .iter()
+                .flatten()
+                .filter(|h| h.univ_rank == tie.rank)
+                .map(|h| h.seats)
+                .sum();
+            let reason = if held_seats > 0 {
+                format!(
+                    "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
+                     그 순위부터 대학 정원 컷을 멈췄습니다. 모집단위 동점을 먼저 정리한 뒤 \
+                     자동 추천을 다시 실행하세요 \
+                     (대학 정원 {}명, 확정 {}명, 잔여 {}석)",
+                    tie.rank, held_seats, tq, univ_used, remaining_univ,
+                )
+            } else {
+                format!(
                     "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 \
                      (경합 대상은 각 모집단위의 다음 차례 지원자에 한함 — \
                      같은 모집단위 상위 지원자에게 막힌 동순위자는 제외 / \
                      대학 정원 {}명, 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
                     tie.rank, tie.free, tie.contenders, tq, univ_used, remaining_univ,
-                ),
+                )
+            };
+            manual_items.push(AutoRecommendManualItem {
+                track_id: None,
+                univ_name: univ_name.clone(),
+                track_name: None,
+                reason,
             });
         }
 
