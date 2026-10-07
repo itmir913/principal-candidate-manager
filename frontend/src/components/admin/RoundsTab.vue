@@ -415,8 +415,10 @@
               </div>
               <div v-if="autoRecommendResult.manual.length > 0" class="rounded-lg mt-2" style="padding: 12px 16px; background: #fffbeb; border: 1px solid #fcd34d;">
                 <p class="text-base font-semibold mb-2" style="color: #92400e;">수동 확인 필요</p>
+                <!-- 공백은 보간 안에 둔다 — `<template>` 첫 자식의 공백은 Vue 공백 정리가 지워
+                     "가대학가모집단위"로 붙어 나왔다 -->
                 <div v-for="(m, i) in autoRecommendResult.manual" :key="i" class="text-base" style="color: #78350f;">
-                  {{ m.univ_name }}<template v-if="m.track_name"> {{ m.track_name }}</template><template v-else> (대학 전체)</template> — {{ m.reason }}
+                  {{ m.univ_name }}{{ m.track_name ? ' ' + m.track_name : ' (대학 전체)' }} — {{ m.reason }}
                 </div>
               </div>
             </div>
@@ -561,8 +563,9 @@
                               <span class="text-base font-semibold" style="color: #166534;">추천 확정됨</span>
                               <button
                                 v-if="selected.status === 'CLOSED'"
-                                class="text-base rounded-lg whitespace-nowrap"
+                                class="text-base rounded-lg whitespace-nowrap disabled:opacity-40"
                                 style="padding: 3px 10px; border: 1px solid #fca5a5; background: white; color: #ef4444; cursor: pointer;"
+                                :disabled="resultActing"
                                 @click="handleUnrecommend(r)"
                               >추천 취소</button>
                             </template>
@@ -601,8 +604,9 @@
                             </template>
                             <button
                               v-else-if="selected.status === 'CLOSED'"
-                              class="text-base rounded-lg whitespace-nowrap"
+                              class="text-base rounded-lg whitespace-nowrap disabled:opacity-40"
                               style="padding: 5px 12px; border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;"
+                              :disabled="resultActing"
                               @click="startExclude(r)"
                             >미선발 처리</button>
                             <span v-else style="color: #cbd5e1;">-</span>
@@ -717,7 +721,8 @@
                   :key="`${u.student_code}-${u.univ_name}-${u.track_name}`"
                   style="border-bottom: 1px solid #f1f5f9;"
                 >
-                  <td class="text-base" style="padding: 10px 16px; color: #475569;">{{ u.grade }}학년 {{ u.class_no }}반</td>
+                  <!-- 졸업생은 학년·반이 없다(서버가 null 로 보낸다) -->
+                  <td class="text-base" style="padding: 10px 16px; color: #475569;">{{ u.grade != null ? `${u.grade}학년 ${u.class_no}반` : '졸업생' }}</td>
                   <td class="text-base font-mono" style="padding: 10px 16px; color: #475569;">{{ u.student_code }}</td>
                   <td class="text-base font-medium" style="padding: 10px 16px; color: #1e293b;">{{ u.student_name }}</td>
                   <td class="text-base" style="padding: 10px 16px; color: #1e293b;">{{ u.univ_name }}</td>
@@ -870,7 +875,7 @@ const helpBox = computed(() => {
       intro: '순위를 확인하고 추천자를 확정하는 단계입니다.',
       items: [
         '"자동 추천 확정"을 누르면 모든 모집단위에서 순위 순으로 잔여 정원까지 자동 확정됩니다.',
-        '동점 등으로 자동 확정하지 못한 모집단위는 노란색 "수동 확인 필요" 목록에 표시됩니다. 해당 모집단위에서 학생을 직접 골라 "추천 확정"을 누르세요.',
+        '동점 등으로 자동 확정하지 못한 곳은 노란색 "수동 확인 필요" 목록에 사유와 함께 표시됩니다. 사유를 확인해 추천할 수 있으면 "추천 확정", 추천하지 않을 학생은 "미선발 처리"로 정리한 뒤 "자동 추천 확정"을 다시 누르면 남은 자리를 이어서 채웁니다.',
         '잘못 확정했으면 "추천 취소"로 되돌릴 수 있습니다.',
         { text: '확정이 모두 끝나면 위의 "마감하기"를 누르세요. 마감은 되돌릴 수 없으며, 마감하면 결과가 담임교사에게 공개됩니다.', warn: true },
         '학과명은 마감 후에도 고칠 수 있습니다 — 점수와 무관한 명단 정보이기 때문입니다. 표에서 학과명을 눌러 수정하세요. 대학·모집단위는 바꿀 수 없습니다.',
@@ -1028,12 +1033,16 @@ async function saveDept(row) {
   if (!name || savingDept.value) return
   savingDept.value = true
   try {
-    await updateApplicationDepartment(row.student_id, row.track_id, row.round_id, name)
-    // 두 표가 같은 값을 보여주므로 함께 되읽는다
-    await Promise.all([loadApps(), loadResults()])
+    try {
+      await updateApplicationDepartment(row.student_id, row.track_id, row.round_id, name)
+    } catch (e) {
+      // 편집기는 열어 둔다 — 입력한 값을 고쳐 다시 저장할 수 있게
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
     cancelDeptEdit()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    // 두 표가 같은 값을 보여주므로 함께 되읽는다
+    await reloadAfter('학과명 수정', () => Promise.all([loadApps(), loadResults()]))
   } finally {
     savingDept.value = false
   }
@@ -1116,6 +1125,43 @@ async function loadAreas() {
   }
 }
 
+// ── 조작 뒤 재조회 ───────────────────────────────────────────────
+// 결과 행 조작·포기·학과명·재계산·자동 추천이 **성공한 뒤의** 재조회는 이 함수를 거친다
+// (상태 전이는 아래 reloadAfterTransition). 조작과 재조회를 한 try 에 두면 재조회
+// 실패가 "오류"로 떠 조작이 실패한 것처럼 보이고, 관리자가 다시 누르면 감사 로그가 중복되거나
+// 정원 마지막 자리에서 409 가 난다(2026-10-07 감사 B-1). 조작 실패의 "오류" 알림은 각
+// 핸들러가 띄운다. 이 함수는 던지지 않는다.
+// 문구가 [새로고침] 버튼이 아니라 화면 새로 고침을 권하는 이유: 그 버튼은 결과만 다시 받는다
+// (refreshResults) — 지원 목록·라운드 목록 재조회 실패는 고치지 못한다.
+async function reloadAfter(doneLabel, reload) {
+  try {
+    await reload()
+  } catch (e) {
+    await dialog.alert({
+      title: `${doneLabel} 완료 — 목록 새로고침 실패`,
+      message: '처리는 완료됐지만 목록을 다시 불러오지 못했습니다. 지금 보이는 표는 처리 전 상태일 수 있으니'
+        + ` 같은 버튼을 다시 누르지 말고 화면을 새로 고쳐 확인해 주세요.\n${e.response?.data || e.message}`,
+    })
+  }
+}
+
+// 상태 전이(종료·재개·마감) 뒤 — 선택 라운드면 selectRound 로 상세 전부를 다시 받는다.
+// 재개는 서버에서 추천·순위·미선발을 지우고(rounds.rs 의 reopen_round), 마감은 [지원 현황] 의
+// 추천 칸이 보는 지원 목록을 바꾼다 — 결과만 다시 받으면 옛 표시가 남는다(감사 B-2·B-3).
+// loadRounds·selectRound·refreshSidebarRound(AdminView.vue 의 refreshRound)는 실패를 각자
+// 화면 자리(라운드 목록 오류, 상세 오류 상자, 사이드바)에 적고 던지지 않는다. 그래서
+// reloadAfter 를 거치지 않으며, 사이드바 갱신이 앞 재조회의 실패로 건너뛰어지지 않는다.
+// 남은 구멍: 라운드 목록 재조회가 실패하면 updated 를 찾지 못해 상세는 옛 상태로 남는다
+// (목록 자리에는 오류가 보인다). 이 수정의 범위 밖이라 두었다.
+async function reloadAfterTransition(id) {
+  await loadRounds()
+  if (selected.value?.id === id) {
+    const updated = rounds.value.find(r => r.id === id)
+    if (updated) await selectRound(updated)
+  }
+  await refreshSidebarRound()
+}
+
 async function handleOpenRound() {
   if (!(await dialog.confirm({
     title: '라운드 열기',
@@ -1165,16 +1211,13 @@ async function handleCloseRound(id) {
   }))) return
   roundActing.value = true
   try {
-    await closeRound(id)
-    await loadRounds()
-    if (selected.value?.id === id) {
-      const updated = rounds.value.find(r => r.id === id)
-      if (updated) selected.value = updated
-      await loadResults()
+    try {
+      await closeRound(id)
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
     }
-    await refreshSidebarRound()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    await reloadAfterTransition(id)
   } finally {
     roundActing.value = false
   }
@@ -1184,22 +1227,19 @@ async function handleReopenRound(id) {
   if (roundActing.value) return
   if (!(await dialog.confirm({
     title: '라운드 다시 열기',
-    message: '라운드를 다시 여시겠습니까?\n지금까지 확정한 추천 표시가 모두 초기화됩니다.',
+    message: '라운드를 다시 여시겠습니까?\n지금까지 한 추천·미선발 결정이 모두 초기화됩니다.',
     confirmText: '다시 열기',
     level: 'warn',
   }))) return
   roundActing.value = true
   try {
-    await reopenRound(id)
-    await loadRounds()
-    if (selected.value?.id === id) {
-      const updated = rounds.value.find(r => r.id === id)
-      if (updated) selected.value = updated
-      await loadConfirmationStatus()
+    try {
+      await reopenRound(id)
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
     }
-    await refreshSidebarRound()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    await reloadAfterTransition(id)
   } finally {
     roundActing.value = false
   }
@@ -1217,25 +1257,23 @@ async function handleFinalizeRound(id) {
   }))) return
   roundActing.value = true
   try {
-    await finalizeRound(id)
-    await loadRounds()
-    if (selected.value?.id === id) {
-      const updated = rounds.value.find(r => r.id === id)
-      if (updated) selected.value = updated
-    }
-    await refreshSidebarRound()
-  } catch (e) {
-    const d = e.response?.data
-    if (d != null && typeof d === 'object' && Array.isArray(d.undecided)) {
-      if (d.undecided.length === 0) {
-        await dialog.alert({ title: '마감할 수 없습니다', message: d.error ?? '미결정 지원자 오류가 발생했습니다', level: 'error' })
+    try {
+      await finalizeRound(id)
+    } catch (e) {
+      const d = e.response?.data
+      if (d != null && typeof d === 'object' && Array.isArray(d.undecided)) {
+        if (d.undecided.length === 0) {
+          await dialog.alert({ title: '마감할 수 없습니다', message: d.error ?? '미결정 지원자 오류가 발생했습니다', level: 'error' })
+        } else {
+          undecidedList.value = d.undecided
+          showUndecidedModal.value = true
+        }
       } else {
-        undecidedList.value = d.undecided
-        showUndecidedModal.value = true
+        await dialog.alert({ title: '마감할 수 없습니다', message: finalizeErrMsg(e), level: 'error' })
       }
-    } else {
-      await dialog.alert({ title: '마감할 수 없습니다', message: finalizeErrMsg(e), level: 'error' })
+      return
     }
+    await reloadAfterTransition(id)
   } finally {
     roundActing.value = false
   }
@@ -1263,16 +1301,21 @@ async function handleCalculate() {
   calcLoading.value = true
   calcMsg.value = null
   try {
-    const res = await calculateScores(roundId)
+    let res
+    try {
+      res = await calculateScores(roundId)
+    } catch (e) {
+      calcMsg.value = { ok: false, text: e.response?.data || e.message }
+      return
+    }
     if (selected.value?.id !== roundId) return
     calcMsg.value = { ok: true, text: `점수 재계산 완료: ${res.calculated}건` }
     // 라운드 목록도 다시 받는다 — needs_recalc 가 여기서 오므로, 갱신하지 않으면
     // 재계산 후에도 "재계산 필요" 배지·경고가 남아 UI 가 거짓을 말한다 (F-032).
-    await Promise.all([loadResults(), loadRounds()])
+    // 결과 재조회가 실패해도 위 성공 문구를 덮지 않고, 아래 selected 갱신도 건너뛰지 않는다.
+    await reloadAfter('점수 재계산', () => Promise.all([loadResults(), loadRounds()]))
     const fresh = rounds.value.find(r => r.id === roundId)
     if (fresh) selected.value = fresh
-  } catch (e) {
-    calcMsg.value = { ok: false, text: e.response?.data || e.message }
   } finally {
     calcLoading.value = false
   }
@@ -1289,10 +1332,11 @@ async function handleAbandon(app) {
   }))) return
   try {
     await abandonApplication(app.student_id, app.track_id, app.round_id)
-    await Promise.all([loadApps(), loadResults()])
   } catch (e) {
     await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    return
   }
+  await reloadAfter('포기 처리', () => Promise.all([loadApps(), loadResults()]))
 }
 
 function startExclude(r) {
@@ -1309,11 +1353,15 @@ async function confirmExclude() {
   if (!reason) return
   resultActing.value = true
   try {
-    await excludeApplication(r.student_id, r.track_id, r.round_id, reason)
+    try {
+      await excludeApplication(r.student_id, r.track_id, r.round_id, reason)
+    } catch (e) {
+      // 모달과 입력한 사유는 남긴다 — 고쳐서 다시 누를 수 있게
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
     showExcludeModal.value = false
-    await loadResults()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    await reloadAfter('미선발 처리', loadResults)
   } finally {
     resultActing.value = false
   }
@@ -1329,10 +1377,13 @@ async function handleClearExclusion(r) {
   }))) return
   resultActing.value = true
   try {
-    await clearApplicationExclusion(r.student_id, r.track_id, r.round_id)
-    await loadResults()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    try {
+      await clearApplicationExclusion(r.student_id, r.track_id, r.round_id)
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
+    await reloadAfter('미선발 해제', loadResults)
   } finally {
     resultActing.value = false
   }
@@ -1402,16 +1453,24 @@ async function handleAutoRecommendUniv(group) {
 }
 
 async function runAutoRecommend(call, scopeLabel) {
+  // 응답이 오기 전에 다른 라운드를 고르면 그 라운드 화면에 이 결과를 띄우지 않는다 —
+  // selectRound 가 패널을 비운 뒤에 덮어쓰게 된다. handleCalculate 와 같은 방식이다.
+  const roundId = selected.value?.id
   autoRecommendActing.value = true
   autoRecommendResult.value = null
   autoRecommendScope.value = ''
   try {
-    const res = await call()
+    let res
+    try {
+      res = await call()
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
+    if (selected.value?.id !== roundId) return
     autoRecommendResult.value = res
     autoRecommendScope.value = scopeLabel
-    await loadResults()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    await reloadAfter('자동 추천 확정', loadResults)
   } finally {
     autoRecommendActing.value = false
   }
@@ -1421,10 +1480,13 @@ async function handleRecommend(r) {
   if (resultActing.value) return
   resultActing.value = true
   try {
-    await recommendResult(r.student_id, r.track_id, r.round_id)
-    await loadResults()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    try {
+      await recommendResult(r.student_id, r.track_id, r.round_id)
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
+    await reloadAfter('추천 확정', loadResults)
   } finally {
     resultActing.value = false
   }
@@ -1440,10 +1502,13 @@ async function handleUnrecommend(r) {
   }))) return
   resultActing.value = true
   try {
-    await unrecommendResult(r.student_id, r.track_id, r.round_id)
-    await loadResults()
-  } catch (e) {
-    await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+    try {
+      await unrecommendResult(r.student_id, r.track_id, r.round_id)
+    } catch (e) {
+      await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
+      return
+    }
+    await reloadAfter('추천 취소', loadResults)
   } finally {
     resultActing.value = false
   }

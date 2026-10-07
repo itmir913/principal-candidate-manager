@@ -902,14 +902,27 @@ async function saveApplication() {
       body.prev_track_id = editingPrevTrackId.value
     }
     await teacherCreateApplication(body)
-    applications.value = await teacherGetApplications(currentRound.value.id)
-    await loadConfirmation()
-    closeForm()
-    pageTopRef.value?.scrollIntoView({ behavior: 'smooth' })
   } catch (e) {
     saveError.value = e.response?.data || e.message
+    return
   } finally {
     saving.value = false
+  }
+
+  // 저장은 끝났다 — 폼을 닫고 목록을 다시 받는다. 재조회 실패를 저장 실패로 보이면(폼을 연 채
+  // saveError 에 띄우면) 다시 누른 저장이, 모집단위를 바꾼 수정이었다면 409 "이미 해당
+  // 모집단위에 지원되어 있습니다" 로 막힌다(2026-10-07 감사 B-1). onModalDeleted 와 같은 형태다.
+  closeForm()
+  pageTopRef.value?.scrollIntoView({ behavior: 'smooth' })
+  try {
+    applications.value = await teacherGetApplications(currentRound.value.id)
+    await loadConfirmation()
+  } catch (e) {
+    await dialog.alert({
+      title: '목록 새로고침 실패',
+      message: `저장은 완료됐지만 목록을 다시 불러오지 못했습니다. 화면을 새로 고쳐 주세요.
+${e.response?.data || e.message}`,
+    })
   }
 }
 

@@ -8,11 +8,15 @@
  *
  * 판별력의 소재(각 테스트 주석에 적는다): axios 를 이 파일에서 막고 응답을 테스트마다
  * 바꿔, 실패 경로와 늦은 응답을 직접 만든다.
+ *
+ * 아래 "저장·수정·취소 뒤" 묶음은 지원 상세 모달의 [수정]·[지원 취소] 와, 저장 뒤 목록
+ * 재조회가 실패하는 경로를 누른다(2026-10-07 감사 B-1 담임 진입점).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { settle } from './settle.js'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { dialogState, settleDialog } from '../src/components/common/dialog.js'
 
 const OPEN_ROUND = { id: 3, status: 'OPEN', opened_at: '2026-03-21T00:00:00Z',
                      closed_at: null, finalized_at: null, needs_recalc: false }
@@ -22,10 +26,16 @@ const AREA_CTX = { area_id: 1, area_name: '요소1', calc_type: 'NUMERIC', match
                    lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1,
                    max_score: 10, current_values: [], table: [] }
 
+/** 이미 등록된 지원 — 상세 모달·수정 경로에서 쓴다. */
+const EXISTING = { student_id: 1, track_id: 10, round_id: 3, univ_id: 1, univ_name: '가대학',
+                   track_name: '가모집단위', department_name: '컴퓨터공학과' }
+
 /** 테스트마다 갈아 끼우는 응답. 함수는 (url, body) 를 받아 값 또는 Promise 를 돌려준다. */
 let routes
 /** POST 로 나간 요청 기록 — 저장 본문을 단언한다. */
 let posts
+/** DELETE 로 나간 URL 기록 */
+let deletes
 
 function defaultRoutes() {
   return {
@@ -33,6 +43,7 @@ function defaultRoutes() {
     context: () => [AREA_CTX],
     preview: () => ({ score: 5, matched_keys: [], warning: null, error: null }),
     save:    () => ({}),
+    apps:    () => [],
   }
 }
 
@@ -45,7 +56,7 @@ vi.mock('axios', () => {
     if (/teacher\/universities\/\d+\/tracks/.test(u)) return Promise.resolve(routes.tracks(u)).then(ok)
     if (/teacher\/universities/.test(u))           return ok([{ id: 1, univ_name: '가대학' }])
     if (/teacher\/results/.test(u))                return ok({ rounds: [], results: [] })
-    if (/teacher\/applications/.test(u))           return ok([])
+    if (/teacher\/applications/.test(u))           return Promise.resolve(routes.apps(u)).then(ok)
     if (/confirm/.test(u))                         return ok({ confirmed: false, confirmed_at: null })
     if (/area-context/.test(u))                    return Promise.resolve(routes.context(u)).then(ok)
     return ok([])
@@ -57,8 +68,12 @@ vi.mock('axios', () => {
     if (/teacher\/applications/.test(u)) return Promise.resolve(routes.save(u, body)).then(ok)
     return ok({})
   }
+  const del = (url = '') => {
+    deletes.push(String(url))
+    return ok({})
+  }
   const axios = {
-    get, post, put: () => ok({}), patch: () => ok({}), delete: () => ok({}),
+    get, post, put: () => ok({}), patch: () => ok({}), delete: del,
     interceptors: { request: { use: () => {} }, response: { use: () => {} } },
   }
   return { default: axios, ...axios }
@@ -75,8 +90,8 @@ const global = {
 const reject = (msg) => () => Promise.reject(Object.assign(new Error(msg), { response: { data: msg } }))
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
 
-/** 학생을 고르고 [+ 새 지원 추가] 로 폼을 연다. */
-async function openForm() {
+/** 마운트하고 학생을 고른다. */
+async function openStudent() {
   const mod = await import('../src/components/teacher/ApplicationTab.vue')
   const wrapper = mount(mod.default, { global })
   await settle()
@@ -84,6 +99,12 @@ async function openForm() {
   expect(row, '학생 행이 없다').toBeTruthy()
   await row.trigger('click')
   await settle()
+  return wrapper
+}
+
+/** 학생을 고르고 [+ 새 지원 추가] 로 폼을 연다. */
+async function openForm() {
+  const wrapper = await openStudent()
   const add = wrapper.findAll('button').find(b => b.text().includes('새 지원 추가'))
   expect(add, '[+ 새 지원 추가] 가 없다').toBeTruthy()
   await add.trigger('click')
@@ -121,13 +142,19 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
     localStorage.clear()
     routes = defaultRoutes()
     posts = []
+    deletes = []
     rejections = []
     process.on('unhandledRejection', onRejection)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // jsdom 에는 scrollIntoView 가 없다. 저장 성공 경로가 폼을 닫은 뒤 부르므로, 없으면
+    // TypeError 가 미처리 오류로 샌다(실제 브라우저에는 있다).
+    Element.prototype.scrollIntoView = () => {}
   })
   afterEach(() => {
+    if (dialogState.open) settleDialog(false)
     process.off('unhandledRejection', onRejection)
     vi.restoreAllMocks()
+    delete Element.prototype.scrollIntoView
   })
 
   // 판별력: 본문 필드 하나라도 빠지거나 값이 바뀌면 toEqual 이 깨진다.
@@ -271,6 +298,141 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
     release()
     await settle()
     expect(w.text(), '지운 미리보기가 늦은 응답으로 되살아났다').not.toContain('예상 6점')
+    w.unmount()
+  })
+})
+
+// ════════════════════════════════════════════════════════════════
+describe('담임 지원 — 저장·수정·취소 뒤', () => {
+  let rejections
+  const onRejection = (e) => rejections.push(String(e?.reason?.message ?? e?.reason ?? e))
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    routes = defaultRoutes()
+    routes.apps = () => [EXISTING]
+    posts = []
+    deletes = []
+    rejections = []
+    process.on('unhandledRejection', onRejection)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Element.prototype.scrollIntoView = () => {}   // 위 묶음과 같은 이유
+  })
+  afterEach(() => {
+    if (dialogState.open) settleDialog(false)
+    process.off('unhandledRejection', onRejection)
+    vi.restoreAllMocks()
+    delete Element.prototype.scrollIntoView
+    expect(rejections, '미처리 거부').toEqual([])
+  })
+
+  const btn = (w, label) => {
+    const b = w.findAll('button').find(x => x.text().trim() === label)
+    expect(b, `[${label}] 버튼이 없다`).toBeTruthy()
+    return b
+  }
+  async function click(el) { await el.trigger('click'); await settle() }
+
+  /** 학생을 고르고 등록된 지원을 눌러 상세 모달을 연다. */
+  async function openDetail() {
+    const w = await openStudent()
+    const app = w.findAll('.cursor-pointer').find(d => d.text().includes('가대학 — 가모집단위'))
+    expect(app, '등록된 지원 행이 없다').toBeTruthy()
+    await click(app)
+    expect(w.text(), '상세 모달이 열리지 않았다').toContain('학생01 — 가대학 가모집단위')
+    return w
+  }
+
+  // (a) 판별력: onModalDeleted 의 catch 를 지우면 알림이 없고 미처리 거부가 남는다(afterEach).
+  // 제목·본문을 정확히 보므로 "오류" 류 알림으로 바꿔도 걸린다.
+  it('[지원 취소] 뒤 목록 재조회만 실패하면 "삭제는 완료됐지만" 으로 알린다', async () => {
+    const w = await openDetail()
+    routes.apps = reject('목록 조회 실패 L')
+    await click(btn(w, '지원 취소'))
+    expect(dialogState.open).toBe(true)
+    expect(dialogState.kind).toBe('confirm')
+    settleDialog(true)
+    await settle()
+
+    expect(deletes).toEqual(['/api/teacher/applications/1/10/3'])
+    expect(dialogState.open, '재조회 실패를 알리지 않았다').toBe(true)
+    expect(dialogState.kind).toBe('alert')
+    expect(dialogState.title).toBe('목록 새로고침 실패')
+    expect(dialogState.message).toContain('삭제는 완료됐지만')
+    expect(dialogState.message).toContain('목록 조회 실패 L')
+    settleDialog(true)
+    await settle()
+    w.unmount()
+  })
+
+  // (b) 판별력: onModalEdit 의 catch 를 지우면 문구가 없고 미처리 거부가 남는다. 저장 잠금은
+  // canSave 가 맡는다 — 실패 뒤 모집단위나 전형요소가 빈 채로 저장이 열리면 걸린다.
+  // 전형요소 실패는 모달을 연 **뒤에** 건다 — 모달도 같은 area-context 를 부르기 때문이다.
+  it.each([
+    ['모집단위 목록', () => { routes.tracks = reject('트랙 오류 T') }, '트랙 오류 T'],
+    ['전형요소 정보', () => { routes.context = reject('컨텍스트 오류 K') }, '컨텍스트 오류 K'],
+  ])('[수정] — %s 를 못 불러오면 알리고 저장을 잠근다', async (_name, breakIt, msg) => {
+    const w = await openDetail()
+    breakIt()
+    await click(btn(w, '수정'))
+
+    const t = w.text()
+    expect(t).toContain('지원 수정 — 가대학 가모집단위')
+    expect(t).toContain('수정할 지원 정보를 불러오지 못했습니다')
+    expect(t).toContain(msg)
+    expect(btn(w, '저장').attributes('disabled'), '불러오지 못했는데 저장이 열려 있다').toBeDefined()
+    w.unmount()
+  })
+
+  // (c) 판별력: onModalEdit 가 기존 모집단위를 고르지 않거나(form.trackId) 저장 본문에
+  // prev_track_id 를 빠뜨리면 걸린다. prev_track_id 가 없으면 서버는 새 지원으로 받는다.
+  it('[수정] 성공 경로 — 기존 모집단위·값이 채워지고, 저장 본문에 prev_track_id 가 간다', async () => {
+    routes.context = () => [{ ...AREA_CTX, current_values: ['3.5'] }]
+    const w = await openDetail()
+    await click(btn(w, '수정'))
+
+    expect(selects(w)[1].element.value, '기존 모집단위가 선택되지 않았다').toBe('10')
+    expect(w.find('input[type="text"][placeholder="예: 컴퓨터공학과"]').element.value).toBe('컴퓨터공학과')
+    expect(w.find('input[type="number"]').element.value).toBe('3.5')
+    const save = btn(w, '저장')
+    expect(save.attributes('disabled'), '값이 다 있는데 저장이 잠겨 있다').toBeUndefined()
+    await click(save)
+
+    const sent = posts.filter(p => /teacher\/applications$/.test(p.url))
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body).toEqual({
+      student_id: 1,
+      track_id: 10,
+      round_id: 3,
+      department_name: '컴퓨터공학과',
+      base_data_entries: [{ area_id: 1, values: ['3.5'] }],
+      prev_track_id: 10,
+    })
+    w.unmount()
+  })
+
+  // (d) 판별력: saveApplication 의 저장과 재조회를 한 try 로 되돌리면(수정 전 모양) 알림이
+  // 없고, 재조회 오류가 saveError 에 떠 폼이 열린 채 남는다 — 다시 누르면 모집단위를 바꾼
+  // 수정이었을 때 409 "이미 해당 모집단위에 지원되어 있습니다" 를 만난다.
+  it('저장 뒤 목록 재조회만 실패하면 저장 실패로 보이지 않고 폼을 닫는다', async () => {
+    routes.apps = () => []
+    const w = await openForm()
+    await pickUniv(w)
+    await pickTrack(w)
+    await w.find('input[type="text"][placeholder="예: 컴퓨터공학과"]').setValue('컴퓨터공학과')
+    await typeValue(w, '3.5')
+    routes.apps = reject('목록 조회 실패 S')
+    await click(btn(w, '저장'))
+
+    expect(posts.filter(p => /teacher\/applications$/.test(p.url))).toHaveLength(1)
+    expect(dialogState.open, '재조회 실패를 알리지 않았다').toBe(true)
+    expect(dialogState.title).toBe('목록 새로고침 실패')
+    expect(dialogState.message).toContain('저장은 완료됐지만')
+    settleDialog(true)
+    await settle()
+    expect(w.findAll('button').some(b => b.text().trim() === '저장'), '저장됐는데 폼이 열려 있다').toBe(false)
+    expect(w.text(), '재조회 오류가 저장 실패 자리에 떴다').not.toContain('목록 조회 실패 S')
     w.unmount()
   })
 })
