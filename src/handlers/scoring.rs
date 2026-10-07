@@ -1514,8 +1514,10 @@ pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> Fill
 /// 가드(5c)가 거부하는 결정이다(2026-10-07 감사 F-1).
 ///
 /// 그래서 그룹을 그 트랙 확정 후보 **뒤**(track_rank 가 더 나쁘다)에 두고 대학 순위
-/// `univ_rank` 에서 선두로 경쟁시킨다. 그룹이 선두 경쟁에 나서는 순간 2단계는 **멈추고**
-/// 관리자 판단으로 넘긴다 — 그 대학 순위 이상(같거나 나쁜) 후보는 자동으로 확정하지 않는다.
+/// `univ_rank` 에서 선두로 경쟁시킨다. 그룹이 선두가 되고 선두들 가운데 대학 순위가
+/// 최상위(동순위 포함)가 되는 순간 2단계는 **멈추고** 관리자 판단으로 넘긴다 — 그 뒤로는
+/// 그 대학 순위 이상(같거나 나쁜) 후보를 자동으로 확정하지 않는다. 그 전에는 트랙 순서상
+/// 앞선 후보가 그룹보다 대학 순위가 나빠도 확정될 수 있다(명세 §5.4).
 ///
 /// 자리가 남아도 멈춘다. 처음엔 그룹 몫(`seats`)을 예약하고 계속 병합했으나, 그러면
 /// 수동 5c 가 거부하는 추천(상위 대학 순위 미결정자가 빈자리 있는 트랙에 남아 있는데
@@ -1538,9 +1540,9 @@ pub struct HeldBlock {
 /// `merge_univ_cut` 에 1단계 보류 덩어리(`held[i]` = 트랙 i 의 덩어리)를 더한 것.
 /// `held` 가 전부 `None` 이면 `merge_univ_cut` 과 같다.
 ///
-/// 두 번째 값은 **보류 덩어리가 선두로 서서 멈췄을 때** 그 순위에 선 덩어리들의 잔여석 합이다
-/// — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다. 그 밖의 경우(일반 동점·
-/// 덩어리 없는 깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
+/// 두 번째 값은 **보류 덩어리가 선두들 가운데 최상위 대학 순위로 서서 멈췄을 때** 그 순위에
+/// 선 덩어리들의 잔여석 합이다 — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다.
+/// 그 밖의 경우(일반 동점·최상위에 덩어리가 서지 않은 깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
 /// 안다 — 호출부가 `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
 /// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
 pub fn merge_univ_cut_held(
@@ -1778,6 +1780,18 @@ async fn run_auto_recommend(
     // track_id → (univ_id, univ_name, track_name)
     let mut track_meta: HashMap<i64, (i64, String, String)> = HashMap::new();
 
+    // 1단계 모집단위 동점 — 수동 항목의 사유는 2단계를 마친 뒤에 쓴다(아래 4-1).
+    struct TrackTie {
+        track_id: i64,
+        univ_id: i64,
+        univ_name: String,
+        track_name: String,
+        rank: i64,
+        free: i64,
+        contenders: i64,
+    }
+    let mut track_ties: Vec<TrackTie> = Vec::new();
+
     // 3. 1단계 — 모집단위별 정원 채움
     for track in &tracks {
         univ_meta
@@ -1879,14 +1893,14 @@ async fn run_auto_recommend(
         let outcome = fill_by_rank_groups(&items, remaining);
 
         if let Some(tie) = &outcome.tie {
-            manual_items.push(AutoRecommendManualItem {
-                track_id: Some(track.track_id),
+            track_ties.push(TrackTie {
+                track_id: track.track_id,
+                univ_id: track.univ_id,
                 univ_name: track.univ_name.clone(),
-                track_name: Some(track.track_name.clone()),
-                reason: format!(
-                    "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합 (관리자 선택 필요)",
-                    tie.rank, tie.free, tie.contenders,
-                ),
+                track_name: track.track_name.clone(),
+                rank: tie.rank,
+                free: tie.free,
+                contenders: tie.contenders,
             });
         }
 
@@ -1926,6 +1940,10 @@ async fn run_auto_recommend(
     let mut univ_ids: Vec<i64> = univ_pool.keys().copied().collect();
     univ_ids.sort_unstable();
 
+    // univ_id → 2단계 뒤 대학 정원이 찼으면 Some((이번 실행 포함 확정 인원, 정원)), 무제한이거나
+    // 자리가 남았으면 None. 2단계를 거친 대학마다 하나씩 들어간다 — 1단계 동점 사유(4-1)가 쓴다.
+    let mut univ_full_after: HashMap<i64, Option<(i64, i64)>> = HashMap::new();
+
     for univ_id in univ_ids {
         let pool = univ_pool.remove(&univ_id).unwrap_or_default();
         let held = univ_held.remove(&univ_id).ok_or_else(|| (
@@ -1940,6 +1958,7 @@ async fn run_auto_recommend(
         let Some(tq) = total_quota else {
             // 대학 정원 무제한 — 컷 미발동, 1단계 결과가 곧 최종
             final_picks.extend(merge_univ_cut(&pool, None).confirmed);
+            univ_full_after.insert(univ_id, None);
             continue;
         };
 
@@ -1962,15 +1981,20 @@ async fn run_auto_recommend(
         // (전체 재정렬 금지 — 같은 트랙의 track_rank 상위자를 건너뛰면 안 된다.)
         let (outcome, held_stop_seats) = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
 
+        // 사유에 적는 정원 숫자는 **이번 실행의 확정분까지 반영한** 값이다. 실행 전 값을 쓰면
+        // 일부를 확정한 뒤 멈춘 경우 "확정 0명, 잔여 2석" 처럼 실제와 다르게 보인다.
+        let used_after = univ_used + outcome.confirmed.len() as i64;
+        let remaining_after = tq - used_after;
+        // 찼는지는 남은 자리로만 판정한다. `held_stop_seats` 로 판정하면 선두들 가운데 보류
+        // 덩어리의 대학 순위가 최상위가 되기 전에 다른 후보에서 깨끗이 끝난 경우(StopClean)를
+        // 놓친다. 이전 라운드로 이미 넘친 경우(remaining_univ < 0)도 여기 걸린다.
+        univ_full_after.insert(univ_id, (remaining_after <= 0).then_some((used_after, tq)));
+
         if let Some(tie) = &outcome.tie {
             // 대학 컷이 1단계 보류 동점 그룹에서 멈췄는가 — 그 경우 남은 자리가 경합 인원보다
             // 많을 수도 있어 "N석에 M명 경합" 문장은 맞지 않는다. 멈춘 이유를 따로 적는다.
             // 판정은 병합 함수가 돌려준 값으로만 한다(held 를 다시 훑어 추측하지 않는다).
             let held_seats = held_stop_seats;
-            // 사유 끝의 정원 숫자는 **이번 실행의 확정분까지 반영한** 값이다. 실행 전 값을 쓰면
-            // 일부를 확정한 뒤 멈춘 경우 "확정 0명, 잔여 2석" 처럼 실제와 다르게 보인다.
-            let used_after = univ_used + outcome.confirmed.len() as i64;
-            let remaining_after = tq - used_after;
             let reason = if held_seats > 0 {
                 format!(
                     "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
@@ -1997,6 +2021,39 @@ async fn run_auto_recommend(
         }
 
         final_picks.extend(outcome.confirmed);
+    }
+
+    // 4-1. 1단계 모집단위 동점 항목 — 2단계 결과를 보고 사유를 쓴다.
+    //      2단계에서 그 대학의 정원이 차면 "관리자 선택 필요"는 사실이 아니다 — 동점자 추천은
+    //      대학 정원으로 409 다. 그 문장을 믿고 자리를 만들려 다른 모집단위 추천을 취소하면,
+    //      취소된 후보가 동점자보다 대학 순위가 나쁠 때 5c 가 동점자 추천을 허용해 2단계 병합과
+    //      다른 결과로 간다(2026-10-07 재감사 C-1). 그 길로 안내하지 않도록 상태만 적는다.
+    //      처방(미선발·취소)도 적지 않는다 — 미선발이 틀리는 구성이 있다
+    //      (`tests/auto_vs_manual.rs` 의 `track_tie_reason_does_not_prescribe_exclusion`).
+    //      대학 정원 무제한이거나 자리가 남았으면 예전 문장 그대로다.
+    for tt in track_ties {
+        // 동점이 난 모집단위는 보류 덩어리로 2단계 풀에 들어가므로 그 대학은 반드시 2단계를 거친다
+        let full = univ_full_after.get(&tt.univ_id).ok_or_else(|| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "1단계 동점 모집단위의 대학 컷 결과 누락".to_string(),
+        ))?;
+        let reason = match full {
+            Some((used_after, tq)) => format!(
+                "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합. 대학 정원이 찼습니다\
+                 (이번 실행 포함 확정 {}명 / 정원 {}명) — 현재 상태에서는 이 동점에서 추천할 수 없습니다",
+                tt.rank, tt.free, tt.contenders, used_after, tq,
+            ),
+            None => format!(
+                "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합 (관리자 선택 필요)",
+                tt.rank, tt.free, tt.contenders,
+            ),
+        };
+        manual_items.push(AutoRecommendManualItem {
+            track_id: Some(tt.track_id),
+            univ_name: tt.univ_name,
+            track_name: Some(tt.track_name),
+            reason,
+        });
     }
 
     // 5. 확정된 선발 대상만 UPDATE results SET recommended = 1 (기존 recommended=1 행은 변경 안 함)
