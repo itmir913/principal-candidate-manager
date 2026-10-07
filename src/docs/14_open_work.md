@@ -77,4 +77,5 @@
 
 ---
 
-관련: 소유자 결정 `11_release_decisions.md`, 검증 방법 `12_verification.md`, 프론트 함정 `13_frontend_pitfalls.md`.
+관련: 소유자 결정 `11_release_decisions.md`, 검증 방법 `12_verification.md`, 프론트 함정 `13_frontend_pitfalls.md`,
+작업 방식(감사·수정·검증·배포) `15_workflows.md`.
