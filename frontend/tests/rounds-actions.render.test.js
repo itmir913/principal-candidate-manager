@@ -853,6 +853,33 @@ describe('점수 재계산', () => {
     w.unmount()
   })
 
+  // ── 최종 감사 F3 C-1 ──────────────────────────────────────────
+  // 재계산 성공 → 결과 재조회는 성공, **라운드 목록 재조회만** 실패. loadRounds 는 던지지 않고
+  // rounds 를 비우므로 reloadAfter 는 알림을 띄우지 않고, handleCalculate 는 `fresh` 를 못 찾는다.
+  // 그 경우 selected 를 그대로 두면 needs_recalc 가 옛 true 로 남아 "점수 재계산 완료" 와
+  // "표시된 총점·순위가 최신이 아닙니다 … 차단됩니다" 가 한 화면에 같이 보였다(모순).
+  // 판별력: handleCalculate 의 `?? { ...selected.value, needs_recalc: false }` 폴백을 지우면 마지막
+  // 단언에서 걸린다. 픽스처가 경고에 닿는지는 재계산 전 단언이 따로 확인한다.
+  it('성공 뒤 라운드 목록 재조회만 실패해도 "재계산 필요" 경고가 남지 않는다', async () => {
+    S.rounds = [{ ...ROUND(1, 'CLOSED'), needs_recalc: true }]
+    const fail = failLater(/\/api\/rounds$/, '라운드 목록 조회 실패 K')
+    const w = await openRoundTab()
+    expect(w.text(), '픽스처가 재계산 필요 경고에 닿지 않는다').toContain('표시된 총점·순위가 최신이 아닙니다')
+    await click(btnIn(w, '지원 현황'))
+    fail.on = true
+    await click(btnIn(w, '점수 전체 재계산'))
+
+    expect(writes()).toEqual(['POST /api/rounds/1/calculate'])
+    // loadRounds 는 던지지 않는다 — 알림이 없어야 한다(뜨면 reloadAfter 의 성격이 바뀐 것)
+    expect(dialogState.open, '목록 재조회 실패에 알림이 떴다').toBe(false)
+    expect(w.text()).toContain('점수 재계산 완료: 2건')
+    expect(w.text()).toContain('라운드 목록 조회 실패 K')
+    await click(btnIn(w, '결과'))
+    expect(w.text(), '재계산은 성공했는데 옛 needs_recalc 로 "최신이 아닙니다" 경고가 남았다')
+      .not.toContain('표시된 총점·순위가 최신이 아닙니다')
+    w.unmount()
+  })
+
   // ── 마감 감사 C-1 — 수정 전 코드에서 실패했다 ─────────────────
   // 재계산 성공 → 재조회(결과·라운드 목록)가 끝나기 전에 관리자가 2차 라운드를 고른다.
   // 수정 전 handleCalculate 는 재조회 뒤 `if (fresh) selected.value = fresh` 를 라운드 비교 없이

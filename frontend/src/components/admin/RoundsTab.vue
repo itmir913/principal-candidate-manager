@@ -1121,14 +1121,21 @@ function toggleRow(key) {
   expandedRows.value = next
 }
 
+// 전형요소는 라운드와 무관한 전역 목록이지만, 실패는 **선택 라운드의** 오류 상자에 적힌다.
+// 그래서 loadApps 와 같은 꼴로 라운드를 잡아 둔다 — 그 사이 다른 라운드를 골랐으면 늦게 온
+// 실패를 새 라운드 상자에 "전형요소: …" 로 적지 않고, 늦게 온 성공이 새 라운드의 실패를 지우지 않는다.
 async function loadAreas() {
+  const rid = selected.value?.id
+  let data
   try {
-    areas.value = await getAreas()
-    setLoadError('areas', null)
+    data = await getAreas()
   } catch (e) {
-    setLoadError('areas', e)
+    if (selected.value?.id === rid) setLoadError('areas', e)
     throw e
   }
+  if (selected.value?.id !== rid) return
+  areas.value = data
+  setLoadError('areas', null)
 }
 
 // ── 조작 뒤 재조회 ───────────────────────────────────────────────
@@ -1330,8 +1337,14 @@ async function handleCalculate() {
     await reloadAfter('점수 재계산', () => Promise.all([loadResults(), loadRounds()]))
     // 재조회 중에 다른 라운드를 골랐으면 되돌리지 않는다 — 되돌리면 머리글은 원래 라운드인데
     // 표는 다른 라운드의 것(응답 순서에 따라 빈 표)이 된다(runAutoRecommend·loadApps 와 같은 꼴).
+    // 라운드 목록 재조회가 실패하면(loadRounds 는 던지지 않고 rounds 를 비운다) fresh 가 없다.
+    // 그때도 needs_recalc 는 내린다 — 재계산이 그 라운드 지원 전원의 results.calculated_at 을
+    // 재계산 시각으로 덮으므로(scoring.rs 의 run_calculate_scores_on_conn, results 는 FK 로
+    // applications 에 묶인다) 서버 판정식(rounds.rs 의 needs_recalc_expr)의 MIN(calculated_at) 이
+    // 재계산 시각이 되어, 그 뒤 기초데이터 업로드가 없는 한 0 이다. 재계산 직후 기초데이터가 새로
+    // 올라왔다면 서버 값은 1 일 수 있다 — 그 경우의 추천 확정·마감은 서버가 막는다(409/422).
     const fresh = rounds.value.find(r => r.id === roundId)
-    if (fresh && selected.value?.id === roundId) selected.value = fresh
+    if (selected.value?.id === roundId) selected.value = fresh ?? { ...selected.value, needs_recalc: false }
   } finally {
     calcLoading.value = false
   }

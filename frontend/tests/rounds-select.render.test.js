@@ -29,6 +29,9 @@ const ROW = (rid, sid, name) => ({
 let appsByRound
 /** 결과 응답을 지원 응답과 다르게 줄 때만 채운다(없으면 appsByRound 를 쓴다). */
 let resultsByRound = {}
+/** 전형요소 응답. 전형요소 조회에는 라운드 id 가 없으므로 **몇 번째 호출인지**(0부터)로 가른다. */
+let areasByCall = null
+let areasCalls = 0
 
 vi.mock('axios', () => {
   const ok = (data) => Promise.resolve({ data, headers: {} })
@@ -41,7 +44,10 @@ vi.mock('axios', () => {
     const m = u.match(/\/api\/rounds\/(\d+)\/results/)
     if (m) return Promise.resolve((resultsByRound[Number(m[1])] ?? appsByRound[Number(m[1])])()).then(ok)
     if (/quota-stats/.test(u)) return ok({ all_round_ids: [1, 2], univs: [] })
-    if (/\/api\/areas/.test(u)) return ok([])
+    if (/\/api\/areas/.test(u)) {
+      const n = areasCalls++
+      return Promise.resolve(areasByCall?.[n] ? areasByCall[n]() : []).then(ok)
+    }
     return ok([])
   }
   const axios = {
@@ -71,13 +77,18 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
     setActivePinia(createPinia())
     localStorage.clear()
     resultsByRound = {}
+    areasByCall = null
+    areasCalls = 0
     rejections = []
     process.on('unhandledRejection', onRejection)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
+  // 미처리 거부는 테스트마다 따로 단언하지 않고 여기서 한 번에 본다 — 단언을 빠뜨린 테스트가
+  // 거부를 모으기만 하고 지나가지 않게(rounds-actions.render.test.js 와 같은 꼴).
   afterEach(() => {
     process.off('unhandledRejection', onRejection)
     vi.restoreAllMocks()
+    expect(rejections, '미처리 거부').toEqual([])
   })
 
   // 판별력: selectRound 가 표를 비우지 않거나 catch 가 없으면, 실패한 2차 라운드
@@ -240,6 +251,61 @@ describe('라운드를 바꾸면 이전 라운드의 표가 남지 않는다', (
 
     expect(wrapper.text()).toContain('새로고침 실패')
     expect(rejections).toEqual([])
+    wrapper.unmount()
+  })
+
+  // ── 최종 감사 F3 C-2 ──────────────────────────────────────────
+  // 전형요소 조회는 라운드와 무관하지만 실패는 선택 라운드의 오류 상자에 적힌다. 1차를 고른 뒤
+  // 그 전형요소 조회가 늦게 실패하면, 2차의 조회는 성공했는데 2차 상자에 "전형요소: …" 가 적혔다.
+  // 판별력: loadAreas 의 catch 쪽 라운드 비교(`selected.value?.id === rid`)를 지우면 마지막 단언에서
+  // 걸린다. 2차가 정말 2차 화면인지는 '이을순' 단언이 확인한다.
+  it('먼저 누른 라운드의 늦은 전형요소 조회 실패가 나중 라운드의 오류 상자에 적히지 않는다', async () => {
+    let release
+    const late = new Promise(r => { release = r })
+    appsByRound = { 1: () => [ROW(1, 1, '김갑돌')], 2: () => [ROW(2, 2, '이을순')] }
+    areasByCall = {
+      0: () => late.then(() => Promise.reject(Object.assign(new Error('전형요소 오류 A'), { response: { data: '전형요소 오류 A' } }))),
+      1: () => [],
+    }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 1)   // 전형요소 조회가 붙잡혀 있다
+    await clickRound(wrapper, 2)
+    release()                      // 이제서야 1차 때의 조회가 실패한다
+    await settle()
+
+    const t = wrapper.text()
+    expect(t).toContain('이을순')
+    expect(t, '1차 때의 늦은 전형요소 실패가 2차 화면의 오류 상자에 적혔다').not.toContain('전형요소 오류 A')
+    expect(t).not.toContain('불러오지 못했습니다')
+    wrapper.unmount()
+  })
+
+  // 짝: 반대 순서 — 2차의 전형요소 조회가 실패한 뒤 1차 때의 조회가 늦게 성공하면, 그 성공이
+  // 2차 상자의 실패를 지우면 안 된다.
+  // 판별력: loadAreas 의 성공 쪽 라운드 비교(`if (selected.value?.id !== rid) return`)를 지우면
+  // 상자가 지워져 마지막 단언에서 걸린다.
+  it('먼저 누른 라운드의 늦은 전형요소 조회 성공이 나중 라운드의 실패를 지우지 않는다', async () => {
+    let release
+    const late = new Promise(r => { release = r })
+    appsByRound = { 1: () => [ROW(1, 1, '김갑돌')], 2: () => [ROW(2, 2, '이을순')] }
+    areasByCall = {
+      0: () => late.then(() => []),
+      1: () => Promise.reject(Object.assign(new Error('전형요소 오류 B'), { response: { data: '전형요소 오류 B' } })),
+    }
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const wrapper = mount(mod.default, { global })
+    await settle()
+
+    await clickRound(wrapper, 1)
+    await clickRound(wrapper, 2)
+    expect(wrapper.text(), '픽스처가 2차의 전형요소 실패에 닿지 않는다').toContain('전형요소: 전형요소 오류 B')
+    release()                      // 1차 때의 조회가 이제 성공한다
+    await settle()
+
+    expect(wrapper.text(), '1차 때의 늦은 전형요소 성공이 2차의 실패를 지웠다').toContain('전형요소: 전형요소 오류 B')
     wrapper.unmount()
   })
 })

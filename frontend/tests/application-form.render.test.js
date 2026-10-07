@@ -150,11 +150,13 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
     // TypeError 가 미처리 오류로 샌다(실제 브라우저에는 있다).
     Element.prototype.scrollIntoView = () => {}
   })
+  // 미처리 거부는 아래 묶음처럼 여기서 한 번에 본다 — 테스트 안의 단언은 일부에만 있었다.
   afterEach(() => {
     if (dialogState.open) settleDialog(false)
     process.off('unhandledRejection', onRejection)
     vi.restoreAllMocks()
     delete Element.prototype.scrollIntoView
+    expect(rejections, '미처리 거부').toEqual([])
   })
 
   // 판별력: 본문 필드 하나라도 빠지거나 값이 바뀌면 toEqual 이 깨진다.
