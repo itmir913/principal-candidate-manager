@@ -1404,3 +1404,242 @@ async fn auto_recommend_univ_scoped_applies_univ_cut() {
     assert!(!get_recommended(&pool, s2, ta2, rid).await, "대학 컷 탈락");
     assert!(!get_recommended(&pool, s3, tb, rid).await, "B대 무변경");
 }
+
+// ── 경합 집합 정지: merge_univ_cut_held (2026-10-07 소유자 결정 B-merge) ──────
+
+use principal_candidate_manager::handlers::scoring::{merge_univ_cut_held, HeldBlock, UnivCutStop};
+
+/// 보류 덩어리 없이 병합한다 — `merge_univ_cut` 과 달리 멈춘 이유까지 돌려받는다.
+fn merge_no_held(tracks: &[Vec<MergeCand>], rem: i64) -> (Vec<i64>, Option<TieBoundary>, UnivCutStop) {
+    let held: Vec<Option<HeldBlock>> = vec![None; tracks.len()];
+    let (out, stop) = merge_univ_cut_held(tracks, &held, Some(rem));
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    (got, out.tie, stop)
+}
+
+/// S1(`tests/auto_vs_manual.rs` 의 `contention_s1_*`)을 병합 입력으로 옮긴 것.
+/// X(재학생 우선): X1(트랙 1위, 대학 2위), X2(트랙 2위, 대학 1위). Y: Y1(트랙 1위, 대학 2위).
+/// 정원 2. 선두 X1·Y1 이 대학 2위 동순위이고 X 연쇄에 X2(1위 ≤ 2위)가 붙어 수요 3 > 2.
+/// 판별력의 소재: 연쇄를 세지 않으면(옛 동작) G={X1,Y1} 가 Take 되어 confirmed 가 비지 않는다.
+#[test]
+fn merge_held_contention_s1_stops_without_confirming() {
+    let tracks = vec![vec![mc(0, 10, 1, 2), mc(1, 10, 2, 1)], vec![mc(2, 20, 1, 2)]];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert!(got.is_empty(), "공통 후보 X1 도 확정하지 않는다(원자 원칙): {got:?}");
+    assert_eq!(tie, Some(TieBoundary { rank: 2, free: 2, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+}
+
+/// S2: X: X1(1, 3)·X2(2, 1), Y: Y1(1, 3)·Y2(2, 1). 정원 2 → 수요 4 > 2 로 멈춤(3위, 잔여 2,
+/// 경합 4). 정원 3 → 여전히 멈춤(잔여 3 < 4). 정원 4 → 수요가 들어가므로 G 를 확정하고
+/// 다음 반복이 X2·Y2 를 처리해 전원 확정.
+#[test]
+fn merge_held_contention_s2_rank_and_counts_and_fits_when_room() {
+    let tracks = vec![
+        vec![mc(0, 10, 1, 3), mc(1, 10, 2, 1)],
+        vec![mc(2, 20, 1, 3), mc(3, 20, 2, 1)],
+    ];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 3, free: 2, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+
+    let (got, tie, stop) = merge_no_held(&tracks, 3);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 3, free: 3, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+
+    let (got, tie, stop) = merge_no_held(&tracks, 4);
+    assert_eq!(got, vec![0, 1, 2, 3], "수요 ≤ 남은 자리 — 전원 확정");
+    assert_eq!(tie, None);
+    assert_eq!(stop, UnivCutStop::Clean);
+}
+
+/// S4: 셋 다 대학 1위. X: X1(1, 1)·X2(2, 1), Y: Y1(1, 1). 정원 2 → 수요 3 > 2 로 멈춤.
+/// 옛 동작은 G={X1,Y1} 를 확정해 대학 1위 동순위 X2·Y1 가운데 Y1 을 시스템이 골랐다.
+#[test]
+fn merge_held_contention_s4_all_rank_one() {
+    let tracks = vec![vec![mc(0, 10, 1, 1), mc(1, 10, 2, 1)], vec![mc(2, 20, 1, 1)]];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 1, free: 2, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+}
+
+/// r 에 선두를 둔 모집단위가 **하나**뿐이면 노출이 있어도 지금처럼 확정한다 — 다른 선두는
+/// 전부 r 보다 나빠 수동 5c 도 그 선두를 먼저 추천하게 하므로 결정적이다.
+/// X: X1(1, 2)·X2(2, 1), Y: Y1(1, 3). 정원 2 → X1 확정, 다음 반복에서 X2(1위) 확정, Y1 은 깨끗한 끝.
+#[test]
+fn merge_held_single_track_exposure_is_taken() {
+    let tracks = vec![vec![mc(0, 10, 1, 2), mc(1, 10, 2, 1)], vec![mc(2, 20, 1, 3)]];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert_eq!(got, vec![0, 1]);
+    assert_eq!(tie, None);
+    assert_eq!(stop, UnivCutStop::Clean);
+}
+
+/// 연쇄는 r 보다 **나쁜** 후보에서 끊긴다. X: X1(1, 2)·X2(2, 3)·X3(3, 1), Y: Y1(1, 2). 정원 2.
+/// X3(1위)은 X2(3위 > 2위) 뒤라 연쇄에 들지 않아 수요 2 ≤ 2 → G={X1,Y1} 확정, X2 는 깨끗한 끝.
+/// 판별력의 소재: 끊지 않고 끝까지 세면 수요 4(X 3 + Y 1) > 2 로 멈춰 confirmed 가 빈다.
+#[test]
+fn merge_held_chain_is_cut_at_worse_rank() {
+    let tracks = vec![
+        vec![mc(0, 10, 1, 2), mc(1, 10, 2, 3), mc(2, 10, 3, 1)],
+        vec![mc(3, 20, 1, 2)],
+    ];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert_eq!(got, vec![0, 3]);
+    assert_eq!(tie, None);
+    assert_eq!(stop, UnivCutStop::Clean);
+}
+
+/// 연쇄가 확정 후보 끝에 닿으면 그 모집단위의 보류 덩어리(대학 순위 ≤ r)의 `seats` 가 수요에,
+/// `contenders` 가 경합 인원에 든다. X: X1(1, 3) + 덩어리(2위 그룹, 대학 1위, 1석에 2명),
+/// Y: Y1(1, 3). 정원 2 → 수요 1+1+1 = 3 > 2, 경합 1+2+1 = 4 → 멈춤. 정원 3 → G 확정 뒤
+/// 덩어리가 선두가 되어 보류 정지(자리 1 남음).
+/// 판별력의 소재: 덩어리를 수요에 넣지 않으면 정원 2 에서 G 가 확정된다.
+#[test]
+fn merge_held_block_seats_count_toward_demand() {
+    let tracks = vec![vec![mc(0, 10, 1, 3)], vec![mc(1, 20, 1, 3)]];
+    let held = vec![
+        Some(HeldBlock { track_rank: 2, univ_rank: 1, seats: 1, contenders: 2 }),
+        None,
+    ];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 3, free: 2, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(3));
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    assert_eq!(got, vec![0, 1]);
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 2 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+}
+
+/// 덩어리의 대학 순위가 r 보다 나쁘면 수요에 들지 않는다 — 같은 입력에서 덩어리만 5위로.
+/// 정원 2 → 수요 2 ≤ 2 로 G 확정, 그 뒤 덩어리가 선두가 되지만 자리가 없어 `tie` 없는 보류 정지.
+#[test]
+fn merge_held_block_worse_than_r_is_not_demand() {
+    let tracks = vec![vec![mc(0, 10, 1, 3)], vec![mc(1, 20, 1, 3)]];
+    let held = vec![
+        Some(HeldBlock { track_rank: 2, univ_rank: 5, seats: 1, contenders: 2 }),
+        None,
+    ];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
+    let mut got = sids(&out.confirmed);
+    got.sort_unstable();
+    assert_eq!(got, vec![0, 1]);
+    assert_eq!(out.tie, None);
+    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+}
+
+/// 둘 이상의 모집단위가 동순위 선두여도 **노출이 없으면** 일반 동점이다 — 멈춘 이유가 `Tie`
+/// 이고 경합 인원은 G 의 크기다.
+#[test]
+fn merge_held_two_tracks_without_exposure_is_ordinary_tie() {
+    let tracks = vec![vec![mc(0, 10, 1, 1)], vec![mc(1, 20, 1, 1)]];
+    let (got, tie, stop) = merge_no_held(&tracks, 1);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 1, free: 1, contenders: 2 }));
+    assert_eq!(stop, UnivCutStop::Tie);
+}
+
+/// 노출이 있어도 남은 자리가 없으면 깨끗한 끝이다(수동도 대학 정원으로 거부한다).
+#[test]
+fn merge_held_contention_with_no_room_is_clean() {
+    let tracks = vec![
+        vec![mc(0, 10, 1, 3), mc(1, 10, 2, 1)],
+        vec![mc(2, 20, 1, 3), mc(3, 20, 2, 1)],
+    ];
+    for rem in [0, -1] {
+        let (got, tie, stop) = merge_no_held(&tracks, rem);
+        assert!(got.is_empty(), "잔여 {rem}");
+        assert_eq!(tie, None, "잔여 {rem}");
+        assert_eq!(stop, UnivCutStop::Clean, "잔여 {rem}");
+    }
+}
+
+/// 보류 덩어리가 선두로 r 에 서면 경합 집합보다 먼저 보류 정지다(규칙 1).
+/// X: 덩어리만(대학 1위), Y: Y1(1, 1)·Y2(2, 1), Z: Z1(1, 1). 정원 2. Y1·Z1 이 1위 동순위 선두이고
+/// Y 연쇄에 Y2 가 붙어 두 검사 순서를 바꾸면 `Contention` 이 나오는 입력이다 — 덩어리가 먼저라
+/// 보류 정지(자리 2 남음, 경합 인원은 G 둘 + 덩어리 둘).
+/// 판별력의 소재: 경합 검사를 보류 검사보다 앞에 두면 `stop` 이 `Contention` 이 된다.
+#[test]
+fn merge_held_block_as_leader_stops_before_contention() {
+    let tracks = vec![vec![], vec![mc(0, 20, 1, 1), mc(1, 20, 2, 1)], vec![mc(2, 30, 1, 1)]];
+    let held = vec![
+        Some(HeldBlock { track_rank: 1, univ_rank: 1, seats: 1, contenders: 2 }),
+        None,
+        None,
+    ];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+}
+
+/// 노출이 있어도 **들어올 수 없으면** 일반 동점이다. X: X1(1, 3)·X2(2, 1), Y: Y1(1, 3). 정원 1.
+/// X2 는 X1 이 추천된 뒤에야 차례인데(5b) 그때는 자리가 없다 — 수동 결과는 {X1}·{Y1} 뿐이라
+/// "다음 지원자가 들어올 수 있어 3명 경합"은 거짓이다. 멈춘 이유 `Tie`, 경합 인원은 G 의 2.
+/// 판별력의 소재: 노출만으로 `Contention` 을 내면(들어올 수 있는지 안 보면) `stop` 과 contenders 가 틀린다.
+#[test]
+fn merge_held_exposure_that_cannot_enter_is_ordinary_tie() {
+    let tracks = vec![vec![mc(0, 10, 1, 3), mc(1, 10, 2, 1)], vec![mc(2, 20, 1, 3)]];
+    let (got, tie, stop) = merge_no_held(&tracks, 1);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 3, free: 1, contenders: 2 }));
+    assert_eq!(stop, UnivCutStop::Tie);
+}
+
+/// 선두 그룹 자체가 남은 자리를 넘어도 노출 후보가 들어올 수 있으면 `Contention` 이다.
+/// X: X1(1, 1)·X2(2, 1), Y: Y1(1, 1), Z: Z1(1, 1). 정원 2. G 셋 > 2 이지만 X1 을 고르면 X2 가
+/// 들어올 수 있다(남은 자리 2 > X 의 G 인원 1) — 수동 결과 {X1, X2} 가 가능하다. 경합 인원은
+/// X1·X2·Y1·Z1 의 4.
+/// 판별력의 소재: "G 가 남은 자리 안에 들 때만 경합"으로 좁히면 여기서 `Tie` 가 나온다.
+#[test]
+fn merge_held_contention_when_group_exceeds_room_but_exposure_can_enter() {
+    let tracks = vec![
+        vec![mc(0, 10, 1, 1), mc(1, 10, 2, 1)],
+        vec![mc(2, 20, 1, 1)],
+        vec![mc(3, 30, 1, 1)],
+    ];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 1, free: 2, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+}
+
+/// 경합 인원은 연쇄 전원이 아니라 **실제로 들어올 수 있는** 인원이다. X: X1(1, 3)·X2(2, 1)·
+/// X3(3, 2), Y: Y1(1, 3). 정원 2. 수동 결과는 {X1, X2}·{X1, Y1} — X3 는 앞의 둘이 먼저 들어가야
+/// 차례라 영영 못 들어온다. 경합 인원 3(X1·X2·Y1), 수요는 4 라 멈춘다.
+/// 판별력의 소재: 연쇄 전원을 세면 "2석에 4명".
+#[test]
+fn merge_held_contenders_exclude_candidates_that_can_never_enter() {
+    let tracks = vec![
+        vec![mc(0, 10, 1, 3), mc(1, 10, 2, 1), mc(2, 10, 3, 2)],
+        vec![mc(3, 20, 1, 3)],
+    ];
+    let (got, tie, stop) = merge_no_held(&tracks, 2);
+    assert!(got.is_empty());
+    assert_eq!(tie, Some(TieBoundary { rank: 3, free: 2, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+}
+
+/// 덩어리도 같다 — 연쇄 전원이 남은 자리 이상이면 덩어리 인원은 경합에 들지 않는다(수요에는
+/// 든다). X: X1(1, 3)·X2(2, 2) + 덩어리(3위 그룹, 대학 1위, 1석에 2명), Y: Y1(1, 3). 정원 2.
+/// 경합 인원 3(X1·X2·Y1), 덩어리 둘은 제외. 수요 1+1+1+1 = 4.
+#[test]
+fn merge_held_block_behind_full_chain_counts_for_demand_not_contenders() {
+    let tracks = vec![vec![mc(0, 10, 1, 3), mc(1, 10, 2, 2)], vec![mc(2, 20, 1, 3)]];
+    let held = vec![
+        Some(HeldBlock { track_rank: 3, univ_rank: 1, seats: 1, contenders: 2 }),
+        None,
+    ];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 3, free: 2, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Contention);
+}

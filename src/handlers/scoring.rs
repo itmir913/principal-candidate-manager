@@ -1374,9 +1374,10 @@ pub struct TieBoundary {
     pub rank: i64,
     /// 그 시점의 잔여 정원 (항상 > 0. 0이면 깨끗한 경계이므로 TieBoundary 가 아님)
     pub free: i64,
-    /// 그 잔여석을 두고 경합하는 동점 인원 수. 보통 free < contenders 이지만, 대학 컷이
-    /// 1단계 보류 덩어리에서 멈춘 경우(`merge_univ_cut_held`)에는 자리가 남아도 멈추므로
-    /// 그렇지 않을 수 있다.
+    /// 그 잔여석을 두고 경합하는 인원 수. 일반 동점에서는 동점 그룹 크기이고 free < contenders
+    /// 다. 대학 컷이 **경합 집합**에서 멈춘 경우(`UnivCutStop::Contention`)에는 연쇄로 드러나는
+    /// 다음 후보·보류 덩어리 인원까지 더한 값이다(역시 free < contenders). 대학 컷이 1단계 보류
+    /// 덩어리에서 멈춘 경우(`UnivCutStop::Held`)에는 자리가 남아도 멈추므로 그렇지 않을 수 있다.
     pub contenders: i64,
 }
 
@@ -1497,13 +1498,43 @@ pub struct MergeCand {
 ///
 /// 동점 그룹 G = 대학 순위가 최상위(r)인 선두들 + 그 선두와 **트랙 내부에서도 동점**
 /// (track_rank 동일)인 연속 후보들. track_rank 가 다르면 트랙 순서가 이미 우열을 정한
-/// 것이므로 동점이 아니다. 경계 처리는 `decide_group` 으로 `fill_by_rank_groups` 와 동일.
+/// 것이므로 동점이 아니다. 경계 처리는 `decide_group` 으로 `fill_by_rank_groups` 와 동일 —
+/// 단, G 가 둘 이상의 모집단위에서 나오고 연쇄 노출이 있으면 `merge_univ_cut_held` 의
+/// 경합 집합 규칙이 먼저 적용된다(그 함수 설명).
 ///
 /// 대학 플래그와 모든 트랙 플래그가 일치하는 구성에서는 대학 순위와 트랙 순서가 같으므로
 /// 이 병합 결과는 **기존 전체 정렬(`fill_by_rank_groups`) 결과와 동일**하다.
 pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> FillOutcome<MergeCand> {
     let held: Vec<Option<HeldBlock>> = vec![None; tracks.len()];
     merge_univ_cut_held(tracks, &held, remaining).0
+}
+
+/// 2단계 대학 컷 병합이 **왜 멈췄는가** — `merge_univ_cut_held` 가 돌려준다.
+///
+/// 멈춘 이유는 병합 함수만 정확히 안다. 호출부(`run_auto_recommend`)는 이 값으로만 대학 단위
+/// 사유 문장을 고른다 — `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
+/// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnivCutStop {
+    /// 선두 집합이 비었거나(끝까지 병합), 남은 자리가 없어 깨끗이 끝났다. `tie` 는 None.
+    Clean,
+    /// 대학 순위 r 의 선두 그룹 G 자체가 경계를 갈랐다. 연쇄 노출이 없거나, 있어도 결과를
+    /// 바꾸지 못한다(노출된 모집단위마다 남은 자리 ≤ 그 모집단위의 G 인원 — 5b 때문에 그 인원이
+    /// 다 추천된 뒤에야 다음 후보 차례인데 그 전에 자리가 찬다). `tie` 는 Some, contenders 는
+    /// G 의 크기.
+    Tie,
+    /// 보류 덩어리가 선두들 가운데 최상위 대학 순위에 섰다. `seats` 는 그 순위에 선 덩어리들의
+    /// 1단계 잔여석 합이다. `tie` 는 자리가 남을 때만 Some 이고, 자리가 남아도 멈추므로
+    /// free < contenders 를 보장하지 않는다.
+    Held { seats: i64 },
+    /// 동순위 선두가 **둘 이상의 모집단위**에 있고, 연쇄 노출(각 모집단위에서 선두부터 대학
+    /// 순위 ≤ r 로 이어지는 다음 후보들과 그 끝의 보류 덩어리)까지 센 수요가 남은 자리를
+    /// 넘으며, 노출된 모집단위 가운데 적어도 하나에서 남은 자리 > 그 모집단위의 G 인원이라
+    /// 노출 후보가 실제로 들어올 수 있다. `tie` 는 Some, contenders 는 연쇄 가운데 실제로 들어올
+    /// 수 있는 인원(앞선 인원이 남은 자리 미만인 후보, 그런 위치의 덩어리 인원). 선두 중 누구를
+    /// 먼저 추천하느냐에 따라 결과가 달라지므로 자동이 정하지 않는다(명세 §5.4, 2026-10-07
+    /// 소유자 결정 B-merge).
+    Contention,
 }
 
 /// 1단계에서 **보류된** 모집단위 동점 그룹 — 2단계 대학 컷을 그 대학 순위에서 멈춘다.
@@ -1538,18 +1569,43 @@ pub struct HeldBlock {
 }
 
 /// `merge_univ_cut` 에 1단계 보류 덩어리(`held[i]` = 트랙 i 의 덩어리)를 더한 것.
-/// `held` 가 전부 `None` 이면 `merge_univ_cut` 과 같다.
+/// `held` 가 전부 `None` 이고 동순위 선두가 한 모집단위에서만 나오면 `merge_univ_cut` 의 옛
+/// 동작과 같다.
 ///
-/// 두 번째 값은 **보류 덩어리가 선두들 가운데 최상위 대학 순위로 서서 멈췄을 때** 그 순위에
-/// 선 덩어리들의 잔여석 합이다 — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다.
-/// 그 밖의 경우(일반 동점·최상위에 덩어리가 서지 않은 깨끗한 끝·끝까지 병합)는 0 이다. 멈춘 이유는 이 함수만 정확히
-/// 안다 — 호출부가 `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
-/// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
+/// 두 번째 값은 멈춘 이유(`UnivCutStop`)다. 보류 덩어리가 선두들 가운데 최상위 대학 순위로
+/// 서서 멈췄으면 `Held { seats }` — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다.
+///
+/// **경합 집합 정지**(2026-10-07 소유자 결정 B-merge, 명세 §5.4): 각 반복에서 r = 선두들 가운데
+/// 최선 대학 순위. r 에 선두를 둔 모집단위가 **둘 이상**이면, 그 모집단위마다 선두부터
+/// 대학 순위 ≤ r 인 후보를 연쇄로 따라가며 센다(트랙 내부 동점 포함, > r 인 후보가 나오면
+/// 거기서 끊는다). 확정 후보 끝까지 갔고 그 모집단위의 보류 덩어리 대학 순위가 ≤ r 이면
+/// 덩어리의 `seats` 를 수요에 더한다. 연쇄가 선두 그룹 G 보다 크면(노출이 있으면): 수요 ≤
+/// 남은 자리 → G 를 지금처럼 확정(드러난 후보는 다음 반복이 결정적으로 처리한다), 남은 자리
+/// ≤ 0 → 깨끗한 끝, 노출된 모집단위 가운데 하나라도 남은 자리 > 그 모집단위의 G 인원이면
+/// (노출 후보가 실제로 들어올 수 있다 — 5b 때문에 G 인원이 다 추천된 뒤에야 차례가 온다)
+/// `Contention` 으로 멈춘다, 그 밖(노출은 있으나 어디서도 들어올 수 없다)은 일반 동점
+/// (`Tie`)이다. 노출이 없으면(연쇄 = G) 지금 경로(`decide_group`) 그대로다.
+/// `Contention` 의 경합 인원은 연쇄 전원이 아니라 실제로 들어올 수 있는 인원 — 같은 연쇄에서
+/// 앞선 인원이 남은 자리 미만인 후보, 연쇄 전원이 남은 자리 미만일 때의 덩어리 인원 — 이다.
+/// 앞선 인원이 남은 자리 이상이면 그 후보는 자리가 찬 뒤에야 차례가 와서 영영 못 들어온다.
+///
+/// 왜 필요한가: 수동 가드(5b·선두 조건이 있는 5c)는 한 명씩 진행하며 동순위 처리 순서는
+/// 관리자가 정한다. G 를 원자적으로 확정하는 것은 그 순서를 자동이 대신 정하는 일인데, 대학
+/// 재학생 우선이 꺼져 있고 어떤 모집단위만 재학생 우선인 대학에서는 G 의 일부를 처리하면 그
+/// 모집단위의 다음 후보(졸업생)가 r 보다 좋거나 같은 대학 순위로 드러나 처리 순서가 결과를
+/// 바꾼다 — 자동 결과가 수동으로 도달 불가한 구성이 있었다(`tests/auto_vs_manual.rs` 의
+/// `contention_*` 시나리오). r 에 선두를 둔 모집단위가 하나뿐이면 노출은 결정적이라 멈추지
+/// 않는다. 대학 플래그와 모든 트랙 플래그가 같은 대학에서는 같은 모집단위의 후행자가 항상
+/// 엄격히 나쁜 대학 순위라 연쇄가 비고, 결과는 옛 동작과 같다
+/// (`tests/handler_auto_recommend.rs` 의 `merge_equals_fill_*`).
+///
+/// 원자 원칙은 유지한다 — 모든 수동 결과에 공통인 후보가 있어도 이 정지에서는 확정하지
+/// 않는다(소유자 결정 — 관리자가 추천한 뒤 다시 실행한다).
 pub fn merge_univ_cut_held(
     tracks: &[Vec<MergeCand>],
     held: &[Option<HeldBlock>],
     remaining: Option<i64>,
-) -> (FillOutcome<MergeCand>, i64) {
+) -> (FillOutcome<MergeCand>, UnivCutStop) {
     assert_eq!(tracks.len(), held.len(), "트랙 수와 보류 덩어리 수가 다르다");
     let Some(rem) = remaining else {
         // 대학 정원 무제한 — 컷 자체가 없으므로 1단계 결과가 그대로 최종
@@ -1558,7 +1614,7 @@ pub fn merge_univ_cut_held(
                 confirmed: tracks.iter().flatten().cloned().collect(),
                 tie: None,
             },
-            0,
+            UnivCutStop::Clean,
         );
     };
 
@@ -1587,7 +1643,7 @@ pub fn merge_univ_cut_held(
         }
         // 선두 집합이 비면 종료
         let Some(r) = best else {
-            return (FillOutcome { confirmed, tie: None }, 0);
+            return (FillOutcome { confirmed, tie: None }, UnivCutStop::Clean);
         };
 
         // 동점 그룹 G — 선두들끼리만 판정
@@ -1625,7 +1681,7 @@ pub fn merge_univ_cut_held(
         let used = confirmed.len() as i64;
         // 보류 덩어리가 선두 경쟁에 나섰다 — 남은 자리가 있으면 관리자 판단, 없으면 깨끗한 끝.
         // 이때의 TieBoundary 는 "free < contenders" 를 보장하지 않는다(자리가 남아도 멈추므로).
-        // 호출부는 두 번째 반환값(held_seats > 0)으로 이 경우를 알아보고 사유를 따로 쓴다.
+        // 호출부는 두 번째 반환값(`Held`)으로 이 경우를 알아보고 사유를 따로 쓴다.
         if held_contenders > 0 {
             let free = rem - used;
             return (
@@ -1637,12 +1693,99 @@ pub fn merge_univ_cut_held(
                         contenders: group_size + held_contenders,
                     }),
                 },
-                held_seats,
+                UnivCutStop::Held { seats: held_seats },
             );
         }
         // 여기 오면 선두 r 에 실제 후보가 있다(보류 덩어리만 있으면 위에서 돌아갔다).
         // 0 이면 아무것도 소비하지 못해 루프가 영원히 돈다 — 조용히 돌지 않게 멈춘다.
         assert!(group_size > 0, "대학 컷 병합: 선두 대학 순위 {r} 에 후보가 없다");
+
+        // 경합 집합 — r 에 선두를 둔 모집단위가 둘 이상일 때만 연쇄 노출을 센다(함수 설명).
+        // 하나뿐이면 다른 선두는 전부 r 보다 나빠 수동 5c 도 그 선두를 먼저 추천하게 하므로
+        // 노출은 결정적이다.
+        if group.len() >= 2 {
+            let free = rem - used;
+            // 수요: 연쇄 전원 + 덩어리 잔여석 — 정지 판정용
+            let mut demand: i64 = 0;
+            // 경합 인원: 연쇄 가운데 **실제로 들어올 수 있는** 인원 — 사유 표시용(아래)
+            let mut contenders: i64 = 0;
+            // 노출된 모집단위 가운데 그 노출 후보가 실제로 들어올 수 있는 곳이 있는가
+            let mut can_enter = false;
+            for &(ti, n) in &group {
+                let list = &tracks[ti];
+                let start = pos[ti];
+                let mut k = start;
+                while let Some(c) = list.get(k) {
+                    if c.univ_rank <= r {
+                        k += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let chained = (k - start) as i64;
+                demand += chained;
+                // 연쇄 후보 c 는 같은 연쇄에서 track_rank 가 더 좋은 인원이 다 추천된 뒤에야 차례가
+                // 온다(5b). 그 인원이 남은 자리 이상이면 c 는 자리가 찬 뒤라 영영 못 들어온다 —
+                // 경합 인원에 세지 않는다. 연쇄는 (track_rank, univ_rank) 오름차순이므로 "더 좋은
+                // 인원" = 같은 track_rank 묶음의 첫 위치.
+                let mut run_start: i64 = 0;
+                for j in start..k {
+                    let rel = (j - start) as i64;
+                    if j > start && list[j].track_rank != list[j - 1].track_rank {
+                        run_start = rel;
+                    }
+                    if run_start < free {
+                        contenders += 1;
+                    }
+                }
+                // 확정 후보 끝까지 갔으면 그 뒤에 선 보류 덩어리도 r 이하일 때 수요에 든다.
+                // 덩어리 인원은 연쇄 전원이 남은 자리 미만일 때만 경합 인원에 든다(같은 이유).
+                let mut held_added = false;
+                if k == list.len() {
+                    if let Some(h) = held[ti].as_ref() {
+                        if h.univ_rank <= r {
+                            demand += h.seats;
+                            held_added = true;
+                            if chained < free {
+                                contenders += h.contenders;
+                            }
+                        }
+                    }
+                }
+                // 이 모집단위의 노출 후보는 G 의 n 명이 다 추천된 뒤에야 들어오므로, 남은 자리가
+                // n 보다 많을 때만 결과를 바꿀 수 있다.
+                let n_ti = n as i64;
+                if (chained > n_ti || held_added) && free > n_ti {
+                    can_enter = true;
+                }
+            }
+            // 연쇄가 G 보다 크다 = 노출이 있다
+            if demand > group_size {
+                if demand <= free {
+                    // 전부 들어갈 자리가 있다 — G 를 확정하고 드러난 후보는 다음 반복이 처리한다
+                } else if free <= 0 {
+                    return (FillOutcome { confirmed, tie: None }, UnivCutStop::Clean);
+                } else if can_enter {
+                    return (
+                        FillOutcome {
+                            confirmed,
+                            tie: Some(TieBoundary { rank: r, free, contenders }),
+                        },
+                        UnivCutStop::Contention,
+                    );
+                } else {
+                    // 노출은 있으나 어느 모집단위에서도 들어올 수 없다(남은 자리 ≤ 그 모집단위의
+                    // G 인원) — 결과를 바꾸지 못하는 노출이므로 일반 동점이다. G 가 둘 이상의
+                    // 모집단위라 group_size > n_ti ≥ free 이고 free > 0 이므로 아래 decide_group 은
+                    // 반드시 StopTie 다. Take 가 나오면 이 추론이 깨진 것이다.
+                    assert!(
+                        group_size > free,
+                        "대학 컷 병합: 들어올 수 없는 노출인데 선두 그룹이 남은 자리 안에 든다 (r={r})"
+                    );
+                }
+            }
+        }
+
         match decide_group(used, group_size, rem) {
             GroupStep::Take => {
                 for (ti, n) in group {
@@ -1650,14 +1793,14 @@ pub fn merge_univ_cut_held(
                     pos[ti] += n;
                 }
             }
-            GroupStep::StopClean => return (FillOutcome { confirmed, tie: None }, 0),
+            GroupStep::StopClean => return (FillOutcome { confirmed, tie: None }, UnivCutStop::Clean),
             GroupStep::StopTie { free } => {
                 return (
                     FillOutcome {
                         confirmed,
                         tie: Some(TieBoundary { rank: r, free, contenders: group_size }),
                     },
-                    0,
+                    UnivCutStop::Tie,
                 )
             }
         }
@@ -1686,8 +1829,9 @@ pub async fn auto_recommend_results_univ(
 ///   1단계(트랙 채움): 각 모집단위를 **모집단위 순위**(트랙 prioritize_enrolled)로 정원까지 채움
 ///   2단계(대학 컷)  : 1단계 확정분을 **대학 전체 순위**(대학 prioritize_enrolled)로 다시 정렬해
 ///                     대학 잔여 정원까지 컷
-/// 두 phase 모두 `fill_by_rank_groups` 를 사용해 동점 그룹을 원자적으로 처리한다.
-/// 재학생 우선은 각 범위의 자기 플래그만 사용한다(OR 금지).
+/// 1단계는 `fill_by_rank_groups`, 2단계는 `merge_univ_cut_held` 로 동점 그룹을 원자적으로
+/// 처리한다. 2단계는 보류 덩어리·경합 집합에서 멈추고 그 이유를 돌려주며, 대학 단위 사유
+/// 문장은 그 이유로만 고른다. 재학생 우선은 각 범위의 자기 플래그만 사용한다(OR 금지).
 async fn run_auto_recommend(
     state: AppState,
     round_id: i64,
@@ -1979,38 +2123,54 @@ async fn run_auto_recommend(
 
         // 트랙 내부 순서를 보존한 채 대학 순위로 병합 컷.
         // (전체 재정렬 금지 — 같은 트랙의 track_rank 상위자를 건너뛰면 안 된다.)
-        let (outcome, held_stop_seats) = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
+        let (outcome, stop) = merge_univ_cut_held(&pool, &held, Some(remaining_univ));
 
         // 사유에 적는 정원 숫자는 **이번 실행의 확정분까지 반영한** 값이다. 실행 전 값을 쓰면
         // 일부를 확정한 뒤 멈춘 경우 "확정 0명, 잔여 2석" 처럼 실제와 다르게 보인다.
         let used_after = univ_used + outcome.confirmed.len() as i64;
         let remaining_after = tq - used_after;
-        // 찼는지는 남은 자리로만 판정한다. `held_stop_seats` 로 판정하면 선두들 가운데 보류
+        // 찼는지는 남은 자리로만 판정한다. 멈춘 이유(`stop`)로 판정하면 선두들 가운데 보류
         // 덩어리의 대학 순위가 최상위가 되기 전에 다른 후보에서 깨끗이 끝난 경우(StopClean)를
         // 놓친다. 이전 라운드로 이미 넘친 경우(remaining_univ < 0)도 여기 걸린다.
         univ_full_after.insert(univ_id, (remaining_after <= 0).then_some((used_after, tq)));
 
         if let Some(tie) = &outcome.tie {
-            // 대학 컷이 1단계 보류 동점 그룹에서 멈췄는가 — 그 경우 남은 자리가 경합 인원보다
-            // 많을 수도 있어 "N석에 M명 경합" 문장은 맞지 않는다. 멈춘 이유를 따로 적는다.
-            // 판정은 병합 함수가 돌려준 값으로만 한다(held 를 다시 훑어 추측하지 않는다).
-            let held_seats = held_stop_seats;
-            let reason = if held_seats > 0 {
-                format!(
+            // 멈춘 이유마다 문장이 다르다. 판정은 병합 함수가 돌려준 값으로만 한다(held 를
+            // 다시 훑어 추측하지 않는다).
+            // - Held: 남은 자리가 경합 인원보다 많을 수도 있어 "N석에 M명 경합"은 맞지 않는다.
+            // - Contention: 경합 대상이 선두에 한하지 않는다 — 일반 동점 문장의 괄호("같은 모집단위
+            //   상위 지원자에게 막힌 동순위자는 제외")가 거짓이 되므로 따로 쓴다. 사실만 적고
+            //   처방은 적지 않는다.
+            let reason = match stop {
+                UnivCutStop::Held { seats } => format!(
                     "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
                      그 순위부터 대학 정원 컷을 멈췄습니다. 모집단위 동점을 먼저 정리한 뒤 \
                      자동 추천을 다시 실행하세요 \
                      (대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석)",
-                    tie.rank, held_seats, tq, used_after, remaining_after,
-                )
-            } else {
-                format!(
+                    tie.rank, seats, tq, used_after, remaining_after,
+                ),
+                UnivCutStop::Contention => format!(
+                    "대학 전체 {}위 동순위 — 동순위 지원자 가운데 누구를 먼저 추천하느냐에 따라 \
+                     같은 모집단위의 다음 지원자(대학 순위가 같거나 더 좋음)가 들어올 수 있어 \
+                     잔여 {}석에 {}명이 경합합니다 \
+                     (대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
+                    tie.rank, tie.free, tie.contenders, tq, used_after, remaining_after,
+                ),
+                UnivCutStop::Tie => format!(
                     "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 \
                      (경합 대상은 각 모집단위의 다음 차례 지원자에 한함 — \
                      같은 모집단위 상위 지원자에게 막힌 동순위자는 제외 / \
                      대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
                     tie.rank, tie.free, tie.contenders, tq, used_after, remaining_after,
-                )
+                ),
+                // 동점 경계가 있는데 깨끗이 끝났다고 하면 병합 함수의 계약 위반이다 — 조용히
+                // 아무 문장이나 고르지 않고 실패한다(Fail-Fast).
+                UnivCutStop::Clean => {
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "대학 컷 병합이 동점 경계를 돌려주면서 멈춘 이유를 알리지 않았다".to_string(),
+                    ))
+                }
             };
             manual_items.push(AutoRecommendManualItem {
                 track_id: None,
@@ -2028,8 +2188,11 @@ async fn run_auto_recommend(
     //      대학 정원으로 409 다. 그 문장을 믿고 자리를 만들려 다른 모집단위 추천을 취소하면,
     //      취소된 후보가 동점자보다 대학 순위가 나쁠 때 5c 가 동점자 추천을 허용해 2단계 병합과
     //      다른 결과로 간다(2026-10-07 재감사 C-1). 그 길로 안내하지 않도록 상태만 적는다.
-    //      처방(미선발·취소)도 적지 않는다 — 미선발이 틀리는 구성이 있다
-    //      (`tests/auto_vs_manual.rs` 의 `track_tie_reason_does_not_prescribe_exclusion`).
+    //      처방(미선발·취소)도 적지 않는다 — 무엇을 할지는 관리자가 정한다. 역방향 가드가 없어
+    //      취소로 자리를 만드는 길이 있고(명세 §4.3) 그 길의 결과는 2단계 병합과 다를 수 있다
+    //      (`tests/auto_vs_manual.rs` 의 `track_tie_reason_says_university_full_when_worse_ranked_took_the_seats`
+    //      의 기록). 이 문장에 처방이 없다는 단언은 같은 파일에서 "대학 정원이 찼습니다"를 단언하는
+    //      `track_tie_*` 테스트들의 `assert_no_prescription` 이다.
     //      대학 정원 무제한이거나 자리가 남았으면 예전 문장 그대로다.
     for tt in track_ties {
         // 동점이 난 모집단위는 보류 덩어리로 2단계 풀에 들어가므로 그 대학은 반드시 2단계를 거친다
