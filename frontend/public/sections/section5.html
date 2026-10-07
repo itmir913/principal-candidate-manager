@@ -100,21 +100,23 @@
                 <li><span class="font-semibold text-slate-700">종료하기</span> 버튼으로 라운드를 종료(CLOSED) 상태로 전환 (담임교사 입력·수정 즉시 차단)</li>
                 <li>전환 시 모든 지원 내역의 점수 산출 및 순위 자동 계산</li>
                 <li>산출된 점수·순위를 모집단위별로 검토</li>
-                <li>결과 탭의 <span class="font-semibold text-slate-700">자동 추천 확정</span> 버튼으로 전체 대학 일괄 처리, 대학별 <span class="font-semibold text-slate-700">이 대학 자동 추천</span> 버튼으로 한 대학만 처리, 또는 학생별 <span class="font-semibold text-slate-700">추천 확정</span> 버튼으로 직접 처리</li>
+                <li>결과 탭의 <span class="font-semibold text-slate-700">자동 추천 확정</span> 버튼으로 전체 대학 일괄 처리, 대학 그룹 머리글의 <span class="font-semibold text-slate-700">(대학명) 전체 자동 추천</span> 버튼으로 한 대학만 처리, 또는 학생별 <span class="font-semibold text-slate-700">추천 확정</span> 버튼으로 직접 처리</li>
                 <li>동점자 여부를 직접 확인하고 정원 초과 모집단위는 추천 대상을 직접 선택</li>
             </ul>
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-indigo-700 mb-2"><span class="mr-2">⚡</span>자동 추천 확정</p>
-            <p class="text-slate-600 leading-relaxed mb-3">결과 탭의 <span class="font-semibold text-slate-700">자동 추천 확정</span> 버튼을 누르면 두 단계로 추천을 일괄 확정합니다. 대학 그룹 머리글의 <span class="font-semibold text-slate-700">이 대학 자동 추천</span> 버튼을 쓰면 그 대학만 같은 방식으로 처리할 수 있습니다.</p>
+            <p class="text-slate-600 leading-relaxed mb-3">결과 탭의 <span class="font-semibold text-slate-700">자동 추천 확정</span> 버튼을 누르면 두 단계로 추천을 일괄 확정합니다. 대학 그룹 머리글의 <span class="font-semibold text-slate-700">(대학명) 전체 자동 추천</span> 버튼(예: <span class="font-semibold text-slate-700">가나대학교 전체 자동 추천</span>)을 쓰면 그 대학만 같은 방식으로 처리할 수 있습니다. 누르면 「이 대학 자동 추천」 확인창이 뜹니다.</p>
             <ul class="space-y-1 text-slate-600 leading-relaxed list-disc list-outside pl-5 mb-3">
                 <li><span class="font-semibold text-slate-700">1단계</span> — 모집단위별로 모집단위 순위순으로 잔여 정원까지 채웁니다.</li>
                 <li><span class="font-semibold text-slate-700">2단계</span> — 대학 전체 정원이 있으면 <span class="font-semibold text-slate-700">모집단위별 순서를 유지한 채</span> <span class="font-semibold text-slate-700">대학 전체 순위</span>로 인원을 줄입니다. 대학 정원이 모집단위 합계보다 적으면 이 단계에서 줄어드는 것이 정상입니다.</li>
                 <li>2단계에서는 각 모집단위의 <span class="font-semibold text-slate-700">다음 차례 지원자끼리만</span> 대학 전체 순위로 겨룹니다. 따라서 같은 모집단위 안에서 순위가 낮은 지원자가 높은 지원자를 앞질러 추천되는 일은 없습니다. 대학 전체 순위가 높더라도 같은 모집단위의 상위 지원자에게 자리가 먼저 가면 이번 라운드에는 추천되지 않으며, 이는 그 모집단위 설정이 정상 적용된 결과입니다.</li>
                 <li>정원이 무제한인 모집단위·대학은 컷이 걸리지 않습니다.</li>
-                <li><span class="font-semibold text-slate-700">동점이 정원 경계를 가르는 경우</span>(잔여석보다 동점 인원이 많을 때)에만 그 동점 그룹을 자동 확정하지 않고 <span class="font-semibold text-slate-700">수동 확인 필요</span> 목록(순위·잔여석·경합 인원 포함)으로 안내합니다. 그보다 상위인 학생은 그대로 자동 확정됩니다.</li>
-                <li>정원이 동점 그룹 사이에 정확히 떨어지면 경계가 명확하므로 수동 확인이 필요 없습니다.</li>
+                <li>순위만으로 추천 대상을 정할 수 없는 지점에서는 자동 확정을 멈추고, 그 지점을 <span class="font-semibold text-slate-700">수동 확인 필요</span> 목록에 사유(순위·잔여석·경합 인원 등)와 함께 안내합니다. 대표적인 경우는 <span class="font-semibold text-slate-700">모집단위 안의 동점이 정원 경계를 가르는 경우</span>(잔여석보다 동점 인원이 많을 때)이고, 대학 전체 순위의 동점이나, 여러 모집단위 지원자가 같은 대학 전체 순위에 있어 누구를 먼저 추천하느냐에 따라 결과가 달라지는 경우에도 멈출 수 있습니다.</li>
+                <li>대학 전체 정원이 있는 대학에서 모집단위 동점이 정리되지 않으면, 대학 전체 정원 컷도 그 동점의 차례에서 멈춥니다. 그래서 목록에는 모집단위 항목 외에 모집단위 이름 대신 <span class="font-semibold text-slate-700">(대학 전체)</span>로 표시되는 대학 단위 항목이 나올 수 있습니다. 모집단위 항목에 "아직 이 동점의 차례가 오지 않았습니다"라고 적혀 있으면 같은 대학의 대학 전체 항목을 먼저 확인하십시오.</li>
+                <li>사유를 확인해 추천할 학생은 <span class="font-semibold text-slate-700">추천 확정</span>, 추천하지 않을 학생은 <span class="font-semibold text-slate-700">미선발 처리</span>로 정리한 뒤 <span class="font-semibold text-slate-700">자동 추천 확정</span>을 다시 누르면 남은 자리를 이어서 채웁니다. 멈출 지점이 또 있으면 거기서 다시 멈춥니다.</li>
+                <li>모집단위 정원이 동점 그룹 사이에 정확히 떨어지면 그 동점은 모집단위 정원 경계를 가르지 않으므로, 그 동점 때문에 모집단위 항목이 생기지는 않습니다. 대학 전체 정원 단계의 판단은 이와 따로 이루어집니다.</li>
                 <li>버튼을 두 번 눌러도 이미 확정된 추천은 변경되지 않습니다.</li>
             </ul>
             <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-base text-amber-800">
@@ -124,7 +126,7 @@
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">
             <p class="font-bold text-slate-700 mb-2"><span class="mr-2">⚖️</span>동점자가 발생한 경우</p>
-            <p class="text-slate-600 leading-relaxed">시스템은 동점자를 자동으로 감지하거나 알리지 않습니다. 동점자는 같은 순위로 표시될 뿐이며, <span class="font-semibold text-slate-700">관리자가 순위 목록을 직접 검토하여 판단</span>해야 합니다. 동점자 중 모집 정원을 초과하는 경우, 추천할 학생을 관리자가 직접 선택한 후 추천 확정을 진행합니다.</p>
+            <p class="text-slate-600 leading-relaxed">결과 표에서 동점자는 같은 순위로 표시되고, 마감 전에는 그 행이 연한 노란색으로 칠해집니다(지금 보고 있는 순위 보기 — 모집단위별 또는 대학 전체 — 기준). <span class="font-semibold text-slate-700">자동 추천 확정</span>은 동점 등으로 자동으로 정할 수 없는 지점을 <span class="font-semibold text-slate-700">수동 확인 필요</span> 목록으로 알립니다. 다만 동점자 가운데 누구를 추천할지는 시스템이 정하지 않으므로 <span class="font-semibold text-slate-700">관리자가 순위 목록을 직접 검토하여 판단</span>해야 합니다. 동점자 중 모집 정원을 초과하는 경우, 추천할 학생을 관리자가 직접 선택한 후 추천 확정을 진행합니다.</p>
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-lg mb-4 print-keep-bg">

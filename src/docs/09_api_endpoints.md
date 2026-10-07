@@ -178,7 +178,7 @@
 | 메서드 | 경로 | 설명 | 에러 |
 |---|---|---|---|
 | POST | `/rounds/:id/calculate` | CLOSED 라운드 점수 재계산 | 400: CLOSED 아님 |
-| POST | `/rounds/:id/auto-recommend` | CLOSED 라운드 자동 추천 확정(전 대학). 2단계(모집단위 정원 채움 → 대학 전체 순위 컷). 동점이 정원 경계를 가르면 그 동점 그룹만 manual로 반환. 부분 성공도 200 | 400: CLOSED 아님 / 404: 없음 |
+| POST | `/rounds/:id/auto-recommend` | CLOSED 라운드 자동 추천 확정(전 대학). 2단계(모집단위 정원 채움 → 대학 전체 순위 컷). 자동으로 정할 수 없는 지점(동점·경합 등)은 manual로 반환 — 모집단위 항목과, 대학 전체 정원 컷에서 생기는 대학 단위 항목(`track_id`·`track_name` 이 null). 부분 성공도 200 | 400: CLOSED 아님 / 404: 없음 |
 | POST | `/rounds/:id/auto-recommend/univ/:univ_id` | 위와 동일하되 지정 대학의 모집단위만 처리 | 400: CLOSED 아님 / 404: 라운드·대학 없음 |
 | GET | `/rounds/:id/results` | 결과 조회. `?track_id=` | `[ResultRow]` |
 | GET | `/rounds/:id/results/export` | 이 라운드 지원자 명단 xlsx ("지원자 명단" 시트, applications 기준·전형요소별 점수 포함) | blob |
