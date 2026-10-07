@@ -721,6 +721,115 @@ describe('라운드 상태 전이', () => {
     expect(w.text(), '재조회 실패가 화면 어디에도 없다').toContain('결과 조회 실패 Q')
     w.unmount()
   })
+
+  // ── 마감 감사 C-2 — 수정 전 코드에서 실패했다 ─────────────────
+  // 전이가 성공했으면 서버 상태는 확정이다. 수정 전 reloadAfterTransition 은 라운드 목록 재조회가
+  // 실패하면(rounds 가 빈다) updated 를 못 찾아 selectRound 를 건너뛰었다 — 상세 머리글·버튼이
+  // 옛 상태(마감했는데 CLOSED 와 [마감하기])로 남고, [지원 현황] 의 추천 칸도 옛 지원 목록을
+  // 봤다. 또 rounds 가 비어 hasOpenRound 가 false 가 되어 [+ 라운드 열기] 가 열렸다(서버는 409 로
+  // 막지만 화면이 거짓이다).
+  // 판별력: ① 목록을 못 받았을 때의 폴백(전이 뒤 상태로 selectRound)을 빼면 [마감하기] 가 남아
+  // 첫 버튼 단언에서 걸린다. ② [+ 라운드 열기] 의 roundsLoadError 잠금을 빼면 disabled 단언에서 걸린다.
+  it('[마감하기] 성공 뒤 라운드 목록 재조회가 실패해도 상세는 마감 상태이고 [+ 라운드 열기] 는 잠긴다', async () => {
+    S.rows = [ROW(1, '김갑돌', { recommended: true }), ROW(2, '이을순', { excluded: true, excluded_reason: '정원 외' })]
+    const fail = failLater(/\/api\/rounds$/, '라운드 목록 조회 실패 F')
+    const w = await openRoundTab()
+    fail.on = true
+    await click(btnIn(w, '마감하기'))
+    settleDialog(true)
+    await settle()
+
+    expect(writes()).toContain('PUT /api/rounds/1/finalize')
+    expect(dialogState.open, '마감은 성공했는데 알림이 떴다').toBe(false)
+    expect(w.findAll('button').some(b => b.text().trim() === '마감하기'), '목록을 못 받았다고 상세가 CLOSED 로 남았다').toBe(false)
+    expect(w.text()).toContain('라운드 목록을 불러오지 못했습니다')
+    expect(w.text()).toContain('라운드 목록 조회 실패 F')
+    expect(btnIn(w, '+ 라운드 열기').attributes('disabled'), '라운드 목록을 모르는데 [+ 라운드 열기] 가 열렸다').toBeDefined()
+    expect(refreshRoundSpy).toHaveBeenCalled()
+    // 마감 시각은 서버 값이 와야 안다 — 목록이 없는 동안 지어내지 않는다
+    expect(w.text()).not.toContain('최종 마감')
+
+    await click(btnIn(w, '지원 현황'))
+    const row = rowOf(w, '김갑돌')
+    expect(row.text(), '마감 상태인데 [지원 현황] 의 추천 칸이 비었다').toContain('추천 확정')
+    btnIn(row, '포기하기')
+    expect(rowOf(w, '이을순').text()).toContain('미선발')
+    w.unmount()
+  })
+
+  // 재개 — 서버는 추천·순위·미선발을 지우고 closed_at 을 NULL 로 되돌린다(rounds.rs 의 reopen_round).
+  // needs_recalc 는 서버 판정식(rounds.rs 의 needs_recalc_expr)이 CLOSED 에서만 1 이라 OPEN 에서는 0 이다.
+  // 목록을 못 받아도 상세는 진행중이어야 하고 결과 표의 옛 추천 표시·"입력 종료" 시각·"최신이 아닙니다"
+  // 경고가 남지 않아야 한다.
+  // 판별력: 폴백의 `closed_at: null` 을 빼면 "입력 종료" 단언에서, `needs_recalc: false` 를 빼면
+  // "최신이 아닙니다" 단언에서 걸린다.
+  it('[다시 열기] 성공 뒤 라운드 목록 재조회가 실패해도 상세는 진행중이고 결과 표가 초기화된다', async () => {
+    S.rounds = [{ ...ROUND(1, 'CLOSED'), needs_recalc: true }]
+    S.rows = [ROW(1, '김갑돌', { recommended: true }), ROW(2, '이을순')]
+    const fail = failLater(/\/api\/rounds$/, '라운드 목록 조회 실패 R')
+    const w = await openRoundTab()
+    expect(rowOf(w, '김갑돌').text()).toContain('추천 확정됨')
+    expect(w.text()).toContain('입력 종료')
+    expect(w.text(), '픽스처가 재계산 필요 경고에 닿지 않는다').toContain('표시된 총점·순위가 최신이 아닙니다')
+    fail.on = true
+    await click(btnIn(w, '다시 열기'))
+    await answer(true, { level: 'warn' })
+
+    expect(writes()).toContain('PUT /api/rounds/1/reopen')
+    expect(dialogState.open).toBe(false)
+    btnIn(w, '종료하기')        // OPEN 화면이다
+    expect(w.findAll('button').some(b => b.text().trim() === '다시 열기'), '재개했는데 CLOSED 화면이 남았다').toBe(false)
+    expect(rowOf(w, '김갑돌').text(), '재개 뒤에도 추천 표시가 남았다').not.toContain('추천 확정됨')
+    expect(w.text(), '재개했는데 입력 종료 시각이 남았다').not.toContain('입력 종료')
+    expect(w.text(), '재개했는데 옛 needs_recalc 로 재계산 필요 경고가 남았다').not.toContain('표시된 총점·순위가 최신이 아닙니다')
+    expect(w.text()).toContain('라운드 목록 조회 실패 R')
+    expect(btnIn(w, '+ 라운드 열기').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+
+  it('[종료하기] 성공 뒤 라운드 목록 재조회가 실패해도 상세는 종료 상태다', async () => {
+    S.rounds = [ROUND(1, 'OPEN')]
+    const fail = failLater(/\/api\/rounds$/, '라운드 목록 조회 실패 C')
+    const w = await openRoundTab({ tab: null })
+    fail.on = true
+    await click(btnIn(w, '종료하기'))
+    await answer(true, { level: 'warn' })
+
+    expect(writes()).toContain('PUT /api/rounds/1/close')
+    expect(dialogState.open).toBe(false)
+    btnIn(w, '마감하기')        // CLOSED 화면이다
+    expect(w.findAll('button').some(b => b.text().trim() === '종료하기'), '종료했는데 OPEN 화면이 남았다').toBe(false)
+    expect(w.text()).toContain('라운드 목록 조회 실패 C')
+    expect(btnIn(w, '+ 라운드 열기').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+
+  // 첫 화면 로드부터 목록을 못 받으면 진행 중 라운드가 있는지 알 수 없다 — 같은 잠금이 적용된다.
+  // 빈 상태 도움말("첫 라운드 열기 전 확인하세요")도 뜨지 않아야 한다 — rounds 가 빈 것은 오류이지
+  // 라운드가 없다는 뜻이 아니다. 판별력: 잠금을 hasOpenRound 만으로 되돌리면 rounds 가 비어 버튼이
+  // 열리고, 도움말의 `!roundsLoadError` 조건을 빼면 제목 단언에서 걸린다.
+  it('첫 화면에서 라운드 목록을 못 받으면 [+ 라운드 열기] 는 잠기고 빈 상태 도움말은 뜨지 않는다', async () => {
+    S.hooks.push({ method: 'GET', re: /\/api\/rounds$/, fn: () => err(500, '라운드 목록 조회 실패 M') })
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const w = mount(mod.default, mountOpts())
+    await settle()
+    expect(w.text()).toContain('라운드 목록 조회 실패 M')
+    expect(btnIn(w, '+ 라운드 열기').attributes('disabled')).toBeDefined()
+    expect(w.text(), '목록 오류인데 빈 상태 도움말이 떴다').not.toContain('첫 라운드 열기 전 확인하세요')
+    w.unmount()
+  })
+
+  // 짝: 진짜 빈 목록(오류 없음)에서는 도움말이 뜬다 — 위 조건을 `false` 로 넓히는 변이를 막는다.
+  // 수정 전에도 통과하는 테스트다(이 묶음의 "수정 전 코드에서 실패했다" 표지와 다르다) — 변이 방어용.
+  it('라운드가 정말 없으면 빈 상태 도움말이 뜬다', async () => {
+    S.rounds = []
+    const mod = await import('../src/components/admin/RoundsTab.vue')
+    const w = mount(mod.default, mountOpts())
+    await settle()
+    expect(w.text()).toContain('첫 라운드 열기 전 확인하세요')
+    expect(w.text()).toContain('라운드 없음')
+    w.unmount()
+  })
 })
 
 // ════════════════════════════════════════════════════════════════
@@ -741,6 +850,58 @@ describe('점수 재계산', () => {
     expect(w.text(), '재계산은 성공했는데 실패 문구로 덮였다').toContain('점수 재계산 완료: 2건')
     await click(btnIn(w, '결과'))
     expect(w.text(), '재계산 뒤에도 "최신이 아닙니다" 경고가 남았다').not.toContain('표시된 총점·순위가 최신이 아닙니다')
+    w.unmount()
+  })
+
+  // ── 마감 감사 C-1 — 수정 전 코드에서 실패했다 ─────────────────
+  // 재계산 성공 → 재조회(결과·라운드 목록)가 끝나기 전에 관리자가 2차 라운드를 고른다.
+  // 수정 전 handleCalculate 는 재조회 뒤 `if (fresh) selected.value = fresh` 를 라운드 비교 없이
+  // 실행해 selected 가 1차로 되돌아갔다 — 머리글은 원래 라운드인데 표는 다른 라운드의 것(응답
+  // 순서에 따라 빈 표: 2차 조회가 늦으면 늦은 응답 가드 `selected.value?.id !== rid` 가 버린다).
+  // 이 픽스처는 clickRound 의 settle 이 2차 조회를 끝낸 뒤 release 하므로 머리글 단언에서 걸린다.
+  // 판별력: selected 갱신의 라운드 비교(`selected.value?.id === roundId`)를 빼면 머리글 단언에서 걸린다.
+  it('재계산 뒤 재조회 중에 다른 라운드를 고르면 머리글이 1차로 되돌아가지 않는다', async () => {
+    S.rounds = [{ ...ROUND(1, 'CLOSED'), needs_recalc: true }, ROUND(2, 'FINALIZED')]
+    S.rows = [ROW(1, '김갑돌'), ROW(2, '이을순', { round_id: 2, recommended: true })]
+    // 재계산 뒤 첫 라운드 목록 재조회만 붙잡는다 — 마운트 때의 조회는 그대로 둔다
+    let release
+    const gate = new Promise(r => { release = r })
+    let armed = false
+    S.hooks.push({ method: 'GET', re: /\/api\/rounds$/, fn: ({ url }) => (armed ? gate.then(() => defaultRoute('GET', url)) : undefined) })
+    const w = await openRoundTab({ tab: null })
+    armed = true
+    await click(btnIn(w, '점수 전체 재계산'))      // POST 성공 → 재조회 시작(라운드 목록은 붙잡힘)
+
+    await clickRound(w, 2)                          // 재조회가 끝나기 전에 2차를 고른다
+    release()
+    await settle()
+
+    // 머리글(상세 카드)의 라운드 번호 — 2차여야 한다
+    const header = w.find('.text-xl.font-bold')
+    expect(header.exists()).toBe(true)
+    expect(header.text(), '재계산 재조회의 늦은 완료가 선택 라운드를 1차로 되돌렸다').toBe('2차 라운드')
+    // 2차 라운드의 지원 목록이 보여야 한다(빈 표가 아니라)
+    expect(w.text()).toContain('이을순')
+    w.unmount()
+  })
+
+  // 같은 상황에서 POST 자체가 실패하면 — 실패 문구는 원래 라운드 것이다. 2차 라운드 화면에
+  // 1차의 "재계산 실패" 를 띄우지 않는다(selectRound 가 calcMsg 를 비운 뒤에 덮어쓰게 된다).
+  // 판별력: 실패 분기의 라운드 비교를 빼면 2차 화면(CLOSED 가 아니라 문구 자리가 없다)에서는
+  // 안 보이므로, 2차도 CLOSED 로 두어 문구 자리가 있게 한다.
+  it('응답 전에 다른 라운드를 고르면 재계산 실패 문구가 그 라운드에 뜨지 않는다', async () => {
+    S.rounds = [ROUND(1, 'CLOSED'), ROUND(2, 'CLOSED')]
+    S.rows = [ROW(1, '김갑돌'), ROW(2, '이을순', { round_id: 2 })]
+    let release
+    const gate = new Promise(r => { release = r })
+    S.hooks.push({ method: 'POST', re: /\/calculate$/, fn: () => gate.then(() => err(500, '재계산 실패 Z')) })
+    const w = await openRoundTab({ tab: null })
+    await click(btnIn(w, '점수 전체 재계산'))
+    await clickRound(w, 2)
+    release()
+    await settle()
+    expect(w.find('.text-xl.font-bold').text()).toBe('2차 라운드')
+    expect(w.text(), '1차 라운드의 재계산 실패 문구가 2차 화면에 떴다').not.toContain('재계산 실패 Z')
     w.unmount()
   })
 })

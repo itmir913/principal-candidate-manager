@@ -7,8 +7,10 @@
       <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">라운드 관리</h1>
     </div>
 
+    <!-- 빈 상태 도움말은 "라운드가 없다"가 확인됐을 때만 — 목록을 못 받았을 때 rounds 가 비는 것은
+         오류이지 빈 상태가 아니다(목록 자리의 오류 표시와 함께 "첫 라운드 열기 전" 안내가 떴다) -->
     <HelpBox
-      v-if="rounds.length === 0"
+      v-if="rounds.length === 0 && !roundsLoadError"
       class="mb-5"
       storage-key="rounds-empty"
       :title="HELP_EMPTY.title"
@@ -25,7 +27,7 @@
           <button
             class="text-base font-medium rounded-lg whitespace-nowrap disabled:opacity-40"
             style="padding: 7px 14px; border: none; background: #2563eb; color: white; cursor: pointer;"
-            :disabled="hasOpenRound || loading"
+            :disabled="openRoundLocked"
             @click="handleOpenRound"
           >+ 라운드 열기</button>
         </div>
@@ -840,6 +842,10 @@ const subTabs = [
 ]
 
 const hasOpenRound = computed(() => rounds.value.some(r => r.status === 'OPEN' || r.status === 'CLOSED'))
+// 라운드 목록을 못 받은 동안(첫 로드든 상태 전이 뒤 재조회든)은 진행 중 라운드가 있는지 알 수
+// 없다 — rounds 가 비어 hasOpenRound 가 false 로 떨어지므로 그것만 보면 버튼이 열린다(서버는
+// 409 로 막지만 화면이 거짓이다). 목록 오류가 있으면 잠근다.
+const openRoundLocked = computed(() => hasOpenRound.value || loading.value || !!roundsLoadError.value)
 
 const helpBox = computed(() => {
   if (!selected.value) return null
@@ -1151,13 +1157,16 @@ async function reloadAfter(doneLabel, reload) {
 // loadRounds·selectRound·refreshSidebarRound(AdminView.vue 의 refreshRound)는 실패를 각자
 // 화면 자리(라운드 목록 오류, 상세 오류 상자, 사이드바)에 적고 던지지 않는다. 그래서
 // reloadAfter 를 거치지 않으며, 사이드바 갱신이 앞 재조회의 실패로 건너뛰어지지 않는다.
-// 남은 구멍: 라운드 목록 재조회가 실패하면 updated 를 찾지 못해 상세는 옛 상태로 남는다
-// (목록 자리에는 오류가 보인다). 이 수정의 범위 밖이라 두었다.
-async function reloadAfterTransition(id) {
+// 라운드 목록 재조회가 실패하면(rounds 가 비고 목록 자리에 오류가 보인다) 서버가 돌려줄 라운드
+// 행은 모르지만 **전이 자체는 성공했으므로 상태는 확정**이다 — 선택 라운드에 `after`(전이 뒤
+// 상태, 재개는 서버가 지우는 closed_at 까지)만 덮어 쓰고 selectRound 로 지원·결과를 다시 받는다.
+// 전이 시각(closed_at·finalized_at)은 서버가 정한 값이라 지어내지 않는다 — 목록이 올 때까지 기존
+// 값이다(그 줄은 비어 보인다). 목록을 모르는 동안 [+ 라운드 열기] 는 openRoundLocked 가 잠근다.
+async function reloadAfterTransition(id, after) {
   await loadRounds()
   if (selected.value?.id === id) {
-    const updated = rounds.value.find(r => r.id === id)
-    if (updated) await selectRound(updated)
+    const updated = rounds.value.find(r => r.id === id) ?? { ...selected.value, ...after }
+    await selectRound(updated)
   }
   await refreshSidebarRound()
 }
@@ -1217,7 +1226,7 @@ async function handleCloseRound(id) {
       await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
       return
     }
-    await reloadAfterTransition(id)
+    await reloadAfterTransition(id, { status: 'CLOSED' })
   } finally {
     roundActing.value = false
   }
@@ -1239,7 +1248,10 @@ async function handleReopenRound(id) {
       await dialog.alert({ title: '오류', message: e.response?.data || e.message, level: 'error' })
       return
     }
-    await reloadAfterTransition(id)
+    // 재개는 서버가 closed_at 을 NULL 로 되돌리고(rounds.rs 의 reopen_round), needs_recalc 는 서버
+    // 판정식(rounds.rs 의 needs_recalc_expr)이 CLOSED 에서만 1 이라 OPEN 에서는 0 이다 — 둘 다
+    // 서버 식으로 확정되는 값이라 함께 쓴다(옛 값을 들고 가면 "최신이 아닙니다" 경고가 남는다)
+    await reloadAfterTransition(id, { status: 'OPEN', closed_at: null, needs_recalc: false })
   } finally {
     roundActing.value = false
   }
@@ -1273,7 +1285,8 @@ async function handleFinalizeRound(id) {
       }
       return
     }
-    await reloadAfterTransition(id)
+    // needs_recalc 는 서버 판정식(rounds.rs 의 needs_recalc_expr)이 CLOSED 에서만 1 — FINALIZED 에서는 0
+    await reloadAfterTransition(id, { status: 'FINALIZED', needs_recalc: false })
   } finally {
     roundActing.value = false
   }
@@ -1305,7 +1318,8 @@ async function handleCalculate() {
     try {
       res = await calculateScores(roundId)
     } catch (e) {
-      calcMsg.value = { ok: false, text: e.response?.data || e.message }
+      // 실패 문구도 원래 라운드 것이다 — 그 사이 다른 라운드를 골랐으면 그 화면에 띄우지 않는다
+      if (selected.value?.id === roundId) calcMsg.value = { ok: false, text: e.response?.data || e.message }
       return
     }
     if (selected.value?.id !== roundId) return
@@ -1314,8 +1328,10 @@ async function handleCalculate() {
     // 재계산 후에도 "재계산 필요" 배지·경고가 남아 UI 가 거짓을 말한다 (F-032).
     // 결과 재조회가 실패해도 위 성공 문구를 덮지 않고, 아래 selected 갱신도 건너뛰지 않는다.
     await reloadAfter('점수 재계산', () => Promise.all([loadResults(), loadRounds()]))
+    // 재조회 중에 다른 라운드를 골랐으면 되돌리지 않는다 — 되돌리면 머리글은 원래 라운드인데
+    // 표는 다른 라운드의 것(응답 순서에 따라 빈 표)이 된다(runAutoRecommend·loadApps 와 같은 꼴).
     const fresh = rounds.value.find(r => r.id === roundId)
-    if (fresh) selected.value = fresh
+    if (fresh && selected.value?.id === roundId) selected.value = fresh
   } finally {
     calcLoading.value = false
   }
