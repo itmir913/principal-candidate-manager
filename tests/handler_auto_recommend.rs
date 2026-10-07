@@ -1516,7 +1516,7 @@ fn merge_held_block_seats_count_toward_demand() {
     got.sort_unstable();
     assert_eq!(got, vec![0, 1]);
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 2 }));
-    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
 }
 
 /// 덩어리의 대학 순위가 r 보다 나쁘면 수요에 들지 않는다 — 같은 입력에서 덩어리만 5위로.
@@ -1533,7 +1533,7 @@ fn merge_held_block_worse_than_r_is_not_demand() {
     got.sort_unstable();
     assert_eq!(got, vec![0, 1]);
     assert_eq!(out.tie, None);
-    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
 }
 
 /// 둘 이상의 모집단위가 동순위 선두여도 **노출이 없으면** 일반 동점이다 — 멈춘 이유가 `Tie`
@@ -1578,7 +1578,25 @@ fn merge_held_block_as_leader_stops_before_contention() {
     let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
     assert!(out.confirmed.is_empty());
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 4 }));
-    assert_eq!(stop, UnivCutStop::Held { seats: 1 });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
+}
+
+/// `Held::tracks` 는 그 대학 순위에 **선두로** 선 덩어리만 담는다. 같은 대학 순위(1위)의 덩어리가
+/// 둘인데 X 의 덩어리는 아직 선두가 아니다 — X1(대학 5위)이 앞에 남아 있다. 정지에 선 것은 Y 의
+/// 덩어리뿐이므로 `tracks` 는 Y 의 인덱스 하나다(seats 도 Y 몫만).
+/// 판별력의 소재: "같은 순위면 전부"로 넓히면(선두 조건을 빼면) `tracks` 가 [0, 1] 이 되고 seats 가
+/// 2 가 된다 — 호출부가 X 동점 사유를 "관리자 선택 필요"로 잘못 적는 입력이다(X2·X3 는 5b 가 막는다).
+#[test]
+fn merge_held_tracks_name_only_leading_blocks() {
+    let tracks = vec![vec![mc(0, 10, 1, 5)], vec![]];
+    let held = vec![
+        Some(HeldBlock { track_rank: 2, univ_rank: 1, seats: 1, contenders: 2 }),
+        Some(HeldBlock { track_rank: 1, univ_rank: 1, seats: 1, contenders: 2 }),
+    ];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 2 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![1] });
 }
 
 /// 노출이 있어도 **들어올 수 없으면** 일반 동점이다. X: X1(1, 3)·X2(2, 1), Y: Y1(1, 3). 정원 1.

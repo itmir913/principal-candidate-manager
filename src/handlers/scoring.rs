@@ -1512,9 +1512,10 @@ pub fn merge_univ_cut(tracks: &[Vec<MergeCand>], remaining: Option<i64>) -> Fill
 /// 2단계 대학 컷 병합이 **왜 멈췄는가** — `merge_univ_cut_held` 가 돌려준다.
 ///
 /// 멈춘 이유는 병합 함수만 정확히 안다. 호출부(`run_auto_recommend`)는 이 값으로만 대학 단위
-/// 사유 문장을 고른다 — `held` 를 다시 훑어 추측하면, 아직 선두가 아닌 덩어리가 같은 순위에
-/// 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07 4차 수정 감사 B-1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 사유 문장과 1단계 모집단위 동점 사유의 갈래를 고른다 — `held` 를 다시 훑어 추측하면, 아직
+/// 선두가 아닌 덩어리가 같은 순위에 있을 때 일반 동점을 보류 정지로 잘못 적는다(2026-10-07
+/// 4차 수정 감사 B-1). 그래서 `Held` 는 **어느 덩어리가** 정지에 섰는지도 함께 돌려준다.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnivCutStop {
     /// 선두 집합이 비었거나(끝까지 병합), 남은 자리가 없어 깨끗이 끝났다. `tie` 는 None.
     Clean,
@@ -1524,9 +1525,12 @@ pub enum UnivCutStop {
     /// G 의 크기.
     Tie,
     /// 보류 덩어리가 선두들 가운데 최상위 대학 순위에 섰다. `seats` 는 그 순위에 선 덩어리들의
-    /// 1단계 잔여석 합이다. `tie` 는 자리가 남을 때만 Some 이고, 자리가 남아도 멈추므로
-    /// free < contenders 를 보장하지 않는다.
-    Held { seats: i64 },
+    /// 1단계 잔여석 합이다. `tracks` 는 그 순위에 **선두로** 선 덩어리들의 트랙 인덱스(`tracks`
+    /// 인자의 위치, 오름차순) — 같은 대학 순위라도 자기 모집단위 확정 후보가 아직 남아 선두가
+    /// 아닌 덩어리는 넣지 않는다(그 덩어리의 학생은 5b 가 막아 지금 추천할 수 없다).
+    /// `tie` 는 자리가 남을 때만 Some 이고, 자리가 남아도 멈추므로 free < contenders 를 보장하지
+    /// 않는다.
+    Held { seats: i64, tracks: Vec<usize> },
     /// 동순위 선두가 **둘 이상의 모집단위**에 있고, 연쇄 노출(각 모집단위에서 선두부터 대학
     /// 순위 ≤ r 로 이어지는 다음 후보들과 그 끝의 보류 덩어리)까지 센 수요가 남은 자리를
     /// 넘으며, 노출된 모집단위 가운데 적어도 하나에서 남은 자리 > 그 모집단위의 G 인원이라
@@ -1573,7 +1577,7 @@ pub struct HeldBlock {
 /// 동작과 같다.
 ///
 /// 두 번째 값은 멈춘 이유(`UnivCutStop`)다. 보류 덩어리가 선두들 가운데 최상위 대학 순위로
-/// 서서 멈췄으면 `Held { seats }` — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다.
+/// 서서 멈췄으면 `Held { seats, tracks }` — 남은 대학 자리가 없어 `tie` 가 `None` 인 경우에도 그렇다.
 ///
 /// **경합 집합 정지**(2026-10-07 소유자 결정 B-merge, 명세 §5.4): 각 반복에서 r = 선두들 가운데
 /// 최선 대학 순위. r 에 선두를 둔 모집단위가 **둘 이상**이면, 그 모집단위마다 선두부터
@@ -1649,15 +1653,18 @@ pub fn merge_univ_cut_held(
         // 동점 그룹 G — 선두들끼리만 판정
         let mut group: Vec<(usize, usize)> = Vec::new(); // (트랙 인덱스, 인원)
         let mut group_size: i64 = 0;
-        // 같은 대학 순위에 **선두로** 선 보류 덩어리 — 있으면 여기서 멈춘다
+        // 같은 대학 순위에 **선두로** 선 보류 덩어리 — 있으면 여기서 멈춘다. 어느 트랙의
+        // 덩어리인지도 모은다(`Held::tracks`) — 호출부가 1단계 동점 사유의 갈래를 이걸로 고른다.
         let mut held_contenders: i64 = 0;
         let mut held_seats: i64 = 0;
+        let mut held_tracks: Vec<usize> = Vec::new();
         for (ti, list) in tracks.iter().enumerate() {
             let Some(head) = list.get(pos[ti]) else {
                 if let Some(h) = held_head(ti) {
                     if h.univ_rank == r {
                         held_contenders += h.contenders;
                         held_seats += h.seats;
+                        held_tracks.push(ti);
                     }
                 }
                 continue;
@@ -1693,7 +1700,7 @@ pub fn merge_univ_cut_held(
                         contenders: group_size + held_contenders,
                     }),
                 },
-                UnivCutStop::Held { seats: held_seats },
+                UnivCutStop::Held { seats: held_seats, tracks: held_tracks },
             );
         }
         // 여기 오면 선두 r 에 실제 후보가 있다(보류 덩어리만 있으면 위에서 돌아갔다).
@@ -1830,8 +1837,9 @@ pub async fn auto_recommend_results_univ(
 ///   2단계(대학 컷)  : 1단계 확정분을 **대학 전체 순위**(대학 prioritize_enrolled)로 다시 정렬해
 ///                     대학 잔여 정원까지 컷
 /// 1단계는 `fill_by_rank_groups`, 2단계는 `merge_univ_cut_held` 로 동점 그룹을 원자적으로
-/// 처리한다. 2단계는 보류 덩어리·경합 집합에서 멈추고 그 이유를 돌려주며, 대학 단위 사유
-/// 문장은 그 이유로만 고른다. 재학생 우선은 각 범위의 자기 플래그만 사용한다(OR 금지).
+/// 처리한다. 2단계는 보류 덩어리·경합 집합에서 멈추고 그 이유(어느 덩어리에서 멈췄는지까지)를
+/// 돌려주며, 대학 단위 사유 문장과 1단계 모집단위 동점 사유의 갈래(4-1)는 그 이유로만 고른다.
+/// 재학생 우선은 각 범위의 자기 플래그만 사용한다(OR 금지).
 async fn run_auto_recommend(
     state: AppState,
     round_id: i64,
@@ -1921,6 +1929,9 @@ async fn run_auto_recommend(
     let mut univ_pool: HashMap<i64, Vec<Vec<MergeCand>>> = HashMap::new();
     // univ_pool 과 같은 순서로, 트랙별 1단계 보류 덩어리(없으면 None) — 2단계가 자리를 센다
     let mut univ_held: HashMap<i64, Vec<Option<HeldBlock>>> = HashMap::new();
+    // univ_pool 과 같은 순서로, 그 자리의 track_id — 병합이 돌려주는 트랙 인덱스(`UnivCutStop::Held`
+    // 의 `tracks`)를 모집단위로 되돌리는 데 쓴다
+    let mut univ_pool_tracks: HashMap<i64, Vec<i64>> = HashMap::new();
     // track_id → (univ_id, univ_name, track_name)
     let mut track_meta: HashMap<i64, (i64, String, String)> = HashMap::new();
 
@@ -2075,6 +2086,7 @@ async fn run_auto_recommend(
         if !outcome.confirmed.is_empty() || held.is_some() {
             univ_pool.entry(track.univ_id).or_default().push(outcome.confirmed);
             univ_held.entry(track.univ_id).or_default().push(held);
+            univ_pool_tracks.entry(track.univ_id).or_default().push(track.track_id);
         }
     }
 
@@ -2084,15 +2096,30 @@ async fn run_auto_recommend(
     let mut univ_ids: Vec<i64> = univ_pool.keys().copied().collect();
     univ_ids.sort_unstable();
 
-    // univ_id → 2단계 뒤 대학 정원이 찼으면 Some((이번 실행 포함 확정 인원, 정원)), 무제한이거나
-    // 자리가 남았으면 None. 2단계를 거친 대학마다 하나씩 들어간다 — 1단계 동점 사유(4-1)가 쓴다.
-    let mut univ_full_after: HashMap<i64, Option<(i64, i64)>> = HashMap::new();
+    // 2단계를 마친 대학의 상태 — 1단계 모집단위 동점 사유(4-1)가 갈래를 고르는 근거다.
+    // 병합 함수가 돌려준 값(`UnivCutStop`)에서만 만든다 — pool/held 를 다시 훑어 "그 덩어리가
+    // 정지 원인인가"를 추측하지 않는다(2026-10-07 4차 수정 감사 B-1: 호출부 추측이 아직 선두가
+    // 아닌 덩어리 때문에 틀렸다).
+    enum UnivCutAfter {
+        /// 대학 정원 무제한 — 컷이 없다
+        Unlimited,
+        /// 2단계 뒤 남은 자리가 없다(이번 실행 확정분 포함, 이전 라운드로 이미 넘친 경우 포함)
+        Full { used_after: i64, tq: i64 },
+        /// 자리가 남았다. `held_stop_tracks` 는 보류 정지에 **선두로** 선 덩어리의 track_id
+        /// (`Held` 가 아니면 빈 목록). `univ_item` 은 이 대학의 대학 단위 수동 항목을 썼는가.
+        Open { held_stop_tracks: Vec<i64>, univ_item: bool },
+    }
+    let mut univ_cut_after: HashMap<i64, UnivCutAfter> = HashMap::new();
 
     for univ_id in univ_ids {
         let pool = univ_pool.remove(&univ_id).unwrap_or_default();
         let held = univ_held.remove(&univ_id).ok_or_else(|| (
             StatusCode::INTERNAL_SERVER_ERROR,
             "보류 덩어리 목록 누락".to_string(),
+        ))?;
+        let pool_track_ids = univ_pool_tracks.remove(&univ_id).ok_or_else(|| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "2단계 풀의 모집단위 목록 누락".to_string(),
         ))?;
         let (univ_name, total_quota) = univ_meta
             .get(&univ_id)
@@ -2102,7 +2129,7 @@ async fn run_auto_recommend(
         let Some(tq) = total_quota else {
             // 대학 정원 무제한 — 컷 미발동, 1단계 결과가 곧 최종
             final_picks.extend(merge_univ_cut(&pool, None).confirmed);
-            univ_full_after.insert(univ_id, None);
+            univ_cut_after.insert(univ_id, UnivCutAfter::Unlimited);
             continue;
         };
 
@@ -2129,10 +2156,30 @@ async fn run_auto_recommend(
         // 일부를 확정한 뒤 멈춘 경우 "확정 0명, 잔여 2석" 처럼 실제와 다르게 보인다.
         let used_after = univ_used + outcome.confirmed.len() as i64;
         let remaining_after = tq - used_after;
+        // 보류 정지에 선두로 선 덩어리의 모집단위 — 병합이 돌려준 트랙 인덱스를 track_id 로 옮긴다.
+        let held_stop_tracks: Vec<i64> = match &stop {
+            UnivCutStop::Held { tracks: at_stop, .. } => at_stop
+                .iter()
+                .map(|&ti| {
+                    pool_track_ids.get(ti).copied().ok_or_else(|| (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "보류 정지 트랙 인덱스가 2단계 풀 범위를 벗어났다".to_string(),
+                    ))
+                })
+                .collect::<Result<Vec<_>, ApiError>>()?,
+            _ => Vec::new(),
+        };
         // 찼는지는 남은 자리로만 판정한다. 멈춘 이유(`stop`)로 판정하면 선두들 가운데 보류
         // 덩어리의 대학 순위가 최상위가 되기 전에 다른 후보에서 깨끗이 끝난 경우(StopClean)를
         // 놓친다. 이전 라운드로 이미 넘친 경우(remaining_univ < 0)도 여기 걸린다.
-        univ_full_after.insert(univ_id, (remaining_after <= 0).then_some((used_after, tq)));
+        univ_cut_after.insert(
+            univ_id,
+            if remaining_after <= 0 {
+                UnivCutAfter::Full { used_after, tq }
+            } else {
+                UnivCutAfter::Open { held_stop_tracks, univ_item: outcome.tie.is_some() }
+            },
+        );
 
         if let Some(tie) = &outcome.tie {
             // 멈춘 이유마다 문장이 다르다. 판정은 병합 함수가 돌려준 값으로만 한다(held 를
@@ -2141,8 +2188,8 @@ async fn run_auto_recommend(
             // - Contention: 경합 대상이 선두에 한하지 않는다 — 일반 동점 문장의 괄호("같은 모집단위
             //   상위 지원자에게 막힌 동순위자는 세지 않음")가 거짓이 되므로 따로 쓴다. 사실만 적고
             //   처방은 적지 않는다.
-            let reason = match stop {
-                UnivCutStop::Held { seats } => format!(
+            let reason = match &stop {
+                UnivCutStop::Held { seats, .. } => format!(
                     "대학 전체 {}위 — 같은 대학 모집단위의 동점(잔여 {}석)이 정리되지 않아 \
                      그 순위부터 대학 정원 컷을 멈췄습니다. 모집단위 동점을 먼저 정리한 뒤 \
                      자동 추천을 다시 실행하세요 \
@@ -2183,33 +2230,63 @@ async fn run_auto_recommend(
         final_picks.extend(outcome.confirmed);
     }
 
-    // 4-1. 1단계 모집단위 동점 항목 — 2단계 결과를 보고 사유를 쓴다.
-    //      2단계에서 그 대학의 정원이 차면 "관리자 선택 필요"는 사실이 아니다 — 동점자 추천은
-    //      대학 정원으로 409 다. 그 문장을 믿고 자리를 만들려 다른 모집단위 추천을 취소하면,
-    //      취소된 후보가 동점자보다 대학 순위가 나쁠 때 5c 가 동점자 추천을 허용해 2단계 병합과
-    //      다른 결과로 간다(2026-10-07 재감사 C-1). 그 길로 안내하지 않도록 상태만 적는다.
-    //      처방(미선발·취소)도 적지 않는다 — 무엇을 할지는 관리자가 정한다. 역방향 가드가 없어
-    //      취소로 자리를 만드는 길이 있고(명세 §4.3) 그 길의 결과는 2단계 병합과 다를 수 있다
-    //      (`tests/auto_vs_manual.rs` 의 `track_tie_reason_says_university_full_when_worse_ranked_took_the_seats`
-    //      의 기록). 이 문장에 처방이 없다는 단언은 같은 파일에서 "대학 정원이 찼습니다"를 단언하는
-    //      `track_tie_*` 테스트들의 `assert_no_prescription` 이다.
-    //      대학 정원 무제한이거나 자리가 남았으면 예전 문장 그대로다.
+    // 4-1. 1단계 모집단위 동점 항목 — 2단계 결과를 보고 사유를 세 갈래로 쓴다(명세 §5.4 C-1).
+    //      (b) 2단계 뒤 그 대학의 정원이 찼으면 "관리자 선택 필요"는 사실이 아니다 — 동점자 추천은
+    //          대학 정원으로 409 다. 그 문장을 믿고 자리를 만들려 다른 모집단위 추천을 취소하면,
+    //          취소된 후보가 동점자보다 대학 순위가 나쁠 때 5c 가 동점자 추천을 허용해 2단계 병합과
+    //          다른 결과로 간다(2026-10-07 재감사 C-1). 그 길로 안내하지 않도록 상태만 적는다.
+    //      (a) 대학 정원이 무제한이거나, 2단계가 **바로 그 덩어리에서** 멈췄으면(보류 정지에 선두로
+    //          섰다 — `UnivCutStop::Held` 의 `tracks`) 그 동점의 학생은 지금 추천할 수 있다 —
+    //          "관리자 선택 필요".
+    //      (c) 그 밖 — 자리는 남았는데 2단계가 다른 곳(대학 동점·경합·다른 덩어리)에서 멈췄다. 이
+    //          덩어리의 학생은 지금 추천되지 않는다: 자기 모집단위에 앞 순위 미결정자가 남았으면 5b
+    //          가, 선두여도 대학 순위가 더 좋은 미결정 선두(빈자리 있는 모집단위)가 있으면 5c 가
+    //          막는다. "관리자 선택 필요"라고 적으면 거짓이다(2026-10-07 마감 감사) — 차례가 아직
+    //          오지 않았다는 상태와, 같은 대학의 대학 단위 항목이 먼저라는 것만 적는다. 그 항목은
+    //          이 갈래에서 반드시 함께 나온다(Tie·Contention 은 `tie` 가 늘 Some, Held 는 자리가
+    //          남았으면 Some) — 아니면 아래서 실패한다(Fail-Fast).
+    //      어느 갈래든 처방(미선발·취소)은 적지 않는다 — 무엇을 할지는 관리자가 정한다. 역방향
+    //      가드가 없어 취소로 자리를 만드는 길이 있고(명세 §4.3) 그 길의 결과는 2단계 병합과 다를
+    //      수 있다(`tests/auto_vs_manual.rs` 의
+    //      `track_tie_reason_says_university_full_when_worse_ranked_took_the_seats` 의 기록).
+    //      처방이 없다는 단언은 같은 파일에서 각 갈래의 문장을 단언하는 테스트들의
+    //      `assert_no_prescription` 이다(어느 테스트가 어느 갈래인지는 명세 §5.4 C-1 문단).
+    //      갈래 판정은 병합 함수가 돌려준 값(`UnivCutAfter`)으로만 한다 — pool/held 를 다시 훑어
+    //      추측하지 않는다(4차 수정 감사 B-1 교훈).
     for tt in track_ties {
         // 동점이 난 모집단위는 보류 덩어리로 2단계 풀에 들어가므로 그 대학은 반드시 2단계를 거친다
-        let full = univ_full_after.get(&tt.univ_id).ok_or_else(|| (
+        let after = univ_cut_after.get(&tt.univ_id).ok_or_else(|| (
             StatusCode::INTERNAL_SERVER_ERROR,
             "1단계 동점 모집단위의 대학 컷 결과 누락".to_string(),
         ))?;
-        let reason = match full {
-            Some((used_after, tq)) => format!(
+        let reason = match after {
+            UnivCutAfter::Full { used_after, tq } => format!(
                 "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합. 대학 정원이 찼습니다\
                  (이번 실행 포함 확정 {}명 / 정원 {}명) — 현재 상태에서는 이 동점에서 추천할 수 없습니다",
                 tt.rank, tt.free, tt.contenders, used_after, tq,
             ),
-            None => format!(
+            UnivCutAfter::Unlimited => format!(
                 "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합 (관리자 선택 필요)",
                 tt.rank, tt.free, tt.contenders,
             ),
+            UnivCutAfter::Open { held_stop_tracks, .. } if held_stop_tracks.contains(&tt.track_id) => format!(
+                "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합 (관리자 선택 필요)",
+                tt.rank, tt.free, tt.contenders,
+            ),
+            UnivCutAfter::Open { univ_item, .. } => {
+                if !*univ_item {
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "대학 자리가 남았고 이 동점에서 멈추지 않았는데 대학 단위 수동 항목이 없다".to_string(),
+                    ));
+                }
+                format!(
+                    "모집단위 {}위 동점 — 잔여 {}석에 {}명 경합. 대학 전체 순위에서 아직 이 동점의 \
+                     차례가 오지 않았습니다 — 같은 대학의 대학 전체 항목을 먼저 정리한 뒤 자동 추천을 \
+                     다시 실행하세요",
+                    tt.rank, tt.free, tt.contenders,
+                )
+            }
         };
         manual_items.push(AutoRecommendManualItem {
             track_id: Some(tt.track_id),

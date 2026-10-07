@@ -73,6 +73,22 @@
 //!   `merge_held_contenders_exclude_candidates_that_can_never_enter`·
 //!   `merge_held_block_behind_full_chain_counts_for_demand_not_contenders` 가 실패한다. 둘 다
 //!   확정·정지 결정은 바꾸지 않고 사유 문장만 바꾸는 변이라 DFS 불변식은 잡지 못한다(예상대로).
+//! - **확인함**(2026-10-07 마감 감사 수정 — 1단계 동점 사유 세 갈래): (c) 판정을 (a) 로 되돌리면
+//!   (`run_auto_recommend` 4-1 의 `Open` 갈래에서 `held_stop_tracks` 조건을 빼 자리가 남으면 전부
+//!   "관리자 선택 필요") `track_tie_behind_university_tie_says_its_turn_has_not_come`·
+//!   `track_tie_behind_contention_says_its_turn_has_not_come`·
+//!   `held_stop_names_only_the_leading_block_in_track_tie_reasons`·`track_tie_reason_does_not_prescribe_exclusion`·
+//!   `contention_s3_with_held_blocks_on_both_chains` 와 DFS 불변식 (f)(생성 구성에서 "관리자 선택
+//!   필요"인데 덩어리의 누구도 지금 추천되지 않는다)가 실패한다. 정지 덩어리 판정을 "같은 순위면
+//!   전부"로 넓히면(`merge_univ_cut_held` 에서 선두가 아닌 덩어리도 `Held::tracks` 에 넣으면)
+//!   `held_stop_names_only_the_leading_block_in_track_tie_reasons` 와 `handler_auto_recommend.rs` 의
+//!   `merge_held_tracks_name_only_leading_blocks` 가 실패한다 — DFS 불변식은 이 변이를 잡지 못했다.
+//!   그 구성("같은 대학 순위의 덩어리 둘 가운데 하나만 선두")을 편향 생성기(`gen_cfg_biased`)는
+//!   **구조상 만들 수 없다**: 선두가 아닌 덩어리는 모집단위의 재학생 80 선두 뒤에 선 졸업생(85/90)
+//!   둘이어야 하고, 선두인 덩어리는 같은 점수의 둘이어야 하는데(다른 모집단위의 재학생 80 선두는 그
+//!   점수가 아니라 못 낀다) 덧붙이는 후보가 최대 3 명이라 4 명이 안 된다. 일반 생성기(`gen_cfg`)는
+//!   만들 수 있지만 드물고, 이 표본에서는 나오지 않았다(변이가 통과했다). 시나리오와 단위 테스트가
+//!   방어선이다.
 //! 아래는 합친 판 작성 시점의 기록이다(B-merge 전 코드에서 확인함).
 //! - F-1 수정을 되돌리면(`merge_univ_cut_held` 의 `held_head` 가 항상 None) 보류 덩어리가 대학
 //!   컷을 막아야 하는 `held_*` 시나리오들, `two_held_blocks_stop_at_the_better_one`,
@@ -92,12 +108,12 @@
 
 mod common;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::pin::Pin;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 use principal_candidate_manager::{
@@ -105,8 +121,8 @@ use principal_candidate_manager::{
         applications::{clear_application_exclusion, exclude_application, ExcludeApplicationBody},
         rounds::{close_round, finalize_round},
         scoring::{
-            auto_recommend_results, auto_recommend_results_univ, calculate_scores, recommend_result,
-            unrecommend_result, AutoRecommendManualItem,
+            auto_recommend_results, auto_recommend_results_univ, calculate_scores, get_results,
+            recommend_result, unrecommend_result, AutoRecommendManualItem, ResultQuery,
         },
     },
     state::AppState,
@@ -397,9 +413,12 @@ async fn first_student_in_both_tracks(pool: &SqlitePool, b: &Built) {
     let _closed = close_round(st(pool), Path(rid)).await.unwrap();
 }
 
-/// 1단계 모집단위 동점 사유의 두 문장(2026-10-07 재감사 C-1) — 2단계 뒤 대학 정원이 찼을 때와 아닐 때.
+/// 1단계 모집단위 동점 사유의 세 갈래(2026-10-07 재감사 C-1·마감 감사) — (b) 2단계 뒤 대학 정원이
+/// 찼다, (a) 지금 고를 수 있다(무제한이거나 2단계가 바로 그 덩어리에서 멈춤), (c) 자리는 남았는데
+/// 2단계가 다른 곳에서 멈춰 아직 차례가 아니다.
 const REASON_UNIV_FULL: &str = "대학 정원이 찼습니다";
 const REASON_CHOICE: &str = "관리자 선택 필요";
+const REASON_NOT_YET: &str = "아직 이 동점의 차례가 오지 않았습니다";
 /// 대학 단위 사유 세 갈래를 가르는 조각 — 보류 정지, 경합 집합 정지(B-merge), 일반 동점.
 const REASON_HELD_STOP: &str = "정리되지 않아";
 const REASON_CONTENTION: &str = "누구를 먼저 추천하느냐";
@@ -652,9 +671,11 @@ async fn held_stop_with_seats_left_explains_itself() {
         .map(|m| m.reason.clone()).expect("대학 단위 사유가 있어야 한다");
     assert!(univ_reason.contains("정리되지 않아"), "멈춘 이유를 말해야 한다: {univ_reason}");
     assert!(!univ_reason.contains("명 경합"), "남은 자리보다 적은 경합 인원을 적으면 모순: {univ_reason}");
-    // 대학 자리가 남았으므로 1단계 X 동점 사유는 예전 문장 그대로다(C-1 변경 대상 아님)
+    // 2단계가 바로 X 덩어리에서 멈췄고 대학 자리가 남았다 — X 동점은 지금 고를 수 있으므로 (a)
+    // "관리자 선택 필요" 그대로다. 아래 X 동점 중 하나를 고르는 수동 호출은 Y1 추천 **뒤** 상태의
+    // 기록이다 — 자동 확정 상태에서 지금 고를 수 있다는 판정은 DFS 불변식 (f) 가 한다.
     let r = track_reason(&resp.manual, b.track_ids[0]);
-    assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+    assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL) && !r.contains(REASON_NOT_YET), "{r}");
 
     rec_manual(&pool, &b, 2).await.expect("Y1 은 대학 1위 동순위 — 관리자가 고를 수 있다");
     assert!(rec_manual(&pool, &b, 3).await.is_err(), "Z1 은 X 동점이 미결정인 동안 막힌다");
@@ -983,9 +1004,11 @@ async fn track_tie_reason_says_university_full_when_worse_ranked_took_the_seats(
 /// X1·Y1 은 대학 3위 동순위 선두. 옛 동작은 X1·Y1 을 통째로 확정하고 X 동점 항목에 "대학 정원이
 /// 찼습니다"를 적었다 — 관리자가 X1 을 먼저 고르면 X2(1위)가 Y1 을 앞서므로 그 확정은 순서를
 /// 자동이 대신 정한 것이었다. B-merge(소유자 결정, 명세 §5.4) 뒤에는 X 연쇄에 덩어리(1위 ≤ 3위,
-/// 1석)가 붙어 수요 3 > 잔여 2 로 **멈춘다**: 확정 없음, 대학 단위 항목은 경합 집합 문장, X 동점
-/// 항목은 대학 정원이 안 찼으니 "관리자 선택 필요". 모든 수동 최대 결과({X1,X2}·{X1,X3}·{X1,Y1})에
-/// 공통인 X1 도 확정하지 않는다(원자 원칙 — 소유자 결정).
+/// 1석)가 붙어 수요 3 > 잔여 2 로 **멈춘다**: 확정 없음, 대학 단위 항목은 경합 집합 문장. X 동점
+/// 항목은 대학 자리가 남았지만 2단계가 그 덩어리가 아니라 경합 집합에서 멈췄으므로 (c) "아직
+/// 차례가 오지 않았습니다" 다 — X2·X3 는 X1 이 미결정인 동안 5b 가 막아 "관리자 선택 필요"는
+/// 거짓이다(2026-10-07 마감 감사가 이 경로를 찾았다; 그 전까지 이 테스트가 옛 문장을 단언했다).
+/// 모든 수동 최대 결과({X1,X2}·{X1,X3}·{X1,Y1})에 공통인 X1 도 확정하지 않는다(원자 원칙 — 소유자 결정).
 /// 사유에 처방(미선발·취소)이 없다는 단언은 그대로 방어선이다. 끝의 수동 진행은 **기록이지
 /// 방어선이 아니다**: X1 → X2 는 통과하고(Y1 보다 대학 순위가 좋다), X1 → Y1 은 5c 가 막는다
 /// (X2 가 X 의 선두가 되어 Y1 보다 좋다). 관리자가 X1 을 고른 뒤 자동을 다시 돌리면 X 덩어리가
@@ -1007,11 +1030,14 @@ async fn track_tie_reason_does_not_prescribe_exclusion() {
     assert!(u.contains("잔여 2석에 4명이 경합"), "경합 인원은 X1 + 덩어리 2명 + Y1: {u}");
     assert!(!u.contains(REASON_HELD_STOP) && !u.contains(REASON_PLAIN_TIE), "{u}");
     let r = track_reason(&resp.manual, b.track_ids[0]);
-    assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "대학 자리가 남았다: {r}");
+    assert!(r.contains(REASON_NOT_YET) && !r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL),
+        "자리는 남았지만 경합 집합에서 멈춰 X 동점은 아직 차례가 아니다: {r}");
     // 경합 집합 문장과 모집단위 동점 문장 둘 다 처방이 없다. "대학 정원이 찼습니다" 문장의
     // 같은 단언은 그 문장을 단언하는 `track_tie_*` 테스트들에 있다.
     assert_no_prescription(&u);
     assert_no_prescription(&r);
+    // (c) 의 근거 — X 동점의 학생은 지금 추천되지 않는다(X1 이 미결정인 동안 5b)
+    assert!(rec_manual(&pool, &b, 1).await.is_err() && rec_manual(&pool, &b, 2).await.is_err());
 
     // 기록: X1 → X2 는 통과하고 X1 → Y1 은 막힌다
     let pool2 = common::create_test_pool().await;
@@ -1051,8 +1077,8 @@ async fn track_tie_reason_says_university_full_after_clean_university_cut() {
     assert_no_prescription(&r);
 }
 
-/// 대학 정원 무제한이면 1단계 동점 사유는 예전 문장("관리자 선택 필요") 그대로다. 자리가 남는
-/// 유한 정원 쪽은 `held_stop_with_seats_left_explains_itself` 가 같은 단언을 한다.
+/// 대학 정원 무제한이면 1단계 동점 사유는 예전 문장("관리자 선택 필요") 그대로다. 자리가 남고
+/// 2단계가 그 덩어리에서 멈춘 쪽은 `held_stop_with_seats_left_explains_itself` 가 같은 단언을 한다.
 #[tokio::test]
 async fn track_tie_reason_keeps_choice_wording_without_university_quota() {
     let cfg = Cfg {
@@ -1065,7 +1091,113 @@ async fn track_tie_reason_keeps_choice_wording_without_university_quota() {
     let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
     assert!(recommended(&pool, b.rid).await.is_empty());
     let r = track_reason(&resp.manual, b.track_ids[0]);
-    assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+    assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL) && !r.contains(REASON_NOT_YET), "{r}");
+    assert_no_prescription(&r);
+    // 무제한이면 2단계 컷이 없어 1단계 확정분이 다 추천되고 5c 도 검사하지 않는다 — 동점자는 지금 고를 수 있다
+    rec_manual(&pool, &b, 0).await.expect("무제한 대학의 모집단위 동점 — 관리자가 고를 수 있다");
+}
+
+/// 마감 감사(2026-10-07)가 찾은 1단계 동점 사유의 부정확 경로 — 갈래 (c). 대학 정원 1. X(2석): X1 95,
+/// X2·X3 85 동점(1석에 2명 → 보류, 대학 3위). Y(1석): Y1 95. 2단계 선두 X1·Y1 이 대학 1위 동순위 —
+/// 일반 동점(`Tie`)으로 멈추고 확정 0, 자리 1 남음. 예전 코드는 자리가 남았다고 X 동점에 "관리자
+/// 선택 필요"를 적었지만 X2·X3 는 어떤 순서로도 지금 들어오지 못한다(수동 최대 결과는 {X1}·{Y1}) —
+/// X1 이 미결정인 동안 5b 가 막는다. 그래서 차례가 오지 않았다는 상태와 대학 단위 항목(X1·Y1 동점)이
+/// 먼저라는 것만 적는다. 관리자가 X1 을 고르고 다시 돌리면 대학 정원이 차 (b) 문장으로 바뀐다.
+/// 판별력의 소재: (c) 판정을 (a)로 되돌리면(자리가 남으면 전부 "관리자 선택 필요") 사유 단언이 깨진다.
+#[tokio::test]
+async fn track_tie_behind_university_tie_says_its_turn_has_not_come() {
+    let cfg = Cfg {
+        total: Some(1), univ_prio: false,
+        tracks: vec![t(Some(2), false), t(Some(1), false)],
+        cands: vec![c(0, 95, true), c(0, 85, true), c(0, 85, true), c(1, 95, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new(), "X1·Y1 1위 동순위 — 확정 없음");
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_PLAIN_TIE) && u.contains("대학 전체 1위"), "{u}");
+    let r = track_reason(&resp.manual, b.track_ids[0]);
+    assert!(r.contains(REASON_NOT_YET), "{r}");
+    assert!(!r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+    assert!(!r.contains("추천할 수 없습니다"), "단정하지 않는다(관리자가 앞 사람을 미선발하면 달라진다): {r}");
+    assert!(r.contains("대학 전체 항목을 먼저"), "대학 단위 항목이 먼저라고 말한다: {r}");
+    assert_no_prescription(&r);
+    // 동점의 학생은 지금 추천되지 않는다 — X1 이 미결정인 동안 5b 가 막는다
+    for i in [1, 2] {
+        let e = rec_manual(&pool, &b, i).await.expect_err("X 동점자가 X1 을 건너뛰고 추천됐다");
+        assert!(e.contains("409") && e.contains("같은 모집단위"), "{e}");
+    }
+    // 대학 단위 항목을 정리(X1 추천)하고 다시 돌리면 대학 정원이 차 (b) 문장이다 — 대학 단위 항목은 없다
+    rec_manual(&pool, &b, 0).await.expect("X1 — 대학 1위 동순위, 관리자가 고를 수 있다");
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), vec![0]);
+    assert!(resp.manual.iter().all(|m| m.track_id.is_some()), "대학 정원이 찼으니 대학 단위 항목은 없다");
+    let r = track_reason(&resp.manual, b.track_ids[0]);
+    assert!(r.contains(REASON_UNIV_FULL) && !r.contains(REASON_NOT_YET) && !r.contains(REASON_CHOICE), "{r}");
+    assert_no_prescription(&r);
+}
+
+/// 같은 감사의 둘째 반례 — 2단계가 경합 집합(`Contention`)에서 멈춘 경우. 대학 정원 2, 대학 재학생
+/// 우선 0. X(3석, 재학생 우선): X1 재학 80(모집단위 1위, 대학 4위), X2 졸업 95(모집단위 2위, 대학
+/// 1위), X3·X4 졸업 90(모집단위 3위 동점, 대학 2위, 1석에 2명 → 보류). Y(1석): Y1 재학 80(4위). 선두
+/// X1·Y1 이 4위 동순위, X 연쇄에 X2 와 덩어리가 붙어 수요 4 > 잔여 2 → 경합 정지, 확정 0. X 동점
+/// 사유는 (c) — X3·X4 는 X1·X2 가 미결정인 동안 5b 가 막는다.
+#[tokio::test]
+async fn track_tie_behind_contention_says_its_turn_has_not_come() {
+    let cfg = Cfg {
+        total: Some(2), univ_prio: false,
+        tracks: vec![t(Some(3), true), t(Some(1), false)],
+        cands: vec![c(0, 80, true), c(0, 95, false), c(0, 90, false), c(0, 90, false), c(1, 80, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new(), "경합 집합 — 확정 없음");
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_CONTENTION) && u.contains("대학 전체 4위"), "{u}");
+    let r = track_reason(&resp.manual, b.track_ids[0]);
+    assert!(r.contains(REASON_NOT_YET) && r.contains("모집단위 3위 동점"), "{r}");
+    assert!(!r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+    assert_no_prescription(&r);
+    for i in [2, 3] {
+        let e = rec_manual(&pool, &b, i).await.expect_err("X 동점자가 X1·X2 를 건너뛰고 추천됐다");
+        assert!(e.contains("409") && e.contains("같은 모집단위"), "{e}");
+    }
+}
+
+/// 같은 대학 순위에 선 덩어리가 둘인데 하나만 선두인 경우 — 선두인 덩어리만 (a), 아닌 쪽은 (c).
+/// 대학 정원 2, 대학 재학생 우선 0. X(2석, 재학생 우선): X1 재학 70(대학 5위), X2·X3 졸업 90(1위
+/// 동점, 1석에 2명 → 보류, X1 뒤). Y(1석): Y1·Y2 재학 90(1위 동점 → 보류, 바로 선두). 2단계는 Y
+/// 덩어리에서 보류 정지(잔여 2, 덩어리 잔여석은 Y 몫 1 만). Y 동점은 지금 고를 수 있고(Y1 추천 통과),
+/// X 동점은 X1 이 미결정인 동안 5b 가 막는다.
+/// 판별력의 소재: 정지 덩어리 판정을 "같은 순위면 전부"로 넓히면(병합의 선두 조건을 빼면) X 동점에도
+/// "관리자 선택 필요"가 나오고 대학 단위 문장의 잔여석이 2 가 된다.
+#[tokio::test]
+async fn held_stop_names_only_the_leading_block_in_track_tie_reasons() {
+    let cfg = Cfg {
+        total: Some(2), univ_prio: false,
+        tracks: vec![t(Some(2), true), t(Some(1), false)],
+        cands: vec![c(0, 70, true), c(0, 90, false), c(0, 90, false), c(1, 90, true), c(1, 90, true)],
+        univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_HELD_STOP) && u.contains("동점(잔여 1석)"), "선두인 Y 덩어리 몫만: {u}");
+    let ry = track_reason(&resp.manual, b.track_ids[1]);
+    assert!(ry.contains(REASON_CHOICE) && !ry.contains(REASON_NOT_YET), "선두 덩어리는 지금 고를 수 있다: {ry}");
+    let rx = track_reason(&resp.manual, b.track_ids[0]);
+    assert!(rx.contains(REASON_NOT_YET) && !rx.contains(REASON_CHOICE), "선두가 아닌 덩어리는 차례가 아니다: {rx}");
+    assert_no_prescription(&ry);
+    assert_no_prescription(&rx);
+    let e = rec_manual(&pool, &b, 1).await.expect_err("X2 가 X1 을 건너뛰고 추천됐다");
+    assert!(e.contains("409") && e.contains("같은 모집단위"), "{e}");
+    rec_manual(&pool, &b, 3).await.expect("Y1 — 선두 덩어리, 관리자가 고를 수 있다");
 }
 
 // ── 경합 집합 정지 (2026-10-07 소유자 결정 B-merge, 명세 §5.4) ───────────────
@@ -1164,7 +1296,8 @@ async fn contention_s2_old_auto_result_was_unreachable_manually() {
 
 /// S3. S2 에서 졸업생이 모집단위마다 2명 동점(1단계 보류 덩어리). 대학 정원 2. 선두 X1·Y1(대학
 /// 5위 동순위), 양쪽 연쇄에 덩어리(1위, 1석에 2명)가 붙어 수요 4 > 2, 경합 6. 멈추고 대학 단위
-/// 항목 + 모집단위 동점 항목 둘 — 대학 자리가 남았으니 모집단위 사유는 "관리자 선택 필요".
+/// 항목 + 모집단위 동점 항목 둘 — 대학 자리는 남았지만 두 덩어리 다 선두가 아니어서(X1·Y1 이 앞)
+/// 모집단위 사유는 (c) "아직 차례가 오지 않았습니다" 다(2026-10-07 마감 감사 전에는 "관리자 선택 필요").
 #[tokio::test]
 async fn contention_s3_with_held_blocks_on_both_chains() {
     let cfg = Cfg {
@@ -1182,7 +1315,8 @@ async fn contention_s3_with_held_blocks_on_both_chains() {
     assert!(u.contains(REASON_CONTENTION) && u.contains("대학 전체 5위") && u.contains("잔여 2석에 6명이 경합"), "{u}");
     for ti in [0, 1] {
         let r = track_reason(&resp.manual, b.track_ids[ti]);
-        assert!(r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+        assert!(r.contains(REASON_NOT_YET) && !r.contains(REASON_CHOICE) && !r.contains(REASON_UNIV_FULL), "{r}");
+        assert_no_prescription(&r);
     }
 }
 
@@ -1563,6 +1697,10 @@ async fn auto_and_manual_agree_after_manual_interleaving() {
 struct Reach {
     visited: BTreeSet<Vec<usize>>,
     maximal: BTreeSet<Vec<usize>>,
+    /// 상태(추천 집합, 오름차순) → 그 상태에서 수동 추천이 **통과하는** 후보. 방문한 상태마다
+    /// 하나씩 있다 — 1단계 동점 사유의 갈래((a) "지금 고를 수 있다" / (b)(c) "지금은 아니다")를
+    /// 자동 확정 상태에서 대조하는 데 쓴다(아래 (f)).
+    succ: BTreeMap<Vec<usize>, BTreeSet<usize>>,
 }
 
 /// 한 풀에서 추천 → 재귀 → 취소로 되돌리며 훑는다. 같은 집합은 다시 들어가지 않는다 — 어떤
@@ -1575,7 +1713,7 @@ fn dfs<'a>(
     out: &'a mut Reach,
 ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
     Box::pin(async move {
-        let mut any_ok = false;
+        let mut ok_here: BTreeSet<usize> = BTreeSet::new();
         for i in 0..excluded.len() {
             if excluded[i] || state.contains(&i) {
                 continue;
@@ -1586,7 +1724,7 @@ fn dfs<'a>(
                 Err(e) if e.starts_with("409") => continue,
                 Err(e) => panic!("DFS: 후보 {i} 추천이 가드 거부가 아닌 오류로 끝났다: {e}"),
             }
-            any_ok = true;
+            ok_here.insert(i);
             state.push(i);
             let mut key = state.clone();
             key.sort_unstable();
@@ -1596,12 +1734,41 @@ fn dfs<'a>(
             state.pop();
             unrec(pool, b, i).await.expect("되돌리기");
         }
-        if !any_ok {
-            let mut key = state.clone();
-            key.sort_unstable();
-            out.maximal.insert(key);
+        let mut key = state.clone();
+        key.sort_unstable();
+        if ok_here.is_empty() {
+            out.maximal.insert(key.clone());
         }
+        out.succ.insert(key, ok_here);
     })
+}
+
+/// 각 후보의 모집단위 순위 — 화면과 같은 값(`get_results` 의 창 함수). 자동 추천 1단계가 쓰는 창
+/// 함수와 정의가 같고 분할(라운드 포함 여부)만 다른데 라운드가 하나라 값이 같다.
+async fn track_ranks(pool: &SqlitePool, b: &Built) -> Vec<Option<i64>> {
+    let rows = get_results(st(pool), Path(b.rid), Query(ResultQuery { track_id: None }))
+        .await
+        .unwrap()
+        .0;
+    b.keys
+        .iter()
+        .map(|&(sid, tid)| {
+            rows.iter()
+                .find(|r| r.student_id == sid && r.track_id == tid)
+                .unwrap_or_else(|| panic!("결과 행이 없다: {sid}/{tid}"))
+                .track_rank
+        })
+        .collect()
+}
+
+/// 1단계 동점 사유 "모집단위 {k}위 동점 — …" 에서 k 를 읽는다. 사유 문장이 덩어리를 가리키는
+/// 유일한 통로다(응답에 구조화된 순위 필드가 없다).
+fn tie_rank_of(reason: &str) -> i64 {
+    let rest = reason
+        .strip_prefix("모집단위 ")
+        .unwrap_or_else(|| panic!("모집단위 동점 사유가 아니다: {reason}"));
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().unwrap_or_else(|_| panic!("모집단위 순위를 읽을 수 없다: {reason}"))
 }
 
 /// 아무것도 추천되지 않은 상태에서 출발한다. 호출 뒤 풀은 출발 상태로 돌아와 있다.
@@ -1660,14 +1827,21 @@ fn gen_cfg_biased(rng: &mut Rng) -> Cfg {
 /// 대신 정한 것이다), (e) 자동이 판단 항목 없이 끝났으면 수동 최대 결과는 하나뿐이고 자동과
 /// 같아야 한다. 2 의 재현 루프와 달리 순서를 찾지 못해 실패하는 일이 없다.
 ///
+/// (f) 1단계 모집단위 동점 사유의 갈래가 수동 가드와 맞는가 — 자동 확정 상태에서 그 덩어리
+/// (사유에 적힌 모집단위 순위의 미결정 후보)의 학생 가운데 누군가가 지금 바로 수동 추천을 통과하면
+/// (a) "관리자 선택 필요" 여야 하고, 아무도 통과하지 않으면 (b) "대학 정원이 찼습니다" 또는
+/// (c) "차례가 오지 않았습니다" 여야 한다. DFS 가 상태마다 통과 후보를 적어 둔 것(`Reach::succ`)을
+/// 자동 확정 상태에서 읽는다 — (a′) 가 그 상태의 방문을 보장한다.
+///
 /// 케이스 수는 바이너리 전체가 수십 초 안에 들도록 측정해 정했다(상태 수는 정원에 묶여 작다).
 /// 커버 카운터: 경합 집합 사유가 나온 구성, 수동 최대 결과가 둘 이상인 구성, 자동이 판단 없이
-/// 끝난 구성 — 셋 다 0 이면 그 갈래는 검사 밖이다.
+/// 끝난 구성, 그리고 1단계 동점 사유 세 갈래 각각 — 0 이면 그 갈래는 검사 밖이다.
 #[tokio::test]
 async fn auto_matches_manual_dfs_reachability() {
     const CASES_PLAIN: u64 = 150;
     const CASES_BIASED: u64 = 150;
     let (mut n_contention, mut n_multi_max, mut n_manual_free) = (0u32, 0u32, 0u32);
+    let (mut n_tie_choice, mut n_tie_not_yet, mut n_tie_full) = (0u32, 0u32, 0u32);
     let plain = (1..=CASES_PLAIN).map(|s| (false, s));
     let biased = (1..=CASES_BIASED).map(|s| (true, s));
     for (bias, seed) in plain.chain(biased) {
@@ -1714,9 +1888,50 @@ async fn auto_matches_manual_dfs_reachability() {
                 reach.maximal
             );
         }
+        // (f) 1단계 모집단위 동점 사유의 갈래 — 자동 확정 상태에서 그 덩어리의 누군가가 지금 추천
+        //     통과하는가와 맞아야 한다. 덩어리 = 그 모집단위의 미결정(미추천·미선발 아님) 후보 가운데
+        //     사유에 적힌 모집단위 순위인 학생. 통과 여부는 DFS 가 그 상태에서 적어 둔 값이다.
+        let succ = reach
+            .succ
+            .get(&auto_idx)
+            .unwrap_or_else(|| panic!("{tag}: 자동 확정 상태 {auto_idx:?} 를 DFS 가 탐색하지 않았다"));
+        let ranks = track_ranks(&pool_a, &ba).await;
+        for m in resp.manual.iter().filter(|m| m.track_id.is_some() && m.reason.starts_with("모집단위 ")) {
+            let tid = m.track_id.expect("필터로 보장");
+            let k = tie_rank_of(&m.reason);
+            let block: Vec<usize> = (0..cfg.cands.len())
+                .filter(|&i| ba.keys[i].1 == tid && !cfg.cands[i].excluded && !auto_idx.contains(&i) && ranks[i] == Some(k))
+                .collect();
+            assert!(!block.is_empty(), "{tag}: 동점 사유의 덩어리를 찾지 못했다: {}\n{cfg:?}", m.reason);
+            let kinds = [REASON_CHOICE, REASON_NOT_YET, REASON_UNIV_FULL]
+                .iter()
+                .filter(|f| m.reason.contains(*f))
+                .count();
+            assert_eq!(kinds, 1, "{tag}: 사유의 갈래가 하나가 아니다: {}", m.reason);
+            let can_now: Vec<usize> = block.iter().copied().filter(|i| succ.contains(i)).collect();
+            if m.reason.contains(REASON_CHOICE) {
+                n_tie_choice += 1;
+                assert!(
+                    !can_now.is_empty(),
+                    "{tag}: \"관리자 선택 필요\"인데 덩어리 {block:?} 의 누구도 지금 추천되지 않는다 — {}\n자동 {auto_idx:?}\n{cfg:?}",
+                    m.reason
+                );
+            } else {
+                if m.reason.contains(REASON_NOT_YET) { n_tie_not_yet += 1 } else { n_tie_full += 1 }
+                assert!(
+                    can_now.is_empty(),
+                    "{tag}: 덩어리 {block:?} 의 {can_now:?} 는 지금 추천되는데 사유는 — {}\n자동 {auto_idx:?}\n{cfg:?}",
+                    m.reason
+                );
+            }
+        }
     }
     assert!(
         n_contention > 0 && n_multi_max > 0 && n_manual_free > 0,
         "생성 구성이 갈래를 덮지 못한다: 경합 집합 사유 {n_contention}, 최대 결과 둘 이상 {n_multi_max}, 판단 없이 끝남 {n_manual_free}"
+    );
+    assert!(
+        n_tie_choice > 0 && n_tie_not_yet > 0 && n_tie_full > 0,
+        "생성 구성이 1단계 동점 사유 갈래를 덮지 못한다: 관리자 선택 필요 {n_tie_choice}, 차례 아님 {n_tie_not_yet}, 대학 정원 참 {n_tie_full}"
     );
 }

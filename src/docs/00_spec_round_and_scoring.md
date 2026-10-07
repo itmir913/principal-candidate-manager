@@ -643,15 +643,27 @@ X2(1위)가 선두로 서서 자동이 확정하고 Y1 은 깨끗한 끝이다. 
 2단계 뒤 남은 자리가 없으면(이번 실행 확정분 포함, 이전 라운드로 이미 넘친 경우도 포함) "…관리자
 선택 필요" 대신 "대학 정원이 찼습니다(이번 실행 포함 확정 N명 / 정원 M명) — 현재 상태에서는 이
 동점에서 추천할 수 없습니다"로 **상태만** 적는다. 동점자 추천은 이때 409(대학 정원)다. 대학
-정원이 무제한이거나 자리가 남았으면(일반 동점, 보류 덩어리에서 멈춤) 예전 문장 그대로다.
+정원이 무제한이거나, 자리가 남았고 2단계가 **바로 그 덩어리에서** 멈췄으면(보류 정지에 선두로
+섰다 — `UnivCutStop::Held` 의 `tracks`) 예전 문장("관리자 선택 필요") 그대로다 — 그 동점의 학생은
+지금 고를 수 있다. 자리는 남았는데 2단계가 **다른 곳**에서 멈췄으면(대학 동점·경합 집합·다른
+덩어리의 보류 정지, 2026-10-07 마감 감사) 그 덩어리의 학생은 지금 추천되지 않는다 — 자기
+모집단위에 앞 순위 미결정자가 남았으면 4 가, 선두여도 대학 순위가 더 좋은 미결정 선두(빈자리
+있는 모집단위)가 있으면 4b 가 막는다 — 그래서 "관리자 선택 필요" 대신 "대학 전체 순위에서 아직
+이 동점의 차례가 오지 않았습니다 — 같은 대학의 대학 전체 항목을 먼저 정리한 뒤 자동 추천을 다시
+실행하세요"로 적는다(그 대학 단위 항목은 이때 반드시 함께 나온다). 어느 갈래인지는 병합 함수가
+돌려준 값으로만 정한다 — 호출부가 풀·덩어리를 다시 훑어 추측하지 않는다(4차 수정 감사 B-1).
 찼는지는 남은 자리로만 판정한다 — 선두들 가운데 보류 덩어리의 대학 순위가 최상위가 되기
 전에 다른 후보에서 깨끗이 끝난 경우도 찬 것이다.
 
 - 처방(미선발하라, 취소하라)은 적지 않는다 — 사유는 상태만 말하고 무엇을 할지는 관리자가
   정한다. 역방향 가드가 없어(§4.3) 취소로 자리를 만드는 길이 있고 그 길의 결과는 2단계 병합과
-  다를 수 있다(아래 둘째 항목). 이 문장에 처방이 없다는 단언은 이 문장을 단언하는 `track_tie_*`
-  테스트들의 `assert_no_prescription` 이 지키고, 경합 집합 문장·"관리자 선택 필요" 문장의 같은
-  단언은 `track_tie_reason_does_not_prescribe_exclusion` 에 있다. 이 문구를 처음 정할 때 근거로
+  다를 수 있다(아래 둘째 항목). 처방이 없다는 단언(`assert_no_prescription`)은 갈래별로 —
+  (b) "대학 정원이 찼습니다"는 그 문장을 단언하는 `track_tie_*` 테스트들, (a) "관리자 선택
+  필요"는 `held_stop_names_only_the_leading_block_in_track_tie_reasons`·
+  `track_tie_reason_keeps_choice_wording_without_university_quota`, (c) "차례가 오지 않았습니다"는
+  `track_tie_behind_*`·`track_tie_reason_does_not_prescribe_exclusion`·
+  `contention_s3_with_held_blocks_on_both_chains`, 경합 집합 문장은
+  `track_tie_reason_does_not_prescribe_exclusion` 에 있다. 이 문구를 처음 정할 때 근거로
   든 구성(대학 동순위 X1·Y1 을 자동이 함께 확정하고 대학 정원이 찬 뒤, 처음부터 수동으로
   X1 → X2 가 통과)은 이제 자동이 확정하지 않고 경합 집합에서 멈추므로(위 문단) 그 구성에서는
   이 문장이 나오지 않는다.
@@ -664,7 +676,13 @@ X2(1위)가 선두로 서서 자동이 확정하고 Y1 은 깨끗한 끝이다. 
   보류한 결정이다. 예전 문장("관리자 선택 필요")이 이 길로 안내했기 때문에 문구를 바꿨다.
 - 테스트(`tests/auto_vs_manual.rs`): 위 셋과 `track_tie_reason_says_university_full_after_clean_university_cut`
   (깨끗한 대학 컷), `track_tie_reason_keeps_choice_wording_without_university_quota`(무제한),
-  `held_stop_with_seats_left_explains_itself`(자리 남음).
+  `held_stop_with_seats_left_explains_itself`(그 덩어리에서 멈춤, 자리 남음),
+  `track_tie_behind_university_tie_says_its_turn_has_not_come`·
+  `track_tie_behind_contention_says_its_turn_has_not_come`(다른 곳에서 멈춤),
+  `held_stop_names_only_the_leading_block_in_track_tie_reasons`(같은 순위 덩어리 둘 중 선두만).
+  DFS 불변식(`auto_matches_manual_dfs_reachability` 의 (f))이 생성 구성에서 세 갈래를 수동 가드와
+  대조한다 — "관리자 선택 필요"가 나온 덩어리는 자동 확정 상태에서 누군가 지금 추천을 통과하고,
+  나머지 두 갈래는 아무도 통과하지 않는다.
 
 ### 5.5 숫자 예시
 
