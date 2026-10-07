@@ -684,6 +684,8 @@ async fn ordinary_univ_tie_is_not_reported_as_held_stop() {
         .map(|m| m.reason.clone()).expect("대학 단위 동점 사유가 있어야 한다");
     assert!(univ_reason.contains("1석에 2명 경합"), "일반 동점 문장이어야 한다: {univ_reason}");
     assert!(!univ_reason.contains("정리되지 않아"), "보류 정지로 잘못 적었다: {univ_reason}");
+    // 용어: 화면에서 "제외"는 옛 미선발 용어로 읽힌다. 일반 동점 문장의 괄호는 "세지 않음"으로 쓴다.
+    assert!(!univ_reason.contains("제외"), "옛 용어 '제외'가 사유에 남았다: {univ_reason}");
 }
 
 /// 대학 단위 사유 끝의 정원 숫자는 이번 실행에서 확정한 인원까지 반영한다(5차 수정 감사 C-2).

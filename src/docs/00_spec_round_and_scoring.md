@@ -793,13 +793,14 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
 미결정이 있으면:
 ```json
 {
-  "error": "추천 또는 제외가 결정되지 않은 지원자가 있어 라운드를 마감할 수 없습니다",
+  "error": "추천 또는 미선발이 결정되지 않은 지원자가 있어 라운드를 마감할 수 없습니다",
   "undecided": [
     {"student_code":"...", "student_name":"...", "grade":3, "class_no":2, "univ_name":"...", "track_name":"..."},
     ...
   ]
 }
 ```
+졸업생은 `grade`·`class_no` 가 `null` 이다(students 의 NULL 을 그대로 보낸다).
 **LIMIT 없음** — 미결정 전원 명단 반환 (`rounds.rs::finalize_round`, LIMIT 없이 `fetch_all`).
 
 정원 초과이면:

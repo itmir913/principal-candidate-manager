@@ -2139,7 +2139,7 @@ async fn run_auto_recommend(
             // 다시 훑어 추측하지 않는다).
             // - Held: 남은 자리가 경합 인원보다 많을 수도 있어 "N석에 M명 경합"은 맞지 않는다.
             // - Contention: 경합 대상이 선두에 한하지 않는다 — 일반 동점 문장의 괄호("같은 모집단위
-            //   상위 지원자에게 막힌 동순위자는 제외")가 거짓이 되므로 따로 쓴다. 사실만 적고
+            //   상위 지원자에게 막힌 동순위자는 세지 않음")가 거짓이 되므로 따로 쓴다. 사실만 적고
             //   처방은 적지 않는다.
             let reason = match stop {
                 UnivCutStop::Held { seats } => format!(
@@ -2159,7 +2159,7 @@ async fn run_auto_recommend(
                 UnivCutStop::Tie => format!(
                     "대학 전체 {}위 동점 — 잔여 {}석에 {}명 경합 \
                      (경합 대상은 각 모집단위의 다음 차례 지원자에 한함 — \
-                     같은 모집단위 상위 지원자에게 막힌 동순위자는 제외 / \
+                     같은 모집단위 상위 지원자에게 막힌 동순위자는 세지 않음 / \
                      대학 정원 {}명, 이번 실행 포함 확정 {}명, 잔여 {}석 / 관리자 선택 필요)",
                     tie.rank, tie.free, tie.contenders, tq, used_after, remaining_after,
                 ),

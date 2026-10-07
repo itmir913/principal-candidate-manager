@@ -882,6 +882,76 @@ async fn finalize_blocked_when_undecided_application_remains() {
     assert_eq!(undecided[0]["student_name"].as_str().unwrap(), "김철수");
     assert_eq!(undecided[0]["univ_name"].as_str().unwrap(), "한국대");
     assert_eq!(undecided[0]["track_name"].as_str().unwrap(), "컴공");
+
+    // 용어: 응답 문장은 "미선발"로 통일했다 — 옛 용어 "제외"가 남으면 걸린다.
+    // 지금 관리자 화면은 이 문장을 그리지 않는다(명단이 있으면 모달이 자기 안내문을 쓰고,
+    // 서버는 명단이 있을 때만 이 본문을 보낸다). 그래도 API 응답이므로 화면 용어와 맞춘다.
+    let error = body["error"].as_str().unwrap();
+    assert!(error.contains("미선발"), "error 문장: {error}");
+    assert!(!error.contains("제외"), "옛 용어 '제외'가 error 문장에 남았다: {error}");
+}
+
+/// 졸업생은 students.grade/class_no 가 NULL 이다(migrations/v1/002-students.sql CHECK).
+/// `UndecidedApplication` 이 i64 로 받으면 sqlx-sqlite 가 NULL 을 0 으로 읽어, 422 명단에
+/// 졸업생이 `grade: 0, class_no: 0` 으로 나가고 관리자 모달은 "0학년 0반" 을 그렸다
+/// (2026-10-07 감사 B-4).
+///
+/// 판별력: 필드를 i64 로 되돌리면 `is_null()` 단언이 0 을 보고 실패한다. 재학생도 하나 두어,
+/// Option 으로 바꾸면서 재학생 값까지 null 로 만드는 변이도 잡는다.
+#[tokio::test]
+async fn finalize_undecided_list_reports_graduate_grade_as_null_not_zero() {
+    let pool = common::create_test_pool().await;
+    common::insert_class(&pool, 1, 1).await;
+    let uid: i64 = sqlx::query_scalar(
+        "INSERT INTO universities (univ_name) VALUES ('한국대') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let tid: i64 = sqlx::query_scalar(
+        "INSERT INTO univ_tracks (univ_id, track_name) VALUES (?, '컴공') RETURNING id",
+    )
+    .bind(uid).fetch_one(&pool).await.unwrap();
+    let rid: i64 = sqlx::query_scalar(
+        "INSERT INTO rounds (status, opened_at, closed_at) \
+         VALUES ('CLOSED', '2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z') RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    let enrolled: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 1, 1, 1, 1) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+    let graduate: i64 = sqlx::query_scalar(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES ('G001', '박졸업', 0, 2025) RETURNING id",
+    )
+    .fetch_one(&pool).await.unwrap();
+
+    for sid in [enrolled, graduate] {
+        sqlx::query("INSERT INTO applications (student_id, track_id, round_id, abandoned) VALUES (?, ?, ?, 0)")
+            .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO results (student_id, track_id, round_id, score_detail, total_score, ranking, recommended, calculated_at) \
+             VALUES (?, ?, ?, '{}', 500000, 1, 0, '2025-01-02T00:00:00Z')",
+        )
+        .bind(sid).bind(tid).bind(rid).execute(&pool).await.unwrap();
+    }
+
+    let err = finalize_round(State(common::make_state(pool.clone())), Path(rid))
+        .await
+        .unwrap_err();
+    assert_eq!(err.0, StatusCode::UNPROCESSABLE_ENTITY);
+    let body: serde_json::Value = serde_json::from_str(&err.1).unwrap();
+    let undecided = body["undecided"].as_array().unwrap();
+    let by_code = |code: &str| undecided.iter().find(|u| u["student_code"] == code).unwrap().clone();
+
+    let g = by_code("G001");
+    assert!(g["grade"].is_null(), "졸업생 학년이 null 이 아니다: {}", g["grade"]);
+    assert!(g["class_no"].is_null(), "졸업생 반이 null 이 아니다: {}", g["class_no"]);
+
+    let e = by_code("S001");
+    assert_eq!(e["grade"], 1);
+    assert_eq!(e["class_no"], 1);
 }
 
 /// T2: 전건 추천 → 마감 성공.

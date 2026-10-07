@@ -306,8 +306,10 @@ pub async fn reopen_round(
 struct UndecidedApplication {
     student_code: String,
     student_name: String,
-    grade: i64,
-    class_no: i64,
+    // 졸업생은 students.grade/class_no 가 NULL 이다. i64 로 받으면 sqlx-sqlite 가 NULL 을 0 으로
+    // 읽어 명단에 "0학년 0반" 이 나갔다(2026-10-07 감사 B-4). ResultRow·ApplicationRow 와 같이 Option.
+    grade: Option<i64>,
+    class_no: Option<i64>,
     univ_name: String,
     track_name: String,
 }
@@ -353,9 +355,9 @@ pub async fn finalize_round(
         return Err((StatusCode::UNPROCESSABLE_ENTITY, NEEDS_RECALC_MSG.into()));
     }
 
-    // 미결정 지원 검증 — 추천도 제외도 되지 않은 지원이 있으면 마감 불가.
+    // 미결정 지원 검증 — 추천도 미선발도 되지 않은 지원이 있으면 마감 불가.
     // COALESCE(r.recommended, 0) = 0: results 행 없음(점수 미계산)도 미결정에 포함한다(LEFT JOIN).
-    // 이는 silent fallback이 아닌 "results 없음 = 미결정"이라는 의도된 3상태(추천/제외/미결정) 판정.
+    // 이는 silent fallback이 아닌 "results 없음 = 미결정"이라는 의도된 3상태(추천/미선발/미결정) 판정.
     let undecided: Vec<UndecidedApplication> = sqlx::query_as(
         "SELECT s.student_code, s.name AS student_name, s.grade, s.class_no,
                 u.univ_name, ut.track_name
@@ -378,7 +380,7 @@ pub async fn finalize_round(
 
     if !undecided.is_empty() {
         let body = serde_json::json!({
-            "error": "추천 또는 제외가 결정되지 않은 지원자가 있어 라운드를 마감할 수 없습니다",
+            "error": "추천 또는 미선발이 결정되지 않은 지원자가 있어 라운드를 마감할 수 없습니다",
             "undecided": undecided,
         });
         return Err((StatusCode::UNPROCESSABLE_ENTITY, body.to_string()));
