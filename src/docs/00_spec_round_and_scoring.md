@@ -398,7 +398,7 @@ CAST(RANK() OVER (
 판단 기준은 **여러 라운드를 걸치는가** 하나뿐이다. CTE인지 인라인인지와는 무관하다 —
 아래 표에서 보듯 두 형태가 `true`/`false` 양쪽에 모두 존재한다.
 
-**호출 5곳** (`grep -n 'track_rank_window' src/handlers/scoring.rs` — 정의 1 + 호출 5):
+**호출 위치** (개수는 `grep -n 'track_rank_window' src/handlers/scoring.rs` 로 센다 — 아래 표는 그 결과를 옮긴 것이고, 바뀌면 grep 이 기준이다):
 
 | 호출부 | 소비자 | 쿼리 형태 | 라운드 범위 | partition_by_round |
 |--------|--------|----------|-----------|-------------------|
@@ -406,6 +406,7 @@ CAST(RANK() OVER (
 | `write_roster_sheet` CTE `tr` | **`export_results`(단일 라운드)와 `export_quota_stats`(전 라운드)가 공유** | CTE | 호출자에 따라 단일·다중 | true |
 | `teacher_get_results` CTE `tr` | 담임 결과 조회 — **졸업생·재학생 두 분기가 같은 문자열을 공유** | CTE | 다중(FINALIZED 전체) | true |
 | `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | CTE | 단일 | false |
+| `recommend_result` 크로스트랙 블로커 쿼리(5c) | 수동 추천 크로스트랙 가드 — 블로커가 자기 모집단위의 선두인지 판정(2026-10-07 F-2) | CTE | 단일 | false |
 | `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | 인라인 | 단일 | false |
 
 ¹ 단일 라운드이므로 `round_id` 파티션은 결과에 영향이 없다(무해한 잉여). 리팩터링 이전
