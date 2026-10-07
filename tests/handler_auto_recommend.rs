@@ -1516,7 +1516,7 @@ fn merge_held_block_seats_count_toward_demand() {
     got.sort_unstable();
     assert_eq!(got, vec![0, 1]);
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 2 }));
-    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 0 });
 }
 
 /// 덩어리의 대학 순위가 r 보다 나쁘면 수요에 들지 않는다 — 같은 입력에서 덩어리만 5위로.
@@ -1533,7 +1533,7 @@ fn merge_held_block_worse_than_r_is_not_demand() {
     got.sort_unstable();
     assert_eq!(got, vec![0, 1]);
     assert_eq!(out.tie, None);
-    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 0 });
 }
 
 /// 둘 이상의 모집단위가 동순위 선두여도 **노출이 없으면** 일반 동점이다 — 멈춘 이유가 `Tie`
@@ -1578,7 +1578,7 @@ fn merge_held_block_as_leader_stops_before_contention() {
     let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
     assert!(out.confirmed.is_empty());
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 4 }));
-    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0] });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 2 });
 }
 
 /// `Held::tracks` 는 그 대학 순위에 **선두로** 선 덩어리만 담는다. 같은 대학 순위(1위)의 덩어리가
@@ -1596,7 +1596,40 @@ fn merge_held_tracks_name_only_leading_blocks() {
     let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(2));
     assert!(out.confirmed.is_empty());
     assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 2, contenders: 2 }));
-    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![1] });
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![1], leaders: 0 });
+}
+
+/// 보류 정지에 덩어리와 **같은 대학 순위의 실제 선두**가 함께 서 있으면 `Held::leaders` 가 그
+/// 인원이다(최종 감사 F1 C-1). X: 덩어리만(대학 1위, 1석에 2명), Y: Y1(1, 1). 정원 1 — 그 선두는
+/// 지금 수동 추천을 통과한다(5c 는 엄격 비교). Y 에 트랙 내부 동점 Y2(1, 1)를 더하면 2 — 선두와
+/// 트랙 내부 동점인 연속 후보까지 센다. Y 에 대학 순위가 r 이하인 후행자 Y2(2, 1)를 더하면 1 그대로
+/// — 연쇄 후보는 5b 가 막아 지금은 추천할 수 없으므로 세지 않는다.
+/// 판별력의 소재: `leaders` 를 0 으로 고정하면 첫째 구성의 `stop` 단언에서, 선두 뒤 연쇄까지 세면 셋째 구성의 `stop` 단언에서
+/// 깨진다(변이 기록은 `tests/auto_vs_manual.rs` 머리말). 호출부 문장 갈래는 그 파일(`auto_vs_manual.rs`)의
+/// `held_tie_equal_to_other_track_leader_is_manual` 이 본다.
+#[test]
+fn merge_held_stop_reports_real_leaders_at_the_same_rank() {
+    let held = vec![
+        Some(HeldBlock { track_rank: 1, univ_rank: 1, seats: 1, contenders: 2 }),
+        None,
+    ];
+    let tracks = vec![vec![], vec![mc(2, 20, 1, 1)]];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(1));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 1 });
+
+    let tracks = vec![vec![], vec![mc(2, 20, 1, 1), mc(3, 20, 1, 1)]];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(1));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 4 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 2 });
+
+    let tracks = vec![vec![], vec![mc(2, 20, 1, 1), mc(3, 20, 2, 1)]];
+    let (out, stop) = merge_univ_cut_held(&tracks, &held, Some(1));
+    assert!(out.confirmed.is_empty());
+    assert_eq!(out.tie, Some(TieBoundary { rank: 1, free: 1, contenders: 3 }));
+    assert_eq!(stop, UnivCutStop::Held { seats: 1, tracks: vec![0], leaders: 1 });
 }
 
 /// 노출이 있어도 **들어올 수 없으면** 일반 동점이다. X: X1(1, 3)·X2(2, 1), Y: Y1(1, 3). 정원 1.

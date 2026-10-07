@@ -89,6 +89,19 @@
 //!   점수가 아니라 못 낀다) 덧붙이는 후보가 최대 3 명이라 4 명이 안 된다. 일반 생성기(`gen_cfg`)는
 //!   만들 수 있지만 드물고, 이 표본에서는 나오지 않았다(변이가 통과했다). 시나리오와 단위 테스트가
 //!   방어선이다.
+//! - **확인함**(2026-10-08 최종 감사 F1 C-1 수정 — 보류 정지 사유가 같은 순위 선두를 적는다):
+//!   병합의 `Held::leaders` 를 0 으로 고정하면 `held_tie_equal_to_other_track_leader_is_manual`·
+//!   `held_stop_with_seats_left_explains_itself`·`held_stop_contest_compares_block_seats_not_contenders`
+//!   와 DFS 불변식 (g), `handler_auto_recommend.rs` 의 `merge_held_stop_reports_real_leaders_at_the_same_rank`·
+//!   `merge_held_block_as_leader_stops_before_contention` 이 실패한다. `leaders` 에 선두 뒤 연쇄
+//!   (대학 순위 ≤ r)까지 세면 DFS 불변식 (g) 와 같은 두 단위 테스트가 실패한다 — 시나리오는 이 변이를
+//!   잡지 못했다. 호출부 문장 갈래를 늘 옛 문장으로 하면 `leaders` 0 고정과 같은 넷이, 늘 새 문장으로
+//!   하면 `held_tie_stops_university_cut_until_resolved` 만 실패한다(새 문장이 "0명"을 적어 (g) 는
+//!   통과한다). "다툼" 조건을 늘 참으로 하면 `held_stop_with_seats_left_explains_itself`·
+//!   `held_stop_contest_compares_block_seats_not_contenders`, 늘 거짓으로 하면
+//!   `held_tie_equal_to_other_track_leader_is_manual`, 경합 인원 합(`tie.contenders`)과 비교하면
+//!   `held_stop_contest_compares_block_seats_not_contenders` 만 실패한다. (g) 는 "다툼" 문장을 보지
+//!   않으므로 이 셋을 잡지 못한다(예상대로).
 //! 아래는 합친 판 작성 시점의 기록이다(B-merge 전 코드에서 확인함).
 //! - F-1 수정을 되돌리면(`merge_univ_cut_held` 의 `held_head` 가 항상 None) 보류 덩어리가 대학
 //!   컷을 막아야 하는 `held_*` 시나리오들, `two_held_blocks_stop_at_the_better_one`,
@@ -423,6 +436,21 @@ const REASON_NOT_YET: &str = "아직 이 동점의 차례가 오지 않았습니
 const REASON_HELD_STOP: &str = "정리되지 않아";
 const REASON_CONTENTION: &str = "누구를 먼저 추천하느냐";
 const REASON_PLAIN_TIE: &str = "명 경합 (경합 대상은";
+/// 보류 정지 문장의 두 형태(최종 감사 F1 C-1) — 같은 대학 순위에 다른 모집단위 선두가 없으면 옛
+/// 문장("모집단위 동점을 먼저 정리한 뒤"), 있으면 그 인원("…명도 지금 추천할 수 있")을 적고 다음
+/// 행동은 중립으로 쓴다. 남은 자리 < 선두 인원 + 덩어리 잔여석이면 다툼("석을 다툽니다")도 적는다.
+const REASON_HELD_RESOLVE_FIRST: &str = "모집단위 동점을 먼저 정리한 뒤";
+const REASON_HELD_LEADERS: &str = "명도 지금 추천할 수 있";
+const REASON_HELD_CONTEST: &str = "석을 다툽니다";
+
+/// 보류 정지 사유가 적은 "같은 대학 순위의 다른 모집단위 지원자 N명"의 N. 그 문장이 없으면 0.
+fn held_leaders_of(reason: &str) -> usize {
+    let Some(end) = reason.find(REASON_HELD_LEADERS) else { return 0 };
+    let head = &reason[..end];
+    let digits: String = head.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<Vec<_>>()
+        .into_iter().rev().collect();
+    digits.parse().unwrap_or_else(|_| panic!("선두 인원을 읽을 수 없다: {reason}"))
+}
 
 /// 사유는 상태만 말하고 처방(미선발하라·취소하라)을 하지 않는다 — 명세 §5.4 C-1. "대학 정원이
 /// 찼습니다" 문장과 경합 집합 문장을 단언하는 테스트가 함께 부른다.
@@ -486,6 +514,16 @@ async fn held_tie_after_partial_fill_still_reserves_seat() {
 }
 
 /// F-1 동순위 변형. 보류 그룹과 Y1 이 **같은 대학 순위**면 셋이 1석을 두고 경합하는 동점이다.
+///
+/// 최종 감사 F1 C-1: 대학 단위 사유가 보류 정지 문장("모집단위 동점을 먼저 정리한 뒤 …")만 적어
+/// Y1 을 언급하지 않았다. Y1 도 지금 추천할 수 있고(5c 는 엄격 비교라 동순위를 막지 않는다) X 동점에서
+/// 고르면 Y1 은 영영 못 들어오는데, 문장은 결정을 X 쪽으로 유도했다. 지금은 같은 순위의 다른 모집단위
+/// 선두 인원(1명)과, 남은 자리(1) < 선두 1 + 덩어리 잔여석 1 이라 같은 자리를 다툰다는 사실을 적고
+/// 다음 행동은 중립으로 쓴다.
+/// 판별력의 소재: 병합의 `Held::leaders` 를 0 으로 고정하거나 호출부의 문장 갈래 조건을 거짓으로
+/// 만들면 옛 문장이 나와 사유 단언이 깨진다. 아래 수동 호출(Y1 통과, X1 뒤 Y1 거부)은 사유가 말하는
+/// 사실의 기록이지 방어선이 아니다 — 자동 확정 상태에서 "지금 추천 가능한 비덩어리 후보 수 = 사유의
+/// 인원"은 DFS 불변식 (g) 가 생성 구성으로 대조한다.
 #[tokio::test]
 async fn held_tie_equal_to_other_track_leader_is_manual() {
     let cfg = Cfg {
@@ -493,9 +531,28 @@ async fn held_tie_equal_to_other_track_leader_is_manual() {
         tracks: vec![t(Some(1), false), t(Some(1), false)],
         cands: vec![c(0, 90, true), c(0, 90, true), c(1, 90, true)], univ2: None, prior: vec![],
     };
-    let (picked, manual) = auto(&cfg).await;
-    assert_eq!(picked, Vec::<usize>::new());
-    assert!(manual >= 1);
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_HELD_STOP) && u.contains("대학 전체 1위"), "보류 정지 문장: {u}");
+    assert_eq!(held_leaders_of(&u), 1, "같은 순위의 다른 모집단위 선두(Y1) 인원을 적는다: {u}");
+    assert!(u.contains("대학 잔여 1석을 다툽니다"), "잔여 1 < 선두 1 + 덩어리 1 — 다툼: {u}");
+    assert!(!u.contains(REASON_HELD_RESOLVE_FIRST), "덩어리 쪽으로 유도하지 않는다: {u}");
+    assert!(!u.contains("명 경합"), "보류 정지 문장은 \"N석에 M명 경합\"을 쓰지 않는다: {u}");
+    assert_no_prescription(&u);
+    // X 동점은 2단계가 바로 그 덩어리에서 멈췄으므로 (a)
+    let rx = track_reason(&resp.manual, b.track_ids[0]);
+    assert!(rx.contains(REASON_CHOICE), "{rx}");
+
+    // 기록: Y1 은 지금 수동 추천을 통과한다
+    rec_manual(&pool, &b, 2).await.expect("Y1 — 덩어리와 대학 1위 동순위, 5c 가 막지 않는다");
+    unrec(&pool, &b, 2).await.expect("되돌리기");
+    // 기록: X 동점에서 고르면 대학 정원 1석이 차 Y1 은 들어오지 못한다
+    rec_manual(&pool, &b, 0).await.expect("X 동점 중 하나");
+    let e = rec_manual(&pool, &b, 2).await.expect_err("X1 뒤에 Y1 이 들어왔다");
+    assert!(e.contains("409"), "{e}");
 }
 
 /// 보류 그룹이 있으면 대학 정원에 자리가 남아도 그 대학 순위에서 멈춘다 — 수동 5c 가
@@ -514,6 +571,12 @@ async fn held_tie_stops_university_cut_until_resolved() {
     let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
     assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
     assert!(!resp.manual.is_empty());
+    // 같은 순위(대학 1위)에 다른 모집단위 선두가 없다(Y1 은 3위) — 보류 정지 문장은 옛 형태 그대로다
+    // (최종 감사 F1 C-1 수정의 반대쪽 경계). 판별력의 소재: 문장 갈래 조건을 항상 참으로 만들면 여기서
+    // "0명도 지금 추천할 수 있"이 나와 깨진다.
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_HELD_STOP) && u.contains(REASON_HELD_RESOLVE_FIRST), "{u}");
+    assert!(!u.contains(REASON_HELD_LEADERS) && !u.contains(REASON_HELD_CONTEST), "{u}");
     // 수동도 같은 판단 — Y1 은 아직 막힌다
     assert!(rec_manual(&pool, &b, 2).await.is_err(), "자동과 수동이 다르다");
 
@@ -671,6 +734,15 @@ async fn held_stop_with_seats_left_explains_itself() {
         .map(|m| m.reason.clone()).expect("대학 단위 사유가 있어야 한다");
     assert!(univ_reason.contains("정리되지 않아"), "멈춘 이유를 말해야 한다: {univ_reason}");
     assert!(!univ_reason.contains("명 경합"), "남은 자리보다 적은 경합 인원을 적으면 모순: {univ_reason}");
+    // Y1 은 덩어리와 같은 대학 1위 선두다 — 그 인원은 적되(최종 감사 F1 C-1), 남은 자리(3) ≥ 선두 1 +
+    // 덩어리 잔여석 1 이라 이 순위의 후보를 다 넣어도 자리가 남는다. 다툼을 적으면 거짓이다 — 위 "명
+    // 경합" 부재 단언과 같은 의도(보류 정지 문장이 남은 자리와 모순된 경합을 말하지 않는다)다.
+    // 판별력의 소재: 다툼 조건을 항상 참으로 만들면 깨진다. 경합 인원 합(선두 1 + 덩어리 2 = 3)과
+    // 비교하는 변이는 여기서 3 < 3 이 거짓이라 판별되지 않는다 —
+    // `held_stop_contest_compares_block_seats_not_contenders` 가 본다.
+    assert_eq!(held_leaders_of(&univ_reason), 1, "Y1 인원: {univ_reason}");
+    assert!(!univ_reason.contains(REASON_HELD_CONTEST), "자리가 남는데 다툼을 적었다: {univ_reason}");
+    assert_no_prescription(&univ_reason);
     // 2단계가 바로 X 덩어리에서 멈췄고 대학 자리가 남았다 — X 동점은 지금 고를 수 있으므로 (a)
     // "관리자 선택 필요" 그대로다. 아래 X 동점 중 하나를 고르는 수동 호출은 Y1 추천 **뒤** 상태의
     // 기록이다 — 자동 확정 상태에서 지금 고를 수 있다는 판정은 DFS 불변식 (f) 가 한다.
@@ -683,6 +755,31 @@ async fn held_stop_with_seats_left_explains_itself() {
     let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
     assert_eq!(names(&b, &recommended(&pool, b.rid).await), vec![0, 2, 3]);
     assert!(resp.manual.is_empty());
+}
+
+/// 보류 정지의 "다툼"은 남은 자리 < 선두 인원 + 덩어리 **잔여석**일 때만 적는다 — 덩어리에서는
+/// 모집단위 잔여석까지만 들어온다(최종 감사 F1 C-1 수정). 대학 정원 2, X(1석) 90·90 보류(대학 1위),
+/// Y(1석) Y1 90(1위). 남은 자리 2 = 선두 1 + 잔여석 1 이라 Y1 과 X 동점 하나가 다 들어간다.
+/// 판별력의 소재: 경합 인원 합(선두 1 + 덩어리 2 = 3)과 비교하면 2 < 3 이라 다툼이 나와 사유 단언이
+/// 깨진다. 아래 수동 호출(Y1 뒤에 X 동점 하나도 통과)은 "다툼 없음"이 사실이라는 기록이다.
+#[tokio::test]
+async fn held_stop_contest_compares_block_seats_not_contenders() {
+    let cfg = Cfg {
+        total: Some(2), univ_prio: false,
+        tracks: vec![t(Some(1), false), t(Some(1), false)],
+        cands: vec![c(0, 90, true), c(0, 90, true), c(1, 90, true)], univ2: None, prior: vec![],
+    };
+    let pool = common::create_test_pool().await;
+    let b = build(&pool, &cfg).await;
+    let resp = auto_recommend_results(st(&pool), Path(b.rid)).await.unwrap().0;
+    assert_eq!(names(&b, &recommended(&pool, b.rid).await), Vec::<usize>::new());
+    let u = univ_reason(&resp.manual);
+    assert!(u.contains(REASON_HELD_STOP), "{u}");
+    assert_eq!(held_leaders_of(&u), 1, "Y1 인원: {u}");
+    assert!(!u.contains(REASON_HELD_CONTEST), "선두와 덩어리 몫이 다 들어가는데 다툼을 적었다: {u}");
+    assert_no_prescription(&u);
+    rec_manual(&pool, &b, 2).await.expect("Y1");
+    rec_manual(&pool, &b, 0).await.expect("X 동점 하나 — Y1 뒤에도 대학 자리가 남는다");
 }
 
 /// 4차 수정 감사 B-1: 아직 **선두가 아닌** 보류 덩어리가 일반 동점과 같은 대학 순위에 있을 때,
@@ -1833,15 +1930,20 @@ fn gen_cfg_biased(rng: &mut Rng) -> Cfg {
 /// (c) "차례가 오지 않았습니다" 여야 한다. DFS 가 상태마다 통과 후보를 적어 둔 것(`Reach::succ`)을
 /// 자동 확정 상태에서 읽는다 — (a′) 가 그 상태의 방문을 보장한다.
 ///
+/// (g) 보류 정지 대학 단위 사유가 적은 같은 순위 선두 인원이, 자동 확정 상태에서 지금 추천을
+/// 통과하는 그 대학의 비덩어리 후보 수와 같은가(최종 감사 F1 C-1). 같은 `Reach::succ` 를 읽는다.
+///
 /// 케이스 수는 바이너리 전체가 수십 초 안에 들도록 측정해 정했다(상태 수는 정원에 묶여 작다).
 /// 커버 카운터: 경합 집합 사유가 나온 구성, 수동 최대 결과가 둘 이상인 구성, 자동이 판단 없이
-/// 끝난 구성, 그리고 1단계 동점 사유 세 갈래 각각 — 0 이면 그 갈래는 검사 밖이다.
+/// 끝난 구성, 1단계 동점 사유 세 갈래 각각, 보류 정지 사유의 두 형태(같은 순위 선두 있음·없음)
+/// — 0 이면 그 갈래는 검사 밖이다.
 #[tokio::test]
 async fn auto_matches_manual_dfs_reachability() {
     const CASES_PLAIN: u64 = 150;
     const CASES_BIASED: u64 = 150;
     let (mut n_contention, mut n_multi_max, mut n_manual_free) = (0u32, 0u32, 0u32);
     let (mut n_tie_choice, mut n_tie_not_yet, mut n_tie_full) = (0u32, 0u32, 0u32);
+    let (mut n_held_leaders, mut n_held_no_leaders) = (0u32, 0u32);
     let plain = (1..=CASES_PLAIN).map(|s| (false, s));
     let biased = (1..=CASES_BIASED).map(|s| (true, s));
     for (bias, seed) in plain.chain(biased) {
@@ -1925,6 +2027,43 @@ async fn auto_matches_manual_dfs_reachability() {
                 );
             }
         }
+        // (g) 보류 정지 대학 단위 사유가 적은 "같은 대학 순위의 다른 모집단위 지원자 N명"(그 문장이
+        //     없으면 0) = 자동 확정 상태에서 지금 수동 추천을 통과하는 그 대학 후보 가운데, 2단계가 멈춘
+        //     바로 그 덩어리((a) "관리자 선택 필요" 사유의 덩어리 — (f) 와 같은 방법으로 찾는다)에 속하지
+        //     않는 인원. 최종 감사 F1 C-1 — 그 사유가 같은 순위 선두를 빠뜨려 결정을 덩어리 쪽으로
+        //     유도했다. 통과 여부는 (f) 와 같이 DFS 가 적어 둔 값이다. "다툼" 문장은 여기서 보지 않는다
+        //     (시나리오 `held_tie_equal_to_other_track_leader_is_manual`·
+        //     `held_stop_contest_compares_block_seats_not_contenders` 가 본다).
+        for m in resp.manual.iter().filter(|m| m.track_id.is_none() && m.reason.contains(REASON_HELD_STOP)) {
+            let ui: usize = m
+                .univ_name
+                .strip_prefix("대학")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(|| panic!("{tag}: 대학 이름에서 인덱스를 읽을 수 없다: {}", m.univ_name));
+            let mut choice_block: BTreeSet<usize> = BTreeSet::new();
+            for tm in resp.manual.iter().filter(|tm| {
+                tm.track_id.is_some() && tm.reason.starts_with("모집단위 ") && tm.reason.contains(REASON_CHOICE)
+            }) {
+                let tid = tm.track_id.expect("필터로 보장");
+                let k = tie_rank_of(&tm.reason);
+                choice_block.extend((0..cfg.cands.len()).filter(|&i| {
+                    ba.keys[i].1 == tid && !cfg.cands[i].excluded && !auto_idx.contains(&i) && ranks[i] == Some(k)
+                }));
+            }
+            let others_now: Vec<usize> = succ
+                .iter()
+                .copied()
+                .filter(|&i| cfg.tracks[cfg.cands[i].track].univ == ui && !choice_block.contains(&i))
+                .collect();
+            let said = held_leaders_of(&m.reason);
+            if said > 0 { n_held_leaders += 1 } else { n_held_no_leaders += 1 }
+            assert_eq!(
+                said,
+                others_now.len(),
+                "{tag}: 보류 정지 사유가 적은 같은 순위 선두 인원과 지금 추천되는 비덩어리 후보 {others_now:?} 가 다르다 — {}\n자동 {auto_idx:?}\n{cfg:?}",
+                m.reason
+            );
+        }
     }
     assert!(
         n_contention > 0 && n_multi_max > 0 && n_manual_free > 0,
@@ -1933,5 +2072,9 @@ async fn auto_matches_manual_dfs_reachability() {
     assert!(
         n_tie_choice > 0 && n_tie_not_yet > 0 && n_tie_full > 0,
         "생성 구성이 1단계 동점 사유 갈래를 덮지 못한다: 관리자 선택 필요 {n_tie_choice}, 차례 아님 {n_tie_not_yet}, 대학 정원 참 {n_tie_full}"
+    );
+    assert!(
+        n_held_leaders > 0 && n_held_no_leaders > 0,
+        "생성 구성이 보류 정지 사유 두 형태를 덮지 못한다: 같은 순위 선두 있음 {n_held_leaders}, 없음 {n_held_no_leaders}"
     );
 }
