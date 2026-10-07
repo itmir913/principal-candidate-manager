@@ -217,24 +217,24 @@ JSON으로 `Score`를 받는 필드는 현재 `CreateAreaBody.max_score` 하나�
 
 1. `base_data`에서 ×100000 정수 문자열 조회 → `parse::<i64>()`. 없거나 파싱 실패 시 오류.
 2. `numeric_table`에서 `threshold` 오름차순 구간표 조회.  
-   COMPOSITE이고 모집단위별 구간표가 없으면 공통(`track_id IS NULL`)으로 폴백 (`scoring.rs::calc_area_score`).
+   COMPOSITE이고 모집단위별 구간표가 없으면 공통(`track_id IS NULL`)으로 폴백 (`scoring.rs::compute_area_score`).
 3. `lookup_range_score` (`scoring.rs::lookup_range_score`):
    - **UPPER**: `value >= threshold`인 행 중 최대 threshold 행의 점수. 모든 threshold보다 작으면 오류 (Fail-Fast).
    - **LOWER**: `value <= threshold`인 행 중 최소 threshold 행의 점수. value > 최대 threshold이면 최대 threshold 행 사용(오류 아님 — `scoring.rs::lookup_range_score`).
    - **EXACT**: `threshold == value`인 행. 없으면 오류.
-4. `raw.min(area.max_score)` — 상한 적용 (`scoring.rs::calc_area_score`).
+4. `raw.min(area.max_score)` — 상한 적용. 헬퍼는 raw 를 돌려주고 캡은 호출자가 건다 (확정: `scoring.rs::calc_area_score`, 미리보기: `teacher_areas.rs::teacher_area_score_preview`).
 
 #### CATEGORY (범주 점수) — `scoring.rs::compute_area_score` (AreaScoreInput::Category)
 
 1. `base_data`에서 범주 문자열 복수 행 조회. 0건이면 오류.
-2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지, `scoring.rs::calc_area_score`).  
+2. 각 범주를 `category_map`에서 조회. 없으면 오류 (0점 silent fallback 금지 — `scoring.rs::compute_area_score` 의 `CategoryUnknown`. `calc_area_score` 는 그 오류에 학생·모집단위 맥락만 덧붙인다).  
    COMPOSITE 폴백은 **범주 단위**다: 모집단위별 표에 **그 범주가 없으면 그 범주만** 공통 표(`track_id IS NULL`)에서
    찾는다. 모집단위별 표에 있는 범주는 모집단위 점수가 이긴다 (`scoring.rs::compute_area_score`).
    NUMERIC 의 "모집단위별 구간표가 **비어 있을 때만** 공통 표"(표 단위)와 다르다 — 소유자 결정
    (`11_release_decisions.md` §10).
 3. `category_agg`에 따라 집계:
-   - **SUM**: `try_fold + checked_add` — overflow 시 Fail-Fast (`scoring.rs::calc_area_score`).
-   - **MAX**: `scores.iter().max()`. 비어있지 않음이 1번에서 보장 (`scoring.rs::calc_area_score`).
+   - **SUM**: `try_fold + checked_add` — overflow 시 Fail-Fast (`scoring.rs::compute_area_score`).
+   - **MAX**: `scores.iter().max()`. 비어있지 않음이 1번에서 보장 (`scoring.rs::compute_area_score`, `silent_fallback_allowed.md` #13).
 4. `max_score` 상한 적용.
 
 **CATEGORY 0점 처리**: `category_map` 설계 단계에서 "해당 없음" 범주를 score=0으로 등록하는 방식.  
@@ -404,7 +404,7 @@ CAST(RANK() OVER (
 |--------|--------|----------|-----------|-------------------|
 | `get_results` | 화면 표시 | 인라인 | 단일(`WHERE r.round_id = ?`) | true¹ |
 | `write_roster_sheet` CTE `tr` | **`export_results`(단일 라운드)와 `export_quota_stats`(전 라운드)가 공유** | CTE | 호출자에 따라 단일·다중 | true |
-| `teacher_get_results` CTE `tr` | 담임 결과 조회 — **졸업생·재학생 두 분기가 같은 문자열을 공유** | CTE | 다중(FINALIZED 전체) | true |
+| `fetch_teacher_results` CTE `tr` | 담임 결과 화면(`teacher_get_results`)과 담임 CSV 내보내기(`teacher_export.rs`)가 **같은 쿼리를 공유** — 졸업생·재학생 분기는 바깥 쿼리의 WHERE·ORDER BY 만 다르고 CTE 는 같다 | CTE | 다중(FINALIZED 전체 — `round_id` 를 줘도 CTE 는 전체에서 계산) | true |
 | `recommend_result` blocker 쿼리 | 수동 추천 트랙 순서 가드 | CTE | 단일 | false |
 | `recommend_result` 크로스트랙 블로커 쿼리(5c) | 수동 추천 크로스트랙 가드 — 블로커가 자기 모집단위의 선두인지 판정(2026-10-07 F-2) | CTE | 단일 | false |
 | `run_auto_recommend` 3c 단계 | 자동 추천 1단계 후보 순위 | 인라인 | 단일 | false |

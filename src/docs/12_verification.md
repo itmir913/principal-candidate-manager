@@ -71,7 +71,7 @@ CLAUDE.md 의 규칙이 **코드로 지켜지는가**와 **기계가 지키는�
 
 | 규칙 | 코드 준수 | 기계 방어선 | 조치 |
 |---|---|---|---|
-| 5. Excel 은 헤더 이름 기반 | 준수 — 데이터 열의 인덱스 직접 참조가 없고, 전부 `col_map` + `require_cols` + `get_col` 을 지난다 | **거의 없었다.** 모든 픽스처가 템플릿과 같은 열 순서를 써서, 이름 조회를 위치 조회로 바꿔도 스위트가 초록이었다. 유일하게 잡힌 경로도 전용 테스트가 아니라 `full_two_round_lifecycle` 픽스처가 우연히 다른 순서를 쓴 덕이었다 | `tests/excel_column_order.rs` 추가 — 전 경로 검출 |
+| 5. Excel 은 헤더 이름 기반 | 준수 — 데이터 열의 인덱스 직접 참조가 없고, 전부 `col_map` + `require_cols` + `get_col` 을 지난다 | **거의 없었다.** 모든 픽스처가 템플릿과 같은 열 순서를 써서, 이름 조회를 위치 조회로 바꿔도 스위트가 초록이었다. 유일하게 잡힌 경로도 전용 테스트가 아니라 `full_two_round_lifecycle` 픽스처가 우연히 다른 순서를 쓴 덕이었다 | `tests/excel_column_order.rs` 추가. 처음 판은 전형요소를 전부 SIMPLE 로 만들어 COMPOSITE 의 `대학명`·`모집단위명`(`area_data.rs::resolve_track`) 하위 경로가 검사 밖이었다(2026-10-08 F2 감사). 저장소의 다른 COMPOSITE 픽스처는 두 열을 맨 끝에 두므로(`git grep -n 대학명 -- tests/`) 끝에서 세는 위치 조회 변이를 잡지 못했을 것으로 보인다 — 전체 스위트로 돌려 확인하지는 않았고, `excel_column_order.rs` 안에서는 기존 테스트 전부가 그 변이를 통과하고 새 네 테스트만 빨강이었다. 그 경로도 회전 픽스처로 넣었다 |
 | 6. 다중 쓰기는 트랜잭션 | 준수 — tx 밖의 쓰기는 전부 단일 쓰기다(최초 비번 UPSERT·`VACUUM INTO`·`wal_checkpoint`·자동실행 설정) | `find_or_create_track(conn: &mut SqliteConnection)` 은 **타입 시스템**이 pool 전달을 막는다. `*_rolls_back_auto_created_track` 이 행동으로도 확인 | 없음 |
 | 7. base_data 는 student_type 분리 | 준수 — `base_data` 에 일괄 DELETE 자체가 없다. 분리는 학생 조회 시점에 걸린다 | 졸업생 경로만. 재학생 경로의 필터는 `students` CHECK 덕에 이중 방어라 변이가 등가다 | `tests/student_type_separation.rs` 로 그 스키마 전제를 고정 |
 | 2. Fail-Fast | `app_info.rs` 의 예외가 허용 목록 밖에 있었다 | 없었음 | `tests/silent_fallback_guard.rs` 로 목록과 대조 |
@@ -167,8 +167,10 @@ CLAUDE.md 의 규칙이 **코드로 지켜지는가**와 **기계가 지키는�
   나머지 대다수는 여전히 육안 확인 영역이다. 비율을 숫자로 적지 않는 이유는
   CLAUDE.md 규칙 9 — 앞서 두 번 적었고 두 번 다 다음 커밋에서 낡았다.
   지금 범위를 알고 싶으면 `frontend/src/logic` 을 열어 보는 쪽이 정확하다.
-  그리고 프론트는 점수를 계산하지 않고 표시만 하며(규칙 1), 표시 정밀도는 백엔드
-  값과 일치한다.
+  그리고 프론트는 점수를 계산하지 않고 표시만 한다(규칙 3). 유일한 예외는 전형요소
+  **만점 합계** 표시(`frontend/src/logic/areaTotals.js`)로, 소유자 결정이다 —
+  `11_release_decisions.md` §9. 표시 정밀도는 백엔드 값과 일치한다(규칙 1,
+  `tools/oracle/front_check.mjs` 의 formatScore 절이 대조).
 - **동시성**: 실제 `BEGIN IMMEDIATE`·유니크 인덱스가 방어선이고 병렬 테스트가 있으나,
   전 경로 경합의 완전 증명은 아니다.
 - **형식 검증 미수행**: "모든 경계·예외 조건"의 수학적 보장이 아니라, 체계적으로

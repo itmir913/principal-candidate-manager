@@ -81,7 +81,9 @@ const report = (name, bad, total, sample) => {
 //
 // 여기서는 키를 만들지 않고 **모든 쌍에 술어를 직접 적용**한다. 묶기(grouping)가 아니라
 // 관계(relation)로 쓰는 것이라, 한쪽의 실수가 다른 쪽에 같은 모양으로 재현되기 어렵다.
-// 시나리오 전체가 2213행이고 시나리오당 수십 행이라 O(n²) 은 문제되지 않는다.
+// 쌍별 비교는 시나리오 하나 안에서만 하고 시나리오당 행이 수십 개 수준이라 O(n²) 은
+// 문제되지 않는다. (전체 행 수는 여기 적지 않는다 — `actual.json` 에서 세면 되고,
+// 적어 두면 다음 시나리오 추가에 낡는다.)
 //
 // **과장하지 않는다**: 이 저장소의 키 형식(`scope-round-rank`, 뒤 둘이 숫자)에서
 // 실제 문자열 충돌을 만들어 보려 했으나 만들지 못했다 — 구분자 개수가 달라진다.
@@ -317,8 +319,10 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
       checks++
       for (let i = 1; i < sorted.length; i++) {
         // JS 에서 `null > n` 은 null 을 0 으로 취급한다 — 순위 미계산 행이 섞이면
-        // 가짜 "정렬 역전"이 쏟아진다. 지금 데이터에는 혼합 그룹이 없지만
-        // (재오픈 직후 상태가 덤프에 들어오면 생긴다) 비교 자체를 안전하게 둔다.
+        // 가짜 "정렬 역전"이 쏟아진다. 지금 덤프에는 한 그룹 안에 NULL 과 숫자가 섞인
+        // 혼합 그룹이 없다 — 재오픈 시나리오(r3d01/r3d02)도 들어 있지만 `reopen_round`
+        // (rounds.rs)가 그 라운드의 ranking 을 **전부** NULL 로 만들어 한 라운드 안에서는
+        // 섞이지 않고, 덤프는 전 시나리오가 한 라운드다. 그래도 비교 자체를 안전하게 둔다.
         const prevRank = sorted[i - 1].ranking, curRank = sorted[i].ranking
         if (prevRank != null && curRank != null && prevRank > curRank) {
           bad++; sample ||= `${scn.name} 정렬 역전`
@@ -333,7 +337,7 @@ const noComments = (src) => src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
 // ── 5. studentsByRound 정렬 — seq_no 누락 입력이 실제로 오는가 ────
 {
   // 재학생 담임(auth.grade !== 0) 경로: 학생은 전원 재학생이라 seq_no NOT NULL
-  // (002-students.sql:15-27 CHECK). 정렬이 null 을 만날 일이 있는지 확인한다.
+  // (`migrations/v1/002-students.sql` 의 students CHECK). 정렬이 null 을 만날 일이 있는지 확인한다.
   // 2026-09-21: `seq_no ?? 999` 는 logic/studentOrder.js 로 옮기며 없앴다
   // (번호 없는 학생은 값을 지어내지 않고 뒤로 보낸다). 이 검사는 "애초에 null 이
   // 오지 않는다"는 전제가 유지되는지 계속 지켜보기 위해 남긴다.

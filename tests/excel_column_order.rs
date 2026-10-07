@@ -6,9 +6,13 @@
 //! 즉 규칙 5 에는 기계 방어선이 거의 없었다 — 열 순서가 다른 파일이 실제로 들어오는
 //! 날에야 현장에서 드러났을 것이다.
 //!
-//! 이 파일은 **모든 import 경로**에 열 순서를 바꾼 입력을 먹인 뒤, 값이 제자리에
+//! 이 파일은 import 경로마다 열 순서를 바꾼 입력을 먹인 뒤, 값이 제자리에
 //! 들어갔는지 본다. "오류가 안 났다"로는 부족하다 — 값이 엉뚱한 필드로 들어가도
-//! 오류는 안 나기 때문이다.
+//! 오류는 안 나기 때문이다. 경로 목록은 `git grep -n -e 'col_map(' -e 'get_col(' -- src/` 로
+//! 다시 뽑아 이 파일과 대조한다(`require_cols` 로 세면 `resolve_track` 의 조건부 `get_col` 과
+//! 외부 양식 두 파서를 놓친다) — "모든 경로"라고 적어 두면 경로가 늘 때 조용히 낡는다. 실제로
+//! 처음 판은 전형요소를 전부 SIMPLE 로 만들어 COMPOSITE 의 `대학명`·`모집단위명`
+//! (`area_data.rs::resolve_track`) 갈래가 검사 밖이었다 — 아래 "area_data COMPOSITE" 절.
 //!
 //! ## 픽스처는 **회전**시킨다 (뒤집기가 아니라)
 //!
@@ -24,7 +28,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use principal_candidate_manager::enums::{CalcType, CategoryAgg, MatchMode};
+use principal_candidate_manager::enums::{CalcType, CategoryAgg, LookupScope, MatchMode};
 use principal_candidate_manager::handlers::area_data::{
     base_data_import, category_map_import, numeric_table_import, StudentTypeQuery,
 };
@@ -64,6 +68,23 @@ const FIX_BASE_ENROLLED: &[&str] = &["값", "학년", "반", "번호", "이름"]
 const CANON_BASE_GRADUATED: &[&str] = &["학생코드", "이름", "값"];
 const FIX_BASE_GRADUATED: &[&str] = &["이름", "값", "학생코드"];
 
+// COMPOSITE 는 `대학명`·`모집단위명` 두 열이 더 붙는다(`area_data.rs::resolve_track`).
+// 저장소의 다른 COMPOSITE 픽스처는 전부 두 열을 **맨 끝 두 칸**에 두므로, 여기서는
+// 회전으로 두 열을 앞으로 보낸다 — 끝에서 세는 위치 조회도 같이 잡기 위해서다.
+const CANON_NUMERIC_COMPOSITE: &[&str] = &["기준값", "점수", "대학명", "모집단위명"];
+const FIX_NUMERIC_COMPOSITE: &[&str] = &["대학명", "모집단위명", "기준값", "점수"];
+
+const CANON_CATEGORY_COMPOSITE: &[&str] = &["범주", "점수", "대학명", "모집단위명"];
+const FIX_CATEGORY_COMPOSITE: &[&str] = &["대학명", "모집단위명", "범주", "점수"];
+
+const CANON_BASE_ENROLLED_COMPOSITE: &[&str] =
+    &["학년", "반", "번호", "이름", "값", "대학명", "모집단위명"];
+const FIX_BASE_ENROLLED_COMPOSITE: &[&str] =
+    &["대학명", "모집단위명", "학년", "반", "번호", "이름", "값"];
+
+const CANON_BASE_GRADUATED_COMPOSITE: &[&str] = &["학생코드", "이름", "값", "대학명", "모집단위명"];
+const FIX_BASE_GRADUATED_COMPOSITE: &[&str] = &["대학명", "모집단위명", "학생코드", "이름", "값"];
+
 const CANON_SETTINGS: &[&str] = &[
     "대학명", "대학 정원", "대학 재학생우선",
     "모집단위명", "모집단위 정원", "모집단위 재학생우선",
@@ -100,6 +121,10 @@ fn every_fixture_moves_required_columns_off_their_canonical_position() {
         ("category_map", CANON_CATEGORY, FIX_CATEGORY),
         ("base_data 재학생", CANON_BASE_ENROLLED, FIX_BASE_ENROLLED),
         ("base_data 졸업생", CANON_BASE_GRADUATED, FIX_BASE_GRADUATED),
+        ("numeric_table COMPOSITE", CANON_NUMERIC_COMPOSITE, FIX_NUMERIC_COMPOSITE),
+        ("category_map COMPOSITE", CANON_CATEGORY_COMPOSITE, FIX_CATEGORY_COMPOSITE),
+        ("base_data 재학생 COMPOSITE", CANON_BASE_ENROLLED_COMPOSITE, FIX_BASE_ENROLLED_COMPOSITE),
+        ("base_data 졸업생 COMPOSITE", CANON_BASE_GRADUATED_COMPOSITE, FIX_BASE_GRADUATED_COMPOSITE),
         ("universities 설정", CANON_SETTINGS, FIX_SETTINGS),
         ("대교협", CANON_DAEGYO, FIX_DAEGYO),
         ("대교협(미제공)", CANON_DAEGYO, FIX_DAEGYO_FALLBACK),
@@ -149,17 +174,49 @@ async fn insert_area(
     match_mode: Option<MatchMode>,
     category_agg: Option<CategoryAgg>,
 ) -> i64 {
+    insert_area_scoped(pool, calc_type, match_mode, category_agg, LookupScope::Simple).await
+}
+
+async fn insert_area_scoped(
+    pool: &sqlx::SqlitePool,
+    calc_type: CalcType,
+    match_mode: Option<MatchMode>,
+    category_agg: Option<CategoryAgg>,
+    lookup_scope: LookupScope,
+) -> i64 {
     sqlx::query(
         "INSERT INTO areas (name, max_score, calc_type, match_mode, category_agg, lookup_scope, multi_value) \
-         VALUES ('요소', 10000000, ?, ?, ?, 'SIMPLE', 0)",
+         VALUES ('요소', 10000000, ?, ?, ?, ?, 0)",
     )
     .bind(calc_type)
     .bind(match_mode)
     .bind(category_agg)
+    .bind(lookup_scope)
     .execute(pool)
     .await
     .unwrap()
     .last_insert_rowid()
+}
+
+async fn insert_enrolled_student(pool: &sqlx::SqlitePool) {
+    common::insert_class(pool, 2, 7).await;
+    sqlx::query(
+        "INSERT INTO students (student_code, name, grade, class_no, seq_no, is_enrolled) \
+         VALUES ('S001', '홍길동', 2, 7, 3, 1)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_graduated_student(pool: &sqlx::SqlitePool) {
+    sqlx::query(
+        "INSERT INTO students (student_code, name, is_enrolled, grad_year) \
+         VALUES ('G001', '홍길동', 0, 2024)",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 fn row(cells: &[&str]) -> Vec<String> {
@@ -368,6 +425,162 @@ async fn base_data_import_enrolled_reads_by_header_name() {
         .await
         .unwrap();
     assert_eq!(value, "450000");
+}
+
+// ── area_data COMPOSITE — `대학명`·`모집단위명` (resolve_track) ──────
+//
+// 위의 area_data 테스트는 전형요소를 전부 SIMPLE 로 만들어 `resolve_track` 이 두 열을
+// 읽는 갈래를 지나지 않았다(2026-10-08 F2 감사 지적). 저장소의 다른 COMPOSITE 픽스처는
+// 두 열을 전부 **맨 끝 두 칸**에 두므로(`git grep -n 대학명 -- tests/`), 두 열을
+// `cols.len()-2` / `cols.len()-1` 로 읽는 변이를 잡지 못했을 것으로 보인다 — 전체
+// 스위트로 돌려 보지는 않았다. 여기서는 두 열을 맨 앞으로 돌린다.
+//
+// 판별력의 소재: 위치로 읽으면 기준값·점수(또는 이름·값)가 대학명·모집단위명으로
+// 읽혀 **그 이름의 대학이 자동 생성**된다. 그래서 단언은 저장된 행이 어느 대학·
+// 모집단위에 묶였는지를 본다 — 상태 코드만 보면 그 변이도 200 을 낼 수 있다.
+// 2026-10-08 에 그 변이를 실제로 넣어 이 파일을 돌렸다: 아래 네 테스트만 빨강,
+// 기존 테스트는 전부 초록이었다(SIMPLE 은 그 갈래를 지나지 않으므로).
+
+#[tokio::test]
+async fn numeric_table_import_composite_reads_univ_and_track_by_header_name() {
+    let pool = common::create_test_pool().await;
+    let aid = insert_area_scoped(
+        &pool, CalcType::Numeric, Some(MatchMode::Upper), None, LookupScope::Composite,
+    ).await;
+    let state = common::make_state(pool.clone());
+
+    let body = csv_body(FIX_NUMERIC_COMPOSITE, &[&["한국대", "컴공", "3", "8.5"]]);
+    let (status, axum::Json(result)) =
+        numeric_table_import(State(state), Path(aid), common::csv_multipart(&body).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+
+    let (univ, track, th, sc): (String, String, i64, i64) = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name, nt.threshold, nt.score \
+         FROM numeric_table nt \
+         JOIN univ_tracks ut ON ut.id = nt.track_id \
+         JOIN universities u ON u.id = ut.univ_id \
+         WHERE nt.area_id = ?",
+    )
+    .bind(aid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (univ.as_str(), track.as_str(), th, sc),
+        ("한국대", "컴공", 300000, 850000),
+        "대학명·모집단위명을 헤더 이름이 아니라 위치로 읽었다"
+    );
+}
+
+#[tokio::test]
+async fn category_map_import_composite_reads_univ_and_track_by_header_name() {
+    let pool = common::create_test_pool().await;
+    let aid = insert_area_scoped(
+        &pool, CalcType::Category, None, Some(CategoryAgg::Sum), LookupScope::Composite,
+    ).await;
+    let state = common::make_state(pool.clone());
+
+    // 0점 기준 행은 같은 (대학, 모집단위) 그룹에 있어야 통과한다 — 함께 넣는다.
+    let body = csv_body(
+        FIX_CATEGORY_COMPOSITE,
+        &[&["한국대", "컴공", "해당없음", "0"], &["한국대", "컴공", "반장", "7.25"]],
+    );
+    let (status, axum::Json(result)) =
+        category_map_import(State(state), Path(aid), common::csv_multipart(&body).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+
+    let (univ, track, sc): (String, String, i64) = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name, cm.score \
+         FROM category_map cm \
+         JOIN univ_tracks ut ON ut.id = cm.track_id \
+         JOIN universities u ON u.id = ut.univ_id \
+         WHERE cm.area_id = ? AND cm.category = '반장'",
+    )
+    .bind(aid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (univ.as_str(), track.as_str(), sc),
+        ("한국대", "컴공", 725000),
+        "대학명·모집단위명을 헤더 이름이 아니라 위치로 읽었다"
+    );
+}
+
+#[tokio::test]
+async fn base_data_import_enrolled_composite_reads_univ_and_track_by_header_name() {
+    let pool = common::create_test_pool().await;
+    let aid = insert_area_scoped(&pool, CalcType::Manual, None, None, LookupScope::Composite).await;
+    insert_enrolled_student(&pool).await;
+    let state = common::make_state(pool.clone());
+
+    let body = csv_body(
+        FIX_BASE_ENROLLED_COMPOSITE,
+        &[&["한국대", "컴공", "2", "7", "3", "홍길동", "4.5"]],
+    );
+    let q = Query(StudentTypeQuery { student_type: "enrolled".to_string() });
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), q, common::csv_multipart(&body).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+
+    let (univ, track, value): (String, String, String) = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name, bd.value \
+         FROM base_data bd \
+         JOIN univ_tracks ut ON ut.id = bd.track_id \
+         JOIN universities u ON u.id = ut.univ_id \
+         WHERE bd.area_id = ?",
+    )
+    .bind(aid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (univ.as_str(), track.as_str(), value.as_str()),
+        ("한국대", "컴공", "450000"),
+        "대학명·모집단위명을 헤더 이름이 아니라 위치로 읽었다"
+    );
+}
+
+#[tokio::test]
+async fn base_data_import_graduated_composite_reads_univ_and_track_by_header_name() {
+    let pool = common::create_test_pool().await;
+    let aid = insert_area_scoped(&pool, CalcType::Manual, None, None, LookupScope::Composite).await;
+    insert_graduated_student(&pool).await;
+    let state = common::make_state(pool.clone());
+
+    let body = csv_body(
+        FIX_BASE_GRADUATED_COMPOSITE,
+        &[&["한국대", "컴공", "G001", "홍길동", "4.5"]],
+    );
+    let q = Query(StudentTypeQuery { student_type: "graduated".to_string() });
+    let (status, axum::Json(result)) =
+        base_data_import(State(state), Path(aid), q, common::csv_multipart(&body).await)
+            .await
+            .unwrap();
+    assert_eq!(status, StatusCode::OK, "errors: {:?}", result.errors);
+
+    let (univ, track, value): (String, String, String) = sqlx::query_as(
+        "SELECT u.univ_name, ut.track_name, bd.value \
+         FROM base_data bd \
+         JOIN univ_tracks ut ON ut.id = bd.track_id \
+         JOIN universities u ON u.id = ut.univ_id \
+         WHERE bd.area_id = ?",
+    )
+    .bind(aid)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (univ.as_str(), track.as_str(), value.as_str()),
+        ("한국대", "컴공", "450000"),
+        "대학명·모집단위명을 헤더 이름이 아니라 위치로 읽었다"
+    );
 }
 
 // ── universities 설정 ────────────────────────────────────────────

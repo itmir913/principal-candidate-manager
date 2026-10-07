@@ -56,9 +56,11 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 표시용 문자열 변환 경로만. 파싱 실패 시 원본 문자열 표시 → 사용자가 데이터 이상 인지 가능. 점수 계산 경로와 무관.  
 **조건**: 점수 계산(`calc_area_score`)에 입력되는 경로가 아닌 순수 표시 경로에서만.
 
-### 12. `src/handlers/teacher_areas.rs` — `.unwrap_or_default()` (`matched_keys`)
-프론트엔드가 점수표 행을 하이라이팅하는 데만 사용. None이면 하이라이팅 없음. 점수 계산·추천 결정에 영향 없음.  
-**조건**: `area-score-preview` 응답의 `matched_keys` 필드에서만.
+### 12. (해소됨) `src/handlers/teacher_areas.rs` — `.unwrap_or_default()` (`matched_keys`)
+프론트엔드가 점수표 행을 하이라이팅하는 데만 쓰던 값이다. 지금 `teacher_area_score_preview` 는
+`matched_keys` 를 `if/else` 로 만들고 `unwrap_or_default()` 호출이 없다 — `compute_area_score`
+공용 헬퍼 추출 커밋(e8465a4)에서 사라졌다(`git log -S unwrap_or_default -- src/handlers/teacher_areas.rs`,
+2026-10-08 확인). 이 파일에 남은 `unwrap_or` 는 #11 뿐이다(2026-10-08 확인). 번호 유지를 위해 항목만 남긴다.
 
 ### 13. `src/handlers/scoring.rs::compute_area_score` — `.expect()` (`CategoryAgg::Max`)
 바로 위에서 범주 0건을 오류로 걸러내므로 `scores`가 비어있지 않고 `max()`는 반드시 `Some`.  
@@ -99,9 +101,9 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 `teacher_login`의 grade=0/class_no=0 분기. 바로 다음 줄 `if hash.is_empty() { return Err(UNAUTHORIZED) }`로 명시적 처리. 허용 목록 #2(admin_login)와 동일 패턴.  
 **조건**: `teacher_login` 함수의 졸업생 분기에서만.
 
-### 22. `src/handlers/teacher_areas.rs` — `.unwrap_or_default()` (`matched_keys`, 라인 drift)
-허용 목록 #12와 동일 위치. 코드 수정으로 라인 번호가 346으로 drift됨.  
-**조건**: #12와 동일.
+### 22. (해소됨) `src/handlers/teacher_areas.rs` — #12 의 중복 등재
+#12 와 같은 위치를 "줄 번호가 달라졌다"는 이유로 다시 적은 항목이었다. 줄 번호는 커밋마다
+낡으므로 적지 않는다(CLAUDE.md 규칙 9). #12 와 함께 해소됨 — 번호 유지를 위해 항목만 남긴다.
 
 ### 23. `src/main.rs` — `.unwrap_or_default()` (자동시작 exe 경로)
 `std::env::current_exe()` 실패 시 빈 문자열 → autostart 레지스트리 등록이 잘못되지만 서버 시작·점수 계산에 영향 없음. Windows 정상 환경에서 발생 불가.  
@@ -116,9 +118,14 @@ value가 테이블 최대 threshold 초과 시 최대 구간 점수 반환 — �
 ### 25. (해소됨) `src/handlers/rounds.rs` / `src/handlers/scoring.rs` — `ROLLBACK ... .ok()`
 2026-07-15 수정으로 수동 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` 패턴을 sqlx 관리 트랜잭션(`Pool::begin_with("BEGIN IMMEDIATE")`)으로 전환. 오류 경로는 tx drop 시 sqlx가 롤백을 관리하며, 실패한 커넥션이 열린 tx를 문 채 풀로 반환되는 경로가 사라짐. 더 이상 `.ok()` 호출 없음 — 번호 유지를 위해 항목만 남긴다.
 
-### 26. `src/handlers/system.rs` — `remove_file(...).ok()` (백업 임시 파일 정리)
-백업 응답 생성 후 임시 파일 삭제 실패는 디스크에 잔존 파일만 남길 뿐 다운로드 결과·점수·추천에 영향 없음.  
-**조건**: `download_db_backup`의 임시 파일 정리 경로에서만.
+### 26. `src/handlers/system.rs` — `if let Err(e) = remove_file(..)` → `tracing::warn!` (백업 임시 파일 정리)
+`download_db_backup` 이 백업 바이트를 읽은 뒤 임시 파일을 지우는데, 삭제 실패는 전파하지 않고
+경고 로그만 남기고 계속 간다. 디스크에 잔존 파일만 남을 뿐 다운로드 결과·점수·추천에 영향 없음.
+예전 기재(`remove_file(...).ok()`)와 형태가 다르다 — `.ok()` 가 아니라 `if let Err` + `warn!` 이다
+(2026-10-08 확인). `tests/silent_fallback_guard.rs` 는 이 형태(`if let Err` + `warn!`)를 세지 않지만,
+이 항목의 **경로는 허용 근거로 읽는다** — 그래서 `system.rs` 는 `unwrap_or` 허용 파일로 남고,
+거기에 새 `unwrap_or` 가 들어오면 파일별 고정 개수 표에만 걸린다.  
+**조건**: `download_db_backup`의 임시 파일 정리 경로에서만. 삭제 실패를 로그 없이 삼키면 위반.
 
 ### 27. (해소됨) `src/main.rs` — `create_dir_all(...).ok()` (`data_dir`)
 2026-07-15 수정으로 `data_dir`가 `anyhow::Result`를 반환하며 경로 취득·디렉토리 생성 실패를 즉시 전파한다 (dev: 기동 중단, release: 오류 대화상자 후 종료). 더 이상 fallback 아님 — 번호 유지를 위해 항목만 남긴다.
@@ -221,5 +228,14 @@ CSV 에서는 그 칸을 빈 문자열로 둔다 — 오류를 감추는 것이 
 
 > **기록 누락이었다(2026-09-21).** 이 예외는 코드에 먼저 들어오고 목록에는 없었다.
 > "새 예외 추가 규칙 1: 이 파일에 먼저 기록한다"가 지켜지지 않았는데 **아무것도 알려 주지
-> 않았다** — 목록을 지키는 기계가 없었기 때문이다. 이제 `tests/silent_fallback_guard.rs` 가
-> 코드와 이 목록을 대조한다.
+> 않았다** — 목록을 지키는 기계가 없었기 때문이다. 이제 `tests/silent_fallback_guard.rs` 가 있다.
+>
+> **그 테스트가 보는 것은 코드→목록 한 방향, 파일 단위다**: `src/` 에서 `unwrap_or*` 를 쓰는
+> 파일이 이 목록에 "(해소됨)" 표시 없이 이름이 있는지, 그리고 파일별 개수가 고정값과 같은지.
+> `.ok()`·`let _ =` 는 개수만 고정한다. **보지 않는 것**: ① 목록 항목이 코드에 아직 있는지
+> (목록→코드) — 낡은 항목(#12·#22·#24·#25·#27)은 사람이 찾아 표시해야 했다. ② 줄 단위 위치.
+> ③ `if let Err` 처럼 다른 형태로 오류를 삼키는 것(#26·#42·#43) — 세지 않는다. ④ **항목의 형태** —
+> 경로만 읽으므로 `unwrap_or` 가 아닌 형태의 항목만 등재된 파일(#6·#18 `students.rs`, #9 `src/auth.rs`,
+> #26 `system.rs`, #35 `areas.rs`, #41 `middleware.rs`)도 `unwrap_or` 허용 파일이 된다. 그런 파일에
+> `unwrap_or` 를 넣고 고정 개수만 올리면 지금도 통과한다. "(해소됨)" 항목을 허용 근거로 세던
+> 동안에는 `rounds.rs`(#25)도 그랬고, 그것만 2026-10-08 에 변이로 확인하고 고쳤다.

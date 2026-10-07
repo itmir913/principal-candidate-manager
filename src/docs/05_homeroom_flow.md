@@ -29,13 +29,20 @@
 - DB에 아무것도 저장하지 않는다.
 - 입력값만을 가지고 점수를 즉시 계산해 응답한다.
 - 점수표에서 매칭된 행의 key(`matched_keys`)를 함께 반환해 프론트엔드가 해당 행을 하이라이팅할 수 있게 한다.
-- 만점 초과 시 자동으로 만점 적용하고 `warning` 메시지를 반환한다.
+- 만점 초과의 처리는 CalcType 에 따라 다르다 (`teacher_areas.rs::teacher_area_score_preview`):
+  - **NUMERIC·CATEGORY**: 계산된 점수가 만점을 초과하면 만점으로 캡해 `score` 로 돌려주고
+    `warning`("계산된 점수가 만점을 초과하여 만점으로 처리됩니다")을 붙인다. 확정 계산
+    (`scoring.rs::calc_area_score`)도 같은 캡을 걸므로 저장 결과와 어긋나지 않는다.
+  - **MANUAL**: 입력값이 만점을 초과하면 `score: null` + `error`("값(…)이 만점(…)을 초과합니다").
+    MANUAL 은 입력값이 곧 점수이고 제출(`teacher_create_application`)이 만점 초과를 400 으로
+    거부하므로, 미리보기가 "만점으로 처리"라고 안내하면 저장 단계에서 뒤집힌다. 문장은 제출
+    오류와 같고 제출 쪽의 `전형요소 id=N: ` 접두어만 없다.
 
 **NUMERIC**: `parse_display_str`로 소수 문자열을 `×100000` 정수로 변환 → `lookup_range_score`로 구간 매칭 → `find_numeric_matched_key`로 매칭된 threshold 반환.
 
 **CATEGORY**: 입력된 각 범주 문자열을 `category_map`에서 조회 → `category_agg`(Sum/Max)로 집계.
 
-**MANUAL**: `parse_display_str`로 변환 후 직접 점수로 사용. 테이블 조회 없음.
+**MANUAL**: `parse_display_str`로 변환 후 직접 점수로 사용. 테이블 조회 없음. 만점 초과는 위와 같이 `error`.
 
 ---
 

@@ -12,6 +12,10 @@
 //! **한계(정직하게)**: 줄 단위가 아니라 파일 단위다. 허용된 파일 안에서 기존 예외를
 //! 지우고 다른 곳에 같은 수만큼 새로 넣으면 통과한다. 목록이 파일 단위로만 위치를
 //! 적고 있어 그 이상은 이 문서 형식으로 지탱되지 않는다.
+//! 그리고 방향은 **코드→목록 하나**다 — 목록 항목이 코드에 아직 있는지(목록→코드)는
+//! 보지 않는다. 낡은 항목은 사람이 찾아 고쳐야 하고(사라졌으면 "(해소됨)", 형태가 바뀌었으면
+//! 실제 형태로), 실제로 세 항목이 낡아 있었다(2026-10-08 F2 감사: #12·#22 는 사라진 호출,
+//! #26 은 다른 형태).
 //!
 //! ③ `unwrap_or*` 밖의 형태 — `Result` 를 `.ok()` 로 Option 으로 바꿔 오류를 버리거나
 //! `let _ =` 로 결과를 버리는 것 — 도 파일별 개수를 고정한다(아래
@@ -27,11 +31,26 @@ use std::collections::BTreeMap;
 
 /// 허용 목록이 이름을 대는 파일들. `### N. \`경로\` — 설명` 에서 경로만 뽑고,
 /// `::함수` 꼬리표는 떼어 파일 단위로 만든다.
+///
+/// `(해소됨)` 표시가 붙은 항목은 **허용 근거가 아니다** — 번호 유지를 위해 남긴 기록이라
+/// 세지 않는다. 전에는 이것도 세어서 #25 때문에 `rounds.rs` 가 허용 파일로 남아 있었고,
+/// 거기에 `unwrap_or` 를 새로 넣고 아래 고정 개수만 올리면 통과했다(2026-10-08 변이로
+/// 확인). 이제 `rounds.rs` 는 허용 파일이 아니다.
+///
+/// 고쳐진 것은 그것 하나다. `system.rs` 는 #26(해소되지 않은 항목)이 이름을 대므로
+/// **여전히 허용 파일**이다. 이 함수는 항목의 **형태**를 보지 않고 경로만 읽으므로,
+/// `unwrap_or` 가 아닌 형태의 항목만 등재된 파일(#6·#18 `students.rs`, #9 `src/auth.rs`,
+/// #26 `system.rs`, #35 `areas.rs`, #41 `middleware.rs`)도 `unwrap_or` 허용 파일이 된다.
+/// 그런 파일에 `unwrap_or` 를 넣고 고정 개수만 올리면 지금도 통과한다 — 개수 표를 고치는
+/// 사람이 목록을 읽는 것이 거기서는 유일한 방어선이다.
 fn allowed_files() -> Vec<String> {
     let doc = include_str!("../src/docs/silent_fallback_allowed.md");
     let mut out = Vec::new();
     for line in doc.lines() {
         let Some(rest) = line.strip_prefix("### ") else { continue };
+        if rest.contains("(해소됨)") {
+            continue;
+        }
         let Some(start) = rest.find('`') else { continue };
         let Some(len) = rest[start + 1..].find('`') else { continue };
         let path = &rest[start + 1..start + 1 + len];

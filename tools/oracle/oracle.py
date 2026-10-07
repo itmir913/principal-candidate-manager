@@ -23,10 +23,11 @@ PCM 채점 독립 오라클
   §3.4  Standard Competition Ranking (1, 1, 3, 4)
   §3.5  각 범위는 자기 플래그만 쓴다 (OR 금지)
 
-라운드 3 추가 (03-round2-findings.md 과제 2):
-  §5.3:450 "순위 계산(RANK())은 excluded 포함 전원으로 계산"
+라운드 3 추가 (03-round2-findings.md 과제 2) — 절 이름으로만 인용한다. 줄 번호는
+커밋마다 낡는다(CLAUDE.md 규칙 9):
+  §5.3 "순위 계산(RANK())은 excluded 포함 전원으로 계산"
         -> ranking / track_rank 파티션에서 excluded 행을 빼지 않는다.
-  §6.1:528 정원 집계 영향 — excluded 없음 / abandoned 있음
+  §6.1 정원 집계 영향 — excluded 없음 / abandoned 있음
         -> 정원은 이 오라클의 범위 밖(순위만 다룬다). abandoned 를 순위에서
            빼야 한다는 조항은 **어느 문서에도 없으므로** 여기서도 빼지 않는다.
            그 침묵 자체가 결과다 (S-08).
@@ -226,13 +227,13 @@ def evaluate(scn):
             "score_detail": detail,
             "is_enrolled": st["is_enrolled"],
             "univ_id": tr["univ_id"],
-            # §5.3:450 — 순위 계산에서 빼지 않는다. 아래 파티션 어디에도 필터가 없다.
+            # §5.3 — 순위 계산에서 빼지 않는다. 아래 파티션 어디에도 필터가 없다.
             "excluded": app.get("excluded", 0),
             "abandoned": app.get("abandoned", 0),
         })
 
     # §3.1 대학 전체 순위 — universities.prioritize_enrolled 만 참조 (§3.5)
-    # 파티션은 '지원 전원'이다. excluded/abandoned 필터가 없는 것이 의도된 상태다(§5.3:450).
+    # 파티션은 '지원 전원'이다. excluded/abandoned 필터가 없는 것이 의도된 상태다(§5.3).
     for uid, u in univs.items():
         part = [r for r in rows if r["univ_id"] == uid]
         if not part:

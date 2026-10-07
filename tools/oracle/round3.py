@@ -1,7 +1,7 @@
 """
 라운드 3 확장 시나리오 — 결정적(무작위 없음).
 
-2단계 오라클(generate.py, 170개)이 **구조적으로 비워 둔** 세 영역을 채운다
+2단계 오라클(generate.py)이 **구조적으로 비워 둔** 세 영역을 채운다
 (02-findings-review.md §3 이 지목한 것):
 
   A. excluded / abandoned 혼재            → 과제 2 (A-2)
@@ -10,7 +10,8 @@
   D. 재오픈(ranking = NULL)               → 2026-09-21 감사 지적
 
 generate.py 의 무작위 시나리오 뒤에 그대로 이어 붙는다. 무작위 스트림을 건드리지
-않으므로 기존 170개(s001~s170)는 바이트 단위로 동일하게 유지된다.
+않으므로 generate.py 가 만드는 기존 시나리오(s001~)는 바이트 단위로 동일하게 유지된다.
+(개수는 여기 적지 않는다 — generate.py 의 `N_SCENARIOS` 가 기준이다.)
 
 시나리오 스키마 확장 (기존 키는 그대로):
   applications[] 에 선택 키 excluded / excluded_reason / abandoned / recommended
@@ -99,7 +100,7 @@ def _group_a():
     students = [_student(i) for i in range(1, 5)]
     out.append(_skeleton(
         "r3a01_excluded_top2",
-        "상위 2명 excluded=1. track_rank/ranking 은 1,2,3,4 그대로여야 한다(명세 §5.3:450).",
+        "상위 2명 excluded=1. track_rank/ranking 은 1,2,3,4 그대로여야 한다(명세 §5.3).",
         areas=[_area(1, "MANUAL", "SIMPLE", 10_000_000)],
         tracks_spec=[(1, 1, None, 0)],
         students=students,
@@ -114,7 +115,7 @@ def _group_a():
                    [(1, 10_000_000), (2, 9_000_000), (3, 8_000_000), (4, 7_000_000)]],
     ))
 
-    # A-2. 추천 확정 후 전원 포기. 순위는 남고 정원만 반환된다(§6.1:528).
+    # A-2. 추천 확정 후 전원 포기. 순위는 남고 정원만 반환된다(§6.1).
     out.append(_skeleton(
         "r3a02_all_abandoned",
         "전원 recommended=1 + abandoned=1 (FINALIZED). 순위는 유지, 정원 집계만 0.",
@@ -130,7 +131,7 @@ def _group_a():
 
     # A-3. 미선발 + 포기 + 정상이 한 트랙에 섞이고 동점까지 있는 경우.
     #      FINALIZED 로 가려면 **모든 지원이 excluded=1 이거나 recommended=1** 이어야 한다
-    #      (trg_require_all_decided_before_finalize, 003-rounds.sql:26). 그래서 abandoned 를
+    #      (`trg_require_all_decided_before_finalize`, `migrations/v1/003-rounds.sql`). 그래서 abandoned 를
     #      섞은 시나리오는 필연적으로 "전원 결정됨" 상태가 된다 — 03-round2-findings.md §2.3 참조.
     out.append(_skeleton(
         "r3a03_mixed_with_tie",
@@ -281,7 +282,7 @@ def _group_b():
 # ────────────────────────────────────── C. COMPOSITE 점수표 폴백
 
 def _group_c():
-    """generate.py:114-115 가 '폴백 경로를 피해' 트랙마다 표를 만든 그 경로를 정면으로 친다.
+    """generate.py 의 점수표 생성부가 '폴백 경로를 피해' 트랙마다 표를 만든 그 경로를 정면으로 친다.
 
     base_data 는 트랙 스코프에 둔다 (구현이 COMPOSITE base_data 에 폴백을 두지 않으므로 — S-02).
     비워 두는 것은 **점수표**뿐이다. 그래야 §2.3 이 규정한 점수표 폴백만 분리해서 볼 수 있다.
