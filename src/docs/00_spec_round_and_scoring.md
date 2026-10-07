@@ -811,7 +811,7 @@ CHECK (excluded = 0 OR (excluded_reason IS NOT NULL AND TRIM(excluded_reason) <>
   "univ_violations": [...]
 }
 ```
-정원 초과는 최대 5건씩 (`rounds.rs::finalize_round, 349` LIMIT 5).
+정원 초과는 최대 5건씩 (`rounds.rs::finalize_round` 의 LIMIT 5).
 
 ### 7.4 DB 트리거 이중 방어와 그 이유
 
@@ -948,7 +948,7 @@ CLOSED 전용) 전례로 삼을 것이 없어 여기 적어 둔다. 학과명은
    현재 FINALIZED 라운드에서 applications를 삭제하는 정상 경로가 없다고 가정한 것으로 보인다.  
    향후 "과거 라운드 데이터 정리" 기능을 추가할 경우 이 트리거가 막는다. 의도하신 것이 맞습니까?
 
-2. **정원 초과 검증의 LIMIT 5** (`rounds.rs::finalize_round, 349`):  
+2. **정원 초과 검증의 LIMIT 5** (`rounds.rs::finalize_round`):  
    미결정 검증은 LIMIT 없이 전원을 반환하지만, 정원 초과 검증은 LIMIT 5를 사용한다.  
    정원 초과 건이 6건 이상 있을 경우 앞 5건만 표시된다. 의도된 것입니까?
 

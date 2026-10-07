@@ -175,11 +175,14 @@ TeacherView.vue 및 하위 탭 컴포넌트에서 사용.
 - `getTrackRecommendedList(trackId)`
 
 ### RoundsTab.vue
-- `getRounds`, `openRound`, `closeRound`, `reopenRound`, `finalizeRound`
-- `calculateScores`, `getResults`, `exportResultsExcel`, `exportRoundSummary`
-- `recommendResult`, `unrecommendResult`
-- `getApplications`, `abandonApplication`
-- `scorePreview`
+- `getRounds`, `openRound`, `closeRound`, `reopenRound`, `finalizeRound`, `getRoundConfirmationStatus`
+- `calculateScores`, `getResults`, `getQuotaStats`, `getAreas`, `exportResultsExcel`, `exportRoundSummary`
+- `recommendResult`, `unrecommendResult`, `autoRecommend`, `autoRecommendUniv`
+- `getApplications`, `abandonApplication`, `updateApplicationDepartment`
+- `excludeApplication`, `clearApplicationExclusion`
+
+(목록은 `RoundsTab.vue` 의 `api/admin.js` import 가운데 API 호출 함수를 옮긴 것이다 — 바뀌면 import 를 기준으로 다시 맞춘다.
+관리자 `scorePreview`(GET /score-preview)는 2026-05-30 `eb293a8` 이후 어느 화면도 부르지 않는다.)
 
 ### TeacherView.vue
 - `getCurrentRound`
