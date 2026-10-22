@@ -126,7 +126,7 @@ npm run build
 npm run ci
 ```
 
-> PR이 올라오면 `.github/workflows/CI.yml`이 같은 `npm run ci`를 자동 실행합니다.
+> PR이 올라오면 `.github/workflows/CI.yml`이 같은 `npm run ci`를 조각별 병렬 잡으로 자동 실행합니다.
 > `npm run ci`는 프론트 테스트·러스트 테스트·오라클 대조를 순서대로 돌립니다.
 > 프론트엔드는 순수 로직에 더해 **화면이 열리는지**·되돌리기 어려운 행위의 확인
 > 절차·정원 입력까지 자동 검증됩니다. 다만 외관(레이아웃·색·여백)은 단언하지

@@ -107,8 +107,8 @@ Rust(stable)와 Node.js가 필요합니다. `setup`이 npm 패키지와 `cargo-w
 3. **로컬에서 `npm run ci`가 전부 통과하는지 확인합니다**
 4. 무엇을 왜 바꿨는지 설명을 담아 PR을 보냅니다
 
-> PR을 올리면 `.github/workflows/CI.yml`이 위와 **동일한 `npm run ci`**를
-> windows-latest에서 실행합니다. 프론트엔드 검증은 여러 겹입니다 — `vitest`가
+> PR을 올리면 `.github/workflows/CI.yml`이 위와 **동일한 `npm run ci`**의 세 조각을
+> windows-latest에서 병렬 잡으로 나눠 실행합니다(조각 구성이 어긋나면 CI가 실패합니다). 프론트엔드 검증은 여러 겹입니다 — `vitest`가
 > `.vue` 밖의 순수 모듈(점수 표기·오류 문자열·라벨)을 직접 호출해 검사하고,
 > `tools/oracle/front_check.mjs`가 백엔드 실측값으로 파생 로직(점수 표기·동점
 > 표식·재정렬)을 대조하며, **정적 스캔**이 `.vue` 템플릿의 미정의 식별자를 찾고, **소스 규칙 검사**가

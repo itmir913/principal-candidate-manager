@@ -15,13 +15,83 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    # tray-icon 이 Linux 에서 GTK 시스템 패키지를 요구하므로 windows 로 고정한다.
-    # 릴리스 대상 플랫폼(publish.yml)과도 일치한다.
+  # `npm run ci` 를 조각별 잡으로 나눠 병렬로 돌린다 — 벽시계가 합 대신 가장 긴 잡이 된다.
+  # 사람이 치는 입구는 여전히 `npm run ci` 하나다. 두 쪽이 같은 것을 돌리는지는
+  # front 잡의 "ci 구성 대조" 단계가 package.json 을 읽어 확인한다.
+  #
+  # tray-icon 이 Linux 에서 GTK 시스템 패키지를 요구하므로 cargo 를 쓰는 잡은
+  # windows 로 고정한다. 릴리스 대상 플랫폼(publish.yml)과도 일치한다.
+
+  front:
     runs-on: windows-latest
     permissions:
       contents: read
+    steps:
+      - uses: actions/checkout@v6
 
+      # 조각을 나눴으므로 `npm run ci` 정의가 바뀌면 여기 잡 구성도 같이 바꿔야 한다.
+      # 이 단계가 그걸 잊지 않게 한다 — 기대 문자열과 다르면 실패.
+      - name: ci 구성 대조
+        shell: bash
+        run: |
+          actual=$(node -p "require('./package.json').scripts.ci")
+          expected='npm run test:front && npm test && npm run test:oracle'
+          if [ "$actual" != "$expected" ]; then
+            echo "package.json scripts.ci 가 CI.yml 잡 구성과 다르다:"
+            echo "  actual:   $actual"
+            echo "  expected: $expected"
+            echo "CI.yml 의 잡(front/cargo/oracle)과 이 기대값을 함께 고친다."
+            exit 1
+          fi
+
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: test:front
+        run: npm run test:front
+
+  cargo:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install frontend dependencies
+        run: npm --prefix frontend ci
+
+      # frontend/dist 는 gitignore 대상인데 src/main.rs 가
+      # #[folder = "frontend/dist/"] 로 임베드하므로, 빌드해 두지 않으면
+      # cargo test 가 바이너리 타깃 컴파일 단계에서 실패한다.
+      - name: build frontend
+        run: npm --prefix frontend run build
+
+      - name: test (cargo)
+        run: npm test
+
+  oracle:
+    runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -43,18 +113,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # front_check.mjs 가 frontend/src 의 실물을 import 하고, 오라클의
+      # cargo test --test audit_oracle_dump 도 바이너리 임베드 때문에 dist 가 필요하다.
       - name: install frontend dependencies
         run: npm --prefix frontend ci
 
-      # frontend/dist 는 gitignore 대상인데 src/main.rs 가
-      # #[folder = "frontend/dist/"] 로 임베드하므로, 빌드해 두지 않으면
-      # cargo test 가 바이너리 타깃 컴파일 단계에서 실패한다.
       - name: build frontend
         run: npm --prefix frontend run build
 
-      # CONTRIBUTING 이 기여자에게 안내하는 명령과 동일하게 유지한다.
-      # 테스트 정의가 바뀌면(예: 프론트 테스트 추가) CI 도 자동으로 따라간다.
-      # npm run ci = npm run test:front(vitest) + npm test(cargo)
-      #            + npm run test:oracle(독립 오라클·프론트 대조).
-      - name: test
-        run: npm run ci
+      - name: test:oracle
+        run: npm run test:oracle
