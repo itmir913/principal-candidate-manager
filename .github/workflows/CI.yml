@@ -52,7 +52,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: install frontend dependencies
-        run: npm --prefix frontend ci
+        # --no-audit: audit 요청이 응답 없이 5분가량 멈추는 일이 반복됐다(2026-10-22).
+        # CI 판정은 audit 과 무관하고, 의존성 경보는 Dependabot 이 맡는다.
+        run: npm --prefix frontend ci --no-audit
 
       - name: test:front
         run: npm run test:front
@@ -77,7 +79,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: install frontend dependencies
-        run: npm --prefix frontend ci
+        # --no-audit: audit 요청이 응답 없이 5분가량 멈추는 일이 반복됐다(2026-10-22).
+        # CI 판정은 audit 과 무관하고, 의존성 경보는 Dependabot 이 맡는다.
+        run: npm --prefix frontend ci --no-audit
 
       # frontend/dist 는 gitignore 대상인데 src/main.rs 가
       # #[folder = "frontend/dist/"] 로 임베드하므로, 빌드해 두지 않으면
@@ -116,7 +120,9 @@ jobs:
       # front_check.mjs 가 frontend/src 의 실물을 import 하고, 오라클의
       # cargo test --test audit_oracle_dump 도 바이너리 임베드 때문에 dist 가 필요하다.
       - name: install frontend dependencies
-        run: npm --prefix frontend ci
+        # --no-audit: audit 요청이 응답 없이 5분가량 멈추는 일이 반복됐다(2026-10-22).
+        # CI 판정은 audit 과 무관하고, 의존성 경보는 Dependabot 이 맡는다.
+        run: npm --prefix frontend ci --no-audit
 
       - name: build frontend
         run: npm --prefix frontend run build
