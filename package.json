@@ -14,7 +14,7 @@
     "ci": "npm run test:front && npm test && npm run test:oracle"
   },
   "devDependencies": {
-    "concurrently": "^10.0.0",
-    "wait-on": "^8.0.0"
+    "concurrently": "^10.0.6",
+    "wait-on": "^9.5.1"
   }
 }
