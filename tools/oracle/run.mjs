@@ -1,12 +1,13 @@
 // 독립 오라클 대조 러너 — `npm run test:oracle` 의 진입점.
 //
-// 네 단계를 순서대로 돌린다. 하나라도 실패하면 즉시 비정상 종료한다.
+// 다섯 단계를 순서대로 돌린다. 하나라도 실패하면 즉시 비정상 종료한다.
 //   1) generate.py   시나리오 생성 (scenarios.json)
 //   2) audit_oracle_dump  구현 실측값 덤프 (actual.json)
 //        - PCM_ORACLE_DIR 이 없으면 이 테스트는 no-op 이다. 여기서만 설정한다.
 //          (일반 `cargo test` 가 파일을 만들지 않게 하려는 의도된 설계)
 //   3) compare.py    오라클 예측 vs 실측 대조 (불일치 시 exit 1)
 //   4) front_check.mjs  프론트 파생값 대조 (알려진 결함은 XFAIL)
+//   5) verify_db_selftest.py  실운영 DB 대조 도구(verify_db.py)가 낡지 않았는지 합성 DB 로 확인
 //
 // scenarios.json / actual.json 은 생성물이라 저장소에 넣지 않는다(.gitignore).
 // 이 러너를 거치면 항상 현재 코드 기준으로 다시 만들어진다.
@@ -48,18 +49,22 @@ function run(label, cmd, args, opts = {}) {
 
 const py = pythonCmd()
 
-run('1/4 시나리오 생성', py, [path.join(HERE, 'generate.py')], {
+run('1/5 시나리오 생성', py, [path.join(HERE, 'generate.py')], {
   cwd: HERE,
   env: { ...process.env, ...PY_ENV },
 })
-run('2/4 구현 실측 덤프', 'cargo', ['test', '--test', 'audit_oracle_dump', '--', '--nocapture'], {
+run('2/5 구현 실측 덤프', 'cargo', ['test', '--test', 'audit_oracle_dump', '--', '--nocapture'], {
   cwd: REPO,
   env: { ...process.env, PCM_ORACLE_DIR: HERE },
 })
-run('3/4 오라클 대조', py, [path.join(HERE, 'compare.py')], {
+run('3/5 오라클 대조', py, [path.join(HERE, 'compare.py')], {
   cwd: HERE,
   env: { ...process.env, ...PY_ENV },
 })
-run('4/4 프론트 대조', process.execPath, [path.join(HERE, 'front_check.mjs')], { cwd: HERE })
+run('4/5 프론트 대조', process.execPath, [path.join(HERE, 'front_check.mjs')], { cwd: HERE })
+run('5/5 실DB 대조 도구 자기검증', py, ['-I', path.join(HERE, 'verify_db_selftest.py')], {
+  cwd: HERE,
+  env: { ...process.env, ...PY_ENV },
+})
 
 console.log('\n오라클 대조 전 단계 통과')
