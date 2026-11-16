@@ -238,7 +238,7 @@
 | PUT | `/teacher/applications/:sid/:tid/:rid/abandon` | 포기 (FINALIZED에서만). 지원 없으면 404 | 담당 학생 검증 |
 | PUT | `/teacher/applications/:sid/:tid/:rid/department` | 학과명 수정 (**FINALIZED에서만**). Body: `{"department_name":"..."}` | 담당 학생 검증(403). OPEN·CLOSED는 400 — 담임이 그 라운드를 보는 화면이 [라운드 결과](FINALIZED 전용)뿐이다. `round_confirmations`를 철회하지 않는다 |
 | PUT | `/teacher/password` | 담임 비밀번호 변경 | 졸업생 담임 불가 |
-| GET | `/teacher/area-context` | 전형요소+저장된 기초데이터. `?student_id=&track_id=` | |
+| GET | `/teacher/area-context` | 전형요소+저장된 기초데이터. `?student_id=&track_id=`. 항목마다 `editable`(이 계정의 입력 가능 여부) 포함 | |
 | POST | `/teacher/area-score-preview` | 입력값 기반 점수 미리보기 (비저장). 응답: `{score, matched_keys, warning, error}` | |
 | GET | `/teacher/results` | FINALIZED 라운드 결과 (담당 학생) | |
 | GET | `/teacher/rounds/:id/confirm` | 우리 학급 입력 확정 상태. 응답: `{confirmed, confirmed_at}` | |
@@ -266,7 +266,7 @@ Body:
 2. 학생 소속 검증 (담당 반/졸업생)
 3. department_name trim+비어있으면 400
 4. 전형요소 정보 일괄 로드
-5. teacher_editable 아닌 전형요소에 값 입력 시 403
+5. 입력 권한(`auth::can_teacher_edit` — teacher_editable 이거나 졸업생 담당) 없는 전형요소에 값 입력 시 403
 6. teacher_editable인 전형요소 전부 값 있어야 함 (누락 시 422)
 7. 값 인코딩 (×100000, Category: 그대로)
 8. **트랜잭션 시작 (`BEGIN IMMEDIATE` — 시작 시점 쓰기 잠금)**

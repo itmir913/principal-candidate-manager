@@ -16,6 +16,22 @@ pub struct TeacherClaims {
     pub exp: usize,
 }
 
+impl TeacherClaims {
+    /// 졸업생 담당 특수 계정(grade 0·class_no 0). 관리자 비밀번호로 로그인한다.
+    pub fn is_graduate_manager(&self) -> bool {
+        self.grade == 0 && self.class_no == 0
+    }
+}
+
+/// 이 담임 계정이 이 전형요소 값을 입력할 수 있는가.
+///
+/// 졸업생 담당은 사실상 관리자 역할이라 `teacher_editable` 이 아닌(관리자 입력 고정)
+/// 항목도 입력한다(이슈 #50). 관리자가 넣은 값과 같은 `base_data` 행이라 저장하면
+/// 덮어쓴다 — 소유자 결정. 저장 관문과 컨텍스트 응답의 `editable` 이 이 함수를 쓴다.
+pub fn can_teacher_edit(claims: &TeacherClaims, teacher_editable: bool) -> bool {
+    teacher_editable || claims.is_graduate_manager()
+}
+
 fn expiry_secs(hours: u64) -> usize {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

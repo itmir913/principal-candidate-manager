@@ -12,10 +12,17 @@ export const teacherGetUnivTracks = (univId) =>
   axios.get(`/api/teacher/universities/${univId}/tracks`).then(r => r.data)
 
 // 전형요소 + 점수표 + 기저장 기초데이터
+// `editable`(이 계정이 입력할 수 있는가)은 서버가 정한다(이슈 #50). 없으면 잠글지 풀지
+// 알 수 없으니 추측하지 않고 실패시킨다 — 호출자 셋은 각자의 catch 로 오류를 보인다.
 export const teacherGetAreaContext = (studentId, trackId) =>
   axios.get('/api/teacher/area-context', {
     params: { student_id: studentId, track_id: trackId },
-  }).then(r => r.data)
+  }).then(r => {
+    if (!Array.isArray(r.data) || r.data.some(a => typeof a?.editable !== 'boolean')) {
+      throw new Error('전형요소 정보에 입력 가능 여부(editable)가 없습니다.')
+    }
+    return r.data
+  })
 
 // 실시간 점수 계산 (비저장)
 export const teacherAreaScorePreview = (areaId, trackId, values) =>

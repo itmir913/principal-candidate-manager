@@ -40,7 +40,11 @@ pub struct AreaContextItem {
     pub area_name: String,
     pub calc_type: CalcType,
     pub max_score: Score,
+    /// 전형요소 설정값(관리자가 정한 "담임 입력 허용").
     pub teacher_editable: bool,
+    /// 이 계정이 이 항목을 입력할 수 있는가 — `auth::can_teacher_edit`. 담임 화면의
+    /// 잠금·배지·제출 범위는 이 값만 본다(이슈 #50).
+    pub editable: bool,
     pub match_mode: Option<MatchMode>,
     pub category_agg: Option<CategoryAgg>,
     pub multi_value: bool,
@@ -74,7 +78,7 @@ pub async fn teacher_area_context(
     Extension(claims): Extension<TeacherClaims>,
     Query(q): Query<AreaContextQuery>,
 ) -> Result<Json<Vec<AreaContextItem>>, ApiError> {
-    let is_grad = claims.grade == 0 && claims.class_no == 0;
+    let is_grad = claims.is_graduate_manager();
     let belongs: bool = if is_grad {
         sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM students WHERE id = ? AND is_enrolled = 0)",
@@ -144,6 +148,7 @@ pub async fn teacher_area_context(
             calc_type: area.calc_type,
             max_score: Score::from_raw(area.max_score),
             teacher_editable: area.teacher_editable,
+            editable: crate::auth::can_teacher_edit(&claims, area.teacher_editable),
             match_mode: area.match_mode,
             category_agg: area.category_agg,
             multi_value: area.category_agg == Some(CategoryAgg::Sum),

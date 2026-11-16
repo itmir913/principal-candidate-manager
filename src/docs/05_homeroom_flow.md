@@ -11,6 +11,7 @@
 
 **반환 내용 (전형요소별)**
 - `area_id`, `area_name`, `calc_type`, `max_score`, `teacher_editable`, `match_mode`, `category_agg`, `multi_value`
+- `editable`: **이 계정이** 이 항목을 입력할 수 있는가(`auth::can_teacher_edit`). `teacher_editable` 은 전형요소 설정값 그대로이고, 담임 화면의 잠금·배지·미리 채우기·제출 범위는 `editable` 만 본다. 응답에 `editable` 이 불리언으로 없으면 프론트(`api/teacher.js` 의 `teacherGetAreaContext`)가 오류로 처리한다.
 - `current_values`: DB에 저장된 기초데이터 값 목록. NUMERIC/MANUAL은 `×100000` 정수를 소수 문자열로 변환(`fmt_score`), CATEGORY는 원문 문자열. 데이터가 없으면 빈 배열.
 - `table`: NUMERIC이면 구간표(`threshold`, `score`), CATEGORY이면 범주표(`category`, `score`), MANUAL이면 `null`.
 - COMPOSITE 전형요소의 경우 `track_id` 기준 테이블을 먼저 조회하고, 없으면 공통(`NULL`) 테이블로 폴백.
@@ -57,7 +58,7 @@
 1. 라운드 상태 확인: `OPEN`이어야 한다. 그 외 상태이면 400.
 2. 학생 소속 검증: 담임 JWT의 grade/class_no와 일치 여부.
 3. `department_name` 필수 여부: 비어 있으면 400.
-4. 전형요소 목록 로드: `teacher_editable` 플래그 확인. `teacher_editable=false`인 전형요소에 값을 전송하면 403.
+4. 전형요소 목록 로드: 입력 권한 확인(`auth::can_teacher_edit` = `teacher_editable` 이거나 졸업생 담당). 권한 없는 전형요소에 값을 전송하면 403.
 5. 값 인코딩: NUMERIC/MANUAL은 소수 문자열 → `×100000` 정수로 변환, CATEGORY는 문자열 그대로. 복수값 허용 여부 검증 포함.
 
 ### 2. 트랜잭션 내 처리 순서
@@ -96,11 +97,24 @@
 ## 저장 가능 조건 (canSave) 검증
 
 **백엔드 검증 방식**:
-- `teacher_editable=false` 전형요소는 값을 전송하면 거부(403)하지만, 전송하지 않는 것은 허용한다.
+- 입력 권한이 없는 전형요소(`can_teacher_edit` 가 false)는 값을 전송하면 거부(403)하지만, 전송하지 않는 것은 허용한다.
 - `teacher_editable=true` 전형요소는 **모두** 값을 제출해야 한다. 하나라도 누락되면 422 Unprocessable Entity 반환.
 - `values`가 비어 있는 항목은 미제출로 간주해 위 422 검증에 걸린다.
 
 **구현** (`applications.rs`): `values`가 1건 이상인 area_id를 `submitted_area_ids`로 수집한 뒤, `teacher_editable=true`인 모든 전형요소가 포함되어 있는지 확인한다. 누락 시 422.
+
+## 졸업생 담당과 관리자 입력 고정 항목 (이슈 #50)
+
+졸업생 담당(grade 0·class_no 0)은 사실상 관리자 역할이라 `teacher_editable=false` 항목도 입력한다. 소유자 결정:
+
+- **덮어쓰기.** 관리자 값과 같은 `base_data` 행이므로 졸업생 담당이 저장하면 그 값으로 바뀐다(마지막 저장이 이긴다). 화면은 관리자 값을 입력칸에 미리 채운다.
+- **필수 제출 집합은 넓히지 않는다.** 위 422 검사는 `teacher_editable` 기준 그대로다. 고정 항목을 빼고 내면 저장된(관리자) 값으로 계산되고, 값이 아예 없으면 점수 계산이 `Err` 를 내 422 가 된다.
+- **감사 로그에 값은 남지 않는다.** `ApplicationSaved` 는 `base_data` 값을 담지 않는다(담임 입력 항목과 같음). 소유자가 받아들였다.
+- 관리자가 나중에 졸업생 기초데이터를 다시 넣으면 졸업생 담당 입력도 교체된다 — `area_data.rs` 의 student_type 범위 DELETE+INSERT, `external_import.rs` 의 `INSERT OR REPLACE` 모두.
+- SIMPLE 항목은 학생당 한 행이라 덮어쓰기가 같은 학생의 다른 모집단위 지원에도 적용된다. `results` 는 저장한 모집단위만 다시 계산되고, 라운드 마감이 전체를 다시 계산한다. COMPOSITE 항목은 모집단위별 행이라 저장한 모집단위에만 적용된다.
+- `base_data` 삭제 방지 트리거는 이 경로에 걸리지 않는다. 라운드 생성이 OPEN·CLOSED 공존을 막고 저장은 tx 안에서 OPEN 을 재확인하므로, 저장 시점에 CLOSED 지원이 없다.
+
+테스트: `tests/graduate_fixed_area.rs`, `frontend/tests/application-form.render.test.js` 의 이슈 #50 묶음, `frontend/src/logic/teacherApplication.test.js` 의 `canSaveApplication`.
 
 ---
 

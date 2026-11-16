@@ -23,7 +23,7 @@ const OPEN_ROUND = { id: 3, status: 'OPEN', opened_at: '2026-03-21T00:00:00Z',
 const STUDENT = { id: 1, name: '학생01', student_code: '2026001',
                   grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }
 const AREA_CTX = { area_id: 1, area_name: '요소1', calc_type: 'NUMERIC', match_mode: 'UPPER',
-                   lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1,
+                   lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1, editable: true,
                    max_score: 10, current_values: [], table: [] }
 
 /** 이미 등록된 지원 — 상세 모달·수정 경로에서 쓴다. */
@@ -250,7 +250,7 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
   // 2026-10-07 브라우저 실측에서 실제로 "예상 6점" 이 남았다(백엔드는 10점을 돌려줬다).
   it('같은 전형요소의 미리보기가 겹치면 마지막 요청의 응답만 남는다', async () => {
     const CAT = { area_id: 2, area_name: '수상실적', calc_type: 'CATEGORY', match_mode: null,
-                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, max_score: 10,
+                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, editable: true, max_score: 10,
                   current_values: [],
                   table: [{ key: '교내 대상', score: 6 }, { key: '교외 우수상', score: 7 }] }
     routes.context = () => [CAT]
@@ -282,7 +282,7 @@ describe('담임 지원 등록 폼 — 실제로 채운다', () => {
   // 지운 미리보기를 되살린다.
   it('선택을 모두 풀면 늦게 온 응답이 미리보기를 되살리지 못한다', async () => {
     const CAT = { area_id: 2, area_name: '수상실적', calc_type: 'CATEGORY', match_mode: null,
-                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, max_score: 10,
+                  lookup_scope: 'SIMPLE', multi_value: 1, teacher_editable: 1, editable: true, max_score: 10,
                   current_values: [],
                   table: [{ key: '교내 대상', score: 6 }, { key: '교외 우수상', score: 7 }] }
     routes.context = () => [CAT]
@@ -435,6 +435,148 @@ describe('담임 지원 — 저장·수정·취소 뒤', () => {
     await settle()
     expect(w.findAll('button').some(b => b.text().trim() === '저장'), '저장됐는데 폼이 열려 있다').toBe(false)
     expect(w.text(), '재조회 오류가 저장 실패 자리에 떴다').not.toContain('목록 조회 실패 S')
+    w.unmount()
+  })
+})
+
+/**
+ * 이슈 #50 — 담임 화면은 서버가 정한 `editable` 만 보고 잠금·배지·미리 채우기·제출 범위를
+ * 정한다. 졸업생 담당이면 서버가 고정 항목에도 `editable: true` 를 준다(백엔드
+ * tests/graduate_fixed_area.rs 가 그 쪽을 본다). 여기서는 `teacher_editable` 은 늘 0(고정)으로
+ * 두고 `editable` 만 바꿔, 화면이 설정값이 아니라 `editable` 을 따르는지 가른다.
+ */
+describe('담임 지원 — editable 로 잠금·배지·제출 범위를 정한다 (이슈 #50)', () => {
+  const FIXED = { ...AREA_CTX, teacher_editable: 0, current_values: ['3.5'] }
+  let rejections
+  const onRejection = (e) => rejections.push(String(e?.reason?.message ?? e?.reason ?? e))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    routes = defaultRoutes()
+    posts = []
+    deletes = []
+    rejections = []
+    process.on('unhandledRejection', onRejection)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Element.prototype.scrollIntoView = () => {}
+  })
+  afterEach(() => {
+    if (dialogState.open) settleDialog(false)
+    process.off('unhandledRejection', onRejection)
+    vi.restoreAllMocks()
+    delete Element.prototype.scrollIntoView
+    expect(rejections, '미처리 거부').toEqual([])
+  })
+  const btn = (w, label) => w.findAll('button').find(x => x.text().trim() === label)
+  async function click(el) { await el.trigger('click'); await settle() }
+  async function fillForm() {
+    const w = await openForm()
+    await pickUniv(w)
+    await pickTrack(w)
+    await w.find('input[type="text"][placeholder="예: 컴퓨터공학과"]').setValue('컴퓨터공학과')
+    await settle()
+    return w
+  }
+  async function openDetail() {
+    routes.apps = () => [EXISTING]
+    const w = await openStudent()
+    await click(w.findAll('.cursor-pointer').find(d => d.text().includes('가대학 — 가모집단위')))
+    expect(w.text(), '상세 모달이 열리지 않았다').toContain('학생01 — 가대학 가모집단위')
+    return w
+  }
+
+  // F1. 판별력(NUMERIC 입력칸): 그 입력칸의 잠금·미리 채우기·제출 필터·배지 중 하나라도
+  //     teacher_editable 을 보면 배지가 뜨거나, 잠기거나, 본문에서 빠진다.
+  //     다른 입력 종류의 잠금은 아래 F1-b 가 본다.
+  it('F1. editable 이면 고정 항목도 배지 없이 열리고, 관리자 값이 미리 채워져 저장 본문에 간다', async () => {
+    routes.context = () => [{ ...FIXED, editable: true }]
+    const w = await fillForm()
+    expect(w.text()).not.toContain('관리자 입력 고정')
+    const input = w.find('input[type="number"]')
+    expect(input.attributes('disabled'), '입력칸이 잠겨 있다').toBeUndefined()
+    expect(input.element.value).toBe('3.5')
+    await input.setValue('4')
+    await wait(450)
+    await settle()
+    await click(btn(w, '저장'))
+    const sent = posts.filter(p => /teacher\/applications$/.test(p.url))
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body.base_data_entries).toEqual([{ area_id: 1, values: ['4'] }])
+    w.unmount()
+  })
+
+  // F1-b. 판별력: CATEGORY 단일(select)·CATEGORY 복수(체크박스)·MANUAL 입력의 잠금이
+  //       teacher_editable 을 보면 해당 컨트롤이 잠긴다. 미리 채운 관리자 값이 본문에 간다.
+  const TABLE = [{ key: 'A', score: 5 }, { key: 'B', score: 3 }]
+  it.each([
+    ['CATEGORY 단일', { calc_type: 'CATEGORY', match_mode: null, multi_value: 0, table: TABLE, current_values: ['A'] },
+      w => w.findAll('select')[2], ['A']],  // [0] 대학 [1] 모집단위 [2] 이 항목
+    ['CATEGORY 복수', { calc_type: 'CATEGORY', match_mode: null, multi_value: 1, category_agg: 'SUM', table: TABLE, current_values: ['A'] },
+      w => w.find('input[type="checkbox"]'), ['A']],
+    ['MANUAL', { calc_type: 'MANUAL', match_mode: null, table: null, current_values: ['3.5'] },
+      w => w.find('input[type="number"]'), ['3.5']],
+  ])('F1-b. %s — editable 이면 컨트롤이 열리고 관리자 값이 저장 본문에 간다', async (_n, over, control, expected) => {
+    routes.context = () => [{ ...FIXED, ...over, editable: true }]
+    const w = await fillForm()
+    await wait(450)
+    await settle()
+    expect(w.text()).not.toContain('관리자 입력 고정')
+    const c = control(w)
+    expect(c && c.exists(), '입력 컨트롤이 없다').toBe(true)
+    expect(c.attributes('disabled'), '컨트롤이 잠겨 있다').toBeUndefined()
+    await click(btn(w, '저장'))
+    const sent = posts.filter(p => /teacher\/applications$/.test(p.url))
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body.base_data_entries).toEqual([{ area_id: 1, values: expected }])
+    w.unmount()
+  })
+
+  // F2. 대조군: editable 이 false 면 지금까지처럼 잠기고, 저장 본문에서 빠진다.
+  it('F2. editable 이 false 면 배지·잠금, 저장 본문에서 제외', async () => {
+    routes.context = () => [{ ...FIXED, editable: false }]
+    const w = await fillForm()
+    expect(w.text()).toContain('관리자 입력 고정')
+    expect(w.find('input[type="number"]').attributes('disabled')).toBeDefined()
+    await click(btn(w, '저장'))
+    const sent = posts.filter(p => /teacher\/applications$/.test(p.url))
+    expect(sent).toHaveLength(1)
+    expect(sent[0].body.base_data_entries).toEqual([])
+    w.unmount()
+  })
+
+  // F3. 판별력: teacherGetAreaContext 의 누락 검사를 지우면 editable 이 undefined 라 오류 없이
+  //     잠긴 화면이 뜬다 — 세 호출자 모두에서 오류 문구 단언이 깨진다. 미처리 거부 없음은
+  //     호출자들의 기존 catch 동작의 기록이다.
+  const noEditable = () => [{ ...FIXED, editable: undefined }]
+  it('F3-a. editable 누락 — 모집단위 선택 경로는 오류를 보이고 저장을 잠근다', async () => {
+    routes.context = noEditable
+    const w = await fillForm()
+    expect(w.text()).toContain('전형요소 정보를 불러오지 못했습니다')
+    expect(w.text()).toContain('editable')
+    expect(btn(w, '저장').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+  it('F3-b. editable 누락 — [수정] 진입 경로는 오류를 보이고 저장을 잠근다', async () => {
+    const w = await openDetail()
+    routes.context = noEditable
+    await click(btn(w, '수정'))
+    expect(w.text()).toContain('수정할 지원 정보를 불러오지 못했습니다')
+    expect(w.text()).toContain('editable')
+    expect(btn(w, '저장').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+  it('F3-c. editable 누락 — 상세 모달은 전형요소를 불러오지 못했다고 보인다', async () => {
+    routes.context = noEditable
+    const w = await openDetail()
+    expect(w.text()).toContain('전형요소를 불러오지 못했습니다')
+    w.unmount()
+  })
+
+  // F4. 판별력: 모달 배지가 teacher_editable(늘 0)을 보면 editable true 쪽에도 배지가 뜬다.
+  it.each([[true, false], [false, true]])('F4. 상세 모달 배지는 editable=%s 를 따른다', async (editable, badge) => {
+    routes.context = () => [{ ...FIXED, editable }]
+    const w = await openDetail()
+    expect(w.text().includes('관리자 입력 고정')).toBe(badge)
     w.unmount()
   })
 })

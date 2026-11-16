@@ -46,7 +46,7 @@ const UNIV = {
 }
 const AREA = { id: 1, area_id: 1, name: '요소1', calc_type: 'NUMERIC', match_mode: 'UPPER',
                category_agg: null, lookup_scope: 'SIMPLE', multi_value: 0,
-               teacher_editable: 1, max_score: 10, current_values: [''], sort_order: 1 }
+               teacher_editable: 1, editable: true, max_score: 10, current_values: [''], sort_order: 1 }
 const STUDENT = { id: 1, name: '학생01', student_code: '2026001',
                   grade: 3, class_no: 1, seq_no: 1, is_enrolled: true }
 

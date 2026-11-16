@@ -27,7 +27,7 @@ const OPEN_ROUND = { id: 3, status: 'OPEN', opened_at: '2026-03-21T00:00:00Z',
 const GRAD_STUDENT = { id: 1, name: '학생01', student_code: '2020001',
                        grade: null, class_no: null, seq_no: null, is_enrolled: false }
 const AREA_CTX = { area_id: 1, area_name: '요소1', calc_type: 'NUMERIC', match_mode: 'UPPER',
-                   lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1,
+                   lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1, editable: true,
                    max_score: 10, current_values: [], table: [] }
 
 /** 스토어가 등록한 응답 에러 핸들러 */

@@ -769,7 +769,7 @@ pub async fn teacher_abandon_application(
 // ── Teacher ────────────────────────────────────────────────────────
 
 fn is_grad_teacher(claims: &TeacherClaims) -> bool {
-    claims.grade == 0 && claims.class_no == 0
+    claims.is_graduate_manager()
 }
 
 pub async fn teacher_list_students(
@@ -939,7 +939,9 @@ pub async fn teacher_create_application(
         .collect()
     };
 
-    // teacher_editable 검증
+    // 입력 권한 검증 — 졸업생 담당은 관리자 입력 고정 항목도 입력한다(이슈 #50).
+    // 필수 제출 집합(아래)은 teacher_editable 기준 그대로다: 고정 항목을 빼고 내면
+    // 저장된(관리자) 값으로 계산되고, 값이 없으면 점수 계산이 Err 를 낸다.
     for entry in &body.base_data_entries {
         if entry.values.is_empty() {
             continue;
@@ -948,7 +950,7 @@ pub async fn teacher_create_application(
             .iter()
             .find(|a| a.id == entry.area_id)
             .ok_or_else(|| (StatusCode::NOT_FOUND, format!("전형요소 id={} 없음", entry.area_id)))?;
-        if !info.teacher_editable {
+        if !crate::auth::can_teacher_edit(&claims, info.teacher_editable) {
             return Err((
                 StatusCode::FORBIDDEN,
                 format!("전형요소 id={}는 담임 입력이 허용되지 않습니다", entry.area_id),

@@ -244,8 +244,8 @@
                   class="rounded-xl"
                   style="padding: 1rem 1.125rem;"
                   :style="{
-                    border: area.teacher_editable ? '1px solid #e2e8f0' : '1px solid #f1f5f9',
-                    background: area.teacher_editable ? 'white' : '#f8fafc',
+                    border: area.editable ? '1px solid #e2e8f0' : '1px solid #f1f5f9',
+                    background: area.editable ? 'white' : '#f8fafc',
                   }"
                 >
                   <!-- 전형요소 헤더 -->
@@ -259,7 +259,7 @@
                         >{{ area.calc_type }}</span>
                       </div>
                       <span
-                        v-if="!area.teacher_editable"
+                        v-if="!area.editable"
                         class="text-base flex-shrink-0"
                         style="padding: 2px 8px; border-radius: 6px; background: #fffbeb; color: #92400e;"
                       >관리자 입력 고정</span>
@@ -348,9 +348,9 @@
                         step="any"
                         class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                         style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
-                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
-                        :disabled="!area.teacher_editable"
-                        :placeholder="area.teacher_editable ? (area.unit ? `데이터 입력 (${area.unit})` : '데이터 입력') : (area.current_values[0] ?? '데이터 없음')"
+                        :style="{ background: area.editable ? 'white' : '#f1f5f9', color: area.editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.editable"
+                        :placeholder="area.editable ? (area.unit ? `데이터 입력 (${area.unit})` : '데이터 입력') : (area.current_values[0] ?? '데이터 없음')"
                         @input="onNumericInput(area, $event.target.value)"
                       />
                     </template>
@@ -361,8 +361,8 @@
                         :value="areaValues[area.area_id] ?? ''"
                         class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                         style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
-                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
-                        :disabled="!area.teacher_editable"
+                        :style="{ background: area.editable ? 'white' : '#f1f5f9', color: area.editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.editable"
                         @change="onCategoryChange(area, $event.target.value)"
                       >
                         <option value="">선택하세요</option>
@@ -377,13 +377,13 @@
                           v-for="row in area.table"
                           :key="row.key"
                           class="flex items-center gap-2 text-base cursor-pointer"
-                          :style="{ color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
+                          :style="{ color: area.editable ? '#1e293b' : '#94a3b8' }"
                         >
                           <input
                             type="checkbox"
                             :value="row.key"
                             :checked="(areaMultiValues[area.area_id] || []).includes(row.key)"
-                            :disabled="!area.teacher_editable"
+                            :disabled="!area.editable"
                             class="accent-blue-600"
                             @change="onMultiValueChange(area, row.key, $event.target.checked)"
                           />
@@ -400,9 +400,9 @@
                         step="any"
                         class="w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                         style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; box-sizing: border-box;"
-                        :style="{ background: area.teacher_editable ? 'white' : '#f1f5f9', color: area.teacher_editable ? '#1e293b' : '#94a3b8' }"
-                        :disabled="!area.teacher_editable"
-                        :placeholder="area.teacher_editable ? '점수 직접 입력 (점)' : (area.current_values[0] ?? '데이터 없음')"
+                        :style="{ background: area.editable ? 'white' : '#f1f5f9', color: area.editable ? '#1e293b' : '#94a3b8' }"
+                        :disabled="!area.editable"
+                        :placeholder="area.editable ? '점수 직접 입력 (점)' : (area.current_values[0] ?? '데이터 없음')"
                         @input="onNumericInput(area, $event.target.value)"
                       />
                     </template>
@@ -654,7 +654,9 @@ const helpBox = computed(() => {
       intro: '우리 반 학생의 지원 대학과 전형요소 값을 입력하는 화면입니다.',
       items: [
         '① 왼쪽 목록에서 학생을 선택하고 ② "+ 새 지원 추가"를 누른 뒤 ③ 대학·모집단위·학과명을 입력하세요.',
-        '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. "관리자 입력 고정" 항목은 관리자가 이미 입력해 둔 값이라 수정할 수 없습니다.',
+        auth.teacherKind === 'graduate'
+          ? '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. 관리자가 이미 넣은 값은 미리 채워지며, 고쳐 저장하면 그 값으로 바뀝니다.'
+          : '④ 전형요소 값을 입력하면 예상 점수가 바로 표시됩니다. "관리자 입력 고정" 항목은 관리자가 이미 입력해 둔 값이라 수정할 수 없습니다.',
         '모든 항목을 입력해야 "저장" 버튼이 활성화됩니다. 저장 전에 예상 점수가 맞는지 확인하세요.',
         '저장한 지원은 학생 이름 옆 파란 숫자로 표시됩니다. 지원을 클릭하면 상세 정보를 확인하고 수정하거나 취소할 수 있습니다. 수정 시 대학·모집단위도 변경할 수 있습니다.',
         '모든 학생의 지원 입력을 마쳤으면 오른쪽 위 \'입력 완료 확정\' 버튼을 눌러 주세요. 확정 후 지원을 수정하면 확정이 자동으로 해제되니 다시 확정하면 됩니다.',
@@ -783,7 +785,7 @@ function initAreaValues(context) {
   const vals      = {}
   const multiVals = {}
   for (const area of context) {
-    if (!area.teacher_editable) continue
+    if (!area.editable) continue
     if (area.multi_value) {
       multiVals[area.area_id] = [...area.current_values]
     } else {
@@ -796,7 +798,7 @@ function initAreaValues(context) {
 
 async function triggerInitialPreviews(context) {
   for (const area of context) {
-    const vals = area.teacher_editable
+    const vals = area.editable
       ? getAreaInputValues(area)
       : area.current_values.filter(v => v !== '')
     if (vals.length > 0) {
@@ -890,7 +892,7 @@ async function saveApplication() {
   saveError.value = ''
 
   const baseDataEntries = areaContext.value
-    .filter(a => a.teacher_editable)
+    .filter(a => a.editable)
     .map(a => {
       const values = a.multi_value
         ? (areaMultiValues.value[a.area_id] || [])

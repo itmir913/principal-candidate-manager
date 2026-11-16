@@ -33,14 +33,14 @@ export function canSaveApplication({
   // 전형요소가 하나도 없으면 점수를 낼 수 없다 — 저장할 것이 없다.
   if (areaContext.length === 0) return false
   return areaContext.every(area => {
-    if (area.teacher_editable) {
+    if (area.editable) {
       if (area.multi_value) {
         return (areaMultiValues[area.area_id] || []).length > 0
       }
       const v = areaValues[area.area_id]
       return v !== undefined && v !== ''
     }
-    // 관리자 입력 고정: 서버에서 받은 current_values 가 있어야 한다.
+    // 이 계정이 입력할 수 없는 항목(관리자 입력 고정): 서버에서 받은 current_values 가 있어야 한다.
     return area.current_values.some(v => v !== '')
   })
 }

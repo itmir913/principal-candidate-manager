@@ -77,7 +77,7 @@
                     <div class="flex items-center gap-2">
                       <span>{{ area.area_name }}</span>
                       <span
-                        v-if="!area.teacher_editable"
+                        v-if="!area.editable"
                         class="text-base flex-shrink-0"
                         style="padding: 2px 7px; border-radius: 6px; background: #fffbeb; color: #92400e;"
                       >관리자 입력 고정</span>

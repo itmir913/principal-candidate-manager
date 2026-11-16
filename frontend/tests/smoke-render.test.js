@@ -124,7 +124,7 @@ function TEACHER_FIXTURE(u) {
 
 const AREA = {
   id: 1, area_id: 1, name: '요소1', calc_type: 'NUMERIC', match_mode: 'UPPER',
-  category_agg: null, lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1,
+  category_agg: null, lookup_scope: 'SIMPLE', multi_value: 0, teacher_editable: 1, editable: true,
   max_score: 10, current_values: [''], sort_order: 1,
 }
 const UNIV = {

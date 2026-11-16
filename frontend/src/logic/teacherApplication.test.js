@@ -8,8 +8,8 @@ const base = () => ({
   hasRound: true,
   departmentName: '컴퓨터공학과',
   areaContext: [
-    { area_id: 1, teacher_editable: true,  multi_value: false, current_values: [] },
-    { area_id: 2, teacher_editable: false, multi_value: false, current_values: ['3.2'] },
+    { area_id: 1, editable: true,  multi_value: false, current_values: [] },
+    { area_id: 2, editable: false, multi_value: false, current_values: ['3.2'] },
   ],
   areaValues: { 1: '88' },
   areaMultiValues: {},
@@ -54,7 +54,7 @@ describe('canSaveApplication', () => {
   it('다중값 요소는 최소 한 개가 필요하다', () => {
     const multi = {
       ...base(),
-      areaContext: [{ area_id: 1, teacher_editable: true, multi_value: true, current_values: [] }],
+      areaContext: [{ area_id: 1, editable: true, multi_value: true, current_values: [] }],
       areaValues: {},
       areaMultiValues: {},
     }
@@ -69,5 +69,14 @@ describe('canSaveApplication', () => {
     expect(canSaveApplication(p)).toBe(false)
     p.areaContext[1].current_values = ['']
     expect(canSaveApplication(p)).toBe(false)
+  })
+
+  // F5(이슈 #50). 판별력: canSave 가 editable 이 아니라 "서버 값이 있나"만 보면, 졸업생 담당이
+  // 미리 채워진 관리자 값을 지웠는데도 current_values 덕에 저장이 열린다.
+  it('editable 인 고정 항목은 서버 값이 있어도 입력칸이 비면 저장할 수 없다', () => {
+    const p = base()
+    p.areaContext[1] = { area_id: 2, editable: true, multi_value: false, current_values: ['3.2'] }
+    expect(canSaveApplication({ ...p, areaValues: { 1: '88', 2: '3.2' } })).toBe(true)
+    expect(canSaveApplication({ ...p, areaValues: { 1: '88', 2: '' } })).toBe(false)
   })
 })
