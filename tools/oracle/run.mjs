@@ -62,7 +62,8 @@ run('3/5 오라클 대조', py, [path.join(HERE, 'compare.py')], {
   env: { ...process.env, ...PY_ENV },
 })
 run('4/5 프론트 대조', process.execPath, [path.join(HERE, 'front_check.mjs')], { cwd: HERE })
-run('5/5 실DB 대조 도구 자기검증', py, ['-I', path.join(HERE, 'verify_db_selftest.py')], {
+// -I 는 PYTHON* 환경변수를 무시하므로 PY_ENV 의 PYTHONUTF8 이 먹지 않는다 — -X utf8 로 직접 준다.
+run('5/5 실DB 대조 도구 자기검증', py, ['-I', '-X', 'utf8', path.join(HERE, 'verify_db_selftest.py')], {
   cwd: HERE,
   env: { ...process.env, ...PY_ENV },
 })

@@ -18,9 +18,13 @@ ddl = "".join(open(f, encoding="utf8").read() for f in
               sorted(glob.glob(os.path.join(REPO, "migrations/v2/*.sql"))))
 
 
+TEMPLATE = None  # 스키마만 만든 빈 DB. 시나리오마다 executescript 하면 느려서 한 번 만들고 복사한다.
+
+
 def build(path, scn, rows, mutate=None):
+    shutil.copyfile(TEMPLATE, path)
     c = sqlite3.connect(path)
-    c.executescript(ddl)
+    c.execute("PRAGMA synchronous=OFF")
     ins = lambda t, d: c.execute("INSERT INTO %s (%s) VALUES (%s)" % (t, ",".join(d), ",".join("?" * len(d))), list(d.values()))
     st = "CLOSED" if scn.get("round_status") != "REOPENED" else "OPEN"
     c.execute("INSERT INTO rounds (id,status,opened_at) VALUES (?,?,'x')", (scn["round_id"], st))
@@ -46,6 +50,10 @@ def build(path, scn, rows, mutate=None):
 
 ok = fail = skipped = 0
 tmp = tempfile.mkdtemp()
+TEMPLATE = os.path.join(tmp, "template.db")
+_t = sqlite3.connect(TEMPLATE)
+_t.executescript(ddl)
+_t.close()
 for n, scn in enumerate(scns):
     act = acts.get(scn["name"])
     if not act or act.get("calc_error") or not act["rows"]:
