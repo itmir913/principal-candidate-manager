@@ -97,7 +97,7 @@
             @click="selectStudent(s)"
           >
             <span class="font-medium" style="color: #1e293b;">
-              <template v-if="auth.grade === 0">{{ s.student_code }} {{ s.name }}</template>
+              <template v-if="auth.teacherKind === 'graduate'">{{ s.student_code }} {{ s.name }}</template>
               <template v-else>{{ s.seq_no }}번 {{ s.name }}</template>
             </span>
             <span
@@ -444,8 +444,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
+import { registerUnsavedGuard } from './unsavedGuard.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { dialog } from '../common/dialog.js'
 import ProductInfoCard from '../common/ProductInfoCard.vue'
@@ -577,7 +578,7 @@ const isDirty = computed(() => {
   )
 })
 
-onBeforeRouteLeave(async () => {
+async function confirmLeave() {
   if (!isDirty.value) return true
   return await dialog.confirm({
     title: '페이지 이동',
@@ -585,6 +586,14 @@ onBeforeRouteLeave(async () => {
     confirmText: '나가기',
     level: 'warn',
   })
+}
+// 로그아웃 버튼은 인증을 지우기 전에 이 확인을 부른다(unsavedGuard.js).
+onUnmounted(registerUnsavedGuard(confirmLeave))
+onBeforeRouteLeave(async () => {
+  // 인증이 이미 지워졌으면 통과한다 — 401 강제 로그아웃, 또는 확인을 마친 로그아웃 버튼.
+  // 여기서 막으면 학년·반이 지워진 채 담임 화면에 남는다(이슈 #49).
+  if (!auth.isTeacher) return true
+  return await confirmLeave()
 })
 
 // ── 확정 상태 로드 ────────────────────────────────────────────────

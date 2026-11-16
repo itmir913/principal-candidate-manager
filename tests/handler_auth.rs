@@ -127,6 +127,31 @@ async fn teacher_login_success() {
     assert!(!res.unwrap().0.token.is_empty());
 }
 
+/// 이슈 #49 계약: 졸업생 담당 로그인(관리자 비밀번호) 응답은 직렬화된 JSON 에서
+/// `grade`·`class_no` 가 정수 0 이다. 프론트는 이 둘이 정확히 0 일 때만 졸업생 담당으로
+/// 판별한다. 구조체 필드가 아니라 `serde_json::to_value` 결과를 본다 — 필드 이름이나
+/// 타입이 바뀌어 JSON 에서 null·누락이 되면 여기서 걸린다.
+#[tokio::test]
+async fn teacher_login_graduate_response_json_has_integer_zero_grade_and_class() {
+    let state = make_state().await;
+    let _ = admin_login(
+        State(state.clone()),
+        Json(AdminLoginBody { password: "adminpw".into() }),
+    )
+    .await
+    .unwrap();
+    let Json(res) = teacher_login(
+        State(state),
+        Json(TeacherLoginBody { grade: 0, class_no: 0, password: "adminpw".into() }),
+    )
+    .await
+    .unwrap();
+    let v = serde_json::to_value(&res).unwrap();
+    assert_eq!(v["grade"], serde_json::json!(0));
+    assert_eq!(v["class_no"], serde_json::json!(0));
+    assert!(v["grade"].is_i64() && v["class_no"].is_i64(), "{v}");
+}
+
 #[tokio::test]
 async fn teacher_login_class_not_found_returns_not_found() {
     let state = make_state().await;

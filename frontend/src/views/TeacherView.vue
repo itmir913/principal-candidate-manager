@@ -35,6 +35,7 @@
           >{{ appInfo.sidebarTitle }}</span>
         </div>
         <button
+          data-testid="sidebar-toggle"
           @click="collapsed = !collapsed"
           class="flex items-center justify-center p-1.5 rounded-md flex-shrink-0"
           style="background: none; border: none; cursor: pointer; color: #94a3b8;"
@@ -111,7 +112,8 @@
           <div
             class="flex items-center justify-center rounded-full font-bold"
             style="width: 36px; height: 36px; background: #dbeafe; color: #1d4ed8; font-size: 16px;"
-          >{{ auth.grade === 0 ? '졸' : '담' }}</div>
+            v-if="identityOk"
+          >{{ auth.teacherKind === 'graduate' ? '졸' : '담' }}</div>
         </div>
         <!-- 펼침: 정보 카드 -->
         <div
@@ -142,7 +144,7 @@
           <!-- 액션 버튼 -->
           <div class="flex gap-3">
             <button
-              v-if="auth.grade !== 0"
+              v-if="auth.teacherKind === 'homeroom'"
               @click="showPwModal = true"
               class="flex items-center gap-1 text-base"
               style="background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0;"
@@ -164,7 +166,17 @@
     <!-- 메인 콘텐츠 -->
     <main class="flex-1 overflow-y-auto" style="scrollbar-gutter: stable;">
       <!-- 탭 전환 페이드. key를 active로 잡아야 탭이 바뀔 때 트랜지션이 걸린다 -->
-      <Transition name="tab-fade" mode="out-in">
+      <!-- 신원 관문(이슈 #49): 졸업생·일반 담임 둘 중 하나가 아니면(401 직후의 null 포함)
+           탭을 그리지 않는다. 사이드바는 그대로 둔다. -->
+      <div v-if="!identityOk" data-testid="identity-invalid" class="flex flex-col items-center justify-center gap-4" style="height: 320px;">
+        <p class="text-base" style="color: #b91c1c; margin: 0;">로그인 정보가 올바르지 않습니다. 다시 로그인해 주세요.</p>
+        <button
+          @click="logout"
+          class="text-base font-semibold"
+          style="background: #2563eb; color: white; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer;"
+        >다시 로그인</button>
+      </div>
+      <Transition v-else name="tab-fade" mode="out-in">
         <div :key="active">
           <Suspense v-if="currentTab">
             <component :is="currentTab" />
@@ -240,6 +252,7 @@ import { useAppInfoStore } from '../stores/appInfo.js'
 
 import { teacherChangePassword, getCurrentRound } from '../api/teacher.js'
 import { dialog } from '../components/common/dialog.js'
+import { confirmDiscardUnsaved } from '../components/teacher/unsavedGuard.js'
 import { LayoutGrid, UserPlus, Trophy, ChevronRight, LogOut, KeyRound, Menu, BookOpen, ExternalLink } from 'lucide-vue-next'
 
 const appInfo = useAppInfoStore()
@@ -274,9 +287,12 @@ const currentMenuItem = computed(() => sidebarMenus.find(m => m.key === active.v
 const collapsed = ref(false)
 
 // ── 역할 레이블 ───────────────────────────────────────────────
+// 두 값만 명시 분기한다 — 그 외(null 포함)에서 일반 담임 문자열을 만들지 않는다(이슈 #49).
+const identityOk = computed(() => auth.teacherKind === 'graduate' || auth.teacherKind === 'homeroom')
 const roleLabel = computed(() => {
-  if (auth.grade === 0) return '졸업생 담당'
-  return `${auth.grade}학년 ${auth.classNo}반 담임`
+  if (auth.teacherKind === 'graduate') return '졸업생 담당'
+  if (auth.teacherKind === 'homeroom') return `${auth.grade}학년 ${auth.classNo}반 담임`
+  return ''
 })
 
 // ── 현재 라운드 ───────────────────────────────────────────────
@@ -333,7 +349,10 @@ async function changePw() {
   }
 }
 
-function logout() {
+// 인증을 지우기 전에 저장하지 않은 입력을 확인한다 — 지운 뒤엔 탭의 leave 가드가
+// 확인 없이 통과하므로(이슈 #49), 순서를 바꾸면 입력이 묻지 않고 버려진다.
+async function logout() {
+  if (!(await confirmDiscardUnsaved())) return
   auth.logout()
   router.push('/login')
 }

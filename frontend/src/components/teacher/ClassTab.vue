@@ -6,7 +6,7 @@
       <div>
         <p class="text-base mb-1" style="color: #94a3b8;">담임 교사</p>
         <h1 class="text-2xl font-semibold" style="color: #1e293b; margin: 0;">
-          <template v-if="auth.grade === 0">졸업생 현황</template>
+          <template v-if="auth.teacherKind === 'graduate'">졸업생 현황</template>
           <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 학급 현황</template>
         </h1>
       </div>
@@ -61,14 +61,14 @@
              졸업생 담당(grade=0)은 번호 열이 없어 80px 이 더 남는다. -->
         <table class="w-full" style="border-collapse: collapse; table-layout: fixed; min-width: 680px;">
           <colgroup>
-            <col v-if="auth.grade !== 0" style="width: 80px;">
+            <col v-if="auth.teacherKind !== 'graduate'" style="width: 80px;">
             <col style="width: 140px;">   <!-- 학생코드: "202630601" 9자 + padding 40px -->
             <col style="width: 140px;">   <!-- 이름 -->
             <col>   <!-- 지원 대학: 남는 폭을 전부 가진다(최소 320px) -->
           </colgroup>
           <thead>
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <th v-if="auth.grade !== 0" class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">번호</th>
+              <th v-if="auth.teacherKind !== 'graduate'" class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">번호</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">학생코드</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">이름</th>
               <th class="text-base font-semibold text-left" style="padding: 14px 20px; color: #475569;">지원 대학</th>
@@ -81,7 +81,7 @@
               class="hover:bg-slate-50"
               style="border-bottom: 1px solid #f1f5f9; transition: background 0.1s;"
             >
-              <td v-if="auth.grade !== 0" class="text-base" style="padding: 13px 20px; color: #94a3b8;">{{ s.seq_no }}</td>
+              <td v-if="auth.teacherKind !== 'graduate'" class="text-base" style="padding: 13px 20px; color: #94a3b8;">{{ s.seq_no }}</td>
               <td class="text-base" style="padding: 13px 20px; color: #64748b;">{{ s.student_code }}</td>
               <td class="text-base font-medium" style="padding: 13px 20px; color: #1e293b;">{{ s.name }}</td>
               <td style="padding: 13px 20px;">

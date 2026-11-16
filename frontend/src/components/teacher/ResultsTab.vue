@@ -107,7 +107,7 @@
         <div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 round-card-head min-w-0"
           style="height: 64px; border-bottom: 1px solid #f1f5f9; border-top-left-radius: 12px; border-top-right-radius: 12px;">
           <h2 class="text-base font-semibold truncate min-w-0" style="color: #1e293b; margin: 0;">
-            <template v-if="auth.grade === 0">졸업생 — {{ round.id }}라운드 결과</template>
+            <template v-if="auth.teacherKind === 'graduate'">졸업생 — {{ round.id }}라운드 결과</template>
             <template v-else>{{ auth.grade }}학년 {{ auth.classNo }}반 — {{ round.id }}라운드 결과</template>
           </h2>
           <span
@@ -154,7 +154,7 @@
             style="height: 120px;"
           >
             <p class="text-base" style="color: #94a3b8;">
-              <template v-if="auth.grade === 0">이 라운드에 지원한 졸업생이 없습니다.</template>
+              <template v-if="auth.teacherKind === 'graduate'">이 라운드에 지원한 졸업생이 없습니다.</template>
               <template v-else>이 라운드에 지원한 우리 반 학생이 없습니다.</template>
             </p>
           </div>
@@ -207,7 +207,7 @@
                     >
                       <span class="text-base font-semibold" style="color: #0f172a;">{{ student.name }}</span>
                       <span class="text-base" style="color: #475569; margin-left: 10px;">{{ student.student_code }}</span>
-                      <span v-if="auth.grade !== 0" class="text-base" style="color: #64748b; margin-left: 10px;">{{ student.seq_no }}번</span>
+                      <span v-if="auth.teacherKind !== 'graduate'" class="text-base" style="color: #64748b; margin-left: 10px;">{{ student.seq_no }}번</span>
                     </td>
                   </tr>
 
@@ -428,11 +428,11 @@ const studentsByRound = computed(() => {
     }
     studentMap.get(r.student_id).results.push(r)
   }
-  // Map → 정렬된 배열로 변환. auth.grade 는 여기(computed 안)서 읽어야
+  // Map → 정렬된 배열로 변환. auth.teacherKind 는 여기(computed 안)서 읽어야
   // 반응성이 유지된다 — 밖에서 캡처해 넘기면 계정이 바뀌어도 순서가 그대로다.
   const out = {}
   for (const [roundId, studentMap] of Object.entries(map)) {
-    out[roundId] = sortStudents([...studentMap.values()], auth.grade === 0)
+    out[roundId] = sortStudents([...studentMap.values()], auth.teacherKind === 'graduate')
   }
   return out
 })

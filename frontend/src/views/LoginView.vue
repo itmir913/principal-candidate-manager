@@ -147,8 +147,15 @@ const loading = ref(false)
 const error = ref(null)
 
 const adminPassword = ref('')
-const teacherGrade = ref(Number(localStorage.getItem(LS_GRADE)) || '')
-const teacherClassNo = ref(Number(localStorage.getItem(LS_CLASS)) || '')
+// `|| ''` 로 복원하면 졸업생 선택 0 이 '' 로 풀린다 — 저장값이 있는지로 판정한다.
+function restoreSelection(key) {
+  const v = localStorage.getItem(key)
+  if (v === null || v === '') return ''
+  const n = Number(v)
+  return Number.isInteger(n) && n >= 0 ? n : ''
+}
+const teacherGrade = ref(restoreSelection(LS_GRADE))
+const teacherClassNo = ref(restoreSelection(LS_CLASS))
 const teacherPassword = ref('')
 
 const classes = ref([])
